@@ -696,6 +696,9 @@ def process_library(lib_id, history, failed_history):
 
             if not title: continue 
             
+            # --- Visual Separator for Logging ---
+            logging.info("-" * 50)
+            
             logging.info(f"Processing: {title} (ASIN: {asin if asin else 'None'})")
             stats['processed'] += 1
             
@@ -864,7 +867,6 @@ def process_library(lib_id, history, failed_history):
                     if res.status_code == 200:
                         updates = []
                         
-                        # --- FIX: Ensure comparison is done with int() ---
                         if (audible_data and int(audible_data.get('count', 0)) > 0) or old_audible:
                             updates.append("Audible")
                         
