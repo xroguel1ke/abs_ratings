@@ -28,7 +28,7 @@ ENV_OUTPUT_FILE = os.path.join(SCRIPT_DIR, "last_run.env")
 # Settings
 REFRESH_DAYS = int(os.getenv('REFRESH_DAYS', 90))
 MAX_BATCH_SIZE = int(os.getenv('BATCH_SIZE', 150))
-MAX_FAIL_ATTEMPTS = 5 # Back to 5 Strikes!
+MAX_FAIL_ATTEMPTS = 5
 DRY_RUN = os.getenv('DRY_RUN', 'False').lower() == 'true'
 BASE_SLEEP = int(os.getenv('SLEEP_TIMER', 6)) 
 # =================================================
@@ -240,26 +240,31 @@ def check_numbers_match(abs_title, gr_title):
     if common: return True
     return False
 
-def check_author_match(abs_author_str, gr_author_str):
-    if not abs_author_str or not gr_author_str: return False
+def check_author_match_list(abs_authors_list, gr_author_str):
+    """
+    Checks if ANY author in the ABS list matches the Goodreads author string.
+    Using smart token matching.
+    """
+    if not abs_authors_list or not gr_author_str: return False
     
-    # 1. Fuzzy Fallback (e.g. for Typos)
-    if difflib.SequenceMatcher(None, abs_author_str.lower(), gr_author_str.lower()).ratio() > 0.6:
-        return True
-
-    # 2. Smart Token Logic
     def tokenize(s):
         s = re.sub(r'[\(\[].*?[\)\]]', '', s)
         tokens = re.split(r'[^a-zA-Z0-9]+', s.lower())
         return set([t for t in tokens if len(t) > 1])
 
-    abs_tokens = tokenize(abs_author_str)
     gr_tokens = tokenize(gr_author_str)
     
-    common = abs_tokens.intersection(gr_tokens)
-    
-    if len(common) >= 2: return True
-    if len(common) >= 1 and len(abs_tokens) == 1: return True
+    for abs_author in abs_authors_list:
+        # 1. Fuzzy Fallback
+        if difflib.SequenceMatcher(None, abs_author.lower(), gr_author_str.lower()).ratio() > 0.6:
+            return True
+            
+        # 2. Token Match
+        abs_tokens = tokenize(abs_author)
+        common = abs_tokens.intersection(gr_tokens)
+        
+        if len(common) >= 2: return True
+        if len(common) >= 1 and len(abs_tokens) == 1: return True
         
     return False
 
@@ -422,7 +427,6 @@ def scrape_goodreads_book_details(url):
             meta_isbn = soup.find('meta', property="books:isbn")
             if meta_isbn: result['isbn'] = meta_isbn.get('content')
         
-        # Try to find ASIN (Commonly labeled as ASIN in text)
         if 'isbn' not in result:
             text_content = soup.get_text()
             asin_match = re.search(r'ASIN[:\s]+(B0\w+)', text_content)
@@ -432,7 +436,10 @@ def scrape_goodreads_book_details(url):
         return result if 'val' in result else None
     except: return None
 
-def find_best_goodreads_match_in_list(html, target_title, target_author):
+def find_best_goodreads_match_in_list(html, target_title, target_abs_authors):
+    """
+    Revised logic: Check GR result against ANY of the ABS authors (list).
+    """
     soup = BeautifulSoup(html, 'lxml')
     if soup.find('div', id='metacol') or soup.find('h1', id='bookTitle'):
         return "DIRECT_HIT" 
@@ -452,18 +459,11 @@ def find_best_goodreads_match_in_list(html, target_title, target_author):
             author_tag = row.find('a', class_='authorName')
             found_author = author_tag.get_text(strip=True) if author_tag else ""
             
-            # Author Check
-            if not check_author_match(target_author, found_author): continue
-            
-            # Number Check
-            if not check_numbers_match(target_title, found_title): continue
-            
-            # Score Calculation
+            # Score Calculation FIRST
             raw_t_score = difflib.SequenceMatcher(None, target_title.lower(), found_title.lower()).ratio()
             clean_t_score = difflib.SequenceMatcher(None, clean_target.lower(), clean_found.lower()).ratio()
             t_score = max(raw_t_score, clean_t_score)
             
-            # Boost if one contains the other (e.g. "Dune" in "Dune: Special Edition")
             containment_bonus = 0.0
             if (len(clean_target) > 3 and clean_target.lower() in clean_found.lower()) or \
                (len(clean_found) > 3 and clean_found.lower() in clean_target.lower()):
@@ -471,14 +471,24 @@ def find_best_goodreads_match_in_list(html, target_title, target_author):
             
             total_score = t_score + containment_bonus
             
-            # Lower threshold to 0.70 to accept more "loose" title matches
+            # Check numbers match
+            if not check_numbers_match(target_title, found_title): 
+                continue
+
+            # Author Check (against list)
+            if not check_author_match_list(target_abs_authors, found_author):
+                # LOGGING: If Title Score is high but Author fails -> Log it for troubleshooting
+                if total_score > 0.8:
+                    logging.info(f"    (Debug) Match Rejected: Title '{found_title}' score {round(total_score,2)} ok, but GR Author '{found_author}' not in ABS list {target_abs_authors}")
+                continue
+            
             if total_score > 0.70 and total_score > best_score:
                 best_score = total_score
                 best_match_url = "https://www.goodreads.com" + url
         except: pass
     return best_match_url
 
-def get_goodreads_data(isbn, asin, title, author):
+def get_goodreads_data(isbn, asin, title, abs_authors_list, primary_author):
     # 1. Search by ISBN
     if isbn:
         url = f"https://www.goodreads.com/search?q={isbn}"
@@ -507,35 +517,35 @@ def get_goodreads_data(isbn, asin, title, author):
     search_titles = [title]
     clean = clean_title_for_search(title)
     if clean and clean != title: search_titles.append(clean)
-    primary_author = author.split(',')[0].split('&')[0].strip()
     
-    # 3a. Search with "Title + Author"
-    for search_t in search_titles:
-        if not search_t: continue
-        query = f"{search_t} {primary_author}"
-        url = f"https://www.goodreads.com/search?q={urllib.parse.quote_plus(query)}"
-        try:
-            r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
-            if r.status_code == 200:
-                if "/book/show/" in r.url:
-                    data = scrape_goodreads_book_details(r.url)
-                    if data:
-                        data['source'] = 'text_lookup'
-                        return data
-                else:
-                    match_url = find_best_goodreads_match_in_list(r.text, title, author)
-                    if match_url == "DIRECT_HIT":
-                         data = scrape_goodreads_book_details(r.url)
-                         if data: 
-                             data['source'] = 'text_lookup'
-                             return data
-                    elif match_url:
-                        logging.info(f"  -> Goodreads found (Title+Author): {match_url}")
-                        data = scrape_goodreads_book_details(match_url)
+    # 3a. Search with "Title + Primary Author"
+    if primary_author:
+        for search_t in search_titles:
+            if not search_t: continue
+            query = f"{search_t} {primary_author}"
+            url = f"https://www.goodreads.com/search?q={urllib.parse.quote_plus(query)}"
+            try:
+                r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
+                if r.status_code == 200:
+                    if "/book/show/" in r.url:
+                        data = scrape_goodreads_book_details(r.url)
                         if data:
                             data['source'] = 'text_lookup'
                             return data
-        except: pass
+                    else:
+                        match_url = find_best_goodreads_match_in_list(r.text, title, abs_authors_list)
+                        if match_url == "DIRECT_HIT":
+                             data = scrape_goodreads_book_details(r.url)
+                             if data: 
+                                 data['source'] = 'text_lookup'
+                                 return data
+                        elif match_url:
+                            logging.info(f"  -> Goodreads found (Title+Author): {match_url}")
+                            data = scrape_goodreads_book_details(match_url)
+                            if data:
+                                data['source'] = 'text_lookup'
+                                return data
+            except: pass
 
     # 3b. Fallback: Search with "Title ONLY"
     logging.info("  -> Standard search failed. Trying Title-only fallback...")
@@ -552,7 +562,7 @@ def get_goodreads_data(isbn, asin, title, author):
                         data['source'] = 'text_lookup'
                         return data
                 else:
-                    match_url = find_best_goodreads_match_in_list(r.text, title, author)
+                    match_url = find_best_goodreads_match_in_list(r.text, title, abs_authors_list)
                     if match_url and match_url != "DIRECT_HIT":
                         logging.info(f"  -> Goodreads found (Title-Only): {match_url}")
                         data = scrape_goodreads_book_details(match_url)
@@ -634,12 +644,28 @@ def process_library(lib_id, history, failed_history):
 
             asin = metadata.get('asin')
             isbn = metadata.get('isbn')
-            author_data = metadata.get('authors', [])
-            author = ""
-            if isinstance(author_data, list) and len(author_data) > 0:
-                first = author_data[0]
-                if isinstance(first, str): author = first
-                elif isinstance(first, dict) and 'name' in first: author = first['name']
+            
+            # --- FIXED: PARSE ALL AUTHORS ---
+            author_data_raw = metadata.get('authors', [])
+            abs_authors_list = []
+            primary_search_author = ""
+            
+            if isinstance(author_data_raw, list):
+                for a in author_data_raw:
+                    if isinstance(a, dict):
+                        name = a.get('name')
+                        role = a.get('role', '').lower()
+                        if name:
+                            abs_authors_list.append(name)
+                            # prioritize "author" or "writer"
+                            if "auth" in role or "writ" in role:
+                                primary_search_author = name
+                    elif isinstance(a, str):
+                        abs_authors_list.append(a)
+            
+            # Fallback if no specific role found
+            if not primary_search_author and abs_authors_list:
+                primary_search_author = abs_authors_list[0]
 
             if not title: continue 
             
@@ -655,7 +681,7 @@ def process_library(lib_id, history, failed_history):
             if should_search_asin and not DRY_RUN:
                 if not asin: logging.info("  -> No ASIN present. Searching...")
                 else: logging.info("  -> ASIN seems invalid. Searching replacement...")
-                found_asin = find_missing_asin(title, author, abs_duration, language)
+                found_asin = find_missing_asin(title, primary_search_author, abs_duration, language)
                 if found_asin:
                     logging.info(f"  -> ✨ Found ASIN: {found_asin}")
                     try:
@@ -670,15 +696,15 @@ def process_library(lib_id, history, failed_history):
             # Update Audible Report
             found_audible = bool(audible_data) or bool(old_audible)
             if not found_audible:
-                update_report("audible", unique_key, title, author, asin, "No Ratings found & Search failed", False)
+                update_report("audible", unique_key, title, primary_search_author, asin, "No Ratings found & Search failed", False)
             else:
-                update_report("audible", unique_key, title, author, asin, "Success", True)
+                update_report("audible", unique_key, title, primary_search_author, asin, "Success", True)
 
             # --- GOODREADS ---
             time.sleep(1)
-            gr = get_goodreads_data(isbn, asin, title, author)
+            # Pass list of authors for validation, primary for search
+            gr = get_goodreads_data(isbn, asin, title, abs_authors_list, primary_search_author)
             
-            # UPDATE LOGIC: Patch ISBN/ASIN if missing OR if old ISBN failed
             if gr and not DRY_RUN:
                 new_id = gr.get('isbn')
                 if not new_id: new_id = gr.get('asin')
@@ -704,9 +730,9 @@ def process_library(lib_id, history, failed_history):
             # Update Goodreads Report
             if not found_gr:
                 search_id = isbn if isbn else "No ISBN"
-                update_report("goodreads", unique_key, title, author, search_id, "No Match found (ID/Title/Fallback)", False)
+                update_report("goodreads", unique_key, title, primary_search_author, search_id, "No Match found (ID/Title/Fallback)", False)
             else:
-                update_report("goodreads", unique_key, title, author, isbn, "Success", True)
+                update_report("goodreads", unique_key, title, primary_search_author, isbn, "Success", True)
             
             # --- HISTORY & STATUS ---
             has_asin = bool(asin)
@@ -716,13 +742,11 @@ def process_library(lib_id, history, failed_history):
             else:
                 if found_gr: is_complete = True
             
-            # Revert to old logic: Only save history if COMPLETE or MAX FAILS reached
             should_save_history = False
             
             if is_complete:
                 should_save_history = True
             else:
-                # If incomplete, we do NOT save history unless fails exceed max
                 fails = failed_history.get(unique_key, 0) + 1
                 failed_history[unique_key] = fails
                 
