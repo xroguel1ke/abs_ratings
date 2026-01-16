@@ -50,7 +50,7 @@ HEADERS_SCRAPE = {
 stats = {
     "processed": 0, "success": 0, "failed": 0, "no_data": 0, 
     "skipped": 0, "partial": 0, "cooldown": 0, "recycled": 0, 
-    "asin_found": 0, "isbn_added": 0
+    "asin_found": 0, "isbn_added": 0, "isbn_repaired": 0
 }
 
 # In-Memory Report Storage
@@ -96,7 +96,7 @@ def write_env_file(log_filename, start_time):
 
     report_body = (f"Proc: {stats['processed']} | New: {stats['success']} | "
                    f"ASIN+: {stats['asin_found']} | ISBN+: {stats['isbn_added']} | "
-                   f"Recyc: {stats['recycled']} | Err: {stats['failed']}")
+                   f"ISBN Fix: {stats['isbn_repaired']} | Err: {stats['failed']}")
 
     try:
         with open(ENV_OUTPUT_FILE, 'w', encoding='utf-8') as f:
@@ -417,7 +417,6 @@ def scrape_goodreads_book_details(url):
         
         # Try to find ASIN (Commonly labeled as ASIN in text)
         if 'isbn' not in result:
-            # Look for "ASIN: B0..."
             text_content = soup.get_text()
             asin_match = re.search(r'ASIN[:\s]+(B0\w+)', text_content)
             if asin_match:
@@ -459,23 +458,37 @@ def find_best_goodreads_match_in_list(html, target_title, target_author):
     return best_match_url
 
 def get_goodreads_data(isbn, asin, title, author):
-    ids = [id for id in [isbn, asin] if id]
-    for identifier in ids:
-        url = f"https://www.goodreads.com/search?q={identifier}"
+    # 1. Search by ISBN
+    if isbn:
+        url = f"https://www.goodreads.com/search?q={isbn}"
         try:
             r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
             if r.status_code == 200:
                 data = scrape_goodreads_book_details(r.url)
-                if data: return data
+                if data:
+                    data['source'] = 'isbn_lookup'
+                    return data
+        except: pass
+
+    # 2. Search by ASIN
+    if asin:
+        url = f"https://www.goodreads.com/search?q={asin}"
+        try:
+            r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
+            if r.status_code == 200:
+                data = scrape_goodreads_book_details(r.url)
+                if data:
+                    data['source'] = 'asin_lookup'
+                    return data
         except: pass
     
-    # Text Search Setup
+    # 3. Text Search (Fallback)
     search_titles = [title]
     clean = clean_title_for_search(title)
     if clean and clean != title: search_titles.append(clean)
     primary_author = author.split(',')[0].split('&')[0].strip()
     
-    # 1. Search with "Title + Author"
+    # 3a. Search with "Title + Author"
     for search_t in search_titles:
         if not search_t: continue
         query = f"{search_t} {primary_author}"
@@ -485,19 +498,25 @@ def get_goodreads_data(isbn, asin, title, author):
             if r.status_code == 200:
                 if "/book/show/" in r.url:
                     data = scrape_goodreads_book_details(r.url)
-                    if data: return data
+                    if data:
+                        data['source'] = 'text_lookup'
+                        return data
                 else:
                     match_url = find_best_goodreads_match_in_list(r.text, title, author)
                     if match_url == "DIRECT_HIT":
                          data = scrape_goodreads_book_details(r.url)
-                         if data: return data
+                         if data: 
+                             data['source'] = 'text_lookup'
+                             return data
                     elif match_url:
                         logging.info(f"  -> Goodreads found (Title+Author): {match_url}")
                         data = scrape_goodreads_book_details(match_url)
-                        if data: return data
+                        if data:
+                            data['source'] = 'text_lookup'
+                            return data
         except: pass
 
-    # 2. Fallback: Search with "Title ONLY"
+    # 3b. Fallback: Search with "Title ONLY"
     logging.info("  -> Standard search failed. Trying Title-only fallback...")
     for search_t in search_titles:
         if not search_t: continue
@@ -508,13 +527,17 @@ def get_goodreads_data(isbn, asin, title, author):
             if r.status_code == 200:
                 if "/book/show/" in r.url:
                     data = scrape_goodreads_book_details(r.url)
-                    if data: return data
+                    if data:
+                        data['source'] = 'text_lookup'
+                        return data
                 else:
                     match_url = find_best_goodreads_match_in_list(r.text, title, author)
                     if match_url and match_url != "DIRECT_HIT":
                         logging.info(f"  -> Goodreads found (Title-Only): {match_url}")
                         data = scrape_goodreads_book_details(match_url)
-                        if data: return data
+                        if data:
+                            data['source'] = 'text_lookup'
+                            return data
         except: pass
 
     return None
@@ -634,23 +657,32 @@ def process_library(lib_id, history, failed_history):
             time.sleep(1)
             gr = get_goodreads_data(isbn, asin, title, author)
             
-            # UPDATE: Only patch ISBN if current ABS isbn is missing
-            if gr and not isbn and not DRY_RUN:
+            # UPDATE LOGIC: Patch ISBN/ASIN if missing OR if old ISBN failed
+            if gr and not DRY_RUN:
                 new_id = gr.get('isbn')
-                id_type = "ISBN"
-                
-                # If no ISBN found, fallback to GR-ASIN
-                if not new_id:
-                    new_id = gr.get('asin')
-                    id_type = "Goodreads ASIN"
+                # Priority 2: Use Goodreads-ASIN if no ISBN available
+                if not new_id: new_id = gr.get('asin')
                 
                 if new_id:
-                    logging.info(f"  -> ✨ Goodreads has {id_type}: {new_id}. Adding to ABS ISBN field...")
-                    try:
-                        patch_isbn_url = f"{ABS_URL}/api/items/{item_id}/media"
-                        requests.patch(patch_isbn_url, json={"metadata": {"isbn": new_id}}, headers=HEADERS_ABS)
+                    should_patch_isbn = False
+                    
+                    # Case A: No ISBN in ABS -> Add it
+                    if not isbn:
+                        should_patch_isbn = True
+                        logging.info(f"  -> ✨ ISBN/ID missing. Adding: {new_id}")
                         stats['isbn_added'] += 1
-                    except: pass
+                        
+                    # Case B: ISBN exists, but search failed (found via Text/ASIN) -> Replace it
+                    elif gr.get('source') != 'isbn_lookup':
+                        should_patch_isbn = True
+                        logging.info(f"  -> 🔧 Existing ISBN failed. Replacing with: {new_id}")
+                        stats['isbn_repaired'] += 1
+                    
+                    if should_patch_isbn:
+                        try:
+                            patch_isbn_url = f"{ABS_URL}/api/items/{item_id}/media"
+                            requests.patch(patch_isbn_url, json={"metadata": {"isbn": new_id}}, headers=HEADERS_ABS)
+                        except: pass
 
             found_gr = bool(gr) or bool(old_gr)
             # Update Goodreads Report
@@ -668,7 +700,7 @@ def process_library(lib_id, history, failed_history):
             else:
                 if found_gr: is_complete = True
             
-            # Partial success now counts as processed
+            # Partial success counts as processed to prevent loops
             should_save_history = found_audible or found_gr
             
             if not is_complete:
