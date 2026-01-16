@@ -163,40 +163,49 @@ def parse_audible_duration(duration_str):
 
 def find_missing_asin(title, author, abs_duration_sec):
     if not title: return None
-    # Search on Audible.de first
+    
+    # Updated: Search .com first, then .de
+    search_domains = ["www.audible.com", "www.audible.de"]
+    
     query_title = urllib.parse.quote_plus(title)
     query_author = urllib.parse.quote_plus(author) if author else ""
-    url = f"https://www.audible.de/search?title={query_title}&author_author={query_author}&ipRedirectOverride=true"
     
-    try:
-        r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
-        if r.status_code != 200: return None
-        soup = BeautifulSoup(r.text, 'lxml')
-        items = soup.find_all('li', class_=re.compile(r'productListItem'))
-        
-        for item in items:
-            asin_attr = item.get('data-asin')
-            if not asin_attr: 
-                div = item.find('div', attrs={'data-asin': True})
-                if div: asin_attr = div.get('data-asin')
-            if not asin_attr: continue
+    for domain in search_domains:
+        url = f"https://{domain}/search?title={query_title}&author_author={query_author}&ipRedirectOverride=true"
+        try:
+            r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
+            if r.status_code != 200: continue
             
-            title_tag = item.find('h3', class_=re.compile(r'bc-heading'))
-            if not title_tag: continue
-            found_title = title_tag.get_text(strip=True)
+            soup = BeautifulSoup(r.text, 'lxml')
+            items = soup.find_all('li', class_=re.compile(r'productListItem'))
             
-            if not fuzzy_match(title, found_title, 0.7): continue
+            for item in items:
+                asin_attr = item.get('data-asin')
+                if not asin_attr: 
+                    div = item.find('div', attrs={'data-asin': True})
+                    if div: asin_attr = div.get('data-asin')
+                if not asin_attr: continue
+                
+                title_tag = item.find('h3', class_=re.compile(r'bc-heading'))
+                if not title_tag: continue
+                found_title = title_tag.get_text(strip=True)
+                
+                if not fuzzy_match(title, found_title, 0.7): continue
+                
+                if abs_duration_sec and abs_duration_sec > 0:
+                    runtime_tag = item.find('li', class_=re.compile(r'runtimeLabel'))
+                    if runtime_tag:
+                        runtime_text = runtime_tag.get_text(strip=True)
+                        audible_sec = parse_audible_duration(runtime_text)
+                        if audible_sec > 0:
+                            if abs(abs_duration_sec - audible_sec) > 900: continue
+                
+                # Found a match!
+                return asin_attr
+                
+        except Exception as e:
+            logging.warning(f"Error searching ASIN on {domain}: {e}")
             
-            if abs_duration_sec and abs_duration_sec > 0:
-                runtime_tag = item.find('li', class_=re.compile(r'runtimeLabel'))
-                if runtime_tag:
-                    runtime_text = runtime_tag.get_text(strip=True)
-                    audible_sec = parse_audible_duration(runtime_text)
-                    if audible_sec > 0:
-                        if abs(abs_duration_sec - audible_sec) > 900: continue
-            return asin_attr
-    except Exception as e:
-        logging.warning(f"Error searching ASIN for '{title}': {e}")
     return None
 
 def get_audible_data(asin):
