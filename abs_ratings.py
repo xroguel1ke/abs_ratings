@@ -20,6 +20,7 @@ LIBRARY_IDS = [l.strip() for l in os.getenv('LIBRARY_IDS', '').split(',') if l.s
 # Paths (Mapped from Host)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(SCRIPT_DIR, "logs")
+REPORT_DIR = os.path.join(SCRIPT_DIR, "reports")
 HISTORY_FILE = os.path.join(SCRIPT_DIR, "rating_history.json")
 FAILED_FILE = os.path.join(SCRIPT_DIR, "failed_history.json")
 ENV_OUTPUT_FILE = os.path.join(SCRIPT_DIR, "last_run.env")
@@ -51,6 +52,10 @@ stats = {
     "skipped": 0, "partial": 0, "cooldown": 0, "recycled": 0, 
     "asin_found": 0, "isbn_added": 0
 }
+
+# In-Memory Report Storage
+report_audible = {}
+report_goodreads = {}
 
 def setup_logging():
     """Sets up logging to file and console."""
@@ -107,15 +112,69 @@ def write_env_file(log_filename, start_time):
 def load_json(path):
     if os.path.exists(path):
         try:
-            with open(path, 'r') as f: return json.load(f)
+            with open(path, 'r', encoding='utf-8') as f: return json.load(f)
         except: return {}
     return {}
 
 def save_json(path, data):
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, 'w') as f: json.dump(data, f, indent=4)
+        with open(path, 'w', encoding='utf-8') as f: json.dump(data, f, indent=4, ensure_ascii=False)
     except: pass
+
+# === REPORTING FUNCTIONS ===
+
+def load_reports():
+    global report_audible, report_goodreads
+    if not os.path.exists(REPORT_DIR):
+        os.makedirs(REPORT_DIR)
+    
+    f_aud = os.path.join(REPORT_DIR, "missing_audible.json")
+    f_gr = os.path.join(REPORT_DIR, "missing_goodreads.json")
+    
+    try:
+        raw_aud = load_json(f_aud)
+        if isinstance(raw_aud, list):
+            report_audible = {item['key']: item for item in raw_aud if 'key' in item}
+        else:
+            report_audible = {}
+            
+        raw_gr = load_json(f_gr)
+        if isinstance(raw_gr, list):
+            report_goodreads = {item['key']: item for item in raw_gr if 'key' in item}
+        else:
+            report_goodreads = {}
+    except:
+        report_audible = {}
+        report_goodreads = {}
+
+def update_report(source, unique_key, title, author, identifier, reason, success):
+    target_dict = report_audible if source == "audible" else report_goodreads
+    
+    if success:
+        if unique_key in target_dict:
+            del target_dict[unique_key]
+    else:
+        target_dict[unique_key] = {
+            "key": unique_key,
+            "title": title,
+            "author": author,
+            "identifier": identifier,
+            "reason": reason,
+            "last_check": datetime.now().strftime("%Y-%m-%d")
+        }
+
+def save_reports():
+    f_aud = os.path.join(REPORT_DIR, "missing_audible.json")
+    f_gr = os.path.join(REPORT_DIR, "missing_goodreads.json")
+    
+    list_aud = sorted(report_audible.values(), key=lambda x: x['title'])
+    list_gr = sorted(report_goodreads.values(), key=lambda x: x['title'])
+    
+    save_json(f_aud, list_aud)
+    save_json(f_gr, list_gr)
+
+# === UTILS ===
 
 def is_due_for_update(unique_key, history):
     if unique_key not in history: return True
@@ -156,11 +215,8 @@ def generate_moon_rating(val):
 
 def clean_title_for_search(title):
     if not title: return ""
-    # Remove audio specific keywords
     title = re.sub(r'(?i)\b(unabridged|abridged|audiobook|graphic audio|dramatized adaptation)\b', '', title)
-    # Remove ALL content in brackets () or []
     title = re.sub(r'[\(\[].*?[\)\]]', '', title)
-    # Remove subtitles
     if ':' in title:
         title = title.split(':')[0]
     elif ' - ' in title:
@@ -170,17 +226,10 @@ def clean_title_for_search(title):
 def extract_volume_number(text):
     nums = set()
     if not text: return nums
-    
-    # Improved regex to capture "Volume 1", "Vol. 1", "Book 1", "No. 1", "#1"
-    # The (?:...) group handles the words with a boundary \b
-    # The |# handles the hash without enforcing \b before it (to catch "(Series#1)")
     matches = re.findall(r'(?i)(?:\b(?:book|vol\.?|volume|part|no\.?)|#)\s*(\d+)', text)
     nums.update(matches)
-    
-    # Capture standalone number at the very end of string
     end_match = re.search(r'\b(\d+)$', text.strip())
     if end_match: nums.add(end_match.group(1))
-    
     return nums
 
 def check_numbers_match(abs_title, gr_title):
@@ -329,6 +378,8 @@ def scrape_goodreads_book_details(url):
         if r.status_code != 200: return None
         soup = BeautifulSoup(r.text, 'lxml')
         result = {'url': url}
+        
+        # JSON-LD Parsing
         scripts = soup.find_all('script', type='application/ld+json')
         for script in scripts:
             try:
@@ -341,6 +392,8 @@ def scrape_goodreads_book_details(url):
                          result['count'] = data['aggregateRating'].get('ratingCount')
                     if 'isbn' in data: result['isbn'] = data['isbn']
             except: pass
+            
+        # Fallback Text Parsing
         if 'val' not in result:
             rating_candidates = soup.find_all(string=re.compile(r"avg rating"))
             for text_node in rating_candidates:
@@ -356,9 +409,20 @@ def scrape_goodreads_book_details(url):
                     clean_count = re.sub(r'[^\d]', '', match.group(1))
                     if clean_count: result['count'] = int(clean_count)
                     break
+        
+        # ISBN & ASIN Extraction
         if 'isbn' not in result:
             meta_isbn = soup.find('meta', property="books:isbn")
             if meta_isbn: result['isbn'] = meta_isbn.get('content')
+        
+        # Try to find ASIN (Commonly labeled as ASIN in text)
+        if 'isbn' not in result:
+            # Look for "ASIN: B0..."
+            text_content = soup.get_text()
+            asin_match = re.search(r'ASIN[:\s]+(B0\w+)', text_content)
+            if asin_match:
+                result['asin'] = asin_match.group(1)
+
         return result if 'val' in result else None
     except: return None
 
@@ -405,7 +469,7 @@ def get_goodreads_data(isbn, asin, title, author):
                 if data: return data
         except: pass
     
-    # Setup search terms
+    # Text Search Setup
     search_titles = [title]
     clean = clean_title_for_search(title)
     if clean and clean != title: search_titles.append(clean)
@@ -443,10 +507,6 @@ def get_goodreads_data(isbn, asin, title, author):
             r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
             if r.status_code == 200:
                 if "/book/show/" in r.url:
-                    # Direct hit on generic search usually untrustworthy without verification
-                    # but check_numbers/author match might be skipped if direct hit. 
-                    # We accept direct hit on strict terms, but maybe verify author?
-                    # Let's scrape it and assume if GR redirects it's a very strong match.
                     data = scrape_goodreads_book_details(r.url)
                     if data: return data
                 else:
@@ -500,7 +560,7 @@ def process_library(lib_id, history, failed_history):
             logging.info(f"Batch limit of {MAX_BATCH_SIZE} reached.")
             break
         
-        # === ERROR HANDLING WRAPPER FOR INDIVIDUAL ITEMS ===
+        # === ITEM PROCESSING WRAPPER ===
         try:
             item_id = item['id']
             unique_key = f"{lib_id}_{item_id}"
@@ -542,18 +602,15 @@ def process_library(lib_id, history, failed_history):
             logging.info(f"Processing: {title} (ASIN: {asin if asin else 'None'})")
             stats['processed'] += 1
             
+            # --- AUDIBLE ---
             audible_data = None
-            if asin:
-                audible_data = get_audible_data(asin)
+            if asin: audible_data = get_audible_data(asin)
             
             should_search_asin = (not asin) or (asin and audible_data is None)
             
             if should_search_asin and not DRY_RUN:
-                if not asin:
-                    logging.info("  -> No ASIN present. Searching...")
-                else:
-                    logging.info("  -> ASIN seems invalid. Searching replacement...")
-                    
+                if not asin: logging.info("  -> No ASIN present. Searching...")
+                else: logging.info("  -> ASIN seems invalid. Searching replacement...")
                 found_asin = find_missing_asin(title, author, abs_duration, language)
                 if found_asin:
                     logging.info(f"  -> ✨ Found ASIN: {found_asin}")
@@ -565,38 +622,61 @@ def process_library(lib_id, history, failed_history):
                             stats['asin_found'] += 1
                             audible_data = get_audible_data(asin)
                     except: pass
+            
+            # Update Audible Report
+            found_audible = bool(audible_data) or bool(old_audible)
+            if not found_audible:
+                update_report("audible", unique_key, title, author, asin, "No Ratings found & Search failed", False)
+            else:
+                update_report("audible", unique_key, title, author, asin, "Success", True)
 
+            # --- GOODREADS ---
             time.sleep(1)
             gr = get_goodreads_data(isbn, asin, title, author)
             
-            if gr and gr.get('isbn') and not isbn and not DRY_RUN:
-                new_isbn = gr.get('isbn')
-                logging.info(f"  -> ✨ Goodreads has ISBN: {new_isbn}. Adding to ABS...")
-                try:
-                    patch_isbn_url = f"{ABS_URL}/api/items/{item_id}/media"
-                    requests.patch(patch_isbn_url, json={"metadata": {"isbn": new_isbn}}, headers=HEADERS_ABS)
-                    stats['isbn_added'] += 1
-                except: pass
+            # UPDATE: Only patch ISBN if current ABS isbn is missing
+            if gr and not isbn and not DRY_RUN:
+                new_id = gr.get('isbn')
+                id_type = "ISBN"
+                
+                # If no ISBN found, fallback to GR-ASIN
+                if not new_id:
+                    new_id = gr.get('asin')
+                    id_type = "Goodreads ASIN"
+                
+                if new_id:
+                    logging.info(f"  -> ✨ Goodreads has {id_type}: {new_id}. Adding to ABS ISBN field...")
+                    try:
+                        patch_isbn_url = f"{ABS_URL}/api/items/{item_id}/media"
+                        requests.patch(patch_isbn_url, json={"metadata": {"isbn": new_id}}, headers=HEADERS_ABS)
+                        stats['isbn_added'] += 1
+                    except: pass
 
-            audible_found = bool(audible_data) or bool(old_audible)
-            gr_found = bool(gr) or bool(old_gr)
+            found_gr = bool(gr) or bool(old_gr)
+            # Update Goodreads Report
+            if not found_gr:
+                search_id = isbn if isbn else "No ISBN"
+                update_report("goodreads", unique_key, title, author, search_id, "No Match found (ID/Title/Fallback)", False)
+            else:
+                update_report("goodreads", unique_key, title, author, isbn, "Success", True)
             
+            # --- HISTORY & STATUS ---
             has_asin = bool(asin)
             is_complete = False
             if has_asin:
-                if audible_found and gr_found: is_complete = True
+                if found_audible and found_gr: is_complete = True
             else:
-                if gr_found: is_complete = True
+                if found_gr: is_complete = True
             
-            should_save_history = is_complete
+            # Partial success now counts as processed
+            should_save_history = found_audible or found_gr
             
             if not is_complete:
-                if not audible_found and not gr_found:
+                if not found_audible and not found_gr:
                     fails = failed_history.get(unique_key, 0) + 1
                     failed_history[unique_key] = fails
                     stats['no_data'] += 1
                     logging.warning(f"  -> ❌ No data found (Attempt {fails}/{MAX_FAIL_ATTEMPTS}).")
-                    
                     if fails >= MAX_FAIL_ATTEMPTS:
                         history[unique_key] = datetime.now().strftime("%Y-%m-%d")
                         save_json(HISTORY_FILE, history)
@@ -607,14 +687,14 @@ def process_library(lib_id, history, failed_history):
                         save_json(FAILED_FILE, failed_history)
                 else:
                     stats['partial'] += 1
-                    logging.info(f"  -> ⚠️ Incomplete data (Audible: {audible_found}, GR: {gr_found}). Saved to History to prevent loop.")
-                    should_save_history = True # STOP THE LOOP
+                    logging.info(f"  -> ⚠️ Incomplete data (Audible: {found_audible}, GR: {found_gr}). Saved to History.")
             
             if should_save_history:
                 if unique_key in failed_history:
                     del failed_history[unique_key]
                     save_json(FAILED_FILE, failed_history)
             
+            # --- BUILD DESC ---
             BR = "<br>" 
             block = f"⭐ Ratings & Infos{BR}"
             
@@ -670,7 +750,6 @@ def process_library(lib_id, history, failed_history):
                 if is_complete: stats['success'] += 1
         
         except Exception as e:
-            # === SAFETY NET ===
             logging.error(f"CRASH on item {item.get('id')}: {e}")
             stats['failed'] += 1
             continue
@@ -684,6 +763,8 @@ def main():
         return
 
     log_file = setup_logging()
+    load_reports() 
+    
     start_time = datetime.now()
     logging.info("--- Starting ABS Ratings Update ---")
     
@@ -693,10 +774,11 @@ def main():
     for lib_id in LIBRARY_IDS:
         process_library(lib_id, history, failed_history)
         
+    save_reports() 
+    
     logging.info(f"--- Finished ---")
     logging.info(f"Stats: {stats}")
     
-    # Generate Env file for Bash script
     write_env_file(log_file, start_time)
 
 if __name__ == "__main__":
