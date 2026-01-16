@@ -6,9 +6,8 @@ import json
 import os
 import random
 import urllib.parse
-import subprocess
-import shutil
-import difflib  # Used for fuzzy string matching (title comparison)
+import difflib
+import logging
 from datetime import datetime
 
 # ================= CONFIGURATION =================
@@ -18,16 +17,17 @@ API_TOKEN = os.getenv('API_TOKEN')
 # List of Library IDs to process
 LIBRARY_IDS = [l.strip() for l in os.getenv('LIBRARY_IDS', '').split(',') if l.strip()]
 
-# File paths for storing history and failure counts
-HISTORY_FILE = "/mnt/user/appdata/audiobookshelf/abs_scripts/rating_history.json"
-FAILED_FILE = "/mnt/user/appdata/audiobookshelf/abs_scripts/failed_history.json"
+# Paths (Mapped from Host)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_DIR = os.path.join(SCRIPT_DIR, "logs")
+HISTORY_FILE = os.path.join(SCRIPT_DIR, "rating_history.json")
+FAILED_FILE = os.path.join(SCRIPT_DIR, "failed_history.json")
+ENV_OUTPUT_FILE = os.path.join(SCRIPT_DIR, "last_run.env")
 
 # Settings
-REFRESH_DAYS = int(os.getenv('REFRESH_DAYS', 90))  # How often to update existing ratings
-MAX_BATCH_SIZE = int(os.getenv('BATCH_SIZE', 150)) # Max items per run
-MAX_FAIL_ATTEMPTS = 3  # Number of failures before triggering a cooldown
-
-# Dry Run: If True, no changes are written to ABS
+REFRESH_DAYS = int(os.getenv('REFRESH_DAYS', 90))
+MAX_BATCH_SIZE = int(os.getenv('BATCH_SIZE', 150))
+MAX_FAIL_ATTEMPTS = 3
 DRY_RUN = os.getenv('DRY_RUN', 'False').lower() == 'true'
 BASE_SLEEP = int(os.getenv('SLEEP_TIMER', 6)) 
 # =================================================
@@ -38,7 +38,7 @@ HEADERS_ABS = {
     "Content-Type": "application/json"
 }
 
-# Headers for scraping (mimics a real browser to avoid blocking)
+# Headers for scraping
 HEADERS_SCRAPE = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -47,11 +47,63 @@ HEADERS_SCRAPE = {
 
 # Statistics tracker
 stats = {
-    "processed": 0, "success": 0, "failed": 0, "no_data": 0, "skipped": 0, "partial": 0, "cooldown": 0, "recycled": 0, "asin_found": 0
+    "processed": 0, "success": 0, "failed": 0, "no_data": 0, 
+    "skipped": 0, "partial": 0, "cooldown": 0, "recycled": 0, "asin_found": 0
 }
 
+def setup_logging():
+    """Sets up logging to file and console."""
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR)
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = os.path.join(LOG_DIR, f"run_{timestamp}.log")
+    
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file, encoding='utf-8'),
+            logging.StreamHandler()
+        ]
+    )
+    return log_file
+
+def write_env_file(log_filename, start_time):
+    """Writes a simple env file for the bash script to source."""
+    duration = datetime.now() - start_time
+    minutes, seconds = divmod(duration.total_seconds(), 60)
+    duration_str = f"{int(minutes)}m {int(seconds)}s"
+
+    if stats['failed'] > 0:
+        status_subject = "ABS Ratings: Fehler ❌"
+        status_icon = "alert"
+        status_header = "Fehler aufgetreten!"
+    elif stats['success'] > 0 or stats['recycled'] > 0 or stats['asin_found'] > 0:
+        status_subject = "ABS Ratings: Erfolg ✅"
+        status_icon = "normal"
+        status_header = "Update abgeschlossen"
+    else:
+        status_subject = "ABS Ratings: Info ℹ️"
+        status_icon = "normal"
+        status_header = "Keine Änderungen"
+
+    report_body = (f"Processed: {stats['processed']} | New: {stats['success']} | "
+                   f"ASIN-Fix: {stats['asin_found']} | Recycled: {stats['recycled']} | "
+                   f"No Data/Cool: {stats['no_data'] + stats['cooldown']} | Errors: {stats['failed']}")
+
+    try:
+        with open(ENV_OUTPUT_FILE, 'w', encoding='utf-8') as f:
+            f.write(f"ABS_SUBJECT='{status_subject}'\n")
+            f.write(f"ABS_ICON='{status_icon}'\n")
+            f.write(f"ABS_HEADER='{status_header}'\n")
+            f.write(f"ABS_DURATION='{duration_str}'\n")
+            f.write(f"ABS_REPORT_BODY='{report_body}'\n")
+            f.write(f"ABS_LOG_FILE='{os.path.basename(log_filename)}'\n")
+    except Exception as e:
+        logging.error(f"Could not write env file: {e}")
+
 def load_json(path):
-    """Loads a JSON file safely."""
     if os.path.exists(path):
         try:
             with open(path, 'r') as f: return json.load(f)
@@ -59,38 +111,12 @@ def load_json(path):
     return {}
 
 def save_json(path, data):
-    """Saves data to a JSON file."""
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'w') as f: json.dump(data, f, indent=4)
     except: pass
 
-def send_unraid_notify():
-    """Sends a notification to the Unraid WebGUI if available."""
-    subject = "ABS Ratings Update"
-    msg = (f"Durchlauf beendet (Batch: {MAX_BATCH_SIZE}).\n"
-           f"Bearbeitet: {stats['processed']}\n"
-           f"Erfolg (Neu): {stats['success']}\n"
-           f"ASINs gefunden: {stats['asin_found']}\n"
-           f"Erhalten (Recycled): {stats['recycled']}\n"
-           f"In Cooldown: {stats['cooldown']}\n"
-           f"Keine Daten: {stats['no_data']}")
-    severity = 'normal' if stats['failed'] == 0 else 'warning'
-    
-    notify_cmd = shutil.which("notify")
-    if not notify_cmd:
-        # Check common Unraid paths
-        possible_paths = ["/usr/local/emhttp/webGui/scripts/notify", "/usr/sbin/notify", "/usr/bin/notify"]
-        for p in possible_paths:
-            if os.path.exists(p):
-                notify_cmd = p
-                break
-    
-    if notify_cmd:
-        subprocess.run([notify_cmd, '-e', 'ABS Scripts', '-s', subject, '-d', msg, '-i', severity], check=False)
-
 def is_due_for_update(unique_key, history):
-    """Checks if an item hasn't been updated for REFRESH_DAYS."""
     if unique_key not in history: return True
     try:
         last_run = datetime.strptime(history[unique_key], "%Y-%m-%d")
@@ -99,27 +125,14 @@ def is_due_for_update(unique_key, history):
     return False
 
 def remove_old_rating_block(description):
-    """
-    Removes the old rating block and aggressively cleans up leading whitespace/breaks.
-    Ensures the text starts cleanly after the new block is inserted.
-    """
     if not description: return ""
-    
-    # 1. Remove the entire block from start-star to end-star
-    # (?s) allows dot (.) to match newlines
     pattern = r'(?s)⭐\s*Ratings.*?⭐(?:\s|<br\s*/?>)*'
     description = re.sub(pattern, '', description)
-
-    # 2. Legacy Support: Remove old text-only blocks
     description = re.sub(r'(?s)\*\*Audible\*\*.*?---\s*\n*', '', description)
-
-    # 3. Gap Killer: Removes ALL leading whitespace/newlines/breaks
     description = re.sub(r'^(?:\s|<br\s*/?>)+', '', description, flags=re.IGNORECASE)
-    
     return description.strip()
 
 def generate_moon_rating(val):
-    """Converts a numeric value (e.g., 4.5) into a moon emoji string."""
     try:
         if not val: return "🌑🌑🌑🌑🌑"
         v = round(float(str(val).replace(',', '.')), 1)
@@ -132,40 +145,25 @@ def generate_moon_rating(val):
         return "🌕" * full + "🌗" * half + "🌑" * (5 - full - half)
     except: return "🌑🌑🌑🌑🌑"
 
-# === HELPER FUNCTIONS FOR ASIN SEARCH ===
+# === HELPER FUNCTIONS ===
 
 def fuzzy_match(s1, s2, threshold=0.8):
-    """Compares two strings using difflib. Returns True if similarity >= threshold."""
     if not s1 or not s2: return False
     return difflib.SequenceMatcher(None, s1.lower(), s2.lower()).ratio() >= threshold
 
 def parse_audible_duration(duration_str):
-    """
-    Parses duration strings like '12 Std. 36 Min.' or '12 hrs 5 mins' into seconds.
-    Used to verify if the found book matches the file length.
-    """
     if not duration_str: return 0
     hours = 0
     mins = 0
-    
-    # Extract hours
     m_h = re.search(r'(\d+)\s*(?:Std|hr|h)', duration_str, re.IGNORECASE)
     if m_h: hours = int(m_h.group(1))
-    
-    # Extract minutes
     m_m = re.search(r'(\d+)\s*(?:Min|m)', duration_str, re.IGNORECASE)
     if m_m: mins = int(m_m.group(1))
-    
     return (hours * 3600) + (mins * 60)
 
 def find_missing_asin(title, author, abs_duration_sec):
-    """
-    Searches for a missing ASIN on Audible.de using Title and Author.
-    Verifies the result by matching Title (fuzzy) and Duration (tolerance check).
-    """
     if not title: return None
-    
-    # Build advanced search URL
+    # Search on Audible.de first
     query_title = urllib.parse.quote_plus(title)
     query_author = urllib.parse.quote_plus(author) if author else ""
     url = f"https://www.audible.de/search?title={query_title}&author_author={query_author}&ipRedirectOverride=true"
@@ -174,114 +172,143 @@ def find_missing_asin(title, author, abs_duration_sec):
         r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
         if r.status_code != 200: return None
         soup = BeautifulSoup(r.text, 'lxml')
-        
-        # Iterate through search results
         items = soup.find_all('li', class_=re.compile(r'productListItem'))
         
         for item in items:
-            # 1. Extract ASIN
             asin_attr = item.get('data-asin')
             if not asin_attr: 
-                # Fallback: Check inner divs
                 div = item.find('div', attrs={'data-asin': True})
                 if div: asin_attr = div.get('data-asin')
-            
             if not asin_attr: continue
             
-            # 2. Verify Title (Fuzzy Match)
             title_tag = item.find('h3', class_=re.compile(r'bc-heading'))
             if not title_tag: continue
             found_title = title_tag.get_text(strip=True)
             
-            if not fuzzy_match(title, found_title, 0.7): # Allow slight variations
-                continue
-                
-            # 3. Verify Duration (Critical Check)
+            if not fuzzy_match(title, found_title, 0.7): continue
+            
             if abs_duration_sec and abs_duration_sec > 0:
                 runtime_tag = item.find('li', class_=re.compile(r'runtimeLabel'))
                 if runtime_tag:
                     runtime_text = runtime_tag.get_text(strip=True)
                     audible_sec = parse_audible_duration(runtime_text)
-                    
                     if audible_sec > 0:
-                        diff = abs(abs_duration_sec - audible_sec)
-                        # Tolerance: +/- 15 Minutes (900 seconds)
-                        # Prevents matching abridged vs. unabridged versions
-                        if diff > 900:
-                            continue
-            
-            # If we reach here, Title and Duration match -> Success
+                        if abs(abs_duration_sec - audible_sec) > 900: continue
             return asin_attr
-            
-    except: pass
+    except Exception as e:
+        logging.warning(f"Error searching ASIN for '{title}': {e}")
     return None
-
-# ============================================
 
 def get_audible_data(asin):
     """
-    Scrapes Audible for ratings. Checks multiple regions (.com, .uk, .de, etc.).
-    Returns early if data is found in a region.
+    Checks multiple domains. 
+    Handles Soft-404s via URL Redirect Check (/pderror).
+    Returns data if ratings > 0 found.
+    Returns {'count': 0} if ASIN exists on .com (but no ratings).
+    Returns None if ASIN exists ONLY on non-com domains (but no ratings) -> Triggers search.
+    Returns None if ASIN does not exist (404/pderror) on all checked domains.
     """
     if not asin: return None
+    
+    # Priority Order: COM -> DE -> UK
     domains = [
-        "www.audible.com", "www.audible.co.uk", "www.audible.de",
+        "www.audible.com", "www.audible.de", "www.audible.co.uk",
         "www.audible.fr", "www.audible.ca", "www.audible.com.au",
         "www.audible.it", "www.audible.es"
     ]
+    
+    found_domains = [] # Track where we found the ASIN (Valid page, no soft-404)
+    
     for domain in domains:
         url = f"https://{domain}/pd/{asin}?ipRedirectOverride=true"
         try:
             r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
-            if r.status_code != 200: continue 
-            soup = BeautifulSoup(r.text, 'lxml')
-            ratings = {}
             
-            # Try getting detailed JSON data (Rating Count + Value)
-            meta_tag = soup.find('adbl-product-metadata')
-            if meta_tag:
-                script = meta_tag.find('script', type='application/json')
-                if script:
-                    try:
-                        d = json.loads(script.string)
-                        if 'rating' in d:
-                            r_data = d['rating']
-                            if 'count' in r_data: ratings['count'] = r_data['count']
-                            if 'value' in r_data: ratings['overall'] = r_data['value']
-                    except: pass
+            if r.status_code == 404:
+                continue 
+                
+            if r.status_code == 200:
+                # === SOFT 404 CHECK (URL Redirect) ===
+                if "/pderror" in r.url.lower():
+                    logging.info(f"  -> Soft 404 on {domain} (Redirected to pderror).")
+                    continue
+                
+                soup = BeautifulSoup(r.text, 'lxml')
+                
+                # Double-Check: Verify Title Tag exists
+                title_tag = soup.find('h1', class_=re.compile(r'bc-heading'))
+                if not title_tag:
+                    logging.info(f"  -> Soft 404 on {domain} (No Title found).")
+                    continue
 
-            # Fallback to LD+JSON
-            scripts = soup.find_all('script', type='application/ld+json')
-            for script in scripts:
-                try:
-                    data = json.loads(script.string)
-                    if isinstance(data, list):
-                        for item in data:
-                            if 'aggregateRating' in item: ratings['overall'] = item['aggregateRating'].get('ratingValue')
-                    elif isinstance(data, dict) and 'aggregateRating' in data:
-                        ratings['overall'] = data['aggregateRating'].get('ratingValue')
-                except: pass
+                # Valid Page Found
+                found_domains.append(domain)
+                ratings = {}
+                
+                # Extract Data
+                meta_tag = soup.find('adbl-product-metadata')
+                if meta_tag:
+                    script = meta_tag.find('script', type='application/json')
+                    if script:
+                        try:
+                            d = json.loads(script.string)
+                            if 'rating' in d:
+                                r_data = d['rating']
+                                if 'count' in r_data: ratings['count'] = r_data['count']
+                                if 'value' in r_data: ratings['overall'] = r_data['value']
+                        except: pass
+
+                # Fallback JSON-LD
+                if not ratings.get('overall'):
+                    scripts = soup.find_all('script', type='application/ld+json')
+                    for script in scripts:
+                        try:
+                            data = json.loads(script.string)
+                            if isinstance(data, list):
+                                for item in data:
+                                    if 'aggregateRating' in item: ratings['overall'] = item['aggregateRating'].get('ratingValue')
+                            elif isinstance(data, dict) and 'aggregateRating' in data:
+                                ratings['overall'] = data['aggregateRating'].get('ratingValue')
+                        except: pass
+                
+                # Detailed Ratings
+                summary_tag = soup.find('adbl-rating-summary')
+                if summary_tag:
+                    if summary_tag.has_attr('performance-value'): ratings['performance'] = summary_tag['performance-value']
+                    if summary_tag.has_attr('story-value'): ratings['story'] = summary_tag['story-value']
+                
+                # CHECK: Do we have ratings?
+                count = ratings.get('count')
+                if count and int(count) > 0:
+                    logging.info(f"  -> Found ratings on {domain} (Count: {count})")
+                    return ratings
+                
+                # Loop continues to check other domains for better data
+                
+        except Exception as e:
+            logging.debug(f"Error checking {domain}: {e}")
+            pass
             
-            # Get Performance and Story ratings
-            summary_tag = soup.find('adbl-rating-summary')
-            if summary_tag:
-                if summary_tag.has_attr('performance-value'): ratings['performance'] = summary_tag['performance-value']
-                if summary_tag.has_attr('story-value'): ratings['story'] = summary_tag['story-value']
-            
-            # If we found at least an overall rating, return it
-            if ratings.get('overall'): return ratings
-        except: pass
-    return None
+    # End of loop. No ratings > 0 found.
+    
+    # Check if we should keep the ASIN or discard it
+    if "www.audible.com" in found_domains:
+        logging.info("  -> ASIN exists on .com (0 ratings). Keeping ASIN.")
+        return {'count': 0, 'overall': None} # Keep ASIN
+        
+    if found_domains:
+        logging.info(f"  -> ASIN found on {found_domains} but not .com (and 0 ratings). Discarding to trigger search.")
+        return None # Discard ASIN -> Trigger Search
+
+    return None # Invalid ASIN (404 everywhere)
 
 def scrape_goodreads_page(url):
-    """Scrapes Goodreads for rating value and count."""
     try:
         r = requests.get(url, headers=HEADERS_SCRAPE, timeout=30)
         if r.status_code != 200: return None
         soup = BeautifulSoup(r.text, 'lxml')
         result = {}
         
-        # Try JSON-LD first
         scripts = soup.find_all('script', type='application/ld+json')
         for script in scripts:
             try:
@@ -294,7 +321,6 @@ def scrape_goodreads_page(url):
                          result['count'] = data['aggregateRating'].get('ratingCount')
             except: pass
             
-        # Fallback: Regex search in HTML for Rating
         if 'val' not in result:
             rating_candidates = soup.find_all(string=re.compile(r"avg rating"))
             for text_node in rating_candidates:
@@ -303,7 +329,6 @@ def scrape_goodreads_page(url):
                     result['val'] = match.group(1).replace(',', '.')
                     break
         
-        # Fallback: Regex search for Count
         if 'count' not in result:
             count_candidates = soup.find_all(string=re.compile(r"ratings"))
             for text_node in count_candidates:
@@ -318,7 +343,6 @@ def scrape_goodreads_page(url):
     return None
 
 def get_goodreads_rating(isbn, asin, title, author):
-    """Tries to find Goodreads rating via ISBN, ASIN, or Title search."""
     def fetch(query): return scrape_goodreads_page(f"https://www.goodreads.com/search?q={query}")
     if isbn:
         res = fetch(isbn)
@@ -335,17 +359,19 @@ def get_goodreads_rating(isbn, asin, title, author):
     return None
 
 def process_library(lib_id, history, failed_history):
-    print(f"\n--- Library: {lib_id} ---", flush=True)
+    logging.info(f"--- Processing Library: {lib_id} ---")
     try:
         r = requests.get(f"{ABS_URL}/api/libraries/{lib_id}/items", headers=HEADERS_ABS)
+        if r.status_code != 200:
+            logging.error(f"Failed to fetch library items. Status: {r.status_code}")
+            stats['failed'] += 1
+            return
         items = r.json()['results']
     except Exception as e:
-        print(f"Verbindungsfehler ABS: {e}", flush=True)
+        logging.error(f"Connection error ABS: {e}")
+        stats['failed'] += 1
         return
 
-    # === PRIORITIZATION ===
-    # queue_new: Items never processed
-    # queue_due: Items processed > REFRESH_DAYS ago
     queue_new = []
     queue_due = []
     
@@ -364,31 +390,37 @@ def process_library(lib_id, history, failed_history):
     random.shuffle(queue_due)
     work_queue = queue_new + queue_due
     
-    print(f"  -> {len(queue_new)} Neue, {len(queue_due)} Fällige.", flush=True)
+    logging.info(f"Queue: {len(queue_new)} New, {len(queue_due)} Due. (Total skipped: {stats['skipped']})")
     
     count_processed = 0
     
     for item in work_queue:
         if count_processed >= MAX_BATCH_SIZE:
-            print(f"\n🛑 Batch-Limit von {MAX_BATCH_SIZE} erreicht.", flush=True)
+            logging.info(f"Batch limit of {MAX_BATCH_SIZE} reached.")
             break
         
         item_id = item['id']
         unique_key = f"{lib_id}_{item_id}"
         metadata = item.get('media', {})['metadata']
+        title = metadata.get('title')
         
-        # 1. Fetch CURRENT description (for Backup/Recycling)
-        item_res = requests.get(f"{ABS_URL}/api/items/{item_id}", headers=HEADERS_ABS)
-        if item_res.status_code == 200:
-            item_data = item_res.json()
-            current_desc = item_data['media']['metadata'].get('description', '')
-            # Get duration for ASIN verification
-            abs_duration = item_data['media'].get('duration')
-        else:
-            current_desc = metadata.get('description', '')
-            abs_duration = item.get('media', {}).get('duration')
+        # 1. Fetch CURRENT description
+        try:
+            item_res = requests.get(f"{ABS_URL}/api/items/{item_id}", headers=HEADERS_ABS)
+            if item_res.status_code == 200:
+                item_data = item_res.json()
+                current_desc = item_data['media']['metadata'].get('description', '')
+                abs_duration = item_data['media'].get('duration')
+            else:
+                logging.warning(f"Could not fetch details for {title} (ID: {item_id}). Status: {item_res.status_code}")
+                current_desc = metadata.get('description', '')
+                abs_duration = item.get('media', {}).get('duration')
+        except Exception as e:
+            logging.error(f"Error fetching item details for {title}: {e}")
+            stats['failed'] += 1
+            continue
 
-        # 2. Extract OLD ratings (as Fallback)
+        # 2. Extract OLD ratings
         old_audible = None
         old_gr = None
         m_aud = re.search(r'(?s)(Audible.*?)<br>\s*(?=Goodreads|⭐)', current_desc)
@@ -397,7 +429,6 @@ def process_library(lib_id, history, failed_history):
         if m_gr: old_gr = m_gr.group(1).strip()
 
         # 3. Metadata Setup
-        title = metadata.get('title')
         asin = metadata.get('asin')
         isbn = metadata.get('isbn')
         
@@ -408,34 +439,56 @@ def process_library(lib_id, history, failed_history):
             if isinstance(first, str): author = first
             elif isinstance(first, dict) and 'name' in first: author = first['name']
 
-        if not title: continue 
+        if not title: 
+            logging.warning(f"Item {item_id} has no title. Skipping.")
+            continue 
         
-        print(f"Bearbeite: {title}...", flush=True)
+        logging.info(f"Processing: {title} (ASIN: {asin if asin else 'None'})")
         stats['processed'] += 1
         
-        # === NEW: AUTOMATIC ASIN SEARCH ===
-        if not asin and not DRY_RUN:
-            print("  -> 🔍 Keine ASIN. Suche auf Audible...", flush=True)
+        # === 4. AUDIBLE DATA & ASIN CHECK ===
+        audible_data = None
+        
+        # A) Check existing ASIN
+        if asin:
+            audible_data = get_audible_data(asin)
+        
+        # B) Decide if we need to search for an ASIN
+        # Condition: ASIN is missing OR ASIN is completely invalid (get_audible_data returned None)
+        # Note: If audible_data is {'count': 0}, it is NOT None, so we do NOT search (preserving the ASIN).
+        should_search_asin = (not asin) or (asin and audible_data is None)
+        
+        if should_search_asin and not DRY_RUN:
+            if not asin:
+                logging.info("  -> No ASIN present. Searching...")
+            else:
+                logging.info("  -> ASIN seems invalid (404 or Soft-404). Searching replacement...")
+                
             found_asin = find_missing_asin(title, author, abs_duration)
             if found_asin:
-                print(f"  -> ✨ ASIN gefunden: {found_asin} (Speichere in ABS...)", flush=True)
-                # Patch ASIN directly to ABS
-                patch_asin_url = f"{ABS_URL}/api/items/{item_id}/media"
-                requests.patch(patch_asin_url, json={"metadata": {"asin": found_asin}}, headers=HEADERS_ABS)
-                # Use found ASIN for current run
-                asin = found_asin
-                stats['asin_found'] += 1
+                logging.info(f"  -> ✨ Found ASIN: {found_asin}")
+                try:
+                    patch_asin_url = f"{ABS_URL}/api/items/{item_id}/media"
+                    r_asin = requests.patch(patch_asin_url, json={"metadata": {"asin": found_asin}}, headers=HEADERS_ABS)
+                    if r_asin.status_code == 200:
+                        asin = found_asin
+                        stats['asin_found'] += 1
+                        # Re-fetch ratings with new ASIN
+                        audible_data = get_audible_data(asin)
+                    else:
+                        logging.warning(f"  -> Failed to save ASIN. Status: {r_asin.status_code}")
+                except Exception as e:
+                    logging.error(f"  -> Error saving ASIN: {e}")
             else:
-                print("  -> ❌ Keine passende ASIN gefunden.", flush=True)
+                logging.info("  -> ❌ No matching ASIN found.")
         # ====================================
 
-        # Fetch Ratings
-        audible = get_audible_data(asin)
+        # 5. Goodreads
         time.sleep(1)
         gr = get_goodreads_rating(isbn, asin, title, author)
 
-        # Check if we have data (New or Recycled)
-        audible_found = bool(audible) or bool(old_audible)
+        # Check Results
+        audible_found = bool(audible_data) or bool(old_audible)
         gr_found = bool(gr) or bool(old_gr)
         
         has_asin = bool(asin)
@@ -445,18 +498,16 @@ def process_library(lib_id, history, failed_history):
         else:
             if gr_found: is_complete = True
         
-        # === 3-STRIKES LOGIC (COOLDOWN) ===
+        # === 3-STRIKES LOGIC ===
         if not is_complete:
             if not audible_found and not gr_found:
-                # Total failure -> Increment counter
                 fails = failed_history.get(unique_key, 0) + 1
                 failed_history[unique_key] = fails
                 stats['no_data'] += 1
-                print(f"  -> ❌ Keine Daten (Versuch {fails}/{MAX_FAIL_ATTEMPTS}).", flush=True)
+                logging.warning(f"  -> ❌ No data found (Attempt {fails}/{MAX_FAIL_ATTEMPTS}).")
                 
-                # If max attempts reached, set to cooldown
                 if fails >= MAX_FAIL_ATTEMPTS:
-                    print(f"  -> 💤 Cooldown aktiviert.", flush=True)
+                    logging.info(f"  -> 💤 Entering Cooldown for this item.")
                     history[unique_key] = datetime.now().strftime("%Y-%m-%d")
                     save_json(HISTORY_FILE, history)
                     del failed_history[unique_key]
@@ -466,9 +517,8 @@ def process_library(lib_id, history, failed_history):
                     save_json(FAILED_FILE, failed_history)
             else:
                 stats['partial'] += 1
-                print(f"  -> ⚠️ Unvollständig (Audible: {audible_found}, GR: {gr_found}).", flush=True)
+                logging.info(f"  -> ⚠️ Incomplete data (Audible: {audible_found}, GR: {gr_found}).")
         else:
-            # Success -> Clear fail counter
             if unique_key in failed_history:
                 del failed_history[unique_key]
                 save_json(FAILED_FILE, failed_history)
@@ -477,74 +527,82 @@ def process_library(lib_id, history, failed_history):
         BR = "<br>" 
         block = f"⭐ Ratings & Infos{BR}"
         
-        # -- Audible Block --
-        if audible:
-            # New data found
-            cnt = audible.get('count')
+        # Audible Block
+        if audible_data:
+            cnt = audible_data.get('count')
             header_text = f"Audible ({cnt}):" if cnt else "Audible:"
             block += f"{header_text}{BR}"
-            ov = audible.get('overall')
-            pf = audible.get('performance')
-            st = audible.get('story')
+            ov = audible_data.get('overall')
+            pf = audible_data.get('performance')
+            st = audible_data.get('story')
             if ov: block += f"🏆 {generate_moon_rating(ov)} {round(float(ov), 1)} / 5 - Overall{BR}"
             if pf: block += f"🎙️ {generate_moon_rating(pf)} {round(float(pf), 1)} / 5 - Performance{BR}"
             if st: block += f"📖 {generate_moon_rating(st)} {round(float(st), 1)} / 5 - Story{BR}"
         elif old_audible:
-            # No new data, but old data exists -> RECYCLE
-            print("  -> ♻️ Behalte altes Audible Rating.", flush=True)
+            logging.info("  -> ♻️ Recycling old Audible rating.")
             stats['recycled'] += 1
             block += f"{old_audible}{BR}"
 
-        # -- Goodreads Block --
+        # Goodreads Block
         if gr:
-            # New data found
             cnt = gr.get('count')
             header_text = f"Goodreads ({cnt}):" if cnt else "Goodreads:"
             block += f"{header_text}{BR}"
             val = gr.get('val')
             if val: block += f"🏆 {generate_moon_rating(val)} {round(float(val), 1)} / 5 - Rating{BR}"
         elif old_gr:
-            # Recycle old data
-            print("  -> ♻️ Behalte altes Goodreads Rating.", flush=True)
+            logging.info("  -> ♻️ Recycling old Goodreads rating.")
             if not old_audible: stats['recycled'] += 1
             block += f"{old_gr}{BR}"
         
         block += f"⭐{BR}" 
-        # ====================
         
-        # Clean up existing description and merge
         clean_desc = remove_old_rating_block(current_desc)
         final_desc = block + clean_desc
 
         if not DRY_RUN:
-            patch_url = f"{ABS_URL}/api/items/{item_id}/media"
-            res = requests.patch(patch_url, json={"metadata": {"description": final_desc}}, headers=HEADERS_ABS)
-            if res.status_code == 200:
-                print(f"  -> ✅ UPDATE OK.", flush=True)
-                if is_complete:
-                    history[unique_key] = datetime.now().strftime("%Y-%m-%d")
-                    save_json(HISTORY_FILE, history)
-                    stats['success'] += 1
-            else:
-                print(f"  -> ❌ API FEHLER: {res.status_code}", flush=True)
+            try:
+                patch_url = f"{ABS_URL}/api/items/{item_id}/media"
+                res = requests.patch(patch_url, json={"metadata": {"description": final_desc}}, headers=HEADERS_ABS)
+                if res.status_code == 200:
+                    logging.info(f"  -> ✅ UPDATE OK.")
+                    if is_complete:
+                        history[unique_key] = datetime.now().strftime("%Y-%m-%d")
+                        save_json(HISTORY_FILE, history)
+                        stats['success'] += 1
+                else:
+                    logging.error(f"  -> ❌ API ERROR: {res.status_code}")
+                    stats['failed'] += 1
+            except Exception as e:
+                logging.error(f"  -> ❌ API Exception: {e}")
                 stats['failed'] += 1
         else:
-            print(f"  -> [DRY RUN] Would save (Complete: {is_complete}).", flush=True)
+            logging.info(f"  -> [DRY RUN] Would save (Complete: {is_complete}).")
             if is_complete: stats['success'] += 1
         
         count_processed += 1
         time.sleep(BASE_SLEEP + random.uniform(1, 3))
 
-    print(f"--- Fertig ({count_processed} Items bearbeitet) ---", flush=True)
-
 def main():
-    if not ABS_URL or not API_TOKEN: return
+    if not ABS_URL or not API_TOKEN:
+        print("Error: Missing ABS_URL or API_TOKEN env vars.")
+        return
+
+    log_file = setup_logging()
+    start_time = datetime.now()
+    logging.info("--- Starting ABS Ratings Update ---")
+    
     history = load_json(HISTORY_FILE)
     failed_history = load_json(FAILED_FILE)
     
     for lib_id in LIBRARY_IDS:
         process_library(lib_id, history, failed_history)
-    if not DRY_RUN: send_unraid_notify()
+        
+    logging.info(f"--- Finished ---")
+    logging.info(f"Stats: {stats}")
+    
+    # Generate Env file for Bash script
+    write_env_file(log_file, start_time)
 
 if __name__ == "__main__":
     main()
