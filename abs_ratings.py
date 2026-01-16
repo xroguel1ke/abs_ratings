@@ -672,8 +672,8 @@ def process_library(lib_id, history, failed_history):
             header_text = f"Audible ({cnt}):" if cnt else "Audible:"
             block += f"{header_text}{BR}"
             ov = audible_data.get('overall')
-            pf = audible_data.get('performance')
-            st = audible_data.get('story')
+            pf = audible.get('performance')
+            st = audible.get('story')
             if ov: block += f"🏆 {generate_moon_rating(ov)} {round(float(ov), 1)} / 5 - Overall{BR}"
             if pf: block += f"🎙️ {generate_moon_rating(pf)} {round(float(pf), 1)} / 5 - Performance{BR}"
             if st: block += f"📖 {generate_moon_rating(st)} {round(float(st), 1)} / 5 - Story{BR}"
