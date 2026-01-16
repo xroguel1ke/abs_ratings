@@ -156,8 +156,11 @@ def generate_moon_rating(val):
 
 def clean_title_for_search(title):
     if not title: return ""
+    # Remove audio specific keywords
     title = re.sub(r'(?i)\b(unabridged|abridged|audiobook|graphic audio|dramatized adaptation)\b', '', title)
+    # Remove ALL content in brackets () or []
     title = re.sub(r'[\(\[].*?[\)\]]', '', title)
+    # Remove subtitles
     if ':' in title:
         title = title.split(':')[0]
     elif ' - ' in title:
@@ -167,10 +170,17 @@ def clean_title_for_search(title):
 def extract_volume_number(text):
     nums = set()
     if not text: return nums
-    matches = re.findall(r'(?i)\b(?:book|vol\.?|volume|part|no\.?|#)\s*(\d+)', text)
+    
+    # Improved regex to capture "Volume 1", "Vol. 1", "Book 1", "No. 1", "#1"
+    # The (?:...) group handles the words with a boundary \b
+    # The |# handles the hash without enforcing \b before it (to catch "(Series#1)")
+    matches = re.findall(r'(?i)(?:\b(?:book|vol\.?|volume|part|no\.?)|#)\s*(\d+)', text)
     nums.update(matches)
+    
+    # Capture standalone number at the very end of string
     end_match = re.search(r'\b(\d+)$', text.strip())
     if end_match: nums.add(end_match.group(1))
+    
     return nums
 
 def check_numbers_match(abs_title, gr_title):
@@ -220,34 +230,26 @@ def find_missing_asin(title, author, abs_duration_sec, language):
     search_domains = ["www.audible.com", "www.audible.de"]
     german_codes = ['de', 'deu', 'ger', 'german', 'deutsch']
     if language and language.lower() in german_codes:
-        logging.info("  -> German language detected. Prioritizing audible.de search.")
         search_domains = ["www.audible.de", "www.audible.com"]
-    
     query_title = urllib.parse.quote_plus(title)
     query_author = urllib.parse.quote_plus(author) if author else ""
-    
     for domain in search_domains:
         url = f"https://{domain}/search?title={query_title}&author_author={query_author}&ipRedirectOverride=true"
         try:
             r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
             if r.status_code != 200: continue
-            
             soup = BeautifulSoup(r.text, 'lxml')
             items = soup.find_all('li', class_=re.compile(r'productListItem'))
-            
             for item in items:
                 asin_attr = item.get('data-asin')
                 if not asin_attr: 
                     div = item.find('div', attrs={'data-asin': True})
                     if div: asin_attr = div.get('data-asin')
                 if not asin_attr: continue
-                
                 title_tag = item.find('h3', class_=re.compile(r'bc-heading'))
                 if not title_tag: continue
                 found_title = title_tag.get_text(strip=True)
-                
                 if not fuzzy_match(title, found_title, 0.7): continue
-                
                 if abs_duration_sec and abs_duration_sec > 0:
                     runtime_tag = item.find('li', class_=re.compile(r'runtimeLabel'))
                     if runtime_tag:
@@ -255,12 +257,9 @@ def find_missing_asin(title, author, abs_duration_sec, language):
                         audible_sec = parse_audible_duration(runtime_text)
                         if audible_sec > 0:
                             if abs(abs_duration_sec - audible_sec) > 900: continue
-                
                 return asin_attr
-                
         except Exception as e:
             logging.warning(f"Error searching ASIN on {domain}: {e}")
-            
     return None
 
 def get_audible_data(asin):
@@ -271,7 +270,6 @@ def get_audible_data(asin):
         "www.audible.it", "www.audible.es"
     ]
     found_domains = [] 
-    
     for domain in domains:
         url = f"https://{domain}/pd/{asin}?ipRedirectOverride=true"
         try:
@@ -279,11 +277,9 @@ def get_audible_data(asin):
             if r.status_code == 404: continue 
             if r.status_code == 200:
                 if "/pderror" in r.url.lower(): continue
-                
                 soup = BeautifulSoup(r.text, 'lxml')
                 title_tag = soup.find('h1', class_=re.compile(r'bc-heading'))
                 if not title_tag: continue
-
                 found_domains.append(domain)
                 ratings = {}
                 meta_tag = soup.find('adbl-product-metadata')
@@ -297,7 +293,6 @@ def get_audible_data(asin):
                                 if 'count' in r_data: ratings['count'] = r_data['count']
                                 if 'value' in r_data: ratings['overall'] = r_data['value']
                         except: pass
-
                 if not ratings.get('overall'):
                     scripts = soup.find_all('script', type='application/ld+json')
                     for script in scripts:
@@ -309,18 +304,15 @@ def get_audible_data(asin):
                             elif isinstance(data, dict) and 'aggregateRating' in data:
                                 ratings['overall'] = data['aggregateRating'].get('ratingValue')
                         except: pass
-                
                 summary_tag = soup.find('adbl-rating-summary')
                 if summary_tag:
                     if summary_tag.has_attr('performance-value'): ratings['performance'] = summary_tag['performance-value']
                     if summary_tag.has_attr('story-value'): ratings['story'] = summary_tag['story-value']
-                
                 count = ratings.get('count')
                 if count and int(count) > 0:
                     logging.info(f"  -> Found ratings on {domain} (Count: {count})")
                     return ratings
         except: pass
-            
     if "www.audible.com" in found_domains:
         return {'count': 0, 'overall': None}
     if found_domains:
@@ -335,10 +327,8 @@ def scrape_goodreads_book_details(url):
     try:
         r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
         if r.status_code != 200: return None
-        
         soup = BeautifulSoup(r.text, 'lxml')
         result = {'url': url}
-        
         scripts = soup.find_all('script', type='application/ld+json')
         for script in scripts:
             try:
@@ -351,7 +341,6 @@ def scrape_goodreads_book_details(url):
                          result['count'] = data['aggregateRating'].get('ratingCount')
                     if 'isbn' in data: result['isbn'] = data['isbn']
             except: pass
-            
         if 'val' not in result:
             rating_candidates = soup.find_all(string=re.compile(r"avg rating"))
             for text_node in rating_candidates:
@@ -359,7 +348,6 @@ def scrape_goodreads_book_details(url):
                 if match: 
                     result['val'] = match.group(1).replace(',', '.')
                     break
-        
         if 'count' not in result:
             count_candidates = soup.find_all(string=re.compile(r"ratings"))
             for text_node in count_candidates:
@@ -368,32 +356,21 @@ def scrape_goodreads_book_details(url):
                     clean_count = re.sub(r'[^\d]', '', match.group(1))
                     if clean_count: result['count'] = int(clean_count)
                     break
-        
         if 'isbn' not in result:
             meta_isbn = soup.find('meta', property="books:isbn")
             if meta_isbn: result['isbn'] = meta_isbn.get('content')
-
         return result if 'val' in result else None
     except: return None
 
 def find_best_goodreads_match_in_list(html, target_title, target_author):
-    """
-    Parses GR search results. 
-    Uses Fuzzy Match + Containment Check + Number Validation + Any-Author-Match.
-    """
     soup = BeautifulSoup(html, 'lxml')
-    
     if soup.find('div', id='metacol') or soup.find('h1', id='bookTitle'):
         return "DIRECT_HIT" 
-        
     rows = soup.find_all('tr', itemtype="http://schema.org/Book")
     if not rows: return None
-    
     best_match_url = None
     best_score = 0.0
-    
     clean_target = clean_title_for_search(target_title)
-    
     for row in rows:
         try:
             title_tag = row.find('a', class_='bookTitle')
@@ -401,37 +378,23 @@ def find_best_goodreads_match_in_list(html, target_title, target_author):
             found_title = title_tag.get_text(strip=True)
             clean_found = clean_title_for_search(found_title)
             url = title_tag['href']
-            
             author_tag = row.find('a', class_='authorName')
             found_author = author_tag.get_text(strip=True) if author_tag else ""
-            
-            # 1. Author Check
             if not check_author_match(target_author, found_author): continue
-            
-            # 2. Number Validation
             if not check_numbers_match(target_title, found_title): continue
-                
-            # 3. Smart Title Score
             raw_t_score = difflib.SequenceMatcher(None, target_title.lower(), found_title.lower()).ratio()
             clean_t_score = difflib.SequenceMatcher(None, clean_target.lower(), clean_found.lower()).ratio()
             t_score = max(raw_t_score, clean_t_score)
-            
-            # Bonus: Containment Check
             containment_bonus = 0.0
-            if clean_target.lower() in found_title.lower():
-                containment_bonus = 0.15
-            
+            if clean_target.lower() in found_title.lower(): containment_bonus = 0.15
             total_score = t_score + containment_bonus
-            
             if total_score > 0.8 and total_score > best_score:
                 best_score = total_score
                 best_match_url = "https://www.goodreads.com" + url
         except: pass
-        
     return best_match_url
 
 def get_goodreads_data(isbn, asin, title, author):
-    # 1. Direct ID Lookup
     ids = [id for id in [isbn, asin] if id]
     for identifier in ids:
         url = f"https://www.goodreads.com/search?q={identifier}"
@@ -441,41 +404,59 @@ def get_goodreads_data(isbn, asin, title, author):
                 data = scrape_goodreads_book_details(r.url)
                 if data: return data
         except: pass
-        
-    # 2. Text Search
+    
+    # Setup search terms
     search_titles = [title]
     clean = clean_title_for_search(title)
-    if clean and clean != title:
-        search_titles.append(clean)
-    
-    # Use only first author for search query to avoid "Too many words" issue
+    if clean and clean != title: search_titles.append(clean)
     primary_author = author.split(',')[0].split('&')[0].strip()
-        
+    
+    # 1. Search with "Title + Author"
     for search_t in search_titles:
         if not search_t: continue
         query = f"{search_t} {primary_author}"
         url = f"https://www.goodreads.com/search?q={urllib.parse.quote_plus(query)}"
-        
         try:
             r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
-            if r.status_code != 200: continue
-            
-            if "/book/show/" in r.url:
-                data = scrape_goodreads_book_details(r.url)
-                if data: return data
-            else:
-                match_url = find_best_goodreads_match_in_list(r.text, title, author)
-                if match_url == "DIRECT_HIT":
-                     data = scrape_goodreads_book_details(r.url)
-                     if data: return data
-                elif match_url:
-                    logging.info(f"  -> Goodreads Fuzzy Match found: {match_url}")
-                    data = scrape_goodreads_book_details(match_url)
+            if r.status_code == 200:
+                if "/book/show/" in r.url:
+                    data = scrape_goodreads_book_details(r.url)
                     if data: return data
-                    
-        except Exception as e:
-            logging.debug(f"Error searching Goodreads for {search_t}: {e}")
-            
+                else:
+                    match_url = find_best_goodreads_match_in_list(r.text, title, author)
+                    if match_url == "DIRECT_HIT":
+                         data = scrape_goodreads_book_details(r.url)
+                         if data: return data
+                    elif match_url:
+                        logging.info(f"  -> Goodreads found (Title+Author): {match_url}")
+                        data = scrape_goodreads_book_details(match_url)
+                        if data: return data
+        except: pass
+
+    # 2. Fallback: Search with "Title ONLY"
+    logging.info("  -> Standard search failed. Trying Title-only fallback...")
+    for search_t in search_titles:
+        if not search_t: continue
+        query = search_t
+        url = f"https://www.goodreads.com/search?q={urllib.parse.quote_plus(query)}"
+        try:
+            r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
+            if r.status_code == 200:
+                if "/book/show/" in r.url:
+                    # Direct hit on generic search usually untrustworthy without verification
+                    # but check_numbers/author match might be skipped if direct hit. 
+                    # We accept direct hit on strict terms, but maybe verify author?
+                    # Let's scrape it and assume if GR redirects it's a very strong match.
+                    data = scrape_goodreads_book_details(r.url)
+                    if data: return data
+                else:
+                    match_url = find_best_goodreads_match_in_list(r.text, title, author)
+                    if match_url and match_url != "DIRECT_HIT":
+                        logging.info(f"  -> Goodreads found (Title-Only): {match_url}")
+                        data = scrape_goodreads_book_details(match_url)
+                        if data: return data
+        except: pass
+
     return None
 
 # =====================================================
@@ -502,13 +483,9 @@ def process_library(lib_id, history, failed_history):
     for item in items:
         item_id = item['id']
         unique_key = f"{lib_id}_{item_id}"
-        
-        if unique_key not in history:
-            queue_new.append(item)
-        elif is_due_for_update(unique_key, history):
-            queue_due.append(item)
-        else:
-            stats['skipped'] += 1
+        if unique_key not in history: queue_new.append(item)
+        elif is_due_for_update(unique_key, history): queue_due.append(item)
+        else: stats['skipped'] += 1
 
     random.shuffle(queue_new)
     random.shuffle(queue_due)
@@ -553,7 +530,6 @@ def process_library(lib_id, history, failed_history):
 
             asin = metadata.get('asin')
             isbn = metadata.get('isbn')
-            
             author_data = metadata.get('authors', [])
             author = ""
             if isinstance(author_data, list) and len(author_data) > 0:
@@ -612,6 +588,8 @@ def process_library(lib_id, history, failed_history):
             else:
                 if gr_found: is_complete = True
             
+            should_save_history = is_complete
+            
             if not is_complete:
                 if not audible_found and not gr_found:
                     fails = failed_history.get(unique_key, 0) + 1
@@ -629,8 +607,10 @@ def process_library(lib_id, history, failed_history):
                         save_json(FAILED_FILE, failed_history)
                 else:
                     stats['partial'] += 1
-                    logging.info(f"  -> ⚠️ Incomplete data (Audible: {audible_found}, GR: {gr_found}).")
-            else:
+                    logging.info(f"  -> ⚠️ Incomplete data (Audible: {audible_found}, GR: {gr_found}). Saved to History to prevent loop.")
+                    should_save_history = True # STOP THE LOOP
+            
+            if should_save_history:
                 if unique_key in failed_history:
                     del failed_history[unique_key]
                     save_json(FAILED_FILE, failed_history)
@@ -638,7 +618,6 @@ def process_library(lib_id, history, failed_history):
             BR = "<br>" 
             block = f"⭐ Ratings & Infos{BR}"
             
-            # --- CONSISTENT VARIABLE USAGE HERE ---
             if audible_data:
                 cnt = audible_data.get('count')
                 header_text = f"Audible ({cnt}):" if cnt else "Audible:"
@@ -676,7 +655,7 @@ def process_library(lib_id, history, failed_history):
                     res = requests.patch(patch_url, json={"metadata": {"description": final_desc}}, headers=HEADERS_ABS)
                     if res.status_code == 200:
                         logging.info(f"  -> ✅ UPDATE OK.")
-                        if is_complete:
+                        if should_save_history:
                             history[unique_key] = datetime.now().strftime("%Y-%m-%d")
                             save_json(HISTORY_FILE, history)
                             stats['success'] += 1
@@ -692,7 +671,6 @@ def process_library(lib_id, history, failed_history):
         
         except Exception as e:
             # === SAFETY NET ===
-            # Logs the exact item that caused the crash and continues with the next
             logging.error(f"CRASH on item {item.get('id')}: {e}")
             stats['failed'] += 1
             continue
