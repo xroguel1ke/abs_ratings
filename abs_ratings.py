@@ -28,7 +28,7 @@ ENV_OUTPUT_FILE = os.path.join(SCRIPT_DIR, "last_run.env")
 # Settings
 REFRESH_DAYS = int(os.getenv('REFRESH_DAYS', 90))
 MAX_BATCH_SIZE = int(os.getenv('BATCH_SIZE', 150))
-MAX_FAIL_ATTEMPTS = 3
+MAX_FAIL_ATTEMPTS = 5 # Back to 5 Strikes!
 DRY_RUN = os.getenv('DRY_RUN', 'False').lower() == 'true'
 BASE_SLEEP = int(os.getenv('SLEEP_TIMER', 6)) 
 # =================================================
@@ -242,18 +242,25 @@ def check_numbers_match(abs_title, gr_title):
 
 def check_author_match(abs_author_str, gr_author_str):
     if not abs_author_str or not gr_author_str: return False
-    def normalize(s):
+    
+    # 1. Fuzzy Fallback (e.g. for Typos)
+    if difflib.SequenceMatcher(None, abs_author_str.lower(), gr_author_str.lower()).ratio() > 0.6:
+        return True
+
+    # 2. Smart Token Logic
+    def tokenize(s):
         s = re.sub(r'[\(\[].*?[\)\]]', '', s)
-        return s.lower().strip()
-    def split_authors(s):
-        parts = re.split(r'[,&]|\sand\s', s)
-        return [normalize(p) for p in parts if len(p.strip()) > 2]
-    abs_authors = split_authors(abs_author_str)
-    gr_authors = split_authors(gr_author_str)
-    for a1 in abs_authors:
-        for a2 in gr_authors:
-            if difflib.SequenceMatcher(None, a1, a2).ratio() > 0.8: return True
-            if (a1 in a2 or a2 in a1) and len(a1) > 3 and len(a2) > 3: return True
+        tokens = re.split(r'[^a-zA-Z0-9]+', s.lower())
+        return set([t for t in tokens if len(t) > 1])
+
+    abs_tokens = tokenize(abs_author_str)
+    gr_tokens = tokenize(gr_author_str)
+    
+    common = abs_tokens.intersection(gr_tokens)
+    
+    if len(common) >= 2: return True
+    if len(common) >= 1 and len(abs_tokens) == 1: return True
+        
     return False
 
 def fuzzy_match(s1, s2, threshold=0.8):
@@ -434,6 +441,7 @@ def find_best_goodreads_match_in_list(html, target_title, target_author):
     best_match_url = None
     best_score = 0.0
     clean_target = clean_title_for_search(target_title)
+    
     for row in rows:
         try:
             title_tag = row.find('a', class_='bookTitle')
@@ -443,15 +451,28 @@ def find_best_goodreads_match_in_list(html, target_title, target_author):
             url = title_tag['href']
             author_tag = row.find('a', class_='authorName')
             found_author = author_tag.get_text(strip=True) if author_tag else ""
+            
+            # Author Check
             if not check_author_match(target_author, found_author): continue
+            
+            # Number Check
             if not check_numbers_match(target_title, found_title): continue
+            
+            # Score Calculation
             raw_t_score = difflib.SequenceMatcher(None, target_title.lower(), found_title.lower()).ratio()
             clean_t_score = difflib.SequenceMatcher(None, clean_target.lower(), clean_found.lower()).ratio()
             t_score = max(raw_t_score, clean_t_score)
+            
+            # Boost if one contains the other (e.g. "Dune" in "Dune: Special Edition")
             containment_bonus = 0.0
-            if clean_target.lower() in found_title.lower(): containment_bonus = 0.15
+            if (len(clean_target) > 3 and clean_target.lower() in clean_found.lower()) or \
+               (len(clean_found) > 3 and clean_found.lower() in clean_target.lower()):
+                containment_bonus = 0.2
+            
             total_score = t_score + containment_bonus
-            if total_score > 0.8 and total_score > best_score:
+            
+            # Lower threshold to 0.70 to accept more "loose" title matches
+            if total_score > 0.70 and total_score > best_score:
                 best_score = total_score
                 best_match_url = "https://www.goodreads.com" + url
         except: pass
@@ -660,19 +681,14 @@ def process_library(lib_id, history, failed_history):
             # UPDATE LOGIC: Patch ISBN/ASIN if missing OR if old ISBN failed
             if gr and not DRY_RUN:
                 new_id = gr.get('isbn')
-                # Priority 2: Use Goodreads-ASIN if no ISBN available
                 if not new_id: new_id = gr.get('asin')
                 
                 if new_id:
                     should_patch_isbn = False
-                    
-                    # Case A: No ISBN in ABS -> Add it
                     if not isbn:
                         should_patch_isbn = True
                         logging.info(f"  -> ✨ ISBN/ID missing. Adding: {new_id}")
                         stats['isbn_added'] += 1
-                        
-                    # Case B: ISBN exists, but search failed (found via Text/ASIN) -> Replace it
                     elif gr.get('source') != 'isbn_lookup':
                         should_patch_isbn = True
                         logging.info(f"  -> 🔧 Existing ISBN failed. Replacing with: {new_id}")
@@ -700,28 +716,34 @@ def process_library(lib_id, history, failed_history):
             else:
                 if found_gr: is_complete = True
             
-            # Partial success counts as processed to prevent loops
-            should_save_history = found_audible or found_gr
+            # Revert to old logic: Only save history if COMPLETE or MAX FAILS reached
+            should_save_history = False
             
-            if not is_complete:
+            if is_complete:
+                should_save_history = True
+            else:
+                # If incomplete, we do NOT save history unless fails exceed max
+                fails = failed_history.get(unique_key, 0) + 1
+                failed_history[unique_key] = fails
+                
                 if not found_audible and not found_gr:
-                    fails = failed_history.get(unique_key, 0) + 1
-                    failed_history[unique_key] = fails
                     stats['no_data'] += 1
                     logging.warning(f"  -> ❌ No data found (Attempt {fails}/{MAX_FAIL_ATTEMPTS}).")
-                    if fails >= MAX_FAIL_ATTEMPTS:
-                        history[unique_key] = datetime.now().strftime("%Y-%m-%d")
-                        save_json(HISTORY_FILE, history)
-                        del failed_history[unique_key]
-                        save_json(FAILED_FILE, failed_history)
-                        stats['cooldown'] += 1
-                    else:
-                        save_json(FAILED_FILE, failed_history)
                 else:
                     stats['partial'] += 1
-                    logging.info(f"  -> ⚠️ Incomplete data (Audible: {found_audible}, GR: {found_gr}). Saved to History.")
+                    logging.info(f"  -> ⚠️ Incomplete data (Audible: {found_audible}, GR: {found_gr}). Attempt {fails}/{MAX_FAIL_ATTEMPTS}.")
+
+                if fails >= MAX_FAIL_ATTEMPTS:
+                    should_save_history = True
+                    stats['cooldown'] += 1
+                    logging.info("  -> 🛑 Max attempts reached. Cooldown started.")
+                    del failed_history[unique_key]
+                else:
+                    save_json(FAILED_FILE, failed_history)
             
             if should_save_history:
+                history[unique_key] = datetime.now().strftime("%Y-%m-%d")
+                save_json(HISTORY_FILE, history)
                 if unique_key in failed_history:
                     del failed_history[unique_key]
                     save_json(FAILED_FILE, failed_history)
@@ -767,10 +789,7 @@ def process_library(lib_id, history, failed_history):
                     res = requests.patch(patch_url, json={"metadata": {"description": final_desc}}, headers=HEADERS_ABS)
                     if res.status_code == 200:
                         logging.info(f"  -> ✅ UPDATE OK.")
-                        if should_save_history:
-                            history[unique_key] = datetime.now().strftime("%Y-%m-%d")
-                            save_json(HISTORY_FILE, history)
-                            stats['success'] += 1
+                        if is_complete: stats['success'] += 1
                     else:
                         logging.error(f"  -> ❌ API ERROR: {res.status_code}")
                         stats['failed'] += 1
