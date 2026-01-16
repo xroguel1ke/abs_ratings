@@ -737,6 +737,26 @@ def process_library(lib_id, history, failed_history):
             metadata = item.get('media', {})['metadata']
             title = metadata.get('title')
             
+            # SAFE AUTHOR EXTRACTION FIX
+            authors_list = metadata.get('authors', [])
+            primary_search_author = ""
+            abs_authors_list = []
+            
+            if authors_list and isinstance(authors_list, list):
+                for a in authors_list:
+                    if isinstance(a, dict):
+                        name = a.get('name')
+                        role = a.get('role', '').lower()
+                        if name:
+                            abs_authors_list.append(name)
+                            if "auth" in role or "writ" in role:
+                                primary_search_author = name
+                    elif isinstance(a, str):
+                        abs_authors_list.append(a)
+                        
+            if not primary_search_author and abs_authors_list:
+                primary_search_author = abs_authors_list[0]
+
             try:
                 item_res = requests.get(f"{ABS_URL}/api/items/{item_id}", headers=HEADERS_ABS)
                 if item_res.status_code == 200:
@@ -763,25 +783,6 @@ def process_library(lib_id, history, failed_history):
 
             asin = metadata.get('asin')
             isbn = metadata.get('isbn')
-            
-            author_data_raw = metadata.get('authors', [])
-            abs_authors_list = []
-            primary_search_author = ""
-            
-            if isinstance(author_data_raw, list):
-                for a in author_data_raw:
-                    if isinstance(a, dict):
-                        name = a.get('name')
-                        role = a.get('role', '').lower()
-                        if name:
-                            abs_authors_list.append(name)
-                            if "auth" in role or "writ" in role:
-                                primary_search_author = name
-                    elif isinstance(a, str):
-                        abs_authors_list.append(a)
-            
-            if not primary_search_author and abs_authors_list:
-                primary_search_author = abs_authors_list[0]
 
             if not title: continue 
             
@@ -1014,6 +1015,7 @@ def process_library(lib_id, history, failed_history):
             stats['failed'] += 1
             continue
         
+        count_processed += 1
         time.sleep(BASE_SLEEP + random.uniform(1, 3))
     
     if stats['aborted_ratelimit']:
