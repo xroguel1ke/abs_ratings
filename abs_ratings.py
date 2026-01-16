@@ -470,17 +470,27 @@ def scrape_goodreads_book_details(url):
             if meta_isbn: result['isbn'] = meta_isbn.get('content')
             
         # [NEW] Fallback for embedded JSON/Apollo state (React hidden data)
-        # Looking for pattern: "asin":"B0..." in raw HTML/Scripts
         if 'isbn' not in result and 'asin' not in result:
-             # This regex matches the key-value pair from your snippet
-             json_asin_match = re.search(r'"asin":\s*"([A-Z0-9]{10})"', r.text)
+             # Pattern 1: Exact JSON key-value pair "asin":"B0..."
+             json_asin_match = re.search(r'"asin"\s*:\s*"([A-Z0-9]{10})"', r.text)
              if json_asin_match:
                  result['asin'] = json_asin_match.group(1)
-        
-        # [OLD] Fallback for text content scan
+             
+             # Pattern 2: URL Parameters like creativeASIN=B0...
+             if 'asin' not in result:
+                 url_asin_match = re.search(r'(?:creativeASIN|asin)=([A-Z0-9]{10})', r.text)
+                 if url_asin_match:
+                     result['asin'] = url_asin_match.group(1)
+
+             # JSON ISBN Fallback
+             json_isbn_match = re.search(r'"isbn"\s*:\s*"([0-9]{10,13})"', r.text)
+             if json_isbn_match:
+                 result['isbn'] = json_isbn_match.group(1)
+
+        # [OLD] Fallback for text content scan (Generic text scan)
         if 'isbn' not in result and 'asin' not in result:
             text_content = soup.get_text()
-            asin_match = re.search(r'ASIN[:\s]+(B0\w+)', text_content)
+            asin_match = re.search(r'ASIN[:\s]*(B0\w+)', text_content)
             if asin_match:
                 result['asin'] = asin_match.group(1)
 
@@ -761,10 +771,17 @@ def process_library(lib_id, history, failed_history):
                     new_id = gr.get('asin')
                     if new_id:
                         used_fallback = True
+                
+                # Check how we found the book
+                source = gr.get('source', '')
+                is_lookup_by_id = source in ['ISBN Lookup', 'ASIN Lookup']
 
                 # Case 1: Goodreads returned NEITHER ISBN NOR ASIN
                 if not new_id:
-                      logging.info(f"   -> ISBN: ⚠️ Goodreads data returned no ISBN or ASIN.")
+                      # Only warn if we scraped via Text Search. 
+                      # If we found it via ID lookup, the existing ID is obviously fine.
+                      if not is_lookup_by_id:
+                          logging.info(f"   -> ISBN: ⚠️ Goodreads data returned no ISBN or ASIN.")
 
                 # Case 2: We have an ID (either ISBN or ASIN-fallback)
                 else:
