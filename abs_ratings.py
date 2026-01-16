@@ -161,11 +161,17 @@ def parse_audible_duration(duration_str):
     if m_m: mins = int(m_m.group(1))
     return (hours * 3600) + (mins * 60)
 
-def find_missing_asin(title, author, abs_duration_sec):
+def find_missing_asin(title, author, abs_duration_sec, language):
     if not title: return None
     
-    # Updated: Search .com first, then .de
+    # Standard Priority: COM -> DE
     search_domains = ["www.audible.com", "www.audible.de"]
+    
+    # If language is German, prioritize DE -> COM
+    german_codes = ['de', 'deu', 'ger', 'german', 'deutsch']
+    if language and language.lower() in german_codes:
+        logging.info("  -> German language detected. Prioritizing audible.de search.")
+        search_domains = ["www.audible.de", "www.audible.com"]
     
     query_title = urllib.parse.quote_plus(title)
     query_author = urllib.parse.quote_plus(author) if author else ""
@@ -412,6 +418,7 @@ def process_library(lib_id, history, failed_history):
         unique_key = f"{lib_id}_{item_id}"
         metadata = item.get('media', {})['metadata']
         title = metadata.get('title')
+        language = metadata.get('language')
         
         # 1. Fetch CURRENT description
         try:
@@ -473,7 +480,7 @@ def process_library(lib_id, history, failed_history):
             else:
                 logging.info("  -> ASIN seems invalid (404 or Soft-404). Searching replacement...")
                 
-            found_asin = find_missing_asin(title, author, abs_duration)
+            found_asin = find_missing_asin(title, author, abs_duration, language)
             if found_asin:
                 logging.info(f"  -> ✨ Found ASIN: {found_asin}")
                 try:
