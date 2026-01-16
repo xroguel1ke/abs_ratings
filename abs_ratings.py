@@ -622,13 +622,20 @@ def process_library(lib_id, history, failed_history):
             title = metadata.get('title')
             language = metadata.get('language')
             
+            # --- FETCH FULL DETAILS FIRST (Fix for [] authors) ---
             try:
                 item_res = requests.get(f"{ABS_URL}/api/items/{item_id}", headers=HEADERS_ABS)
                 if item_res.status_code == 200:
                     item_data = item_res.json()
-                    current_desc = item_data['media']['metadata'].get('description', '')
+                    
+                    # OVERWRITE METADATA WITH DETAILED VERSION
+                    metadata = item_data['media']['metadata']
+                    current_desc = metadata.get('description', '')
                     abs_duration = item_data['media'].get('duration')
+                    title = metadata.get('title') # Update title from details
+                    
                 else:
+                    # Fallback to list data if detail fetch fails (unlikely)
                     current_desc = metadata.get('description', '')
                     abs_duration = item.get('media', {}).get('duration')
             except Exception as e:
@@ -645,7 +652,7 @@ def process_library(lib_id, history, failed_history):
             asin = metadata.get('asin')
             isbn = metadata.get('isbn')
             
-            # --- FIXED: PARSE ALL AUTHORS ---
+            # --- PARSE ALL AUTHORS FROM DETAILED METADATA ---
             author_data_raw = metadata.get('authors', [])
             abs_authors_list = []
             primary_search_author = ""
