@@ -468,8 +468,17 @@ def scrape_goodreads_book_details(url):
         if 'isbn' not in result:
             meta_isbn = soup.find('meta', property="books:isbn")
             if meta_isbn: result['isbn'] = meta_isbn.get('content')
+            
+        # [NEW] Fallback for embedded JSON/Apollo state (React hidden data)
+        # Looking for pattern: "asin":"B0..." in raw HTML/Scripts
+        if 'isbn' not in result and 'asin' not in result:
+             # This regex matches the key-value pair from your snippet
+             json_asin_match = re.search(r'"asin":\s*"([A-Z0-9]{10})"', r.text)
+             if json_asin_match:
+                 result['asin'] = json_asin_match.group(1)
         
-        if 'isbn' not in result:
+        # [OLD] Fallback for text content scan
+        if 'isbn' not in result and 'asin' not in result:
             text_content = soup.get_text()
             asin_match = re.search(r'ASIN[:\s]+(B0\w+)', text_content)
             if asin_match:
