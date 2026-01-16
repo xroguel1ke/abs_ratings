@@ -655,6 +655,7 @@ def process_library(lib_id, history, failed_history):
     logging.info(f"Queue: {len(queue_new)} New, {len(queue_due)} Due. (Total skipped: {stats['skipped']})")
     
     count_processed = 0
+    total_in_batch = min(len(work_queue), MAX_BATCH_SIZE)
     
     for item in work_queue:
         if count_processed >= MAX_BATCH_SIZE:
@@ -718,7 +719,7 @@ def process_library(lib_id, history, failed_history):
             # --- Visual Separator for Logging ---
             logging.info("-" * 50)
             
-            logging.info(f"Processing: {title} (ASIN: {asin if asin else 'None'})")
+            logging.info(f"({count_processed + 1}/{total_in_batch}) Processing: {title} (ASIN: {asin if asin else 'None'})")
             stats['processed'] += 1
             
             audible_data = None
