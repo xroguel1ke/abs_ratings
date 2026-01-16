@@ -150,22 +150,19 @@ def generate_moon_rating(val):
 
 def clean_title_for_search(title):
     """
-    Aggressively cleans the title for search purposes, removing 'abridged', 
-    'audiobook', subtitles, etc., but tries to preserve series numbers.
+    Aggressively cleans the title for search purposes.
     """
     if not title: return ""
     
     # 1. Remove specific keywords (Case Insensitive)
-    # Removing 'abridged', 'unabridged', 'audiobook', 'graphic audio', 'dramatized'
     title = re.sub(r'(?i)\b(unabridged|abridged|audiobook|graphic audio|dramatized adaptation)\b', '', title)
     
     # 2. Remove text in brackets [] or parenthesis ()
-    # Often contains "Narrated by...", "Book X", etc. - we strip this for the generic search
-    # but the validation logic will check the original title's numbers.
+    # This removes "(Sowing Season #2)" from "Casual Farming 2 (Sowing Season #2)"
+    # leaving "Casual Farming 2 "
     title = re.sub(r'[\(\[].*?[\)\]]', '', title)
     
     # 3. Handle Subtitles (split by colon or hyphen)
-    # Strategy: Keep the first part.
     if ':' in title:
         title = title.split(':')[0]
     elif ' - ' in title:
@@ -174,20 +171,12 @@ def clean_title_for_search(title):
     return title.strip()
 
 def extract_volume_number(text):
-    """
-    Extracts distinct volume numbers from a title string.
-    Matches: 'Book 5', 'Vol. 3', '#10', or a number at the very end of the string.
-    Returns a set of integers (as strings).
-    """
     nums = set()
     if not text: return nums
     
-    # Pattern A: Explicit markers (Book, Vol, #, etc)
     matches = re.findall(r'(?i)\b(?:book|vol\.?|volume|part|no\.?|#)\s*(\d+)', text)
     nums.update(matches)
     
-    # Pattern B: Number at the very end of the string (e.g., "Title 1")
-    # We use a boundary check to ensure it's a standalone number
     end_match = re.search(r'\b(\d+)$', text.strip())
     if end_match:
         nums.add(end_match.group(1))
@@ -195,32 +184,43 @@ def extract_volume_number(text):
     return nums
 
 def check_numbers_match(abs_title, gr_title):
-    """
-    Validates if the found Goodreads title contains the volume numbers present in the ABS title.
-    Returns True if safe (numbers match or no numbers to check), False if mismatch.
-    """
     abs_nums = extract_volume_number(abs_title)
-    
-    # If the ABS title has no series number, we assume it's standalone or the first book.
-    # In this case, we are less strict (to allow finding "Book 1" even if ABS doesn't say "1").
-    if not abs_nums:
-        return True
+    if not abs_nums: return True 
         
     gr_nums = extract_volume_number(gr_title)
-    
-    # If ABS has a number (e.g., "1"), Goodreads MUST have that number either explicitly or implicitly.
-    # We check if any of the ABS numbers appear in the extracted GR numbers.
-    # Exception: ABS says "Book 1", GR says "Book One" (we don't handle words yet, but basic digit matching)
-    
-    # Intersection: Do they share the specific volume number?
     common = abs_nums.intersection(gr_nums)
+    if common: return True
+    return False
+
+def check_author_match(abs_author_str, gr_author_str):
+    """
+    Checks if ANY author from the ABS list matches ANY author from the Goodreads list.
+    Handles 'Goodreads Author', 'Illustrator' tags and comma separations.
+    """
+    if not abs_author_str or not gr_author_str: return False
     
-    if common:
-        return True
+    def normalize(s):
+        # Remove parens content like (Goodreads Author)
+        s = re.sub(r'[\(\[].*?[\)\]]', '', s)
+        return s.lower().strip()
+
+    def split_authors(s):
+        # Split by comma, &, and ' and '
+        parts = re.split(r'[,&]|\sand\s', s)
+        return [normalize(p) for p in parts if len(p.strip()) > 2]
         
-    # Edge Case: ABS has "1", GR has "10". extract_volume_number separates them, so no overlap.
-    # This logic correctly prevents "1" matching "10".
+    abs_authors = split_authors(abs_author_str)
+    gr_authors = split_authors(gr_author_str)
     
+    for a1 in abs_authors:
+        for a2 in gr_authors:
+            # Check for high fuzzy similarity
+            if difflib.SequenceMatcher(None, a1, a2).ratio() > 0.8:
+                return True
+            # Check for containment (e.g. "King" in "Stephen King")
+            if (a1 in a2 or a2 in a1) and len(a1) > 3 and len(a2) > 3:
+                return True
+                     
     return False
 
 def fuzzy_match(s1, s2, threshold=0.8):
@@ -406,7 +406,7 @@ def scrape_goodreads_book_details(url):
 def find_best_goodreads_match_in_list(html, target_title, target_author):
     """
     Parses GR search results. 
-    Uses Fuzzy Match + Containment Check + Number Validation.
+    Uses Fuzzy Match + Containment Check + Number Validation + Any-Author-Match.
     """
     soup = BeautifulSoup(html, 'lxml')
     
@@ -426,30 +426,33 @@ def find_best_goodreads_match_in_list(html, target_title, target_author):
             title_tag = row.find('a', class_='bookTitle')
             if not title_tag: continue
             found_title = title_tag.get_text(strip=True)
+            clean_found = clean_title_for_search(found_title)
             url = title_tag['href']
             
             author_tag = row.find('a', class_='authorName')
             found_author = author_tag.get_text(strip=True) if author_tag else ""
             
-            # 1. Author Check (Fuzzy, threshold lowered for safety)
-            a_score = difflib.SequenceMatcher(None, target_author.lower(), found_author.lower()).ratio()
-            if a_score < 0.5: continue # Must match at least halfway
+            # 1. Author Check (Flexible: Any match is good)
+            if not check_author_match(target_author, found_author):
+                continue
             
-            # 2. Number Validation (Critical!)
-            # Check if volume numbers in the ABS title (target_title) exist in the found title
+            # 2. Number Validation
             if not check_numbers_match(target_title, found_title):
                 continue
                 
-            # 3. Title Matching Strategy
-            t_score = difflib.SequenceMatcher(None, target_title.lower(), found_title.lower()).ratio()
+            # 3. Smart Title Score
+            # Use MAX of raw comparison or clean comparison
+            raw_t_score = difflib.SequenceMatcher(None, target_title.lower(), found_title.lower()).ratio()
+            clean_t_score = difflib.SequenceMatcher(None, clean_target.lower(), clean_found.lower()).ratio()
+            t_score = max(raw_t_score, clean_t_score)
             
             # Bonus: Containment Check
-            # If the clean short title is fully contained in the found title (e.g. "Wind Runner" in "Wind Runner (Wandering Inn #10)")
             containment_bonus = 0.0
             if clean_target.lower() in found_title.lower():
-                containment_bonus = 0.2
+                containment_bonus = 0.15
             
-            total_score = (t_score * 0.6) + (a_score * 0.4) + containment_bonus
+            # Score Calculation (Author check is binary now, so we trust it fully if True)
+            total_score = t_score + containment_bonus
             
             if total_score > 0.8 and total_score > best_score:
                 best_score = total_score
@@ -471,15 +474,17 @@ def get_goodreads_data(isbn, asin, title, author):
         except: pass
         
     # 2. Text Search
-    # We search for the Cleaned Title to get better hits, but validate against Original Title
     search_titles = [title]
     clean = clean_title_for_search(title)
     if clean and clean != title:
         search_titles.append(clean)
+    
+    # Use only first author for search query to avoid "Too many words" issue
+    primary_author = author.split(',')[0].split('&')[0].strip()
         
     for search_t in search_titles:
         if not search_t: continue
-        query = f"{search_t} {author}"
+        query = f"{search_t} {primary_author}"
         url = f"https://www.goodreads.com/search?q={urllib.parse.quote_plus(query)}"
         
         try:
@@ -490,7 +495,6 @@ def get_goodreads_data(isbn, asin, title, author):
                 data = scrape_goodreads_book_details(r.url)
                 if data: return data
             else:
-                # Pass original title to validation to check numbers correctly
                 match_url = find_best_goodreads_match_in_list(r.text, title, author)
                 if match_url == "DIRECT_HIT":
                      data = scrape_goodreads_book_details(r.url)
@@ -718,7 +722,10 @@ def process_library(lib_id, history, failed_history):
         time.sleep(BASE_SLEEP + random.uniform(1, 3))
 
 def main():
-    if not ABS_URL or not API_TOKEN: return
+    if not ABS_URL or not API_TOKEN:
+        print("Error: Missing ABS_URL or API_TOKEN env vars.")
+        return
+
     log_file = setup_logging()
     start_time = datetime.now()
     logging.info("--- Starting ABS Ratings Update ---")
@@ -731,6 +738,8 @@ def main():
         
     logging.info(f"--- Finished ---")
     logging.info(f"Stats: {stats}")
+    
+    # Generate Env file for Bash script
     write_env_file(log_file, start_time)
 
 if __name__ == "__main__":
