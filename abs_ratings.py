@@ -29,6 +29,8 @@ ENV_OUTPUT_FILE = os.path.join(SCRIPT_DIR, "last_run.env")
 REFRESH_DAYS = int(os.getenv('REFRESH_DAYS', 90))
 MAX_BATCH_SIZE = int(os.getenv('BATCH_SIZE', 150))
 MAX_FAIL_ATTEMPTS = 5
+MAX_CONSECUTIVE_RATE_LIMITS = 3  # Abort after 3 consecutive errors
+RECOVERY_PAUSE = 60             # Wait 60s to recover from a potential block
 DRY_RUN = os.getenv('DRY_RUN', 'False').lower() == 'true'
 BASE_SLEEP = int(os.getenv('SLEEP_TIMER', 6)) 
 # =================================================
@@ -50,12 +52,19 @@ HEADERS_SCRAPE = {
 stats = {
     "processed": 0, "success": 0, "failed": 0, "no_data": 0, 
     "skipped": 0, "partial": 0, "cooldown": 0, "recycled": 0, 
-    "asin_found": 0, "isbn_added": 0, "isbn_repaired": 0
+    "asin_found": 0, "isbn_added": 0, "isbn_repaired": 0,
+    "aborted_ratelimit": False
 }
 
 # In-Memory Report Storage
 report_audible = {}
 report_goodreads = {}
+
+class RateLimitException(Exception):
+    """Custom exception raised when a rate limit or captcha is detected."""
+    def __init__(self, message, is_hard_limit=False):
+        super().__init__(message)
+        self.is_hard_limit = is_hard_limit
 
 def setup_logging():
     """Sets up logging to file and console."""
@@ -81,7 +90,11 @@ def write_env_file(log_filename, start_time):
     minutes, seconds = divmod(duration.total_seconds(), 60)
     duration_str = f"{int(minutes)}m {int(seconds)}s"
 
-    if stats['failed'] > 0:
+    if stats['aborted_ratelimit']:
+        status_subject = "ABS Ratings: Abbruch 🛑"
+        status_icon = "alert"
+        status_header = "Rate Limit erkannt!"
+    elif stats['failed'] > 0:
         status_subject = "ABS Ratings: Fehler ❌"
         status_icon = "alert"
         status_header = "Fehler aufgetreten!"
@@ -97,6 +110,9 @@ def write_env_file(log_filename, start_time):
     report_body = (f"Proc: {stats['processed']} | New: {stats['success']} | "
                    f"ASIN+: {stats['asin_found']} | ISBN+: {stats['isbn_added']} | "
                    f"ISBN Fix: {stats['isbn_repaired']} | Err: {stats['failed']}")
+    
+    if stats['aborted_ratelimit']:
+        report_body += " | ⚠️ ABORTED (Rate Limit)"
 
     try:
         with open(ENV_OUTPUT_FILE, 'w', encoding='utf-8') as f:
@@ -211,6 +227,26 @@ def generate_moon_rating(val):
         return "🌕" * full + "🌗" * half + "🌑" * (5 - full - half)
     except: return "🌑🌑🌑🌑🌑"
 
+def check_potential_rate_limit(response, soup=None):
+    """Checks for HTTP codes or Captcha content."""
+    if response.status_code == 429:
+        raise RateLimitException("HTTP 429 (Too Many Requests)", is_hard_limit=True)
+    if response.status_code == 503:
+        raise RateLimitException("HTTP 503 (Service Unavailable)")
+    if response.status_code == 403:
+        raise RateLimitException("HTTP 403 (Forbidden)")
+
+    if soup:
+        text_lower = soup.get_text().lower()
+        title_lower = soup.title.string.lower() if soup.title else ""
+        captcha_indicators = ["enter the characters you see", "robot check", "security check"]
+        if "captcha" in title_lower or "robot check" in title_lower:
+             raise RateLimitException("Captcha detected in Title")
+        for indicator in captcha_indicators:
+            if indicator in text_lower:
+                if len(text_lower) < 5000: 
+                    raise RateLimitException(f"Captcha detected: '{indicator}'")
+
 # === HELPER FUNCTIONS ===
 
 def clean_title_for_search(title):
@@ -237,8 +273,7 @@ def check_numbers_match(abs_title, gr_title):
     if not abs_nums: return True 
     gr_nums = extract_volume_number(gr_title)
     common = abs_nums.intersection(gr_nums)
-    if common: return True
-    return False
+    return bool(common)
 
 def check_author_match_list(abs_authors_list, gr_author_str):
     if not abs_authors_list or not gr_author_str: return False
@@ -255,9 +290,7 @@ def check_author_match_list(abs_authors_list, gr_author_str):
             return True
         abs_tokens = tokenize(abs_author)
         common = abs_tokens.intersection(gr_tokens)
-        if len(common) >= 2: return True
-        if len(common) >= 1 and len(abs_tokens) == 1: return True
-        
+        if len(common) >= 2 or (len(common) >= 1 and len(abs_tokens) == 1): return True
     return False
 
 def fuzzy_match(s1, s2, threshold=0.8):
@@ -290,9 +323,18 @@ def find_missing_asin(title, author, abs_duration_sec, language):
         url = f"https://{domain}/search?title={query_title}&author_author={query_author}&ipRedirectOverride=true"
         try:
             r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
+            
+            # Check for Rate Limit before parsing
+            check_potential_rate_limit(r)
+            
             if r.status_code != 200: continue
             soup = BeautifulSoup(r.text, 'lxml')
+            
+            # Additional Content Check if no items found
             items = soup.find_all('li', class_=re.compile(r'productListItem'))
+            if not items:
+                check_potential_rate_limit(r, soup)
+                
             for item in items:
                 asin_attr = item.get('data-asin')
                 if not asin_attr: 
@@ -311,6 +353,8 @@ def find_missing_asin(title, author, abs_duration_sec, language):
                         if audible_sec > 0:
                             if abs(abs_duration_sec - audible_sec) > 900: continue
                 return asin_attr
+        except RateLimitException:
+            raise # Re-raise to be caught in main loop
         except Exception as e:
             logging.warning(f"Error searching ASIN on {domain}: {e}")
     return None
@@ -327,6 +371,10 @@ def get_audible_data(asin):
         url = f"https://{domain}/pd/{asin}?ipRedirectOverride=true"
         try:
             r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
+            
+            # Check Status Code first
+            check_potential_rate_limit(r)
+            
             if r.status_code == 404: continue 
             if r.status_code == 200:
                 if "/pderror" in r.url.lower(): 
@@ -413,9 +461,13 @@ def get_audible_data(asin):
                     return ratings
                 
                 if (title_tag or redirected_to_home) and not count:
+                      # Suspicious: We found a page but no content. Check for Captcha.
+                      check_potential_rate_limit(r, soup)
                       logging.info(f"   -> Audible: ⚠️ Page found on {domain}, but NO ratings (Count: 0)")
                       return {'count': 0, 'overall': None}
 
+        except RateLimitException:
+            raise # Bubble up to main loop
         except: pass
         
     if "www.audible.com" in found_domains:
@@ -432,6 +484,10 @@ def get_audible_data(asin):
 def scrape_goodreads_book_details(url):
     try:
         r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
+        
+        # Check Status Code first
+        check_potential_rate_limit(r)
+        
         if r.status_code != 200: return None
         soup = BeautifulSoup(r.text, 'lxml')
         result = {'url': url}
@@ -494,7 +550,13 @@ def scrape_goodreads_book_details(url):
             if asin_match:
                 result['asin'] = asin_match.group(1)
 
+        # If we still have no result, check if it was a Captcha page that returned 200 OK
+        if 'val' not in result:
+             check_potential_rate_limit(r, soup)
+
         return result if 'val' in result else None
+    except RateLimitException:
+        raise
     except: return None
 
 def find_best_goodreads_match_in_list(html, target_title, target_abs_authors):
@@ -547,22 +609,26 @@ def get_goodreads_data(isbn, asin, title, abs_authors_list, primary_author):
         url = f"https://www.goodreads.com/search?q={isbn}"
         try:
             r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
+            check_potential_rate_limit(r)
             if r.status_code == 200:
                 data = scrape_goodreads_book_details(r.url)
                 if data:
                     data['source'] = 'ISBN Lookup'
                     return data
+        except RateLimitException: raise
         except: pass
 
     if asin:
         url = f"https://www.goodreads.com/search?q={asin}"
         try:
             r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
+            check_potential_rate_limit(r)
             if r.status_code == 200:
                 data = scrape_goodreads_book_details(r.url)
                 if data:
                     data['source'] = 'ASIN Lookup'
                     return data
+        except RateLimitException: raise
         except: pass
     
     search_titles = [title]
@@ -576,6 +642,7 @@ def get_goodreads_data(isbn, asin, title, abs_authors_list, primary_author):
             url = f"https://www.goodreads.com/search?q={urllib.parse.quote_plus(query)}"
             try:
                 r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
+                check_potential_rate_limit(r)
                 if r.status_code == 200:
                     if "/book/show/" in r.url:
                         data = scrape_goodreads_book_details(r.url)
@@ -594,6 +661,7 @@ def get_goodreads_data(isbn, asin, title, abs_authors_list, primary_author):
                             if data:
                                 data['source'] = 'Text Search (Title+Author List)'
                                 return data
+            except RateLimitException: raise
             except: pass
 
     logging.info("   -> Standard search failed. Trying Title-only fallback...")
@@ -603,6 +671,7 @@ def get_goodreads_data(isbn, asin, title, abs_authors_list, primary_author):
         url = f"https://www.goodreads.com/search?q={urllib.parse.quote_plus(query)}"
         try:
             r = requests.get(url, headers=HEADERS_SCRAPE, timeout=20)
+            check_potential_rate_limit(r)
             if r.status_code == 200:
                 if "/book/show/" in r.url:
                     data = scrape_goodreads_book_details(r.url)
@@ -616,6 +685,7 @@ def get_goodreads_data(isbn, asin, title, abs_authors_list, primary_author):
                         if data:
                             data['source'] = 'Text Search (Title Only)'
                             return data
+        except RateLimitException: raise
         except: pass
 
     return None
@@ -656,15 +726,14 @@ def process_library(lib_id, history, failed_history):
     
     count_processed = 0
     total_in_batch = min(len(work_queue), MAX_BATCH_SIZE)
+    consecutive_rate_limits = 0
     
-    for item in work_queue:
-        if count_processed >= MAX_BATCH_SIZE:
-            logging.info(f"Batch limit of {MAX_BATCH_SIZE} reached.")
-            break
+    for count_processed, item in enumerate(work_queue[:total_in_batch]):
+        if stats['aborted_ratelimit']: break
         
         try:
             item_id = item['id']
-            unique_key = f"{lib_id}_{item_id}"
+            unique_key = f"{lib_id}_{item['id']}"
             metadata = item.get('media', {})['metadata']
             title = metadata.get('title')
             
@@ -754,6 +823,9 @@ def process_library(lib_id, history, failed_history):
             
             time.sleep(1)
             gr = get_goodreads_data(isbn, asin, title, abs_authors_list, primary_search_author)
+            
+            # Reset consecutive errors if we made it here without exception
+            consecutive_rate_limits = 0
             
             if gr:
                 source = gr.get('source', 'Unknown')
@@ -853,6 +925,12 @@ def process_library(lib_id, history, failed_history):
                     del failed_history[unique_key]
                     save_json(FAILED_FILE, failed_history)
             
+            # --- LIVE REPORT SAVING ---
+            update_report("audible", unique_key, title, primary_search_author, asin, "Not found", found_audible)
+            update_report("goodreads", unique_key, title, primary_search_author, isbn, "Not found", found_gr)
+            if not DRY_RUN:
+                save_reports()
+            
             BR = "<br>" 
             block = f"⭐ Ratings & Infos{BR}"
             
@@ -914,13 +992,34 @@ def process_library(lib_id, history, failed_history):
                 logging.info(f"   -> [DRY RUN] Would save (Complete: {is_complete}).")
                 if is_complete: stats['success'] += 1
         
+        except RateLimitException as rle:
+            consecutive_rate_limits += 1
+            logging.warning(f"🛑 Rate Limit DETECTED: {rle}")
+            
+            if rle.is_hard_limit:
+                 logging.error(f"🛑 HARD STOP initiated due to HTTP 429. Aborting script.")
+                 stats['aborted_ratelimit'] = True
+                 break
+            elif consecutive_rate_limits >= MAX_CONSECUTIVE_RATE_LIMITS:
+                 logging.error(f"🛑 Aborting script: {consecutive_rate_limits} consecutive rate limit errors.")
+                 stats['aborted_ratelimit'] = True
+                 break
+            else:
+                 logging.info(f"   -> Pausing for {RECOVERY_PAUSE}s before next item (Attempt {consecutive_rate_limits}/{MAX_CONSECUTIVE_RATE_LIMITS})...")
+                 time.sleep(RECOVERY_PAUSE)
+                 # No strike added, loop continues to next item
+        
         except Exception as e:
             logging.error(f"CRASH on item {item.get('id')}: {e}")
             stats['failed'] += 1
             continue
         
-        count_processed += 1
         time.sleep(BASE_SLEEP + random.uniform(1, 3))
+    
+    if stats['aborted_ratelimit']:
+        logging.info("-" * 50)
+        logging.info(f"🛑 ABBRUCH wg. Rate Limit! (Erfolgreich verarbeitet: {stats['success']} / {total_in_batch} geplant)")
+        logging.info("-" * 50)
 
 def main():
     if not ABS_URL or not API_TOKEN:
@@ -938,6 +1037,7 @@ def main():
     
     for lib_id in LIBRARY_IDS:
         process_library(lib_id, history, failed_history)
+        if stats['aborted_ratelimit']: break
         
     save_reports() 
     
