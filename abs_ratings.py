@@ -43,7 +43,7 @@ HEADERS_ABS = {
 HEADERS_SCRAPE = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9" # Added to help with US-Redirects
+    "Accept-Language": "en-US,en;q=0.9"
 }
 
 # Statistics tracker
@@ -334,29 +334,21 @@ def get_audible_data(asin):
                 
                 soup = BeautifulSoup(r.text, 'lxml')
                 
-                # --- FLEXIBLE TITLE CHECK (Gateway relaxation) ---
-                # Check for H1, H2, OR H3 with 'bc-heading'
+                # --- FLEXIBLE TITLE CHECK ---
                 title_tag = soup.find(['h1', 'h2', 'h3'], class_=re.compile(r'bc-heading'))
-                
-                # Check for newer "uia" attribute if class check failed
                 if not title_tag:
                     title_tag = soup.find(['h1', 'h2', 'h3'], attrs={'data-uia': 'product-title'})
 
-                # If still no title tag found, but we are not redirected to home
-                # -> We might proceed CAUTIOUSLY if we find ratings (e.g. Great Courses layout)
                 redirected_to_home = ("audible." in r.url and len(r.url) < 35)
 
                 found_domains.append(domain)
                 ratings = {}
 
-                # --- STRATEGY: Try to find ratings ANYWAY ---
-                
-                # 1. Summary Tag (Your specific Great Courses case!)
+                # 1. Summary Tag
                 summary_tag = soup.find('adbl-rating-summary')
                 if summary_tag:
                     if summary_tag.has_attr('performance-value'): ratings['performance'] = summary_tag['performance-value']
                     if summary_tag.has_attr('story-value'): ratings['story'] = summary_tag['story-value']
-                    # Often the star-rating is inside
                     star_tag = summary_tag.find('adbl-star-rating')
                     if star_tag:
                          if star_tag.has_attr('value'): ratings['overall'] = star_tag['value']
@@ -400,7 +392,7 @@ def get_audible_data(asin):
                                 ratings['count'] = found_r.get('count')
                         except: pass
 
-                # 4. Classic Metadata (Fallback)
+                # 4. Classic Metadata
                 if not ratings.get('overall'):
                     meta_tag = soup.find('adbl-product-metadata')
                     if meta_tag:
@@ -416,23 +408,18 @@ def get_audible_data(asin):
 
                 count = ratings.get('count')
                 
-                # DECISION: Do we trust this page?
-                # If we found ratings -> TRUST IT (Even if title was weird)
                 if count and int(count) > 0:
                     logging.info(f"  -> Audible: ✅ Found on {domain} (Count: {count})")
                     return ratings
                 
-                # If no ratings AND no title -> Then we reject
-                if not title_tag and not count and not redirected_to_home:
-                     # Maybe valid page but no ratings yet?
-                     logging.info(f"    (Debug) Page loaded but no Title H1/H2/H3 and no Ratings found. URL: {r.url}")
-                elif redirected_to_home:
-                     logging.info(f"    (Debug) Redirected to homepage: {r.url}")
+                if (title_tag or redirected_to_home) and not count:
+                     logging.info(f"  -> Audible: ⚠️ Page found on {domain}, but NO ratings (Count: 0)")
+                     return {'count': 0, 'overall': None}
 
         except: pass
         
     if "www.audible.com" in found_domains:
-        logging.info("  -> Audible: ❌ Not found (Empty on .com)")
+        logging.info("  -> Audible: ⚠️ Page found on .com, but NO ratings (Count: 0)")
         return {'count': 0, 'overall': None}
     
     logging.info("  -> Audible: ❌ Not found (Page error or Redirect)")
@@ -739,14 +726,12 @@ def process_library(lib_id, history, failed_history):
             
             found_audible = bool(audible_data) or bool(old_audible)
             if not found_audible:
-                update_report("audible", unique_key, title, primary_search_author, asin, "No Ratings found & Search failed", False)
-            else:
-                update_report("audible", unique_key, title, primary_search_author, asin, "Success", True)
-
+                # Audible logging handled in function
+                pass
+            
             time.sleep(1)
             gr = get_goodreads_data(isbn, asin, title, abs_authors_list, primary_search_author)
             
-            # --- VERBOSE LOGGING FOR GOODREADS ---
             if gr:
                 source = gr.get('source', 'Unknown')
                 val = gr.get('val', 'N/A')
@@ -754,33 +739,52 @@ def process_library(lib_id, history, failed_history):
             else:
                 logging.info(f"  -> Goodreads: ❌ Not found (Tried: ISBN, ASIN, Text w/ Author validation)")
 
+            # --- REVISED ISBN/ASIN FALLBACK LOGIC ---
             if gr and not DRY_RUN:
                 new_id = gr.get('isbn')
-                if not new_id: new_id = gr.get('asin')
-                
-                if new_id:
-                    should_patch_isbn = False
+                used_fallback = False
+
+                # Fallback to ASIN if ISBN is missing
+                if not new_id:
+                    new_id = gr.get('asin')
+                    if new_id:
+                        used_fallback = True
+
+                # Case 1: Goodreads returned NEITHER ISBN NOR ASIN
+                if not new_id:
+                     logging.info(f"  -> ISBN: ⚠️ Goodreads data returned no ISBN or ASIN.")
+
+                # Case 2: We have an ID (either ISBN or ASIN-fallback)
+                else:
+                    # Clean comparison to avoid re-patching identical IDs (e.g. 978- vs 978)
+                    clean_abs_isbn = str(isbn).replace('-','').strip() if isbn else ""
+                    clean_new_id = str(new_id).replace('-','').strip()
+
                     if not isbn:
-                        should_patch_isbn = True
-                        logging.info(f"  -> ✨ ISBN/ID missing. Adding: {new_id}")
-                        stats['isbn_added'] += 1
-                    elif gr.get('source') != 'isbn_lookup' and gr.get('source') != 'ISBN Lookup':
-                        should_patch_isbn = True
-                        logging.info(f"  -> 🔧 Existing ISBN failed. Replacing with: {new_id}")
-                        stats['isbn_repaired'] += 1
-                    
-                    if should_patch_isbn:
+                        type_label = "GR-ASIN" if used_fallback else "ISBN"
+                        logging.info(f"  -> ISBN: ✨ Missing locally. Adding ({type_label}): {new_id}")
                         try:
                             patch_isbn_url = f"{ABS_URL}/api/items/{item_id}/media"
                             requests.patch(patch_isbn_url, json={"metadata": {"isbn": new_id}}, headers=HEADERS_ABS)
+                            stats['isbn_added'] += 1
+                        except: pass
+
+                    elif clean_abs_isbn == clean_new_id:
+                         # It matches, just verify in logs
+                         type_label = "GR-ASIN" if used_fallback else "ISBN"
+                         logging.info(f"  -> ISBN: ✅ Verified Match ({type_label}: {new_id})")
+
+                    else:
+                        # Update existing
+                        type_label = "GR-ASIN" if used_fallback else "ISBN"
+                        logging.info(f"  -> ISBN: 🔧 Updating ({type_label} Fallback) Old: {isbn} -> New: {new_id}" if used_fallback else f"  -> ISBN: 🔧 Updating (Old: {isbn} -> New: {new_id})")
+                        try:
+                            patch_isbn_url = f"{ABS_URL}/api/items/{item_id}/media"
+                            requests.patch(patch_isbn_url, json={"metadata": {"isbn": new_id}}, headers=HEADERS_ABS)
+                            stats['isbn_repaired'] += 1
                         except: pass
 
             found_gr = bool(gr) or bool(old_gr)
-            if not found_gr:
-                search_id = isbn if isbn else "No ISBN"
-                update_report("goodreads", unique_key, title, primary_search_author, search_id, "No Match found (ID/Title/Fallback)", False)
-            else:
-                update_report("goodreads", unique_key, title, primary_search_author, isbn, "Success", True)
             
             has_asin = bool(asin)
             is_complete = False
@@ -859,8 +863,13 @@ def process_library(lib_id, history, failed_history):
                     res = requests.patch(patch_url, json={"metadata": {"description": final_desc}}, headers=HEADERS_ABS)
                     if res.status_code == 200:
                         updates = []
-                        if audible_data: updates.append("Audible")
-                        if gr: updates.append("Goodreads")
+                        
+                        if (audible_data and audible_data.get('count', 0) > 0) or old_audible:
+                            updates.append("Audible")
+                        
+                        if gr or old_gr:
+                            updates.append("Goodreads")
+                        
                         update_str = " & ".join(updates) if updates else "Description Cleaned"
                         
                         logging.info(f"  -> ✅ UPDATE SUCCESS (Content: {update_str})")
