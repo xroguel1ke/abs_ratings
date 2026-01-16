@@ -409,20 +409,20 @@ def get_audible_data(asin):
                 count = ratings.get('count')
                 
                 if count and int(count) > 0:
-                    logging.info(f"  -> Audible: ✅ Found on {domain} (Count: {count})")
+                    logging.info(f"   -> Audible: ✅ Found on {domain} (Count: {count})")
                     return ratings
                 
                 if (title_tag or redirected_to_home) and not count:
-                     logging.info(f"  -> Audible: ⚠️ Page found on {domain}, but NO ratings (Count: 0)")
-                     return {'count': 0, 'overall': None}
+                      logging.info(f"   -> Audible: ⚠️ Page found on {domain}, but NO ratings (Count: 0)")
+                      return {'count': 0, 'overall': None}
 
         except: pass
         
     if "www.audible.com" in found_domains:
-        logging.info("  -> Audible: ⚠️ Page found on .com, but NO ratings (Count: 0)")
+        logging.info("   -> Audible: ⚠️ Page found on .com, but NO ratings (Count: 0)")
         return {'count': 0, 'overall': None}
     
-    logging.info("  -> Audible: ❌ Not found (Page error or Redirect)")
+    logging.info("   -> Audible: ❌ Not found (Page error or Redirect)")
     return None 
 
 # =====================================================
@@ -577,7 +577,7 @@ def get_goodreads_data(isbn, asin, title, abs_authors_list, primary_author):
                                 return data
             except: pass
 
-    logging.info("  -> Standard search failed. Trying Title-only fallback...")
+    logging.info("   -> Standard search failed. Trying Title-only fallback...")
     for search_t in search_titles:
         if not search_t: continue
         query = search_t
@@ -705,16 +705,16 @@ def process_library(lib_id, history, failed_history):
             should_search_asin = (not asin) or (asin and audible_data is None)
             
             if should_search_asin and not DRY_RUN:
-                if not asin: logging.info("  -> No ASIN present. Searching...")
-                else: logging.info("  -> ASIN seems invalid. Searching replacement...")
+                if not asin: logging.info("   -> No ASIN present. Searching...")
+                else: logging.info("   -> ASIN seems invalid. Searching replacement...")
                 
                 found_asin = find_missing_asin(title, primary_search_author, abs_duration, language)
                 
                 if found_asin:
                     if found_asin == asin:
-                        logging.info(f"  -> Found same ASIN {found_asin}. Stopping search to avoid loop.")
+                        logging.info(f"   -> Found same ASIN {found_asin}. Stopping search to avoid loop.")
                     else:
-                        logging.info(f"  -> ✨ Found NEW ASIN: {found_asin}")
+                        logging.info(f"   -> ✨ Found NEW ASIN: {found_asin}")
                         try:
                             patch_asin_url = f"{ABS_URL}/api/items/{item_id}/media"
                             r_asin = requests.patch(patch_asin_url, json={"metadata": {"asin": found_asin}}, headers=HEADERS_ABS)
@@ -735,9 +735,9 @@ def process_library(lib_id, history, failed_history):
             if gr:
                 source = gr.get('source', 'Unknown')
                 val = gr.get('val', 'N/A')
-                logging.info(f"  -> Goodreads: ✅ Found via {source} (Rating: {val})")
+                logging.info(f"   -> Goodreads: ✅ Found via {source} (Rating: {val})")
             else:
-                logging.info(f"  -> Goodreads: ❌ Not found (Tried: ISBN, ASIN, Text w/ Author validation)")
+                logging.info(f"   -> Goodreads: ❌ Not found (Tried: ISBN, ASIN, Text w/ Author validation)")
 
             # --- REVISED ISBN/ASIN FALLBACK LOGIC ---
             if gr and not DRY_RUN:
@@ -752,7 +752,7 @@ def process_library(lib_id, history, failed_history):
 
                 # Case 1: Goodreads returned NEITHER ISBN NOR ASIN
                 if not new_id:
-                     logging.info(f"  -> ISBN: ⚠️ Goodreads data returned no ISBN or ASIN.")
+                      logging.info(f"   -> ISBN: ⚠️ Goodreads data returned no ISBN or ASIN.")
 
                 # Case 2: We have an ID (either ISBN or ASIN-fallback)
                 else:
@@ -762,7 +762,7 @@ def process_library(lib_id, history, failed_history):
 
                     if not isbn:
                         type_label = "GR-ASIN" if used_fallback else "ISBN"
-                        logging.info(f"  -> ISBN: ✨ Missing locally. Adding ({type_label}): {new_id}")
+                        logging.info(f"   -> ISBN: ✨ Missing locally. Adding ({type_label}): {new_id}")
                         try:
                             patch_isbn_url = f"{ABS_URL}/api/items/{item_id}/media"
                             requests.patch(patch_isbn_url, json={"metadata": {"isbn": new_id}}, headers=HEADERS_ABS)
@@ -772,12 +772,12 @@ def process_library(lib_id, history, failed_history):
                     elif clean_abs_isbn == clean_new_id:
                          # It matches, just verify in logs
                          type_label = "GR-ASIN" if used_fallback else "ISBN"
-                         logging.info(f"  -> ISBN: ✅ Verified Match ({type_label}: {new_id})")
+                         logging.info(f"   -> ISBN: ✅ Verified Match ({type_label}: {new_id})")
 
                     else:
                         # Update existing
                         type_label = "GR-ASIN" if used_fallback else "ISBN"
-                        logging.info(f"  -> ISBN: 🔧 Updating ({type_label} Fallback) Old: {isbn} -> New: {new_id}" if used_fallback else f"  -> ISBN: 🔧 Updating (Old: {isbn} -> New: {new_id})")
+                        logging.info(f"   -> ISBN: 🔧 Updating ({type_label} Fallback) Old: {isbn} -> New: {new_id}" if used_fallback else f"   -> ISBN: 🔧 Updating (Old: {isbn} -> New: {new_id})")
                         try:
                             patch_isbn_url = f"{ABS_URL}/api/items/{item_id}/media"
                             requests.patch(patch_isbn_url, json={"metadata": {"isbn": new_id}}, headers=HEADERS_ABS)
@@ -803,15 +803,15 @@ def process_library(lib_id, history, failed_history):
                 
                 if not found_audible and not found_gr:
                     stats['no_data'] += 1
-                    logging.warning(f"  -> ❌ No data found (Attempt {fails}/{MAX_FAIL_ATTEMPTS}).")
+                    logging.warning(f"   -> ❌ No data found (Attempt {fails}/{MAX_FAIL_ATTEMPTS}).")
                 else:
                     stats['partial'] += 1
-                    logging.info(f"  -> ⚠️ Incomplete data (Audible: {found_audible}, GR: {found_gr}). Attempt {fails}/{MAX_FAIL_ATTEMPTS}.")
+                    logging.info(f"   -> ⚠️ Incomplete data (Audible: {found_audible}, GR: {found_gr}). Attempt {fails}/{MAX_FAIL_ATTEMPTS}.")
 
                 if fails >= MAX_FAIL_ATTEMPTS:
                     should_save_history = True
                     stats['cooldown'] += 1
-                    logging.info("  -> 🛑 Max attempts reached. Cooldown started.")
+                    logging.info("   -> 🛑 Max attempts reached. Cooldown started.")
                     del failed_history[unique_key]
                 else:
                     save_json(FAILED_FILE, failed_history)
@@ -837,7 +837,7 @@ def process_library(lib_id, history, failed_history):
                 if pf: block += f"🎙️ {generate_moon_rating(pf)} {round(safe_float(pf), 1)} / 5 - Performance{BR}"
                 if st: block += f"📖 {generate_moon_rating(st)} {round(safe_float(st), 1)} / 5 - Story{BR}"
             elif old_audible:
-                logging.info("  -> ♻️ Recycling old Audible rating.")
+                logging.info("   -> ♻️ Recycling old Audible rating.")
                 stats['recycled'] += 1
                 block += f"{old_audible}{BR}"
 
@@ -848,7 +848,7 @@ def process_library(lib_id, history, failed_history):
                 val = gr.get('val')
                 if val: block += f"🏆 {generate_moon_rating(val)} {round(safe_float(val), 1)} / 5 - Rating{BR}"
             elif old_gr:
-                logging.info("  -> ♻️ Recycling old Goodreads rating.")
+                logging.info("   -> ♻️ Recycling old Goodreads rating.")
                 if not old_audible: stats['recycled'] += 1
                 block += f"{old_gr}{BR}"
             
@@ -864,7 +864,8 @@ def process_library(lib_id, history, failed_history):
                     if res.status_code == 200:
                         updates = []
                         
-                        if (audible_data and audible_data.get('count', 0) > 0) or old_audible:
+                        # --- FIX: Ensure comparison is done with int() ---
+                        if (audible_data and int(audible_data.get('count', 0)) > 0) or old_audible:
                             updates.append("Audible")
                         
                         if gr or old_gr:
@@ -872,16 +873,16 @@ def process_library(lib_id, history, failed_history):
                         
                         update_str = " & ".join(updates) if updates else "Description Cleaned"
                         
-                        logging.info(f"  -> ✅ UPDATE SUCCESS (Content: {update_str})")
+                        logging.info(f"   -> ✅ UPDATE SUCCESS (Content: {update_str})")
                         if is_complete: stats['success'] += 1
                     else:
-                        logging.error(f"  -> ❌ API ERROR: {res.status_code}")
+                        logging.error(f"   -> ❌ API ERROR: {res.status_code}")
                         stats['failed'] += 1
                 except Exception as e:
-                    logging.error(f"  -> ❌ API Exception: {e}")
+                    logging.error(f"   -> ❌ API Exception: {e}")
                     stats['failed'] += 1
             else:
-                logging.info(f"  -> [DRY RUN] Would save (Complete: {is_complete}).")
+                logging.info(f"   -> [DRY RUN] Would save (Complete: {is_complete}).")
                 if is_complete: stats['success'] += 1
         
         except Exception as e:
