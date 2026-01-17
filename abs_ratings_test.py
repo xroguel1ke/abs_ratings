@@ -1,6 +1,17 @@
+import os
+import time
+
+# --- TIMEZONE FIX FOR UNRAID USER SCRIPTS ---
+# Zwingt das Skript auf deutsche Zeit, egal was der Host sagt
+os.environ['TZ'] = 'Europe/Berlin'
+try:
+    time.tzset()
+except: pass
+# --------------------------------------------
+
 import requests
 from bs4 import BeautifulSoup
-import time, re, json, os, random, urllib.parse, difflib, logging
+import re, json, random, urllib.parse, difflib, logging
 from datetime import datetime
 
 # ================= CONFIGURATION =================
@@ -161,10 +172,13 @@ def find_rating_recursive(obj):
             if res := find_rating_recursive(item): return res
     return None
 
+def format_time(seconds):
+    if seconds < 60: return f"{int(seconds)}s"
+    return f"{int(seconds // 60)}m {int(seconds % 60)}s"
+
 # ================= AUDIBLE LOGIC =================
 
 def check_asin_exists_on_domain(asin, domain):
-    """Lightweight check if ASIN page loads (200 OK) on specific domain"""
     try:
         r, _ = fetch_url(f"https://{domain}/pd/{asin}?ipRedirectOverride=true")
         if r and r.status_code == 200:
@@ -179,7 +193,6 @@ def get_audible_data(asin, language):
         "www.audible.com", "www.audible.de", "www.audible.co.uk", "www.audible.fr",
         "www.audible.ca", "www.audible.com.au", "www.audible.it", "www.audible.es"
     ]
-    # Smart Sorting based on language
     if language and str(language).strip().lower() in GERMAN_LANG_CODES:
         if "www.audible.de" in domains:
             domains.remove("www.audible.de"); domains.insert(0, "www.audible.de")
@@ -196,15 +209,12 @@ def get_audible_data(asin, language):
         found_domains.append(domain)
         ratings = {}
         
-        # 1. Summary Tag
         if sum_tag := soup.find('adbl-rating-summary'):
             ratings = {k: sum_tag.get(f'{k}-value') for k in ['performance', 'story']}
             if st := sum_tag.find('adbl-star-rating'):
                 ratings.update({'overall': st.get('value'), 'count': st.get('count')})
         
-        # 2. JSON-LD / Next.js / Metadata
         if not ratings.get('overall'):
-            # JSON-LD
             for s in soup.find_all('script', type='application/ld+json'):
                 try:
                     d = json.loads(s.string)
@@ -212,7 +222,6 @@ def get_audible_data(asin, language):
                         if 'aggregateRating' in i: ratings['overall'] = i['aggregateRating'].get('ratingValue')
                 except: pass
             
-            # Next.js
             if not ratings.get('overall'):
                 if nxt := soup.find('script', id='__NEXT_DATA__'):
                     try:
@@ -220,7 +229,6 @@ def get_audible_data(asin, language):
                             ratings['overall'], ratings['count'] = r_found.get('value'), r_found.get('count')
                     except: pass
             
-            # Metadata Script
             if not ratings.get('overall'):
                 if meta_tag := soup.find('adbl-product-metadata'):
                     if sc := meta_tag.find('script', type='application/json'):
@@ -242,8 +250,7 @@ def get_audible_data(asin, language):
     return None
 
 def find_missing_asin(title, author, duration, lang, force_domain=None):
-    if force_domain:
-        doms = [force_domain]
+    if force_domain: doms = [force_domain]
     else:
         doms = ["www.audible.com", "www.audible.de"]
         if lang and str(lang).strip().lower() in GERMAN_LANG_CODES:
@@ -385,13 +392,25 @@ def process_library(lib_id, history, failed):
     
     work_queue = queue + due
     random.shuffle(work_queue)
-    logging.info(f"Queue: {len(queue)} New, {len(due)} Due.")
     
+    total_in_batch = min(len(work_queue), MAX_BATCH_SIZE)
+    logging.info(f"Queue: {len(queue)} New, {len(due)} Due. Total in this run: {total_in_batch}")
+    
+    batch_start_time = datetime.now()
     consecutive_rl = 0
 
     for idx, item in enumerate(work_queue[:MAX_BATCH_SIZE]):
         if stats['aborted_ratelimit']: break
         
+        # --- ETA CALCULATION ---
+        elapsed = (datetime.now() - batch_start_time).total_seconds()
+        items_done = idx + 1
+        avg_time = elapsed / items_done
+        remaining_items = total_in_batch - items_done
+        eta_seconds = avg_time * remaining_items
+        eta_str = format_time(eta_seconds)
+        # -----------------------
+
         try:
             iid, key = item['id'], f"{lib_id}_{item['id']}"
             ir = abs_session.get(f"{ABS_URL}/api/items/{iid}")
@@ -403,16 +422,15 @@ def process_library(lib_id, history, failed):
             prim_auth = next((a for a in authors), "")
             
             logging.info(f"-"*50)
-            logging.info(f"({idx+1}) Processing: {title} (ASIN: {asin})")
+            logging.info(f"({idx+1}/{total_in_batch}) [ETA: {eta_str}] Processing: {title}")
             stats['processed'] += 1
 
-            # --- 1. ASIN STANDARDIZATION LOGIC (NEW) ---
+            # --- 1. ASIN STANDARDIZATION ---
             target_domain = "www.audible.com"
             if lang and str(lang).strip().lower() in GERMAN_LANG_CODES:
                 target_domain = "www.audible.de"
             
             if asin:
-                # Check if current ASIN works on target domain
                 if not check_asin_exists_on_domain(asin, target_domain) and not DRY_RUN:
                     logging.info(f"    -> ASIN {asin} invalid on {target_domain}. Searching migration...")
                     if found_mig := find_missing_asin(title, prim_auth, item['media'].get('duration'), lang, force_domain=target_domain):
@@ -422,7 +440,7 @@ def process_library(lib_id, history, failed):
                     else:
                         logging.info("    -> No migration target found. Keeping old ASIN.")
 
-            # --- 2. AUDIBLE DATA FETCH ---
+            # --- 2. AUDIBLE DATA ---
             aud_data = get_audible_data(asin, lang)
             should_search = (not asin) or (asin and aud_data is None)
             
@@ -443,7 +461,6 @@ def process_library(lib_id, history, failed):
             gr_data = get_goodreads_data(isbn, asin, title, authors, prim_auth)
             if gr_data: logging.info(f"    -> Goodreads: ✅ Found via {gr_data['source']} (Rating: {gr_data.get('val')})")
             
-            # Patch ISBN
             if gr_data and not DRY_RUN:
                 new_id = gr_data.get('isbn') or gr_data.get('asin')
                 if new_id and str(isbn or "").replace('-','') != str(new_id).replace('-',''):
