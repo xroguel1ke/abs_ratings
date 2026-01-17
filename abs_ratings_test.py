@@ -105,7 +105,6 @@ def update_report(src, key, title, author, ident, reason, success):
 def save_reports():
     for k, v in reports.items(): rw_json(os.path.join(REPORT_DIR, f"missing_{k}.json"), sorted(v.values(), key=lambda x: x['title']))
 
-# --- From Script 2: Detailed ENV Output ---
 def write_env_file(log_file, start_time):
     dur = f"{int((datetime.now() - start_time).total_seconds() // 60)}m {int((datetime.now() - start_time).total_seconds() % 60)}s"
     if stats['aborted_ratelimit']: sub, icon, head = "ABS Ratings: Abbruch 🛑", "alert", "Rate Limit erkannt!"
@@ -122,6 +121,13 @@ def write_env_file(log_file, start_time):
     except: pass
 
 def safe_float(v): return float(str(v).replace(',', '.')) if v else 0.0
+
+def is_valid_rating(v):
+    try:
+        val = safe_float(v)
+        return 0 <= val <= 5.0
+    except: return False
+
 def clean_title(t): return RE_CLEAN_TITLE.sub('', t).split(':')[0].split(' - ')[0].strip() if t else ""
 def moon_rating(v):
     v = safe_float(v)
@@ -131,12 +137,10 @@ def moon_rating(v):
 
 def extract_volume(text): return set(RE_VOL.findall(text)) | ({m.group(1)} if (m := re.search(r'\b(\d+)$', text.strip())) else set())
 
-# --- From Script 2: Detailed Time Format ---
 def format_time(seconds):
     if seconds < 60: return f"{int(seconds)}s"
     return f"{int(seconds // 60)}m {int(seconds % 60)}s"
 
-# --- From Script 2: Author Matching Logic ---
 def match_author(abs_authors, gr_author):
     if not abs_authors or not gr_author: return False
     gr_tok = set(re.split(r'[^a-zA-Z0-9]+', gr_author.lower()))
@@ -148,7 +152,8 @@ def match_author(abs_authors, gr_author):
 
 def find_rating_recursive(obj):
     if isinstance(obj, dict):
-        if 'rating' in obj and isinstance(obj['rating'], dict) and 'value' in obj['rating']: return obj['rating']
+        if 'rating' in obj and isinstance(obj['rating'], dict) and 'value' in obj['rating']:
+             if is_valid_rating(obj['rating'].get('value')): return obj['rating']
         for k, v in obj.items():
             if res := find_rating_recursive(v): return res
     elif isinstance(obj, list):
@@ -156,12 +161,9 @@ def find_rating_recursive(obj):
             if res := find_rating_recursive(item): return res
     return None
 
-# --- HELPER: DYNAMIC HEADER BUILDER (From Script 1) ---
 def get_headers(domain=None):
     h = HEADERS_BASE.copy()
     h["User-Agent"] = random.choice(USER_AGENTS)
-    
-    # DYNAMIC LANGUAGE SWITCHING
     if domain and "audible.de" in domain:
         h["Accept-Language"] = "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7"
     else:
@@ -170,10 +172,8 @@ def get_headers(domain=None):
 
 def fetch_url(url, params=None, domain=None):
     try:
-        # Use dynamic headers based on domain
         headers = get_headers(domain)
         cookies = {} 
-        
         r = requests.get(url, headers=headers, params=params, cookies=cookies, timeout=20)
         
         if r.status_code == 429: raise RateLimitException("HTTP 429", True)
@@ -188,7 +188,6 @@ def fetch_url(url, params=None, domain=None):
 def scrape_search_result_fallback(domain, asin):
     try:
         h = get_headers(domain) 
-        
         logging.info(f"        🔎 Attempting Search Fallback on {domain}...")
         r = requests.get(f"https://{domain}/search", params={"keywords": asin, "ipRedirectOverride": "true"}, headers=h, timeout=15)
         soup = BeautifulSoup(r.text, 'lxml')
@@ -197,7 +196,9 @@ def scrape_search_result_fallback(domain, asin):
         if item:
             ratings = {}
             if rate_txt := item.find('span', class_=re.compile(r'ratingLabel|ratingText')):
-                if m := re.search(r'(\d+[.,]?\d*)', rate_txt.get_text()): ratings['overall'] = m.group(1).replace(',', '.')
+                if m := re.search(r'(\d+[.,]?\d*)', rate_txt.get_text()):
+                     if is_valid_rating(m.group(1).replace(',', '.')):
+                         ratings['overall'] = m.group(1).replace(',', '.')
             if count_txt := item.find('span', class_=re.compile(r'ratingsLabel|ratingCount')):
                 if m := re.search(r'([\d,.]+)', count_txt.get_text()): ratings['count'] = int(re.sub(r'[^\d]', '', m.group(1)))
             if ratings.get('overall') and ratings.get('count'): return ratings
@@ -216,73 +217,92 @@ def get_audible_data(asin, language):
     best_result = None
 
     for domain in domains:
-        logging.info(f"    -> Checking {domain}...")
+        logging.info(f"     -> Checking {domain}...")
         
         url = f"https://{domain}/pd/{asin}?ipRedirectOverride=true"
         cookies = {}
         if "audible.de" in domain: cookies["audible_site_preference"] = "de"
         elif "audible.com" in domain: cookies["audible_site_preference"] = "us"
         
-        # DYNAMIC HEADERS HERE
         headers = get_headers(domain)
 
         try:
             r = requests.get(url, headers=headers, cookies=cookies, timeout=15)
             
-            # --- SOFT FAIL CHECK ---
+            # SOFT FAIL & "NO RESULTS" DETECTION
             txt_lower = r.text.lower()
-            if "looks like this title is no longer available" in txt_lower or "titel ist leider nicht verfügbar" in txt_lower:
-                logging.info(f"        ⚠️ Soft-404 (Not Available Text) on {domain}")
+            
+            soft_404_markers = [
+                "looks like this title is no longer available",
+                "titel ist leider nicht verfügbar",
+                "no results for",
+                "keine ergebnisse für"
+            ]
+
+            if any(marker in txt_lower for marker in soft_404_markers):
+                logging.info(f"        ⚠️ Soft-404 (Not Available/No Results) on {domain}")
                 if domain in ["www.audible.com", "www.audible.de"]:
                     if fb := scrape_search_result_fallback(domain, asin):
                         logging.info(f"        ✅ Found via Search Fallback (Soft-404) (Count: {fb['count']})")
+                        fb['domain'] = domain
                         return fb
                 continue
 
-            # --- HARD FAIL CHECK ---
+            # HARD FAIL
             if r.status_code == 404 or "/pderror" in r.url:
                 logging.info(f"        ❌ 404/Error on {domain}")
                 if domain in ["www.audible.com", "www.audible.de"]:
                     if fb := scrape_search_result_fallback(domain, asin):
                         logging.info(f"        ✅ Found via Search Fallback (404) (Count: {fb['count']})")
+                        fb['domain'] = domain
                         return fb
                 continue
 
-            # --- EXTRACTION ---
-            ratings = {}
+            # EXTRACTION
+            ratings = {'domain': domain}
             raw_text = r.text
             
-            # A) REGEX
-            if m := RE_RAW_STORY.search(raw_text): ratings['story'] = m.group(1)
-            if m := RE_RAW_PERFORMANCE.search(raw_text): ratings['performance'] = m.group(1)
-            if m := RE_RAW_OVERALL.search(raw_text): ratings['overall'] = m.group(1)
+            # A) REGEX (Enhanced with Sanity Check)
+            if m := RE_RAW_STORY.search(raw_text):
+                 if is_valid_rating(m.group(1)): ratings['story'] = m.group(1)
+            if m := RE_RAW_PERFORMANCE.search(raw_text):
+                 if is_valid_rating(m.group(1)): ratings['performance'] = m.group(1)
+            if m := RE_RAW_OVERALL.search(raw_text):
+                 # CRITICAL FIX: Ensure extracted value is not an ASIN/ISBN
+                 if is_valid_rating(m.group(1)): ratings['overall'] = m.group(1)
             if m := RE_RAW_COUNT.search(raw_text): ratings['count'] = m.group(1)
 
             # B) TAGS
             if not ratings.get('count'):
                 soup = BeautifulSoup(raw_text, 'lxml')
                 if sum_tag := soup.find('adbl-rating-summary'):
-                    ratings = {k: sum_tag.get(f'{k}-value') for k in ['performance', 'story']}
-                    if st := sum_tag.find('adbl-star-rating'): ratings.update({'overall': st.get('value'), 'count': st.get('count')})
+                    if is_valid_rating(sum_tag.get('performance-value')): ratings['performance'] = sum_tag.get('performance-value')
+                    if is_valid_rating(sum_tag.get('story-value')): ratings['story'] = sum_tag.get('story-value')
+                    
+                    if st := sum_tag.find('adbl-star-rating'): 
+                        if is_valid_rating(st.get('value')): ratings['overall'] = st.get('value')
+                        ratings['count'] = st.get('count')
 
             # C) JSON
-            if not ratings.get('count'):
+            if not ratings.get('count') or not ratings.get('overall'):
                 soup = BeautifulSoup(raw_text, 'lxml')
                 for s in soup.find_all('script', type='application/ld+json'):
                     try:
                         d = json.loads(s.string)
                         for i in (d if isinstance(d, list) else [d]):
-                            if 'aggregateRating' in i: ratings['overall'] = i['aggregateRating'].get('ratingValue')
+                            if 'aggregateRating' in i: 
+                                val = i['aggregateRating'].get('ratingValue')
+                                if is_valid_rating(val): ratings['overall'] = val
                     except: pass
 
             count = int(ratings.get('count', 0))
-            if count > 0:
+            if count > 0 and ratings.get('overall'): # Check overall too
                 ov = ratings.get('overall', 'N/A')
                 logging.info(f"        ✅ SUCCESS on {domain} (Count: {count}, Rating: {ov})")
                 return ratings
             else:
                 logging.info(f"        ⚠️ Page OK (200), but 0 Ratings found.")
-                if best_result is None: best_result = {'count': 0, 'source': 'Empty'}
+                if best_result is None: best_result = {'count': 0, 'source': 'Empty', 'domain': domain}
 
         except Exception as e:
             logging.error(f"        ⚠️ Request failed: {e}")
@@ -292,12 +312,11 @@ def get_audible_data(asin, language):
     return None
 
 def find_missing_asin(title, author, duration, lang, force_domain=None):
-    logging.info(f"    -> 🔎 Searching Replacement ASIN for '{title}'...")
+    logging.info(f"     -> 🔎 Searching Replacement ASIN for '{title}'...")
     doms = ["www.audible.com", "www.audible.de"]
     if lang and str(lang).strip().lower() in GERMAN_LANG_CODES: doms = ["www.audible.de", "www.audible.com"]
     
     for d in doms:
-        # fetch_url now uses dynamic headers based on 'd' (domain)
         r, soup = fetch_url(f"https://{d}/search", params={"title": title, "author_author": author or "", "ipRedirectOverride": "true"}, domain=d)
         if not soup: continue
         
@@ -319,7 +338,7 @@ def find_missing_asin(title, author, duration, lang, force_domain=None):
     return None
 
 def scrape_gr_details(url):
-    r, soup = fetch_url(url) # Goodreads just gets general headers
+    r, soup = fetch_url(url)
     if not soup: return None
     res = {'url': url, 'source': 'GR'}
     for s in soup.find_all('script', type='application/ld+json'):
@@ -343,17 +362,15 @@ def scrape_gr_details(url):
             if m := re.search(r'ASIN[:\s]*(B0\w+)', soup.get_text()): res['asin'] = m.group(1)
     return res if 'val' in res else None
 
-# --- From Script 2: Detailed Goodreads Logic ---
 def get_goodreads_data(isbn, asin, title, authors, prim_auth):
+    logging.info("     -> Checking www.goodreads.com")
     # 1. ID Search
     for q_id, src in [(isbn, 'ISBN Lookup'), (asin, 'ASIN Lookup')]:
         if q_id:
             if d := scrape_gr_details(f"https://www.goodreads.com/search?q={q_id}"):
-                d['source'] = src; return d
-            else:
-                 logging.info(f"    (Debug) Goodreads: ID Lookup for {q_id} ({src}) returned no data.")
-    
-    logging.info(f"    -> Goodreads: ❌ ID Lookup failed. Falling back to text search...")
+                d['source'] = src
+                logging.info(f"        ✅ Found via {src} (Count: {d.get('count')}, Rating: {d.get('val')})")
+                return d
     
     # 2. Text Search
     searches = [f"{t} {prim_auth}" for t in [title, clean_title(title)] if t] + [title]
@@ -364,7 +381,10 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
         if not soup: continue
         
         if "/book/show/" in r.url:
-            if d := scrape_gr_details(r.url): d['source'] = 'Text Search (Direct Hit)'; return d
+            if d := scrape_gr_details(r.url): 
+                d['source'] = 'Text Search (Direct Hit)'
+                logging.info(f"        ✅ Found via Text Search (Direct) (Count: {d.get('count')}, Rating: {d.get('val')})")
+                return d
         else:
             best_url, best_score = None, 0.0
             for row in soup.find_all('tr', itemtype="http://schema.org/Book"):
@@ -383,16 +403,18 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
                 if (f_nums and t_nums and not f_nums & t_nums): continue
                 
                 found_auth = row.find('a', class_='authorName').text if row.find('a', class_='authorName') else ""
-                if not match_author(authors, found_auth):
-                     if t_score > 0.8: logging.info(f"    (Debug) Match Rejected: '{found_title}' score {t_score}, but Author mismatch.")
-                     continue
+                if not match_author(authors, found_auth): continue
                 
                 if t_score > 0.7 and t_score > best_score:
-                    logging.info(f"    (Debug) Match Candidate Accepted: '{found_title}' (Score: {round(t_score, 2)})")
                     best_score, best_url = t_score, "https://www.goodreads.com" + link['href']
             
             if best_url:
-                if d := scrape_gr_details(best_url): d['source'] = 'Text Search (List Match)'; return d
+                if d := scrape_gr_details(best_url): 
+                    d['source'] = 'Text Search (List Match)'
+                    logging.info(f"        ✅ Found via Text Search (List) (Count: {d.get('count')}, Rating: {d.get('val')})")
+                    return d
+    
+    logging.info("        ❌ Not found via ID or Text.")
     return None
 
 def build_description(current_desc, aud, gr, old_aud, old_gr):
@@ -436,7 +458,6 @@ def process_library(lib_id, history, failed):
     for idx, item in enumerate(work_queue[:MAX_BATCH_SIZE]):
         if stats['aborted_ratelimit']: break
         
-        # --- ETA CALCULATION (From Script 2) ---
         elapsed = (datetime.now() - start).total_seconds()
         items_done = idx + 1
         avg_time = elapsed / items_done
@@ -459,29 +480,46 @@ def process_library(lib_id, history, failed):
                 aud_data = get_audible_data(asin, lang)
                 
                 # REPLACEMENT LOGIC
-                if (not asin) or (aud_data is None) or (int(aud_data.get('count', 0)) == 0):
-                    if not asin: logging.info("    -> No ASIN. Searching...")
-                    else: logging.info("    -> ASIN invalid/0 ratings. Searching replacement...")
-                    
+                should_search = False
+                if not asin:
+                    logging.info("     -> ⚠️ No ASIN in ABS.")
+                    should_search = True
+                elif aud_data is None:
+                    logging.info("     -> ⚠️ ASIN not found (All domains).")
+                    should_search = True
+                elif int(aud_data.get('count', 0)) == 0:
+                    logging.info("     -> ⚠️ Found 0 Ratings.")
+                    should_search = True
+                elif (str(lang).lower() not in GERMAN_LANG_CODES) and aud_data.get('domain') == 'www.audible.de':
+                    logging.info("     -> ⚠️ Non-German Book only found on .de (Possible broken .com ASIN). Attempting Fix...")
+                    should_search = True
+                elif (str(lang).lower() in GERMAN_LANG_CODES) and aud_data.get('domain') == 'www.audible.com':
+                    logging.info("     -> ⚠️ German Book only found on .com (Possible broken .de ASIN). Attempting Fix...")
+                    should_search = True
+
+                if should_search:
                     if found := find_missing_asin(title, authors[0] if authors else "", item['media'].get('duration'), lang):
                         if found != asin:
-                            logging.info(f"    -> ✨ Found NEW ASIN: {found}")
-                            if not DRY_RUN: abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"asin": found}})
+                            logging.info(f"        ✨ NEW ASIN Found: {found}")
+                            if not DRY_RUN: 
+                                abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"asin": found}})
+                                logging.info(f"        💾 ASIN updated in ABS.")
                             asin, stats['asin_found'] = found, stats['asin_found'] + 1
                             stats['asin_migrated'] += 1
-                            aud_data = get_audible_data(asin, lang)
+                            aud_data = get_audible_data(asin, lang) # Fetch fresh data with new ASIN
+                        else:
+                             logging.info(f"        ℹ️ Search returned same ASIN. Keeping fallback data.")
 
                 time.sleep(1)
                 
                 # 2. GOODREADS
                 gr_data = get_goodreads_data(meta.get('isbn'), asin, title, authors, authors[0] if authors else "")
-                if gr_data: logging.info(f"    -> Goodreads: ✅ Found (Count: {gr_data.get('count')}, Rating: {gr_data.get('val')})")
                 
                 # ISBN REPAIR
                 if gr_data and not DRY_RUN:
                       new_id = gr_data.get('isbn') or gr_data.get('asin')
                       if new_id and str(meta.get('isbn') or "").replace('-','') != str(new_id).replace('-',''):
-                        logging.info(f"    -> ISBN: ✨ Updating ABS: {new_id}")
+                        logging.info(f"        🔧 ISBN Fixed/Added: {new_id}")
                         abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"isbn": new_id}})
                         stats['isbn_added' if not meta.get('isbn') else 'isbn_repaired'] += 1
 
@@ -495,7 +533,13 @@ def process_library(lib_id, history, failed):
                 
                 if not DRY_RUN:
                     if abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"description": final_desc}}).status_code == 200:
-                        logging.info(f"    -> ✅ SUCCESS: {'Audible ' if has_aud else ''}{'Goodreads' if has_gr else ''}")
+                        success_parts = []
+                        if has_aud: success_parts.append("Audible")
+                        if has_gr: success_parts.append("Goodreads")
+                        
+                        success_str = f"({', '.join(success_parts)})" if success_parts else "Data Cleaned"
+                        logging.info(f"     -> ✅ SUCCESS: {success_str}")
+                        
                         if has_aud or has_gr: stats['success'] += 1
                     else: stats['failed'] += 1
                 else:
@@ -509,9 +553,9 @@ def process_library(lib_id, history, failed):
                 if has_aud or has_gr:
                     history[key] = datetime.now().strftime("%Y-%m-%d"); failed.pop(key, None)
                 elif fails >= MAX_FAIL_ATTEMPTS:
-                    logging.info("    -> 🛑 Max attempts reached."); history[key] = datetime.now().strftime("%Y-%m-%d"); failed.pop(key, None)
+                    logging.info("     -> 🛑 Max attempts reached."); history[key] = datetime.now().strftime("%Y-%m-%d"); failed.pop(key, None)
                 else:
-                    failed[key] = fails; logging.warning(f"    -> ❌ Partial/No data.")
+                    failed[key] = fails; logging.warning(f"     -> ❌ Partial/No data.")
                 
                 consecutive_rl = 0
                 break # Success!
