@@ -239,7 +239,8 @@ def get_audible_data(asin, language):
         
         count = ratings.get('count')
         if count and int(count) > 0:
-            logging.info(f"    -> Audible: ✅ Found on {domain} (Count: {count})")
+            ov = ratings.get('overall', 'N/A')
+            logging.info(f"    -> Audible: ✅ Found on {domain} (Count: {count}, Rating: {ov})")
             return ratings
         
         if soup.find(['h1', 'h2', 'h3'], class_=re.compile(r'bc-heading|product-title')):
@@ -459,7 +460,8 @@ def process_library(lib_id, history, failed):
             
             # --- 3. GOODREADS ---
             gr_data = get_goodreads_data(isbn, asin, title, authors, prim_auth)
-            if gr_data: logging.info(f"    -> Goodreads: ✅ Found via {gr_data['source']} (Rating: {gr_data.get('val')})")
+            if gr_data: 
+                logging.info(f"    -> Goodreads: ✅ Found via {gr_data['source']} (Count: {gr_data.get('count', '0')}, Rating: {gr_data.get('val')})")
             
             if gr_data and not DRY_RUN:
                 new_id = gr_data.get('isbn') or gr_data.get('asin')
