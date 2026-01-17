@@ -125,7 +125,7 @@ def safe_float(v): return float(str(v).replace(',', '.')) if v else 0.0
 def is_valid_rating(v):
     try:
         val = safe_float(v)
-        return 0 <= val <= 5.0
+        return 0.1 <= val <= 5.0
     except: return False
 
 def clean_title(t): return RE_CLEAN_TITLE.sub('', t).split(':')[0].split(' - ')[0].strip() if t else ""
@@ -180,7 +180,7 @@ def fetch_url(url, params=None, domain=None):
         if r.status_code in [503, 403]: raise RateLimitException(f"HTTP {r.status_code}")
         
         soup = BeautifulSoup(r.text, 'lxml')
-        if "captcha" in (soup.title.string or "").lower(): raise RateLimitException("Captcha detected")
+        if soup.title and "captcha" in (soup.title.text).lower(): raise RateLimitException("Captcha detected")
         return r, soup
     except RateLimitException: raise
     except Exception as e: return None, None
@@ -229,8 +229,10 @@ def get_audible_data(asin, language):
         try:
             r = requests.get(url, headers=headers, cookies=cookies, timeout=15)
             
-            # SOFT FAIL & "NO RESULTS" DETECTION
+            # --- SOFT FAIL & "NO RESULTS" DETECTION ---
             txt_lower = r.text.lower()
+            soup = BeautifulSoup(r.text, 'lxml')
+            title_lower = (soup.title.text if soup.title else "").lower()
             
             soft_404_markers = [
                 "looks like this title is no longer available",
@@ -239,8 +241,8 @@ def get_audible_data(asin, language):
                 "keine ergebnisse für"
             ]
 
-            if any(marker in txt_lower for marker in soft_404_markers):
-                logging.info(f"        ⚠️ Soft-404 (Not Available/No Results) on {domain}")
+            if any(marker in txt_lower for marker in soft_404_markers) or "search" in title_lower:
+                logging.info(f"        ⚠️ Soft-404 (Not Available/No Results/Search Page) on {domain}")
                 if domain in ["www.audible.com", "www.audible.de"]:
                     if fb := scrape_search_result_fallback(domain, asin):
                         logging.info(f"        ✅ Found via Search Fallback (Soft-404) (Count: {fb['count']})")
@@ -258,34 +260,21 @@ def get_audible_data(asin, language):
                         return fb
                 continue
 
-            # EXTRACTION
+            # --- EXTRACTION ---
             ratings = {'domain': domain}
             raw_text = r.text
             
-            # A) REGEX (Enhanced with Sanity Check)
-            if m := RE_RAW_STORY.search(raw_text):
-                 if is_valid_rating(m.group(1)): ratings['story'] = m.group(1)
-            if m := RE_RAW_PERFORMANCE.search(raw_text):
-                 if is_valid_rating(m.group(1)): ratings['performance'] = m.group(1)
-            if m := RE_RAW_OVERALL.search(raw_text):
-                 # CRITICAL FIX: Ensure extracted value is not an ASIN/ISBN
-                 if is_valid_rating(m.group(1)): ratings['overall'] = m.group(1)
-            if m := RE_RAW_COUNT.search(raw_text): ratings['count'] = m.group(1)
+            # 1. TAGS (Priority 1)
+            if sum_tag := soup.find('adbl-rating-summary'):
+                if is_valid_rating(sum_tag.get('performance-value')): ratings['performance'] = sum_tag.get('performance-value')
+                if is_valid_rating(sum_tag.get('story-value')): ratings['story'] = sum_tag.get('story-value')
+                
+                if st := sum_tag.find('adbl-star-rating'): 
+                    if is_valid_rating(st.get('value')): ratings['overall'] = st.get('value')
+                    ratings['count'] = st.get('count')
 
-            # B) TAGS
-            if not ratings.get('count'):
-                soup = BeautifulSoup(raw_text, 'lxml')
-                if sum_tag := soup.find('adbl-rating-summary'):
-                    if is_valid_rating(sum_tag.get('performance-value')): ratings['performance'] = sum_tag.get('performance-value')
-                    if is_valid_rating(sum_tag.get('story-value')): ratings['story'] = sum_tag.get('story-value')
-                    
-                    if st := sum_tag.find('adbl-star-rating'): 
-                        if is_valid_rating(st.get('value')): ratings['overall'] = st.get('value')
-                        ratings['count'] = st.get('count')
-
-            # C) JSON
+            # 2. JSON (Priority 2)
             if not ratings.get('count') or not ratings.get('overall'):
-                soup = BeautifulSoup(raw_text, 'lxml')
                 for s in soup.find_all('script', type='application/ld+json'):
                     try:
                         d = json.loads(s.string)
@@ -295,13 +284,25 @@ def get_audible_data(asin, language):
                                 if is_valid_rating(val): ratings['overall'] = val
                     except: pass
 
+            # 3. REGEX (Priority 3 - Last Resort)
+            if not ratings.get('count'):
+                if m := RE_RAW_STORY.search(raw_text):
+                     if is_valid_rating(m.group(1)): ratings['story'] = m.group(1)
+                if m := RE_RAW_PERFORMANCE.search(raw_text):
+                     if is_valid_rating(m.group(1)): ratings['performance'] = m.group(1)
+                if m := RE_RAW_OVERALL.search(raw_text):
+                     if is_valid_rating(m.group(1)): ratings['overall'] = m.group(1)
+                if m := RE_RAW_COUNT.search(raw_text): ratings['count'] = m.group(1)
+
             count = int(ratings.get('count', 0))
-            if count > 0 and ratings.get('overall'): # Check overall too
-                ov = ratings.get('overall', 'N/A')
+            overall_val = safe_float(ratings.get('overall'))
+            
+            if count > 0 and overall_val > 0:
+                ov = round(overall_val, 2)
                 logging.info(f"        ✅ SUCCESS on {domain} (Count: {count}, Rating: {ov})")
                 return ratings
             else:
-                logging.info(f"        ⚠️ Page OK (200), but 0 Ratings found.")
+                logging.info(f"        ⚠️ Page OK (200), but 0 Ratings/Invalid Rating found.")
                 if best_result is None: best_result = {'count': 0, 'source': 'Empty', 'domain': domain}
 
         except Exception as e:
@@ -369,7 +370,7 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
         if q_id:
             if d := scrape_gr_details(f"https://www.goodreads.com/search?q={q_id}"):
                 d['source'] = src
-                logging.info(f"        ✅ Found via {src} (Count: {d.get('count')}, Rating: {d.get('val')})")
+                logging.info(f"        ✅ Found via {src} (Count: {d.get('count')}, Rating: {round(safe_float(d.get('val')), 2)})")
                 return d
     
     # 2. Text Search
@@ -383,7 +384,7 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
         if "/book/show/" in r.url:
             if d := scrape_gr_details(r.url): 
                 d['source'] = 'Text Search (Direct Hit)'
-                logging.info(f"        ✅ Found via Text Search (Direct) (Count: {d.get('count')}, Rating: {d.get('val')})")
+                logging.info(f"        ✅ Found via Text Search (Direct) (Count: {d.get('count')}, Rating: {round(safe_float(d.get('val')), 2)})")
                 return d
         else:
             best_url, best_score = None, 0.0
@@ -411,7 +412,7 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
             if best_url:
                 if d := scrape_gr_details(best_url): 
                     d['source'] = 'Text Search (List Match)'
-                    logging.info(f"        ✅ Found via Text Search (List) (Count: {d.get('count')}, Rating: {d.get('val')})")
+                    logging.info(f"        ✅ Found via Text Search (List) (Count: {d.get('count')}, Rating: {round(safe_float(d.get('val')), 2)})")
                     return d
     
     logging.info("        ❌ Not found via ID or Text.")
@@ -506,7 +507,7 @@ def process_library(lib_id, history, failed):
                                 logging.info(f"        💾 ASIN updated in ABS.")
                             asin, stats['asin_found'] = found, stats['asin_found'] + 1
                             stats['asin_migrated'] += 1
-                            aud_data = get_audible_data(asin, lang) # Fetch fresh data with new ASIN
+                            aud_data = get_audible_data(asin, lang)
                         else:
                              logging.info(f"        ℹ️ Search returned same ASIN. Keeping fallback data.")
 
