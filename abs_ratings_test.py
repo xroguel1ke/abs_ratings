@@ -2,7 +2,6 @@ import os
 import time
 
 # --- TIMEZONE FIX FOR UNRAID USER SCRIPTS ---
-# Zwingt das Skript auf deutsche Zeit, egal was der Host sagt
 os.environ['TZ'] = 'Europe/Berlin'
 try:
     time.tzset()
@@ -83,7 +82,6 @@ def setup_logging():
     return f
 
 def rw_json(path, data=None):
-    """Centralized Read/Write JSON"""
     try:
         if data is None: # Read
             if os.path.exists(path):
@@ -117,12 +115,9 @@ def write_env_file(log_file, start_time):
     except: pass
 
 def fetch_url(url, params=None):
-    """Centralized HTTP Request with Rate Limit Handling & Rotating Agents"""
     try:
-        # Rotate User Agent for every request to avoid blocking
         headers = HEADERS_SCRAPE_BASE.copy()
         headers["User-Agent"] = random.choice(USER_AGENTS)
-        
         r = requests.get(url, headers=headers, params=params, timeout=20)
         
         if r.status_code == 429: raise RateLimitException("HTTP 429 (Too Many Requests)", True)
@@ -137,8 +132,6 @@ def fetch_url(url, params=None):
         return r, soup
     except RateLimitException: raise
     except Exception as e: return None, None
-
-# ================= LOGIC HELPER =================
 
 def safe_float(v): return float(str(v).replace(',', '.')) if v else 0.0
 def clean_title(t): return RE_CLEAN_TITLE.sub('', t).split(':')[0].split(' - ')[0].strip() if t else ""
@@ -162,7 +155,6 @@ def match_author(abs_authors, gr_author):
     return False
 
 def find_rating_recursive(obj):
-    """Helper for Next.js recursion"""
     if isinstance(obj, dict):
         if 'rating' in obj and isinstance(obj['rating'], dict) and 'value' in obj['rating']: return obj['rating']
         for k, v in obj.items():
@@ -175,8 +167,6 @@ def find_rating_recursive(obj):
 def format_time(seconds):
     if seconds < 60: return f"{int(seconds)}s"
     return f"{int(seconds // 60)}m {int(seconds % 60)}s"
-
-# ================= AUDIBLE LOGIC =================
 
 def check_asin_exists_on_domain(asin, domain):
     try:
@@ -197,7 +187,6 @@ def get_audible_data(asin, language):
         if "www.audible.de" in domains:
             domains.remove("www.audible.de"); domains.insert(0, "www.audible.de")
 
-    found_domains = []
     for domain in domains:
         r, soup = fetch_url(f"https://{domain}/pd/{asin}?ipRedirectOverride=true")
         if not r or r.status_code == 404 or "/pderror" in r.url: continue
@@ -206,9 +195,7 @@ def get_audible_data(asin, language):
              logging.info(f"    -> Audible: ⚠️ Page found on {domain}, but redirected to Home.")
              continue
 
-        found_domains.append(domain)
         ratings = {}
-        
         if sum_tag := soup.find('adbl-rating-summary'):
             ratings = {k: sum_tag.get(f'{k}-value') for k in ['performance', 'story']}
             if st := sum_tag.find('adbl-star-rating'):
@@ -277,8 +264,6 @@ def find_missing_asin(title, author, duration, lang, force_domain=None):
                     if sec > 0 and abs(duration - sec) > 900: continue
                 return asin
     return None
-
-# ================= GOODREADS LOGIC =================
 
 def scrape_gr_details(url):
     r, soup = fetch_url(url)
@@ -377,8 +362,6 @@ def build_description(current_desc, aud, gr, old_aud, old_gr):
     clean_d = re.sub(r'(?s)\*\*Audible\*\*.*?---\s*\n*', '', clean_d)
     return "<br>".join(lines) + "<br>" + re.sub(r'^(?:\s|<br\s*/?>)+', '', clean_d, flags=re.I).strip()
 
-# ================= MAIN =================
-
 def process_library(lib_id, history, failed):
     logging.info(f"--- Processing Library: {lib_id} ---")
     try:
@@ -412,114 +395,120 @@ def process_library(lib_id, history, failed):
         eta_str = format_time(eta_seconds)
         # -----------------------
 
-        try:
-            iid, key = item['id'], f"{lib_id}_{item['id']}"
-            ir = abs_session.get(f"{ABS_URL}/api/items/{iid}")
-            if ir.status_code != 200: continue
-            meta = ir.json()['media']['metadata']
-            
-            title, asin, isbn, lang = meta.get('title'), meta.get('asin'), meta.get('isbn'), meta.get('language')
-            authors = [a.get('name') if isinstance(a, dict) else a for a in meta.get('authors', [])]
-            prim_auth = next((a for a in authors), "")
-            
-            logging.info(f"-"*50)
-            logging.info(f"({idx+1}/{total_in_batch}) [ETA: {eta_str}] Processing: {title}")
-            stats['processed'] += 1
-
-            # --- 1. ASIN STANDARDIZATION ---
-            target_domain = "www.audible.com"
-            if lang and str(lang).strip().lower() in GERMAN_LANG_CODES:
-                target_domain = "www.audible.de"
-            
-            if asin:
-                if not check_asin_exists_on_domain(asin, target_domain) and not DRY_RUN:
-                    logging.info(f"    -> ASIN {asin} invalid on {target_domain}. Searching migration...")
-                    if found_mig := find_missing_asin(title, prim_auth, item['media'].get('duration'), lang, force_domain=target_domain):
-                        logging.info(f"    -> 🔄 Migrating ASIN: {asin} -> {found_mig} ({target_domain})")
-                        abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"asin": found_mig}})
-                        asin, stats['asin_migrated'] = found_mig, stats['asin_migrated'] + 1
-                    else:
-                        logging.info("    -> No migration target found. Keeping old ASIN.")
-
-            # --- 2. AUDIBLE DATA ---
-            aud_data = get_audible_data(asin, lang)
-            should_search = (not asin) or (asin and aud_data is None)
-            
-            if should_search and not DRY_RUN:
-                if not asin: logging.info("    -> No ASIN present. Searching...")
-                elif aud_data is None: logging.info("    -> ASIN found no ratings globally. Searching replacement...")
+        # --- RETRY LOOP FOR SINGLE ITEM ---
+        while True:
+            try:
+                iid, key = item['id'], f"{lib_id}_{item['id']}"
+                ir = abs_session.get(f"{ABS_URL}/api/items/{iid}")
+                if ir.status_code != 200: break # Skip corrupt item
+                meta = ir.json()['media']['metadata']
                 
-                if found := find_missing_asin(title, prim_auth, item['media'].get('duration'), lang):
-                    if found != asin:
-                        logging.info(f"    -> ✨ Found NEW ASIN: {found}")
-                        abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"asin": found}})
-                        asin, stats['asin_found'] = found, stats['asin_found'] + 1
-                        aud_data = get_audible_data(asin, lang)
+                title, asin, isbn, lang = meta.get('title'), meta.get('asin'), meta.get('isbn'), meta.get('language')
+                authors = [a.get('name') if isinstance(a, dict) else a for a in meta.get('authors', [])]
+                prim_auth = next((a for a in authors), "")
+                
+                logging.info(f"-"*50)
+                logging.info(f"({idx+1}/{total_in_batch}) [ETA: {eta_str}] Processing: {title}")
+                stats['processed'] += 1 # Only count once in outer loop logic, but technically we are inside enum
 
-            time.sleep(1)
-            
-            # --- 3. GOODREADS ---
-            gr_data = get_goodreads_data(isbn, asin, title, authors, prim_auth)
-            if gr_data: 
-                logging.info(f"    -> Goodreads: ✅ Found via {gr_data['source']} (Count: {gr_data.get('count', '0')}, Rating: {gr_data.get('val')})")
-            
-            if gr_data and not DRY_RUN:
-                new_id = gr_data.get('isbn') or gr_data.get('asin')
-                if new_id and str(isbn or "").replace('-','') != str(new_id).replace('-',''):
-                    logging.info(f"    -> ISBN: ✨ Adding/Updating: {new_id}")
-                    abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"isbn": new_id}})
-                    stats['isbn_added' if not isbn else 'isbn_repaired'] += 1
+                # --- 1. ASIN STANDARDIZATION ---
+                target_domain = "www.audible.com"
+                if lang and str(lang).strip().lower() in GERMAN_LANG_CODES:
+                    target_domain = "www.audible.de"
+                
+                if asin:
+                    if not check_asin_exists_on_domain(asin, target_domain) and not DRY_RUN:
+                        logging.info(f"    -> ASIN {asin} invalid on {target_domain}. Searching migration...")
+                        if found_mig := find_missing_asin(title, prim_auth, item['media'].get('duration'), lang, force_domain=target_domain):
+                            logging.info(f"    -> 🔄 Migrating ASIN: {asin} -> {found_mig} ({target_domain})")
+                            abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"asin": found_mig}})
+                            asin, stats['asin_migrated'] = found_mig, stats['asin_migrated'] + 1
+                        else:
+                            logging.info("    -> No migration target found. Keeping old ASIN.")
 
-            # --- 4. DESCRIPTION ---
-            old_aud = (RE_AUDIBLE_BLOCK.search(meta.get('description', '')) or [None, None])[1]
-            old_gr = (RE_GR_BLOCK.search(meta.get('description', '')) or [None, None])[1]
-            
-            final_desc = build_description(meta.get('description', ''), aud_data, gr_data, old_aud and old_aud.strip(), old_gr and old_gr.strip())
-            
-            has_aud, has_gr = bool(aud_data or old_aud), bool(gr_data or old_gr)
-            is_complete = (asin and has_aud and has_gr) or (not asin and has_gr)
+                # --- 2. AUDIBLE DATA ---
+                aud_data = get_audible_data(asin, lang)
+                should_search = (not asin) or (asin and aud_data is None)
+                
+                if should_search and not DRY_RUN:
+                    if not asin: logging.info("    -> No ASIN present. Searching...")
+                    elif aud_data is None: logging.info("    -> ASIN found no ratings globally. Searching replacement...")
+                    
+                    if found := find_missing_asin(title, prim_auth, item['media'].get('duration'), lang):
+                        if found != asin:
+                            logging.info(f"    -> ✨ Found NEW ASIN: {found}")
+                            abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"asin": found}})
+                            asin, stats['asin_found'] = found, stats['asin_found'] + 1
+                            aud_data = get_audible_data(asin, lang)
 
-            if not DRY_RUN:
-                res = abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"description": final_desc}})
-                if res.status_code == 200:
-                    logging.info("    -> ✅ UPDATE SUCCESS")
+                time.sleep(1)
+                
+                # --- 3. GOODREADS ---
+                gr_data = get_goodreads_data(isbn, asin, title, authors, prim_auth)
+                if gr_data: 
+                    logging.info(f"    -> Goodreads: ✅ Found via {gr_data['source']} (Count: {gr_data.get('count', '0')}, Rating: {gr_data.get('val')})")
+                
+                if gr_data and not DRY_RUN:
+                    new_id = gr_data.get('isbn') or gr_data.get('asin')
+                    if new_id and str(isbn or "").replace('-','') != str(new_id).replace('-',''):
+                        logging.info(f"    -> ISBN: ✨ Adding/Updating: {new_id}")
+                        abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"isbn": new_id}})
+                        stats['isbn_added' if not isbn else 'isbn_repaired'] += 1
+
+                # --- 4. DESCRIPTION ---
+                old_aud = (RE_AUDIBLE_BLOCK.search(meta.get('description', '')) or [None, None])[1]
+                old_gr = (RE_GR_BLOCK.search(meta.get('description', '')) or [None, None])[1]
+                
+                final_desc = build_description(meta.get('description', ''), aud_data, gr_data, old_aud and old_aud.strip(), old_gr and old_gr.strip())
+                
+                has_aud, has_gr = bool(aud_data or old_aud), bool(gr_data or old_gr)
+                is_complete = (asin and has_aud and has_gr) or (not asin and has_gr)
+
+                if not DRY_RUN:
+                    res = abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"description": final_desc}})
+                    if res.status_code == 200:
+                        logging.info("    -> ✅ UPDATE SUCCESS")
+                        if is_complete: stats['success'] += 1
+                    else: stats['failed'] += 1
+                else:
                     if is_complete: stats['success'] += 1
-                else: stats['failed'] += 1
-            else:
-                 if is_complete: stats['success'] += 1
 
-            # --- 5. REPORTING ---
-            update_report("audible", key, title, prim_auth, asin, "Not found", has_aud)
-            update_report("goodreads", key, title, prim_auth, isbn, "Not found", has_gr)
-            
-            fails = failed.get(key, 0) + 1
-            if is_complete:
-                history[key] = datetime.now().strftime("%Y-%m-%d")
-                failed.pop(key, None)
-            elif fails >= MAX_FAIL_ATTEMPTS:
-                logging.info("    -> 🛑 Max attempts reached. Cooldown started.")
-                history[key] = datetime.now().strftime("%Y-%m-%d")
-                failed.pop(key, None)
-                stats['cooldown'] += 1
-            else:
-                failed[key] = fails
-                if not has_aud and not has_gr: stats['no_data'] += 1; logging.warning(f"    -> ❌ No data found ({fails}/{MAX_FAIL_ATTEMPTS}).")
-                else: stats['partial'] += 1
-            
-            consecutive_rl = 0
-            
-        except RateLimitException as e:
-            consecutive_rl += 1
-            logging.warning(f"🛑 Rate Limit DETECTED: {e}")
-            if e.is_hard or consecutive_rl >= MAX_CONSECUTIVE_RL: 
-                logging.error("🛑 ABORTING script due to Rate Limits."); stats['aborted_ratelimit'] = True; break
-            
-            wait_time = RECOVERY_PAUSE * consecutive_rl
-            logging.info(f"    -> Pausing for {wait_time}s (Attempt {consecutive_rl}/{MAX_CONSECUTIVE_RL})...")
-            time.sleep(wait_time)
-            
-        except Exception as e:
-            logging.error(f"CRASH on item {item.get('id')}: {e}"); stats['failed'] += 1
+                # --- 5. REPORTING ---
+                update_report("audible", key, title, prim_auth, asin, "Not found", has_aud)
+                update_report("goodreads", key, title, prim_auth, isbn, "Not found", has_gr)
+                
+                fails = failed.get(key, 0) + 1
+                if is_complete:
+                    history[key] = datetime.now().strftime("%Y-%m-%d")
+                    failed.pop(key, None)
+                elif fails >= MAX_FAIL_ATTEMPTS:
+                    logging.info("    -> 🛑 Max attempts reached. Cooldown started.")
+                    history[key] = datetime.now().strftime("%Y-%m-%d")
+                    failed.pop(key, None)
+                    stats['cooldown'] += 1
+                else:
+                    failed[key] = fails
+                    if not has_aud and not has_gr: stats['no_data'] += 1; logging.warning(f"    -> ❌ No data found ({fails}/{MAX_FAIL_ATTEMPTS}).")
+                    else: stats['partial'] += 1
+                
+                consecutive_rl = 0
+                break # Success! Exit Retry Loop
+
+            except RateLimitException as e:
+                consecutive_rl += 1
+                logging.warning(f"🛑 Rate Limit DETECTED: {e}")
+                
+                if e.is_hard or consecutive_rl >= MAX_CONSECUTIVE_RL: 
+                    logging.error("🛑 ABORTING script due to Rate Limits."); stats['aborted_ratelimit'] = True; break
+                
+                wait_time = RECOVERY_PAUSE * consecutive_rl
+                logging.info(f"    -> Pausing for {wait_time}s (Attempt {consecutive_rl}/{MAX_CONSECUTIVE_RL})...")
+                time.sleep(wait_time)
+                # Loop continues (Retrying same item)
+                
+            except Exception as e:
+                logging.error(f"CRASH on item {item.get('id')}: {e}"); stats['failed'] += 1
+                break # Fatal Error, Exit Retry Loop
         
         time.sleep(BASE_SLEEP + random.uniform(1, 3))
 
