@@ -23,11 +23,23 @@ RECOVERY_PAUSE = 60
 DRY_RUN = os.getenv('DRY_RUN', 'False').lower() == 'true'
 BASE_SLEEP = int(os.getenv('SLEEP_TIMER', 6))
 
+# --- OPTIMIZATION: User Agents for Stealth ---
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/122.0.0.0"
+]
+
+# --- OPTIMIZATION: Persistent Session for ABS (Local Speed) ---
 HEADERS_ABS = {"Authorization": f"Bearer {API_TOKEN}", "Content-Type": "application/json"}
-HEADERS_SCRAPE = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9"
+abs_session = requests.Session()
+abs_session.headers.update(HEADERS_ABS)
+
+HEADERS_SCRAPE_BASE = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9,de;q=0.8"
 }
 
 # Pre-compiled Regex for Performance
@@ -91,15 +103,21 @@ def write_env_file(log_file, start_time):
     except: pass
 
 def fetch_url(url, params=None):
-    """Centralized HTTP Request with Rate Limit Handling"""
+    """Centralized HTTP Request with Rate Limit Handling & Rotating Agents"""
     try:
-        r = requests.get(url, headers=HEADERS_SCRAPE, params=params, timeout=20)
+        # Rotate User Agent for every request to avoid blocking
+        headers = HEADERS_SCRAPE_BASE.copy()
+        headers["User-Agent"] = random.choice(USER_AGENTS)
+        
+        r = requests.get(url, headers=headers, params=params, timeout=20)
+        
         if r.status_code == 429: raise RateLimitException("HTTP 429 (Too Many Requests)", True)
         if r.status_code in [503, 403]: raise RateLimitException(f"HTTP {r.status_code}")
         
         soup = BeautifulSoup(r.text, 'lxml')
         txt = soup.get_text().lower()
         title = (soup.title.string or "").lower()
+        
         if "captcha" in title or "robot check" in title or any(x in txt and len(txt) < 5000 for x in ["enter the characters", "robot check"]):
             raise RateLimitException("Captcha detected")
         return r, soup
@@ -144,12 +162,10 @@ def find_rating_recursive(obj):
 
 def get_audible_data(asin, language):
     if not asin: return None
-    # FULL Domain List
     domains = [
         "www.audible.com", "www.audible.de", "www.audible.co.uk", "www.audible.fr",
         "www.audible.ca", "www.audible.com.au", "www.audible.it", "www.audible.es"
     ]
-    # Smart Sorting: DE first if book is German
     if language and language.lower() in ['de', 'deu', 'ger', 'german', 'deutsch']:
         if "www.audible.de" in domains:
             domains.remove("www.audible.de"); domains.insert(0, "www.audible.de")
@@ -159,9 +175,8 @@ def get_audible_data(asin, language):
         r, soup = fetch_url(f"https://{domain}/pd/{asin}?ipRedirectOverride=true")
         if not r or r.status_code == 404 or "/pderror" in r.url: continue
         
-        # Explicit Redirect Check
         if "audible." in r.url and len(r.url) < 35: 
-             logging.info(f"   -> Audible: ⚠️ Page found on {domain}, but redirected to Home.")
+             logging.info(f"    -> Audible: ⚠️ Page found on {domain}, but redirected to Home.")
              continue
 
         found_domains.append(domain)
@@ -182,7 +197,7 @@ def get_audible_data(asin, language):
                         if 'aggregateRating' in i: ratings['overall'] = i['aggregateRating'].get('ratingValue')
                 except: pass
         
-        # 3. Next.js Data (RESTORED)
+        # 3. Next.js Data
         if not ratings.get('overall'):
             if nxt := soup.find('script', id='__NEXT_DATA__'):
                 try:
@@ -190,7 +205,7 @@ def get_audible_data(asin, language):
                         ratings['overall'], ratings['count'] = r_found.get('value'), r_found.get('count')
                 except: pass
                 
-        # 4. Metadata Script (RESTORED)
+        # 4. Metadata Script
         if not ratings.get('overall'):
             if meta_tag := soup.find('adbl-product-metadata'):
                 if sc := meta_tag.find('script', type='application/json'):
@@ -201,15 +216,14 @@ def get_audible_data(asin, language):
         
         count = ratings.get('count')
         if count and int(count) > 0:
-            logging.info(f"   -> Audible: ✅ Found on {domain} (Count: {count})")
+            logging.info(f"    -> Audible: ✅ Found on {domain} (Count: {count})")
             return ratings
         
-        # Log empty page if title found
         if soup.find(['h1', 'h2', 'h3'], class_=re.compile(r'bc-heading|product-title')):
-             logging.info(f"   -> Audible: ⚠️ Page found on {domain}, but NO ratings (Count: 0)")
+             logging.info(f"    -> Audible: ⚠️ Page found on {domain}, but NO ratings (Count: 0)")
              return {'count': 0}
 
-    logging.info("   -> Audible: ❌ Not found (Page error or Redirect)")
+    logging.info("    -> Audible: ❌ Not found (Page error or Redirect)")
     return None
 
 def find_missing_asin(title, author, duration, lang):
@@ -245,7 +259,6 @@ def scrape_gr_details(url):
     if not soup: return None
     res = {'url': url}
     
-    # JSON-LD
     for s in soup.find_all('script', type='application/ld+json'):
         try:
             d = json.loads(s.string)
@@ -255,7 +268,6 @@ def scrape_gr_details(url):
             if 'isbn' in d: res['isbn'] = d['isbn']
         except: pass
 
-    # Regex Fallback
     if 'val' not in res:
         if m := re.search(r'(\d+[.,]\d+)\s+avg rating', soup.get_text()): res['val'] = m.group(1).replace(',', '.')
     if 'count' not in res:
@@ -264,7 +276,6 @@ def scrape_gr_details(url):
     if 'isbn' not in res: res['isbn'] = (soup.find('meta', property="books:isbn") or {}).get('content')
     if 'isbn' not in res and (m := RE_ISBN_JSON.search(r.text)): res['isbn'] = m.group(1)
     
-    # New Fallbacks (Embedded JSON/URL)
     if 'asin' not in res:
         if m := RE_ASIN_JSON.search(r.text) or RE_URL_ASIN.search(r.text): res['asin'] = m.group(1)
         if not res.get('asin'):
@@ -297,7 +308,6 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
                 found_title = link.get_text(strip=True)
                 clean_found = clean_title(found_title)
                 
-                # Scoring with Containment Bonus (RESTORED)
                 t_score = max(difflib.SequenceMatcher(None, title.lower(), found_title.lower()).ratio(),
                               difflib.SequenceMatcher(None, clean_target.lower(), clean_found.lower()).ratio())
                 
@@ -305,7 +315,6 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
                    (len(clean_found) > 3 and clean_found.lower() in clean_target.lower()):
                     t_score += 0.2
                 
-                # Number & Author Check
                 f_nums, t_nums = extract_volume(found_title), extract_volume(title)
                 if (f_nums and t_nums and not f_nums & t_nums): continue
                 
@@ -330,7 +339,7 @@ def build_description(current_desc, aud, gr, old_aud, old_gr):
         if v := aud.get('performance'): lines.append(f"🎙️ {moon_rating(v)} {round(safe_float(v), 1)} / 5 - Performance")
         if v := aud.get('story'): lines.append(f"📖 {moon_rating(v)} {round(safe_float(v), 1)} / 5 - Story")
     elif old_aud:
-        logging.info("   -> ♻️ Recycling old Audible rating.")
+        logging.info("    -> ♻️ Recycling old Audible rating.")
         stats['recycled'] += 1; lines.append(old_aud)
     
     # Goodreads Block
@@ -338,7 +347,7 @@ def build_description(current_desc, aud, gr, old_aud, old_gr):
         lines.append(f"Goodreads ({gr.get('count', 0)}):")
         if v := gr.get('val'): lines.append(f"🏆 {moon_rating(v)} {round(safe_float(v), 1)} / 5 - Rating")
     elif old_gr:
-        logging.info("   -> ♻️ Recycling old Goodreads rating.")
+        logging.info("    -> ♻️ Recycling old Goodreads rating.")
         if not old_aud: stats['recycled'] += 1
         lines.append(old_gr)
         
@@ -353,7 +362,8 @@ def build_description(current_desc, aud, gr, old_aud, old_gr):
 def process_library(lib_id, history, failed):
     logging.info(f"--- Processing Library: {lib_id} ---")
     try:
-        r = requests.get(f"{ABS_URL}/api/libraries/{lib_id}/items", headers=HEADERS_ABS)
+        # Use abs_session for local API speed
+        r = abs_session.get(f"{ABS_URL}/api/libraries/{lib_id}/items")
         if r.status_code != 200: raise Exception(f"Status {r.status_code}")
         items = r.json()['results']
     except Exception as e:
@@ -375,8 +385,8 @@ def process_library(lib_id, history, failed):
         try:
             iid, key = item['id'], f"{lib_id}_{item['id']}"
             
-            # Fresh details fetch
-            ir = requests.get(f"{ABS_URL}/api/items/{iid}", headers=HEADERS_ABS)
+            # Fresh details fetch via Session
+            ir = abs_session.get(f"{ABS_URL}/api/items/{iid}")
             if ir.status_code != 200: continue
             meta = ir.json()['media']['metadata']
             
@@ -393,13 +403,13 @@ def process_library(lib_id, history, failed):
             should_search = (not asin) or (asin and aud_data is None)
             
             if should_search and not DRY_RUN:
-                if not asin: logging.info("   -> No ASIN present. Searching...")
-                else: logging.info("   -> ASIN seems invalid. Searching replacement...")
+                if not asin: logging.info("    -> No ASIN present. Searching...")
+                else: logging.info("    -> ASIN seems invalid. Searching replacement...")
                 
                 if found := find_missing_asin(title, prim_auth, item['media'].get('duration'), lang):
                     if found != asin:
-                        logging.info(f"   -> ✨ Found NEW ASIN: {found}")
-                        requests.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"asin": found}}, headers=HEADERS_ABS)
+                        logging.info(f"    -> ✨ Found NEW ASIN: {found}")
+                        abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"asin": found}})
                         asin, stats['asin_found'] = found, stats['asin_found'] + 1
                         aud_data = get_audible_data(asin, lang)
 
@@ -407,8 +417,8 @@ def process_library(lib_id, history, failed):
             
             # --- GOODREADS ---
             gr_data = get_goodreads_data(isbn, asin, title, authors, prim_auth)
-            if gr_data: logging.info(f"   -> Goodreads: ✅ Found via {gr_data['source']} (Rating: {gr_data.get('val')})")
-            else: logging.info(f"   -> Goodreads: ❌ Not found (Tried: ISBN, ASIN, Text w/ Author validation)")
+            if gr_data: logging.info(f"    -> Goodreads: ✅ Found via {gr_data['source']} (Rating: {gr_data.get('val')})")
+            else: logging.info(f"    -> Goodreads: ❌ Not found (Tried: ISBN, ASIN, Text w/ Author validation)")
             
             # Patch ISBN
             if gr_data and not DRY_RUN:
@@ -416,17 +426,17 @@ def process_library(lib_id, history, failed):
                 is_fallback = not gr_data.get('isbn') and gr_data.get('asin')
                 
                 if not new_id:
-                     if gr_data['source'] not in ['ISBN Lookup', 'ASIN Lookup']: logging.info(f"   -> ISBN: ⚠️ Goodreads data returned no ISBN or ASIN.")
+                     if gr_data['source'] not in ['ISBN Lookup', 'ASIN Lookup']: logging.info(f"    -> ISBN: ⚠️ Goodreads data returned no ISBN or ASIN.")
                 else:
                     if str(isbn or "").replace('-','') != str(new_id).replace('-',''):
                         type_lbl = "GR-ASIN" if is_fallback else "ISBN"
-                        if not isbn: logging.info(f"   -> ISBN: ✨ Missing locally. Adding ({type_lbl}): {new_id}")
-                        else: logging.info(f"   -> ISBN: 🔧 Updating (Old: {isbn} -> New: {new_id})")
+                        if not isbn: logging.info(f"    -> ISBN: ✨ Missing locally. Adding ({type_lbl}): {new_id}")
+                        else: logging.info(f"    -> ISBN: 🔧 Updating (Old: {isbn} -> New: {new_id})")
                         
-                        requests.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"isbn": new_id}}, headers=HEADERS_ABS)
+                        abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"isbn": new_id}})
                         stats['isbn_added' if not isbn else 'isbn_repaired'] += 1
                     else:
-                        logging.info(f"   -> ISBN: ✅ Verified Match")
+                        logging.info(f"    -> ISBN: ✅ Verified Match")
 
             # --- DESCRIPTION ---
             old_aud = (RE_AUDIBLE_BLOCK.search(meta.get('description', '')) or [None, None])[1]
@@ -438,15 +448,15 @@ def process_library(lib_id, history, failed):
             is_complete = (asin and has_aud and has_gr) or (not asin and has_gr)
 
             if not DRY_RUN:
-                res = requests.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"description": final_desc}}, headers=HEADERS_ABS)
+                res = abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"description": final_desc}})
                 if res.status_code == 200:
-                    logging.info("   -> ✅ UPDATE SUCCESS")
+                    logging.info("    -> ✅ UPDATE SUCCESS")
                     if is_complete: stats['success'] += 1
                 else: 
-                    logging.error(f"   -> ❌ API ERROR: {res.status_code}")
+                    logging.error(f"    -> ❌ API ERROR: {res.status_code}")
                     stats['failed'] += 1
             else:
-                 logging.info(f"   -> [DRY RUN] Would save (Complete: {is_complete}).")
+                 logging.info(f"    -> [DRY RUN] Would save (Complete: {is_complete}).")
                  if is_complete: stats['success'] += 1
 
             # --- REPORTING ---
@@ -458,14 +468,14 @@ def process_library(lib_id, history, failed):
                 history[key] = datetime.now().strftime("%Y-%m-%d")
                 failed.pop(key, None)
             elif fails >= MAX_FAIL_ATTEMPTS:
-                logging.info("   -> 🛑 Max attempts reached. Cooldown started.")
+                logging.info("    -> 🛑 Max attempts reached. Cooldown started.")
                 history[key] = datetime.now().strftime("%Y-%m-%d") # Mark as done to trigger cooldown
                 failed.pop(key, None)
                 stats['cooldown'] += 1
             else:
                 failed[key] = fails
-                if not has_aud and not has_gr: stats['no_data'] += 1; logging.warning(f"   -> ❌ No data found (Attempt {fails}/{MAX_FAIL_ATTEMPTS}).")
-                else: stats['partial'] += 1; logging.info(f"   -> ⚠️ Incomplete data (Attempt {fails}).")
+                if not has_aud and not has_gr: stats['no_data'] += 1; logging.warning(f"    -> ❌ No data found (Attempt {fails}/{MAX_FAIL_ATTEMPTS}).")
+                else: stats['partial'] += 1; logging.info(f"    -> ⚠️ Incomplete data (Attempt {fails}).")
             
             consecutive_rl = 0
             
@@ -474,7 +484,7 @@ def process_library(lib_id, history, failed):
             logging.warning(f"🛑 Rate Limit DETECTED: {e}")
             if e.is_hard or consecutive_rl >= MAX_CONSECUTIVE_RL: 
                 logging.error("🛑 ABORTING script due to Rate Limits."); stats['aborted_ratelimit'] = True; break
-            logging.info(f"   -> Pausing for {RECOVERY_PAUSE}s...")
+            logging.info(f"    -> Pausing for {RECOVERY_PAUSE}s...")
             time.sleep(RECOVERY_PAUSE)
         except Exception as e:
             logging.error(f"CRASH on item {item.get('id')}: {e}"); stats['failed'] += 1
