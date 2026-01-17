@@ -484,8 +484,12 @@ def process_library(lib_id, history, failed):
             logging.warning(f"🛑 Rate Limit DETECTED: {e}")
             if e.is_hard or consecutive_rl >= MAX_CONSECUTIVE_RL: 
                 logging.error("🛑 ABORTING script due to Rate Limits."); stats['aborted_ratelimit'] = True; break
-            logging.info(f"    -> Pausing for {RECOVERY_PAUSE}s...")
-            time.sleep(RECOVERY_PAUSE)
+            
+            # Exponential Backoff
+            wait_time = RECOVERY_PAUSE * consecutive_rl
+            logging.info(f"    -> Pausing for {wait_time}s (Attempt {consecutive_rl}/{MAX_CONSECUTIVE_RL})...")
+            time.sleep(wait_time)
+            
         except Exception as e:
             logging.error(f"CRASH on item {item.get('id')}: {e}"); stats['failed'] += 1
         
