@@ -43,6 +43,19 @@ USER_AGENTS = [
 
 GERMAN_LANG_CODES = ['de', 'deu', 'ger', 'german', 'deutsch']
 
+# Mapping for Language Tag Normalization
+LANG_MAPPING = {
+    # German variations
+    'de': 'German', 'deu': 'German', 'ger': 'German', 'ge': 'German', 
+    'de-de': 'German', 'de-at': 'German', 'de-ch': 'German', 
+    'deutsch': 'German', 'german': 'German',
+    
+    # English variations
+    'en': 'English', 'eng': 'English', 'engl': 'English', 
+    'en-us': 'English', 'en-gb': 'English', 'en-ca': 'English', 'en-au': 'English', 'en-ie': 'English',
+    'english': 'English'
+}
+
 # Base Headers
 HEADERS_BASE = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -74,9 +87,12 @@ RE_RAW_PERFORMANCE = re.compile(r'performance-value="([0-9.]+)"')
 RE_RAW_OVERALL = re.compile(r'value="([0-9.]+)"') 
 RE_RAW_COUNT = re.compile(r'count="(\d+)"')
 
-stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated"]}
+# Fallback Regex for Language if JSON parsing fails
+RE_LANG_FALLBACK = re.compile(r'"language"\s*:\s*"([^"]+)"', re.IGNORECASE)
+
+stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "lang_fixed"]}
 stats['aborted_ratelimit'] = False
-reports = {"audible": {}, "goodreads": {}}
+reports = {"audible": {}, "goodreads": {}, "language": {}}
 
 class RateLimitException(Exception):
     def __init__(self, msg, is_hard=False): super().__init__(msg); self.is_hard = is_hard
@@ -109,10 +125,10 @@ def write_env_file(log_file, start_time):
     dur = f"{int((datetime.now() - start_time).total_seconds() // 60)}m {int((datetime.now() - start_time).total_seconds() % 60)}s"
     if stats['aborted_ratelimit']: sub, icon, head = "ABS Ratings: Abbruch 🛑", "alert", "Rate Limit erkannt!"
     elif stats['failed'] > 0: sub, icon, head = "ABS Ratings: Fehler ❌", "alert", "Fehler aufgetreten!"
-    elif any(stats[k] > 0 for k in ['success', 'recycled', 'asin_found', 'asin_migrated', 'isbn_added']): sub, icon, head = "ABS Ratings: Erfolg ✅", "normal", "Update abgeschlossen"
+    elif any(stats[k] > 0 for k in ['success', 'recycled', 'asin_found', 'asin_migrated', 'isbn_added', 'lang_fixed']): sub, icon, head = "ABS Ratings: Erfolg ✅", "normal", "Update abgeschlossen"
     else: sub, icon, head = "ABS Ratings: Info ℹ️", "normal", "Keine Änderungen"
     
-    body = f"Proc: {stats['processed']} | New: {stats['success']} | ASIN+: {stats['asin_found']} | Mig: {stats['asin_migrated']} | ISBN+: {stats['isbn_added']} | Fix: {stats['isbn_repaired']} | Err: {stats['failed']}"
+    body = f"Proc: {stats['processed']} | New: {stats['success']} | ASIN+: {stats['asin_found']} | Lang: {stats['lang_fixed']} | ISBN+: {stats['isbn_added']} | Fix: {stats['isbn_repaired']} | Err: {stats['failed']}"
     if stats['aborted_ratelimit']: body += " | ⚠️ ABORTED (Rate Limit)"
     
     try:
@@ -138,7 +154,12 @@ def moon_rating(v):
 def extract_volume(text): return set(RE_VOL.findall(text)) | ({m.group(1)} if (m := re.search(r'\b(\d+)$', text.strip())) else set())
 
 def format_time(seconds):
-    if seconds < 60: return f"{int(seconds)}s"
+    if seconds < 60: 
+        return f"{int(seconds)}s"
+    if seconds >= 3600:
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        return f"{hours}h {minutes}m"
     return f"{int(seconds // 60)}m {int(seconds % 60)}s"
 
 def match_author(abs_authors, gr_author):
@@ -210,6 +231,7 @@ def scrape_search_result_fallback(domain, asin):
 def get_audible_data(asin, language):
     if not asin: return None
     
+    # Priority based on known language
     domains = ["www.audible.com", "www.audible.de"]
     if language and str(language).strip().lower() in ['de', 'deu', 'german', 'deutsch']:
         domains = ["www.audible.de", "www.audible.com"]
@@ -264,6 +286,34 @@ def get_audible_data(asin, language):
             ratings = {'domain': domain}
             raw_text = r.text
             
+            # 0. DETECT LANGUAGE (New Feature)
+            detected_lang = None
+            
+            # Method A: Clean JSON-LD (Preferred)
+            for s in soup.find_all('script', type='application/json'):
+                try:
+                    d = json.loads(s.string)
+                    # Check root
+                    if isinstance(d, dict) and 'language' in d:
+                        detected_lang = d['language']
+                        break
+                    # Check lists (sometimes nested)
+                    elif isinstance(d, list):
+                        for item in d:
+                            if isinstance(item, dict) and 'language' in item:
+                                detected_lang = item['language']
+                                break
+                except: pass
+                if detected_lang: break
+            
+            # Method B: Regex Fallback (For product:[...] style)
+            if not detected_lang:
+                if m_lang := RE_LANG_FALLBACK.search(raw_text):
+                    detected_lang = m_lang.group(1)
+            
+            if detected_lang:
+                ratings['language'] = detected_lang
+
             # 1. TAGS (Priority 1)
             if sum_tag := soup.find('adbl-rating-summary'):
                 if is_valid_rating(sum_tag.get('performance-value')): ratings['performance'] = sum_tag.get('performance-value')
@@ -297,9 +347,13 @@ def get_audible_data(asin, language):
             count = int(ratings.get('count', 0))
             overall_val = safe_float(ratings.get('overall'))
             
-            if count > 0 and overall_val > 0:
-                ov = round(overall_val, 2)
-                logging.info(f"        ✅ SUCCESS on {domain} (Count: {count}, Rating: {ov})")
+            # Return findings even if 0 ratings, so we can use the detected language
+            if count > 0 or detected_lang:
+                if count > 0 and overall_val > 0:
+                    ov = round(overall_val, 2)
+                    logging.info(f"        ✅ SUCCESS on {domain} (Count: {count}, Rating: {ov})")
+                else:
+                    logging.info(f"        ℹ️  Metadata found on {domain}, but 0 Ratings.")
                 return ratings
             else:
                 logging.info(f"        ⚠️ Page OK (200), but 0 Ratings/Invalid Rating found.")
@@ -470,16 +524,68 @@ def process_library(lib_id, history, failed):
             try:
                 iid, key = item['id'], f"{lib_id}_{item['id']}"
                 meta = abs_session.get(f"{ABS_URL}/api/items/{iid}").json()['media']['metadata']
-                title, asin, lang = meta.get('title'), meta.get('asin'), meta.get('language')
+                title, asin = meta.get('title'), meta.get('asin')
                 authors = [a.get('name') if isinstance(a, dict) else a for a in meta.get('authors', [])]
                 
                 logging.info(f"-"*50)
                 logging.info(f"({idx+1}/{total}) [ETA: {eta_str}] {title} [ASIN: {asin}] (Try {failed.get(key,0)+1}/{MAX_FAIL_ATTEMPTS})")
                 stats['processed'] += 1 
 
+                # --- 0. LANGUAGE FIX ---
+                cur_lang = meta.get('language', '')
+                clean_lang = str(cur_lang).lower().strip()
+                
+                # Check 1: Normalization (Standardize existing tags)
+                if clean_lang in LANG_MAPPING:
+                    new_lang = LANG_MAPPING[clean_lang]
+                    if new_lang != cur_lang:
+                         logging.info(f"      -> 🔧 Language Tag changed from '{cur_lang}' to '{new_lang}'")
+                         if not DRY_RUN:
+                             abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"language": new_lang}})
+                             stats['lang_fixed'] += 1
+                         meta['language'] = new_lang
+                
+                lang = meta.get('language')
+                
+                # Check 2: Report Missing Language
+                has_lang = bool(lang and str(lang).strip())
+                update_report("language", key, title, authors[0] if authors else "", asin, "Missing Language", has_lang)
+
                 # 1. AUDIBLE
                 aud_data = get_audible_data(asin, lang)
                 
+                # --- DOMAIN MISMATCH & AUTO-FILL LOGIC ---
+                if aud_data and aud_data.get('language'):
+                    found_lang_raw = aud_data['language'].lower().strip()
+                    norm_found_lang = LANG_MAPPING.get(found_lang_raw)
+                    
+                    if norm_found_lang:
+                        # Auto-Fill missing language in ABS
+                        if not lang or lang != norm_found_lang:
+                            logging.info(f"      -> 🔧 Auto-detected Language: '{norm_found_lang}' (Source: Audible). Updating ABS...")
+                            if not DRY_RUN:
+                                abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"language": norm_found_lang}})
+                                stats['lang_fixed'] += 1
+                                update_report("language", key, title, authors[0] if authors else "", asin, "Fixed", True)
+                            lang = norm_found_lang # Update local var for further logic
+
+                        # Domain Mismatch Check
+                        current_domain = aud_data.get('domain', '')
+                        if "audible.com" in current_domain and norm_found_lang == "German":
+                            logging.info(f"      -> ⚠️ German book found on .com. Ignoring ratings, switching to .de...")
+                            # Force a retry on next iteration (which will prioritize .de because lang is now German)
+                            time.sleep(1)
+                            # Manually call .de lookup logic in next loop iteration or simple continue 
+                            # Since we updated 'lang' locally, simply continuing the outer loop isn't possible directly here
+                            # But since get_audible_data iterates domains based on 'lang', and we called it with OLD lang,
+                            # we should theoretically call it again with NEW lang.
+                            aud_data = get_audible_data(asin, lang) # Retry with corrected language
+
+                        elif "audible.de" in current_domain and norm_found_lang == "English":
+                             logging.info(f"      -> ⚠️ English book found on .de. Ignoring ratings, switching to .com...")
+                             time.sleep(1)
+                             aud_data = get_audible_data(asin, lang) # Retry with corrected language
+
                 # REPLACEMENT LOGIC
                 should_search = False
                 if not asin:
@@ -580,6 +686,7 @@ def main():
     # Reports Init
     reports['audible'] = {x['key']: x for x in rw_json(os.path.join(REPORT_DIR, "missing_audible.json"))}
     reports['goodreads'] = {x['key']: x for x in rw_json(os.path.join(REPORT_DIR, "missing_goodreads.json"))}
+    reports['language'] = {x['key']: x for x in rw_json(os.path.join(REPORT_DIR, "missing_language.json"))}
     
     logging.info("--- Start ---")
     start_time = datetime.now()
