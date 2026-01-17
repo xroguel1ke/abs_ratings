@@ -33,7 +33,6 @@ BASE_SLEEP = int(os.getenv('SLEEP_TIMER', 6))
 DRY_RUN = os.getenv('DRY_RUN', 'False').lower() == 'true'
 
 # --- HEADERS & CONSTANTS ---
-# OPTIMIZATION: User Agents from Script 2 (Stealth)
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
@@ -42,10 +41,9 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/122.0.0.0"
 ]
 
-# STRICT HEADERS (Exakt wie im Debugger - Wichtig für Audible!)
-HEADERS_STRICT = {
+# Base Headers (Sprache wird dynamisch gesetzt)
+HEADERS_BASE = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9", # KEIN "de" hier, das verursacht den 404 auf .com!
     "Referer": "https://www.google.com/",
     "Upgrade-Insecure-Requests": "1",
     "Sec-Fetch-Dest": "document",
@@ -53,10 +51,6 @@ HEADERS_STRICT = {
     "Sec-Fetch-Site": "cross-site",
     "Sec-Fetch-User": "?1"
 }
-
-# Standard Headers (für Goodreads etc.)
-HEADERS_GENERAL = HEADERS_STRICT.copy()
-HEADERS_GENERAL["Accept-Language"] = "en-US,en;q=0.9,de;q=0.8"
 
 HEADERS_ABS = {"Authorization": f"Bearer {API_TOKEN}", "Content-Type": "application/json"}
 abs_session = requests.Session()
@@ -73,7 +67,6 @@ RE_RATING_BLOCK = re.compile(r'(?s)⭐\s*Ratings.*?⭐(?:\s|<br\s*/?>)*')
 RE_CLEAN_TITLE = re.compile(r'(?i)\b(unabridged|abridged|audiobook|graphic audio|dramatized adaptation)\b|[\(\[].*?[\)\]]')
 RE_VOL = re.compile(r'(?i)(?:\b(?:book|vol\.?|volume|part|no\.?)|#)\s*(\d+)')
 
-# Raw Extraction Regex
 RE_RAW_STORY = re.compile(r'story-value="([0-9.]+)"')
 RE_RAW_PERFORMANCE = re.compile(r'performance-value="([0-9.]+)"')
 RE_RAW_OVERALL = re.compile(r'value="([0-9.]+)"') 
@@ -153,16 +146,24 @@ def find_rating_recursive(obj):
             if res := find_rating_recursive(item): return res
     return None
 
-def format_time(seconds):
-    if seconds < 60: return f"{int(seconds)}s"
-    return f"{int(seconds // 60)}m {int(seconds % 60)}s"
+# --- HELPER: DYNAMIC HEADER BUILDER ---
+def get_headers(domain=None):
+    h = HEADERS_BASE.copy()
+    h["User-Agent"] = random.choice(USER_AGENTS)
+    
+    # DYNAMIC LANGUAGE SWITCHING
+    if domain and "audible.de" in domain:
+        h["Accept-Language"] = "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7"
+    else:
+        # Strict English for .com to prevent redirects
+        h["Accept-Language"] = "en-US,en;q=0.9"
+    return h
 
-# --- HELPER FOR GOODREADS/SEARCH (Uses Wrapper) ---
 def fetch_url(url, params=None, domain=None):
     try:
-        headers = HEADERS_GENERAL.copy()
-        headers["User-Agent"] = random.choice(USER_AGENTS)
-        cookies = {} # Simple cookies for general fetch
+        # Use dynamic headers based on domain
+        headers = get_headers(domain)
+        cookies = {} 
         
         r = requests.get(url, headers=headers, params=params, cookies=cookies, timeout=20)
         
@@ -177,9 +178,7 @@ def fetch_url(url, params=None, domain=None):
 
 def scrape_search_result_fallback(domain, asin):
     try:
-        # Use HEADERS_STRICT for Audible search too
-        h = HEADERS_STRICT.copy()
-        h["User-Agent"] = random.choice(USER_AGENTS)
+        h = get_headers(domain) # Dynamic headers here too
         
         logging.info(f"        🔎 Attempting Search Fallback on {domain}...")
         r = requests.get(f"https://{domain}/search", params={"keywords": asin, "ipRedirectOverride": "true"}, headers=h, timeout=15)
@@ -201,7 +200,6 @@ def scrape_search_result_fallback(domain, asin):
 def get_audible_data(asin, language):
     if not asin: return None
     
-    # Domain Selection
     domains = ["www.audible.com", "www.audible.de"]
     if language and str(language).strip().lower() in ['de', 'deu', 'german', 'deutsch']:
         domains = ["www.audible.de", "www.audible.com"]
@@ -211,15 +209,13 @@ def get_audible_data(asin, language):
     for domain in domains:
         logging.info(f"    -> Checking {domain}...")
         
-        # --- 1:1 KOPIE AUS FUNKTIONIERENDEM DEBUGGER/TRANSPLANTAT ---
-        # Wir umgehen hier fetch_url bewusst, um 100% Parität mit dem Debugger zu haben.
         url = f"https://{domain}/pd/{asin}?ipRedirectOverride=true"
         cookies = {}
         if "audible.de" in domain: cookies["audible_site_preference"] = "de"
         elif "audible.com" in domain: cookies["audible_site_preference"] = "us"
         
-        headers = HEADERS_STRICT.copy()
-        headers["User-Agent"] = random.choice(USER_AGENTS)
+        # DYNAMIC HEADERS HERE
+        headers = get_headers(domain)
 
         try:
             r = requests.get(url, headers=headers, cookies=cookies, timeout=15)
@@ -228,7 +224,6 @@ def get_audible_data(asin, language):
             txt_lower = r.text.lower()
             if "looks like this title is no longer available" in txt_lower or "titel ist leider nicht verfügbar" in txt_lower:
                 logging.info(f"        ⚠️ Soft-404 (Not Available Text) on {domain}")
-                # Auch hier: Fallback probieren
                 if domain in ["www.audible.com", "www.audible.de"]:
                     if fb := scrape_search_result_fallback(domain, asin):
                         logging.info(f"        ✅ Found via Search Fallback (Soft-404) (Count: {fb['count']})")
@@ -238,7 +233,6 @@ def get_audible_data(asin, language):
             # --- HARD FAIL CHECK ---
             if r.status_code == 404 or "/pderror" in r.url:
                 logging.info(f"        ❌ 404/Error on {domain}")
-                # Fallback probieren!
                 if domain in ["www.audible.com", "www.audible.de"]:
                     if fb := scrape_search_result_fallback(domain, asin):
                         logging.info(f"        ✅ Found via Search Fallback (404) (Count: {fb['count']})")
@@ -249,7 +243,7 @@ def get_audible_data(asin, language):
             ratings = {}
             raw_text = r.text
             
-            # A) REGEX (Die Waffe gegen Adult Walls)
+            # A) REGEX
             if m := RE_RAW_STORY.search(raw_text): ratings['story'] = m.group(1)
             if m := RE_RAW_PERFORMANCE.search(raw_text): ratings['performance'] = m.group(1)
             if m := RE_RAW_OVERALL.search(raw_text): ratings['overall'] = m.group(1)
@@ -272,7 +266,6 @@ def get_audible_data(asin, language):
                             if 'aggregateRating' in i: ratings['overall'] = i['aggregateRating'].get('ratingValue')
                     except: pass
 
-            # VERDICT
             count = int(ratings.get('count', 0))
             if count > 0:
                 ov = ratings.get('overall', 'N/A')
@@ -295,6 +288,7 @@ def find_missing_asin(title, author, duration, lang, force_domain=None):
     if lang and str(lang).strip().lower() in GERMAN_LANG_CODES: doms = ["www.audible.de", "www.audible.com"]
     
     for d in doms:
+        # fetch_url now uses dynamic headers based on 'd' (domain)
         r, soup = fetch_url(f"https://{d}/search", params={"title": title, "author_author": author or "", "ipRedirectOverride": "true"}, domain=d)
         if not soup: continue
         
@@ -316,7 +310,7 @@ def find_missing_asin(title, author, duration, lang, force_domain=None):
     return None
 
 def scrape_gr_details(url):
-    r, soup = fetch_url(url)
+    r, soup = fetch_url(url) # Goodreads just gets general headers
     if not soup: return None
     res = {'url': url, 'source': 'GR'}
     for s in soup.find_all('script', type='application/ld+json'):
@@ -365,7 +359,7 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
                 link = row.find('a', class_='bookTitle')
                 if not link: continue
                 found_title = link.get_text(strip=True)
-                clean_found = clean_title(found_title) # Added for boost logic
+                clean_found = clean_title(found_title)
                 
                 f_nums, t_nums = extract_volume(found_title), extract_volume(title)
                 if (f_nums and t_nums and not f_nums & t_nums): continue
@@ -376,7 +370,7 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
                 t_score = max(difflib.SequenceMatcher(None, title.lower(), found_title.lower()).ratio(),
                               difflib.SequenceMatcher(None, clean_target.lower(), clean_found.lower()).ratio())
                 
-                # OPTIMIZATION: Boost Logic from Script 2
+                # OPTIMIZATION: Boost Logic
                 if (len(clean_target) > 3 and clean_target.lower() in clean_found.lower()) or \
                    (len(clean_found) > 3 and clean_found.lower() in clean_target.lower()): t_score += 0.2
 
