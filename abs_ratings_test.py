@@ -227,12 +227,13 @@ def get_audible_data(asin, language):
         count = ratings.get('count')
         if count and int(count) > 0:
             ov = ratings.get('overall', 'N/A')
-            logging.info(f"    -> Audible: ✅ Found on {domain} (Count: {count}, Rating: {ov})")
+            ratings['source'] = 'ASIN Direct'
+            logging.info(f"    -> Audible: ✅ Found via ASIN Direct on {domain} (Count: {count}, Rating: {ov})")
             return ratings
         
         if soup.find(['h1', 'h2', 'h3'], class_=re.compile(r'bc-heading|product-title')):
              logging.info(f"    -> Audible: ⚠️ Page found on {domain}, but NO ratings (Count: 0)")
-             return {'count': 0}
+             return {'count': 0, 'source': 'ASIN Direct (No Ratings)'}
 
     logging.info("    -> Audible: ❌ Not found (Page error or Redirect)")
     return None
@@ -295,11 +296,18 @@ def scrape_gr_details(url):
     return res if 'val' in res else None
 
 def get_goodreads_data(isbn, asin, title, authors, prim_auth):
+    # 1. ID Search
     for q_id, src in [(isbn, 'ISBN Lookup'), (asin, 'ASIN Lookup')]:
         if q_id:
             if d := scrape_gr_details(f"https://www.goodreads.com/search?q={q_id}"):
                 d['source'] = src; return d
+            else:
+                 # Debug Log for transparency
+                 logging.info(f"    (Debug) Goodreads: ID Lookup for {q_id} ({src}) returned no data.")
     
+    logging.info(f"    -> Goodreads: ❌ ID Lookup failed. Falling back to text search...")
+    
+    # 2. Text Search
     searches = [f"{t} {prim_auth}" for t in [title, clean_title(title)] if t] + [title]
     clean_target = clean_title(title)
 
@@ -332,6 +340,7 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
                      continue
                 
                 if t_score > 0.7 and t_score > best_score:
+                    logging.info(f"    (Debug) Match Candidate Accepted: '{found_title}' (Score: {round(t_score, 2)})")
                     best_score, best_url = t_score, "https://www.goodreads.com" + link['href']
             
             if best_url:
@@ -409,7 +418,7 @@ def process_library(lib_id, history, failed):
                 
                 logging.info(f"-"*50)
                 logging.info(f"({idx+1}/{total_in_batch}) [ETA: {eta_str}] Processing: {title}")
-                stats['processed'] += 1 # Only count once in outer loop logic, but technically we are inside enum
+                stats['processed'] += 1 
 
                 # --- 1. ASIN STANDARDIZATION ---
                 target_domain = "www.audible.com"
@@ -440,6 +449,7 @@ def process_library(lib_id, history, failed):
                             abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"asin": found}})
                             asin, stats['asin_found'] = found, stats['asin_found'] + 1
                             aud_data = get_audible_data(asin, lang)
+                            aud_data['source'] = 'Search Replacement' # Mark source
 
                 time.sleep(1)
                 
@@ -467,7 +477,12 @@ def process_library(lib_id, history, failed):
                 if not DRY_RUN:
                     res = abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"description": final_desc}})
                     if res.status_code == 200:
-                        logging.info("    -> ✅ UPDATE SUCCESS")
+                        updates = []
+                        if aud_data: updates.append("Audible")
+                        if gr_data: updates.append("Goodreads")
+                        update_str = " + ".join(updates) if updates else "Data Cleaned"
+                        
+                        logging.info(f"    -> ✅ UPDATE SUCCESS ({update_str})")
                         if is_complete: stats['success'] += 1
                     else: stats['failed'] += 1
                 else:
