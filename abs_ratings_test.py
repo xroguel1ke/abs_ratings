@@ -114,11 +114,19 @@ def write_env_file(log_file, start_time):
             f.write(f"ABS_SUBJECT='{sub}'\nABS_ICON='{icon}'\nABS_HEADER='{head}'\nABS_DURATION='{dur}'\nABS_REPORT_BODY='{body}'\nABS_LOG_FILE='{os.path.basename(log_file)}'\n")
     except: pass
 
-def fetch_url(url, params=None):
+def fetch_url(url, params=None, domain=None):
     try:
         headers = HEADERS_SCRAPE_BASE.copy()
         headers["User-Agent"] = random.choice(USER_AGENTS)
-        r = requests.get(url, headers=headers, params=params, timeout=20)
+        
+        # --- COOKIE TRICK FOR GEOBLOCKING ---
+        cookies = {}
+        if domain:
+            if "audible.de" in domain: cookies["audible_site_preference"] = "de"
+            elif "audible.com" in domain: cookies["audible_site_preference"] = "us"
+        # ------------------------------------
+
+        r = requests.get(url, headers=headers, params=params, cookies=cookies, timeout=20)
         
         if r.status_code == 429: raise RateLimitException("HTTP 429 (Too Many Requests)", True)
         if r.status_code in [503, 403]: raise RateLimitException(f"HTTP {r.status_code}")
@@ -170,12 +178,46 @@ def format_time(seconds):
 
 def check_asin_exists_on_domain(asin, domain):
     try:
-        r, _ = fetch_url(f"https://{domain}/pd/{asin}?ipRedirectOverride=true")
+        r, _ = fetch_url(f"https://{domain}/pd/{asin}?ipRedirectOverride=true", domain=domain)
         if r and r.status_code == 200:
             if "/pderror" in r.url.lower() or ("audible." in r.url and len(r.url) < 35): return False
             return True
         return False
     except: return False
+
+def scrape_search_result_fallback(domain, asin):
+    """Scrapes rating from Search Result List if Detail Page is geoblocked"""
+    try:
+        r, soup = fetch_url(f"https://{domain}/search", params={"keywords": asin, "ipRedirectOverride": "true"}, domain=domain)
+        if not soup: return None
+        
+        # Find item with correct ASIN
+        item = soup.find('li', attrs={'data-asin': asin})
+        if not item: 
+            # Try finding by div inside list
+            div = soup.find('div', attrs={'data-asin': asin})
+            if div: item = div.find_parent('li')
+            
+        if item:
+            ratings = {}
+            # Extract Rating
+            # Pattern: "4.5 out of 5 stars"
+            rate_txt = item.find('span', class_=re.compile(r'ratingLabel|ratingText'))
+            if rate_txt:
+                m = re.search(r'(\d+[.,]?\d*)', rate_txt.get_text())
+                if m: ratings['overall'] = m.group(1).replace(',', '.')
+            
+            # Extract Count
+            # Pattern: "123 ratings"
+            count_txt = item.find('span', class_=re.compile(r'ratingsLabel|ratingCount'))
+            if count_txt:
+                m = re.search(r'([\d,.]+)', count_txt.get_text())
+                if m: ratings['count'] = int(re.sub(r'[^\d]', '', m.group(1)))
+            
+            if ratings.get('overall') and ratings.get('count'):
+                return ratings
+    except: pass
+    return None
 
 def get_audible_data(asin, language):
     if not asin: return None
@@ -188,12 +230,19 @@ def get_audible_data(asin, language):
             domains.remove("www.audible.de"); domains.insert(0, "www.audible.de")
 
     for domain in domains:
-        r, soup = fetch_url(f"https://{domain}/pd/{asin}?ipRedirectOverride=true")
-        if not r or r.status_code == 404 or "/pderror" in r.url: continue
+        r, soup = fetch_url(f"https://{domain}/pd/{asin}?ipRedirectOverride=true", domain=domain)
         
-        if "audible." in r.url and len(r.url) < 35: 
-             logging.info(f"    -> Audible: ⚠️ Page found on {domain}, but redirected to Home.")
-             continue
+        # --- GEOBLOCK FALLBACK ---
+        # If Page 404 or Redirect -> Try Search Result Fallback
+        if not r or r.status_code == 404 or "/pderror" in r.url or ("audible." in r.url and len(r.url) < 35):
+            if domain in ["www.audible.com", "www.audible.de"]: # Only try fallback on main domains
+                fallback_data = scrape_search_result_fallback(domain, asin)
+                if fallback_data:
+                    ov = fallback_data.get('overall', 'N/A')
+                    logging.info(f"    -> Audible: ✅ Found via List-View Fallback (Geoblock Bypass) on {domain} (Count: {fallback_data['count']}, Rating: {ov})")
+                    return fallback_data
+            continue
+        # -------------------------
 
         ratings = {}
         if sum_tag := soup.find('adbl-rating-summary'):
@@ -227,7 +276,6 @@ def get_audible_data(asin, language):
         count = ratings.get('count')
         if count and int(count) > 0:
             ov = ratings.get('overall', 'N/A')
-            ratings['source'] = 'ASIN Direct'
             logging.info(f"    -> Audible: ✅ Found via ASIN Direct on {domain} (Count: {count}, Rating: {ov})")
             return ratings
         
@@ -246,7 +294,7 @@ def find_missing_asin(title, author, duration, lang, force_domain=None):
             doms = ["www.audible.de", "www.audible.com"]
     
     for d in doms:
-        r, soup = fetch_url(f"https://{d}/search", params={"title": title, "author_author": author or "", "ipRedirectOverride": "true"})
+        r, soup = fetch_url(f"https://{d}/search", params={"title": title, "author_author": author or "", "ipRedirectOverride": "true"}, domain=d)
         if not soup: continue
         
         for item in soup.find_all('li', class_=re.compile(r'productListItem')):
@@ -302,7 +350,6 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
             if d := scrape_gr_details(f"https://www.goodreads.com/search?q={q_id}"):
                 d['source'] = src; return d
             else:
-                 # Debug Log for transparency
                  logging.info(f"    (Debug) Goodreads: ID Lookup for {q_id} ({src}) returned no data.")
     
     logging.info(f"    -> Goodreads: ❌ ID Lookup failed. Falling back to text search...")
@@ -429,9 +476,12 @@ def process_library(lib_id, history, failed):
                     if not check_asin_exists_on_domain(asin, target_domain) and not DRY_RUN:
                         logging.info(f"    -> ASIN {asin} invalid on {target_domain}. Searching migration...")
                         if found_mig := find_missing_asin(title, prim_auth, item['media'].get('duration'), lang, force_domain=target_domain):
-                            logging.info(f"    -> 🔄 Migrating ASIN: {asin} -> {found_mig} ({target_domain})")
-                            abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"asin": found_mig}})
-                            asin, stats['asin_migrated'] = found_mig, stats['asin_migrated'] + 1
+                            if found_mig != asin:
+                                logging.info(f"    -> 🔄 Migrating ASIN: {asin} -> {found_mig} ({target_domain})")
+                                abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"asin": found_mig}})
+                                asin, stats['asin_migrated'] = found_mig, stats['asin_migrated'] + 1
+                            else:
+                                logging.info(f"    -> Search returned same ASIN {asin}. Item likely unavailable on {target_domain} (Geoblocking).")
                         else:
                             logging.info("    -> No migration target found. Keeping old ASIN.")
 
@@ -449,7 +499,7 @@ def process_library(lib_id, history, failed):
                             abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"asin": found}})
                             asin, stats['asin_found'] = found, stats['asin_found'] + 1
                             aud_data = get_audible_data(asin, lang)
-                            aud_data['source'] = 'Search Replacement' # Mark source
+                            if aud_data: aud_data['source'] = 'Search Replacement'
 
                 time.sleep(1)
                 
