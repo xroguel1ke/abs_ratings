@@ -744,7 +744,8 @@ def process_library(lib_id, history, failed):
                         new_series = s_obj.get('name')
                         new_seq = None
                         if part_txt := s_obj.get('part'):
-                            if m := re.search(r'(\d+)', part_txt): new_seq = m.group(1)
+                            # FIXED: Regex now supports floats like 3.2 or 0.5
+                            if m := re.search(r'(\d+(?:\.\d+)?)', part_txt): new_seq = m.group(1)
                         
                         # Only update if series name is different OR if sequence is different (and exists)
                         # Audible is master. Overwrite ABS if diff.
