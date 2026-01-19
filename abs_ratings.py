@@ -70,10 +70,12 @@ RE_CLEAN_TITLE = re.compile(r'(?i)\b(unabridged|abridged|audiobook|graphic audio
 RE_VOL = re.compile(r'(?i)(?:\b(?:book|vol\.?|volume|part|no\.?)|#)\s*(\d+)')
 
 # --- NORMALIZATION CONSTANTS ---
+# Kept German keys for title normalization logic
 NUMBER_MAP = {
     'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9', 'ten': '10',
     'eins': '1', 'zwei': '2', 'drei': '3', 'vier': '4', 'fünf': '5', 'sechs': '6', 'sieben': '7', 'acht': '8', 'neun': '9', 'zehn': '10'
 }
+# Kept German keywords for title cleaning logic
 RE_NOISE = re.compile(r'(?i)\b(?:book|vol\.?|volume|part|no\.?|nr\.?|band|teil|buch|reihe|serie|series|episode|chapter|kapitel)\b')
 
 RE_RAW_STORY = re.compile(r'story-value="([0-9.]+)"')
@@ -114,10 +116,10 @@ def save_reports():
 
 def write_env_file(log_file, start_time):
     dur = f"{int((datetime.now() - start_time).total_seconds() // 60)}m {int((datetime.now() - start_time).total_seconds() % 60)}s"
-    if stats['aborted_ratelimit']: sub, icon, head = "ABS Ratings: Abbruch 🛑", "alert", "Rate Limit erkannt!"
-    elif stats['failed'] > 0: sub, icon, head = "ABS Ratings: Fehler ❌", "alert", "Fehler aufgetreten!"
-    elif any(stats[k] > 0 for k in ['success', 'recycled', 'asin_found', 'asin_migrated', 'isbn_added']): sub, icon, head = "ABS Ratings: Erfolg ✅", "normal", "Update abgeschlossen"
-    else: sub, icon, head = "ABS Ratings: Info ℹ️", "normal", "Keine Änderungen"
+    if stats['aborted_ratelimit']: sub, icon, head = "ABS Ratings: Aborted 🛑", "alert", "Rate Limit detected!"
+    elif stats['failed'] > 0: sub, icon, head = "ABS Ratings: Error ❌", "alert", "Error occurred!"
+    elif any(stats[k] > 0 for k in ['success', 'recycled', 'asin_found', 'asin_migrated', 'isbn_added']): sub, icon, head = "ABS Ratings: Success ✅", "normal", "Update complete"
+    else: sub, icon, head = "ABS Ratings: Info ℹ️", "normal", "No changes"
     
     body = f"Proc: {stats['processed']} | New: {stats['success']} | ASIN+: {stats['asin_found']} | Mig: {stats['asin_migrated']} | ISBN+: {stats['isbn_added']} | Fix: {stats['isbn_repaired']} | Err: {stats['failed']}"
     if stats['aborted_ratelimit']: body += " | ⚠️ ABORTED (Rate Limit)"
@@ -164,13 +166,26 @@ def format_time(seconds):
         return f"{hours}h {minutes}m"
     return f"{int(seconds // 60)}m {int(seconds % 60)}s"
 
-def match_author(abs_authors, gr_author):
-    if not abs_authors or not gr_author: return False
-    gr_tok = set(re.split(r'[^a-zA-Z0-9]+', gr_author.lower()))
-    for a in abs_authors:
-        if difflib.SequenceMatcher(None, a.lower(), gr_author.lower()).ratio() > 0.6: return True
-        common = set(re.split(r'[^a-zA-Z0-9]+', a.lower())).intersection(gr_tok)
-        if len(common) >= 2 or (len(common) >= 1 and len(re.split(r'[^a-zA-Z0-9]+', a.lower())) == 1): return True
+def match_author(abs_authors, web_author):
+    # UPDATED: Handles comma separated authors and partial matches better
+    if not abs_authors or not web_author: return False
+    
+    # Split web authors (e.g. "Asato Asato, Shirabii")
+    web_clean = [w.strip().lower() for w in web_author.split(',')]
+    
+    for abs_auth in abs_authors:
+        abs_clean = abs_auth.lower()
+        # Check if ABS author is substring of ANY web author (or vice versa)
+        for wa in web_clean:
+            if abs_clean in wa or wa in abs_clean: return True
+            
+            # Token match fallback
+            a_tok = set(re.split(r'[^a-z0-9]+', abs_clean))
+            wa_tok = set(re.split(r'[^a-z0-9]+', wa))
+            # If intersection > 60% or enough tokens match
+            if len(a_tok.intersection(wa_tok)) >= 2: return True
+            if len(a_tok.intersection(wa_tok)) == 1 and len(a_tok) == 1: return True
+
     return False
 
 def find_rating_recursive(obj):
@@ -221,7 +236,7 @@ def scrape_search_result_fallback(domain, asin):
             if rate_txt := item.find('span', class_=re.compile(r'ratingLabel|ratingText')):
                 if m := re.search(r'(\d+[.,]?\d*)', rate_txt.get_text()):
                      if is_valid_rating(m.group(1).replace(',', '.')):
-                          ratings['overall'] = m.group(1).replace(',', '.')
+                           ratings['overall'] = m.group(1).replace(',', '.')
             if count_txt := item.find('span', class_=re.compile(r'ratingsLabel|ratingCount')):
                 if m := re.search(r'([\d,.]+)', count_txt.get_text()): ratings['count'] = int(re.sub(r'[^\d]', '', m.group(1)))
             if ratings.get('overall') and ratings.get('count'): return ratings
@@ -257,6 +272,7 @@ def get_audible_data(asin, language):
             soup = BeautifulSoup(r.text, 'lxml')
             title_lower = (soup.title.text if soup.title else "").lower()
             
+            # Keep German search strings as they are scraped from the website
             soft_404_markers = [
                 "looks like this title is no longer available",
                 "titel ist leider nicht verfügbar",
@@ -286,6 +302,23 @@ def get_audible_data(asin, language):
             # --- EXTRACTION ---
             ratings = {'domain': domain}
             raw_text = r.text
+            
+            # NEW: CHECK HREFLANG (Canonical Links in HTML)
+            # Scan for links to other major stores to find replacement ASINs directly
+            try:
+                for link in soup.find_all('link', attrs={'rel': 'alternate'}):
+                    href = link.get('href', '').strip()
+                    # Check strictly for .com/ or .de/ to avoid matches like .com.au
+                    tgt = None
+                    if "www.audible.com/" in href: tgt = "www.audible.com"
+                    elif "www.audible.de/" in href: tgt = "www.audible.de"
+                    
+                    if tgt:
+                         # Extract ASIN from URL (usually at end or query)
+                         if m := re.search(r'([A-Z0-9]{10})', href):
+                             ratings['variant_asin'] = m.group(1)
+                             ratings['variant_domain'] = tgt
+            except: pass
             
             # 1. TAGS (Priority 1)
             if sum_tag := soup.find('adbl-rating-summary'):
@@ -335,30 +368,81 @@ def get_audible_data(asin, language):
     if best_result: return best_result
     return None
 
-def find_missing_asin(title, author, duration, lang, force_domain=None):
+def find_missing_asin(title, authors_list, duration, lang, force_domain=None):
+    # UPDATED: Accepts list of authors for better matching
     logging.info(f"      -> 🔎 Searching Replacement ASIN for '{title}'...")
     doms = ["www.audible.com", "www.audible.de"]
     if lang and str(lang).strip().lower() in GERMAN_LANG_CODES: doms = ["www.audible.de", "www.audible.com"]
     
+    # Use first author for Search Query, but pass FULL list to match_author
+    prim_auth = authors_list[0] if authors_list else ""
+    
+    strategies = [
+        {"params": {"title": title, "author_author": prim_auth, "ipRedirectOverride": "true"}, "mode": "Strict"},
+        {"params": {"title": title, "ipRedirectOverride": "true"}, "mode": "TitleOnly"}
+    ]
+
     for d in doms:
-        r, soup = fetch_url(f"https://{d}/search", params={"title": title, "author_author": author or "", "ipRedirectOverride": "true"}, domain=d)
-        if not soup: continue
-        
-        for item in soup.find_all('li', class_=re.compile(r'productListItem')):
-            asin = item.get('data-asin') or (item.find('div', attrs={'data-asin': True}) or {}).get('data-asin')
-            if not asin: continue
+        for strat in strategies:
             
-            ft = item.find('h3', class_=re.compile(r'bc-heading'))
-            if not ft: continue
-            found_title = ft.get_text(strip=True)
+            r, soup = fetch_url(f"https://www.audible.de/search" if "audible.de" in d else f"https://{d}/search", params=strat["params"], domain=d)
+            # URL fix: Ensure correct domain usage for fetch
+            if "audible.de" in d and "/search" not in r.url and r.status_code != 200:
+                 # Fallback/Correction if needed - mostly fetch_url handles it
+                 pass
+                 
+            # Note: fetch_url handles the domain structure, so just passing the search URL:
+            r, soup = fetch_url(f"https://{d}/search", params=strat["params"], domain=d)
             
-            if difflib.SequenceMatcher(None, title.lower(), found_title.lower()).ratio() > 0.7:
-                if duration and (rt := item.find('li', class_=re.compile(r'runtimeLabel'))):
+            if not soup: continue
+            
+            for item in soup.find_all('li', class_=re.compile(r'productListItem')):
+                asin = item.get('data-asin') or (item.find('div', attrs={'data-asin': True}) or {}).get('data-asin')
+                if not asin: continue
+                
+                ft = item.find('h3', class_=re.compile(r'bc-heading'))
+                if not ft: continue
+                found_title = ft.get_text(strip=True)
+                
+                # Title Match Score
+                t_score = difflib.SequenceMatcher(None, title.lower(), found_title.lower()).ratio()
+                if t_score < 0.7: 
+                    continue
+
+                # Duration Check
+                dur_match = False
+                found_dur_sec = 0
+                if rt := item.find('li', class_=re.compile(r'runtimeLabel')):
                     h = re.search(r'(\d+)\s*(?:Std|hr|h)', rt.text)
                     m = re.search(r'(\d+)\s*(?:Min|m)', rt.text)
-                    sec = (int(h.group(1))*3600 if h else 0) + (int(m.group(1))*60 if m else 0)
-                    if sec > 0 and abs(duration - sec) > 900: continue
-                return asin
+                    found_dur_sec = (int(h.group(1))*3600 if h else 0) + (int(m.group(1))*60 if m else 0)
+                    if found_dur_sec > 0:
+                        if duration and abs(duration - found_dur_sec) < 300: dur_match = True
+                    else:
+                        dur_match = True # No duration info found -> Pass
+
+                # Author Check
+                found_auth = ""
+                if auth_tag := item.find('li', class_=re.compile(r'authorLabel')):
+                    found_auth = auth_tag.get_text(strip=True).replace('By:', '').strip()
+                
+                # UPDATED: Checks against ALL authors in the list
+                auth_match = match_author(authors_list, found_auth)
+
+                # --- DECISION LOGIC ---
+                # A) Title matches well AND Author matches
+                if t_score > 0.7 and auth_match:
+                    if duration and found_dur_sec > 0 and not dur_match:
+                         # Log why we skip despite author match
+                         logging.info(f"        ⚠️ Skipped candidate '{found_title}': Author matches, but duration differs > 15m (ABS: {int(duration)}s vs Web: {found_dur_sec}s).")
+                         continue
+                    return asin
+
+                # B) Title matches VERY well (>0.8) AND Duration matches (ignores Author -> Solves Kanji/Translator issues)
+                if t_score > 0.8 and dur_match and duration:
+                    logging.info(f"        ✅ Accepted '{found_title}' based on Title+Duration match (Author mismatch ignored: '{prim_auth}' vs '{found_auth}')")
+                    return asin
+
     return None
 
 def scrape_gr_details(url):
@@ -399,11 +483,11 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
     # 2. Text Search
     searches = [f"{t} {prim_auth}" for t in [title, clean_title(title)] if t] + [title]
     
-    # Optional: Suche nach Basis-Titel (ohne Nummer), falls spezifische Suche scheitert
+    # Optional: Search for base title (without number) if specific search fails
     base_title = clean_title(title)
     if base_title and base_title != title: searches.append(base_title)
     
-    # Bereinigung für Vergleich
+    # Cleanup for comparison
     norm_target = normalize_title_text(title)
 
     for q in searches:
@@ -425,19 +509,19 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
                 # NORMALIZED MATCHING LOGIC
                 norm_found = normalize_title_text(found_title)
                 
-                # Berechne Score auf Basis der normalisierten Titel (Book, Vol etc. entfernt, Zahlen konvertiert)
+                # Calculate score based on normalized titles (Book, Vol etc. removed, numbers converted)
                 t_score = difflib.SequenceMatcher(None, norm_target, norm_found).ratio()
                 
-                # Bonus für Teilstrings im normalisierten Text
+                # Bonus for substrings in normalized text
                 if (len(norm_target) > 3 and norm_target in norm_found) or \
                    (len(norm_found) > 3 and norm_found in norm_target): t_score += 0.15
                 
-                # Fallback: Check auf Volumen-Nummern Konflikt
+                # Fallback: Check for volume number conflict
                 f_nums, t_nums = extract_volume(found_title), extract_volume(title)
-                # Nur abbrechen, wenn BEIDE Seiten Nummern haben und diese NICHT übereinstimmen
+                # Only abort if BOTH sides have numbers and they do NOT match
                 if (f_nums and t_nums and not f_nums & t_nums): 
-                    # Extra Check: Wurde die Nummer vielleicht durch normalize_title aufgelöst? (Two -> 2)
-                    # Wenn t_score extrem hoch ist (>0.9), ignorieren wir den Regex-Mismatch, da normalize schlauer ist
+                    # Extra Check: Was the number perhaps resolved by normalize_title? (Two -> 2)
+                    # If t_score is extremely high (>0.9), ignore regex mismatch as normalize is smarter
                     if t_score < 0.9: continue
                 
                 found_auth = row.find('a', class_='authorName').text if row.find('a', class_='authorName') else ""
@@ -536,7 +620,21 @@ def process_library(lib_id, history, failed):
                     should_search = True
 
                 if should_search:
-                    if found := find_missing_asin(title, authors[0] if authors else "", item['media'].get('duration'), lang):
+                    found = None
+                    
+                    # CHECK HREFLANG FROM HTML FIRST (Safe Direct Link)
+                    target_domain = "www.audible.de" if str(lang).lower() in GERMAN_LANG_CODES else "www.audible.com"
+                    
+                    if aud_data and aud_data.get('variant_asin') and aud_data.get('variant_domain') == target_domain:
+                         found = aud_data['variant_asin']
+                         logging.info(f"        🔗 Found ASIN via HTML Link (hreflang): {found}")
+                    
+                    # If not found via Link, try Search
+                    if not found:
+                         # UPDATED: Pass full authors list
+                         found = find_missing_asin(title, authors, item['media'].get('duration'), lang)
+                    
+                    if found:
                         if found != asin:
                             logging.info(f"        ✨ NEW ASIN Found: {found}")
                             if not DRY_RUN: 
@@ -547,6 +645,8 @@ def process_library(lib_id, history, failed):
                             aud_data = get_audible_data(asin, lang)
                         else:
                              logging.info(f"        ℹ️ Search returned same ASIN. Keeping fallback data.")
+                    else:
+                        logging.info(f"        ℹ️ No replacement found. Keeping fallback data.")
 
                 time.sleep(1)
                 
@@ -596,7 +696,7 @@ def process_library(lib_id, history, failed):
                 else:
                     failed[key] = fails; logging.warning(f"      -> ❌ Partial/No data (Audible: {has_aud}, GR: {has_gr}). Strike {fails}/{MAX_FAIL_ATTEMPTS}")
                 
-                # --- SAVE PROGRESS IMMEDIATELY ---
+                # SAVE IMMEDIATELY
                 rw_json(HISTORY_FILE, history)
                 rw_json(FAILED_FILE, failed)
                 
@@ -617,8 +717,18 @@ def process_library(lib_id, history, failed):
 
 def main():
     if not ABS_URL or not API_TOKEN: return print("Error: Envs missing.")
+    
+    # SETUP LOGGING FIRST
     log_file = setup_logging()
     
+    # NEW: Connection Check
+    try:
+        logging.info("Checking API connection...")
+        if abs_session.get(f"{ABS_URL}/api/libraries").status_code != 200:
+            return print("Error: Cannot connect to ABS API (Check URL/Token).")
+    except Exception as e:
+        return print(f"Error: Connection failed: {e}")
+
     # Reports Init
     reports['audible'] = {x['key']: x for x in rw_json(os.path.join(REPORT_DIR, "missing_audible.json"))}
     reports['goodreads'] = {x['key']: x for x in rw_json(os.path.join(REPORT_DIR, "missing_goodreads.json"))}
