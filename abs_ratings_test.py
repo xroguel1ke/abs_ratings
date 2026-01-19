@@ -348,20 +348,22 @@ def get_audible_data(asin, language):
     if best_result: return best_result
     return None
 
-def find_missing_asin(title, author, duration, lang, force_domain=None):
+def find_missing_asin(title, authors_list, duration, lang, force_domain=None):
+    # UPDATED: Accepts list of authors for better matching
     logging.info(f"      -> 🔎 Searching Replacement ASIN for '{title}'...")
     doms = ["www.audible.com", "www.audible.de"]
     if lang and str(lang).strip().lower() in GERMAN_LANG_CODES: doms = ["www.audible.de", "www.audible.com"]
     
-    # NEW: 2-Stage Strategy: First strict (Title+Author), then loose (Title only)
+    # Use first author for Search Query, but pass FULL list to match_author
+    prim_auth = authors_list[0] if authors_list else ""
+    
     strategies = [
-        {"params": {"title": title, "author_author": author or "", "ipRedirectOverride": "true"}, "mode": "Strict"},
+        {"params": {"title": title, "author_author": prim_auth, "ipRedirectOverride": "true"}, "mode": "Strict"},
         {"params": {"title": title, "ipRedirectOverride": "true"}, "mode": "TitleOnly"}
     ]
 
     for d in doms:
         for strat in strategies:
-            # Skip TitleOnly on this domain if Strict already ran? No, because Strict might fail due to Author mismatch
             
             r, soup = fetch_url(f"https://{d}/search", params=strat["params"], domain=d)
             if not soup: continue
@@ -396,7 +398,8 @@ def find_missing_asin(title, author, duration, lang, force_domain=None):
                 if auth_tag := item.find('li', class_=re.compile(r'authorLabel')):
                     found_auth = auth_tag.get_text(strip=True).replace('By:', '').strip()
                 
-                auth_match = match_author([author], found_auth)
+                # UPDATED: Checks against ALL authors in the list
+                auth_match = match_author(authors_list, found_auth)
 
                 # --- DECISION LOGIC ---
                 # A) Title matches well AND Author matches
@@ -409,11 +412,8 @@ def find_missing_asin(title, author, duration, lang, force_domain=None):
 
                 # B) Title matches VERY well (>0.8) AND Duration matches (ignores Author -> Solves Kanji/Translator issues)
                 if t_score > 0.8 and dur_match and duration:
-                    logging.info(f"        ✅ Accepted '{found_title}' based on Title+Duration match (Author mismatch ignored: '{author}' vs '{found_auth}')")
+                    logging.info(f"        ✅ Accepted '{found_title}' based on Title+Duration match (Author mismatch ignored: '{prim_auth}' vs '{found_auth}')")
                     return asin
-
-                # If we get here, it's a near miss
-                # logging.debug(f"        Skipped '{found_title}': Score {t_score:.2f}, AuthMatch: {auth_match}, DurMatch: {dur_match}")
 
     return None
 
@@ -592,7 +592,8 @@ def process_library(lib_id, history, failed):
                     should_search = True
 
                 if should_search:
-                    if found := find_missing_asin(title, authors[0] if authors else "", item['media'].get('duration'), lang):
+                    # UPDATED: Pass full authors list
+                    if found := find_missing_asin(title, authors, item['media'].get('duration'), lang):
                         if found != asin:
                             logging.info(f"        ✨ NEW ASIN Found: {found}")
                             if not DRY_RUN: 
@@ -675,6 +676,15 @@ def process_library(lib_id, history, failed):
 
 def main():
     if not ABS_URL or not API_TOKEN: return print("Error: Envs missing.")
+    
+    # NEW: Connection Check
+    try:
+        logging.info("Checking API connection...")
+        if abs_session.get(f"{ABS_URL}/api/libraries").status_code != 200:
+            return print("Error: Cannot connect to ABS API (Check URL/Token).")
+    except Exception as e:
+        return print(f"Error: Connection failed: {e}")
+
     log_file = setup_logging()
     
     # Reports Init
