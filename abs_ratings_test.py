@@ -576,6 +576,13 @@ def process_library(lib_id, history, failed):
 
                 # 1. AUDIBLE
                 aud_data = get_audible_data(asin, lang)
+
+                # NEW: Update local language variable immediately if Audible provides better data
+                # This ensures the subsequent region checks use the CORRECT language
+                if aud_data and aud_data.get('meta_raw'):
+                    raw_lang = aud_data['meta_raw'].get('language')
+                    if raw_lang:
+                        lang = raw_lang
                 
                 # REPLACEMENT LOGIC
                 should_search = False
