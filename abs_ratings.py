@@ -344,6 +344,12 @@ def get_audible_data(asin, language):
                         except: continue
             except: pass
 
+            # NEW: Extract Raw Title & Subtitle for Fallback Logic
+            if h1 := soup.find('h1', slot='title'):
+                ratings['title_raw'] = h1.get_text(strip=True)
+            if h2 := soup.find('h2', slot='subtitle'):
+                ratings['subtitle_raw'] = h2.get_text(strip=True)
+
             # 1. TAGS (Priority 1)
             if sum_tag := soup.find('adbl-rating-summary'):
                 if is_valid_rating(sum_tag.get('performance-value')): ratings['performance'] = sum_tag.get('performance-value')
@@ -738,7 +744,7 @@ def process_library(lib_id, history, failed):
                         abs_updates['genres'] = current_genres + added_genres
                         log_updates.append(f"Genres: +{added_genres}")
 
-                    # 6. Series (UPDATED: Multi-Series Support)
+                    # 6. Series (UPDATED: Multi-Series Support with ID Filtering & Extended Title Fallback)
                     if series_list := md_raw.get('series'):
                         new_series_list = []
                         # Loop through ALL series in the JSON list
@@ -750,16 +756,41 @@ def process_library(lib_id, history, failed):
                                 if m := re.search(r'(\d+(?:\.\d+)?)', part_txt): 
                                     s_seq = m.group(1)
                             
+                            # NEW: Extended Title Fallback Logic
+                            if s_seq is None and s_name:
+                                # Determine text to search:
+                                # Prioritize Full Web Title (H1 + H2) from Audible
+                                search_text = title # Default to ABS title
+                                
+                                if aud_data:
+                                    aud_t = aud_data.get('title_raw', '')
+                                    aud_s = aud_data.get('subtitle_raw', '')
+                                    if aud_t or aud_s:
+                                        search_text = f"{aud_t} {aud_s}".strip()
+                                
+                                # Try to match "SeriesName X" in the combined title
+                                pattern = re.escape(s_name) + r'[\s:,-]+(\d+(?:\.\d+)?)'
+                                if m := re.search(pattern, search_text, re.IGNORECASE):
+                                    s_seq = m.group(1)
+                                
+                                # Fallback 2: Look for generic markers (Teil X, Book X) if still None
+                                if not s_seq:
+                                     if m := re.search(r'(?:Teil|Band|Book|Vol\.?)\s*(\d+(?:\.\d+)?)', search_text, re.IGNORECASE):
+                                         s_seq = m.group(1)
+
                             if s_name:
                                 new_series_list.append({"name": s_name, "sequence": s_seq})
                         
-                        # Only update if the LIST of series is different from ABS
-                        # (ABS also stores a list of dicts)
                         curr_series_list = meta.get('series') or []
                         
-                        # Simple comparison: If lists are different, update.
-                        # Note: This overwrites ABS order with Audible order.
-                        if new_series_list and new_series_list != curr_series_list:
+                        # FIXED: Remove 'id' from current ABS series list for comparison
+                        # We create a normalized version of current data (only name and sequence)
+                        curr_series_norm = []
+                        for s in curr_series_list:
+                            curr_series_norm.append({"name": s.get('name'), "sequence": s.get('sequence')})
+
+                        # Compare new list vs normalized current list
+                        if new_series_list and new_series_list != curr_series_norm:
                             abs_updates['series'] = new_series_list
                             # Logging for transparency
                             s_log_str = ", ".join([f"'{x['name']}' #{x['sequence']}" for x in new_series_list])
