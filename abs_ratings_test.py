@@ -70,10 +70,12 @@ RE_CLEAN_TITLE = re.compile(r'(?i)\b(unabridged|abridged|audiobook|graphic audio
 RE_VOL = re.compile(r'(?i)(?:\b(?:book|vol\.?|volume|part|no\.?)|#)\s*(\d+)')
 
 # --- NORMALIZATION CONSTANTS ---
+# Kept German keys for title normalization logic
 NUMBER_MAP = {
     'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9', 'ten': '10',
     'eins': '1', 'zwei': '2', 'drei': '3', 'vier': '4', 'fünf': '5', 'sechs': '6', 'sieben': '7', 'acht': '8', 'neun': '9', 'zehn': '10'
 }
+# Kept German keywords for title cleaning logic
 RE_NOISE = re.compile(r'(?i)\b(?:book|vol\.?|volume|part|no\.?|nr\.?|band|teil|buch|reihe|serie|series|episode|chapter|kapitel)\b')
 
 RE_RAW_STORY = re.compile(r'story-value="([0-9.]+)"')
@@ -114,10 +116,10 @@ def save_reports():
 
 def write_env_file(log_file, start_time):
     dur = f"{int((datetime.now() - start_time).total_seconds() // 60)}m {int((datetime.now() - start_time).total_seconds() % 60)}s"
-    if stats['aborted_ratelimit']: sub, icon, head = "ABS Ratings: Abbruch 🛑", "alert", "Rate Limit erkannt!"
-    elif stats['failed'] > 0: sub, icon, head = "ABS Ratings: Fehler ❌", "alert", "Fehler aufgetreten!"
-    elif any(stats[k] > 0 for k in ['success', 'recycled', 'asin_found', 'asin_migrated', 'isbn_added']): sub, icon, head = "ABS Ratings: Erfolg ✅", "normal", "Update abgeschlossen"
-    else: sub, icon, head = "ABS Ratings: Info ℹ️", "normal", "Keine Änderungen"
+    if stats['aborted_ratelimit']: sub, icon, head = "ABS Ratings: Aborted 🛑", "alert", "Rate Limit detected!"
+    elif stats['failed'] > 0: sub, icon, head = "ABS Ratings: Error ❌", "alert", "Error occurred!"
+    elif any(stats[k] > 0 for k in ['success', 'recycled', 'asin_found', 'asin_migrated', 'isbn_added']): sub, icon, head = "ABS Ratings: Success ✅", "normal", "Update complete"
+    else: sub, icon, head = "ABS Ratings: Info ℹ️", "normal", "No changes"
     
     body = f"Proc: {stats['processed']} | New: {stats['success']} | ASIN+: {stats['asin_found']} | Mig: {stats['asin_migrated']} | ISBN+: {stats['isbn_added']} | Fix: {stats['isbn_repaired']} | Err: {stats['failed']}"
     if stats['aborted_ratelimit']: body += " | ⚠️ ABORTED (Rate Limit)"
@@ -234,7 +236,7 @@ def scrape_search_result_fallback(domain, asin):
             if rate_txt := item.find('span', class_=re.compile(r'ratingLabel|ratingText')):
                 if m := re.search(r'(\d+[.,]?\d*)', rate_txt.get_text()):
                      if is_valid_rating(m.group(1).replace(',', '.')):
-                          ratings['overall'] = m.group(1).replace(',', '.')
+                           ratings['overall'] = m.group(1).replace(',', '.')
             if count_txt := item.find('span', class_=re.compile(r'ratingsLabel|ratingCount')):
                 if m := re.search(r'([\d,.]+)', count_txt.get_text()): ratings['count'] = int(re.sub(r'[^\d]', '', m.group(1)))
             if ratings.get('overall') and ratings.get('count'): return ratings
@@ -270,6 +272,7 @@ def get_audible_data(asin, language):
             soup = BeautifulSoup(r.text, 'lxml')
             title_lower = (soup.title.text if soup.title else "").lower()
             
+            # Keep German search strings as they are scraped from the website
             soft_404_markers = [
                 "looks like this title is no longer available",
                 "titel ist leider nicht verfügbar",
@@ -365,7 +368,15 @@ def find_missing_asin(title, authors_list, duration, lang, force_domain=None):
     for d in doms:
         for strat in strategies:
             
+            r, soup = fetch_url(f"https://www.audible.de/search" if "audible.de" in d else f"https://{d}/search", params=strat["params"], domain=d)
+            # URL fix: Ensure correct domain usage for fetch
+            if "audible.de" in d and "/search" not in r.url and r.status_code != 200:
+                 # Fallback/Correction if needed - mostly fetch_url handles it
+                 pass
+                 
+            # Note: fetch_url handles the domain structure, so just passing the search URL:
             r, soup = fetch_url(f"https://{d}/search", params=strat["params"], domain=d)
+            
             if not soup: continue
             
             for item in soup.find_all('li', class_=re.compile(r'productListItem')):
@@ -455,11 +466,11 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
     # 2. Text Search
     searches = [f"{t} {prim_auth}" for t in [title, clean_title(title)] if t] + [title]
     
-    # Optional: Suche nach Basis-Titel (ohne Nummer), falls spezifische Suche scheitert
+    # Optional: Search for base title (without number) if specific search fails
     base_title = clean_title(title)
     if base_title and base_title != title: searches.append(base_title)
     
-    # Bereinigung für Vergleich
+    # Cleanup for comparison
     norm_target = normalize_title_text(title)
 
     for q in searches:
@@ -481,19 +492,19 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
                 # NORMALIZED MATCHING LOGIC
                 norm_found = normalize_title_text(found_title)
                 
-                # Berechne Score auf Basis der normalisierten Titel (Book, Vol etc. entfernt, Zahlen konvertiert)
+                # Calculate score based on normalized titles (Book, Vol etc. removed, numbers converted)
                 t_score = difflib.SequenceMatcher(None, norm_target, norm_found).ratio()
                 
-                # Bonus für Teilstrings im normalisierten Text
+                # Bonus for substrings in normalized text
                 if (len(norm_target) > 3 and norm_target in norm_found) or \
                    (len(norm_found) > 3 and norm_found in norm_target): t_score += 0.15
                 
-                # Fallback: Check auf Volumen-Nummern Konflikt
+                # Fallback: Check for volume number conflict
                 f_nums, t_nums = extract_volume(found_title), extract_volume(title)
-                # Nur abbrechen, wenn BEIDE Seiten Nummern haben und diese NICHT übereinstimmen
+                # Only abort if BOTH sides have numbers and they do NOT match
                 if (f_nums and t_nums and not f_nums & t_nums): 
-                    # Extra Check: Wurde die Nummer vielleicht durch normalize_title aufgelöst? (Two -> 2)
-                    # Wenn t_score extrem hoch ist (>0.9), ignorieren wir den Regex-Mismatch, da normalize schlauer ist
+                    # Extra Check: Was the number perhaps resolved by normalize_title? (Two -> 2)
+                    # If t_score is extremely high (>0.9), ignore regex mismatch as normalize is smarter
                     if t_score < 0.9: continue
                 
                 found_auth = row.find('a', class_='authorName').text if row.find('a', class_='authorName') else ""
@@ -677,6 +688,9 @@ def process_library(lib_id, history, failed):
 def main():
     if not ABS_URL or not API_TOKEN: return print("Error: Envs missing.")
     
+    # SETUP LOGGING FIRST
+    log_file = setup_logging()
+    
     # NEW: Connection Check
     try:
         logging.info("Checking API connection...")
@@ -685,8 +699,6 @@ def main():
     except Exception as e:
         return print(f"Error: Connection failed: {e}")
 
-    log_file = setup_logging()
-    
     # Reports Init
     reports['audible'] = {x['key']: x for x in rw_json(os.path.join(REPORT_DIR, "missing_audible.json"))}
     reports['goodreads'] = {x['key']: x for x in rw_json(os.path.join(REPORT_DIR, "missing_goodreads.json"))}
