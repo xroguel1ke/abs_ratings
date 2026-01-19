@@ -69,6 +69,13 @@ RE_RATING_BLOCK = re.compile(r'(?s)⭐\s*Ratings.*?⭐(?:\s|<br\s*/?>)*')
 RE_CLEAN_TITLE = re.compile(r'(?i)\b(unabridged|abridged|audiobook|graphic audio|dramatized adaptation)\b|[\(\[].*?[\)\]]')
 RE_VOL = re.compile(r'(?i)(?:\b(?:book|vol\.?|volume|part|no\.?)|#)\s*(\d+)')
 
+# --- NORMALIZATION CONSTANTS ---
+NUMBER_MAP = {
+    'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9', 'ten': '10',
+    'eins': '1', 'zwei': '2', 'drei': '3', 'vier': '4', 'fünf': '5', 'sechs': '6', 'sieben': '7', 'acht': '8', 'neun': '9', 'zehn': '10'
+}
+RE_NOISE = re.compile(r'(?i)\b(?:book|vol\.?|volume|part|no\.?|nr\.?|band|teil|buch|reihe|serie|series|episode|chapter|kapitel)\b')
+
 RE_RAW_STORY = re.compile(r'story-value="([0-9.]+)"')
 RE_RAW_PERFORMANCE = re.compile(r'performance-value="([0-9.]+)"')
 RE_RAW_OVERALL = re.compile(r'value="([0-9.]+)"') 
@@ -129,6 +136,17 @@ def is_valid_rating(v):
     except: return False
 
 def clean_title(t): return RE_CLEAN_TITLE.sub('', t).split(':')[0].split(' - ')[0].strip() if t else ""
+
+def normalize_title_text(t):
+    if not t: return ""
+    t = RE_CLEAN_TITLE.sub(' ', t)
+    t = t.lower()
+    t = re.sub(r'[:\-\(\)\[\]]', ' ', t)
+    for word, digit in NUMBER_MAP.items():
+        t = re.sub(r'\b' + word + r'\b', digit, t)
+    t = RE_NOISE.sub('', t)
+    return re.sub(r'\s+', ' ', t).strip()
+
 def moon_rating(v):
     v = safe_float(v)
     if v == 0: return "🌑" * 5
@@ -138,7 +156,6 @@ def moon_rating(v):
 def extract_volume(text): return set(RE_VOL.findall(text)) | ({m.group(1)} if (m := re.search(r'\b(\d+)$', text.strip())) else set())
 
 def format_time(seconds):
-    # CHANGE START: Updated formatting per request
     if seconds < 60: 
         return f"{int(seconds)}s"
     if seconds >= 3600:
@@ -146,7 +163,6 @@ def format_time(seconds):
         minutes = int((seconds % 3600) // 60)
         return f"{hours}h {minutes}m"
     return f"{int(seconds // 60)}m {int(seconds % 60)}s"
-    # CHANGE END
 
 def match_author(abs_authors, gr_author):
     if not abs_authors or not gr_author: return False
@@ -205,7 +221,7 @@ def scrape_search_result_fallback(domain, asin):
             if rate_txt := item.find('span', class_=re.compile(r'ratingLabel|ratingText')):
                 if m := re.search(r'(\d+[.,]?\d*)', rate_txt.get_text()):
                      if is_valid_rating(m.group(1).replace(',', '.')):
-                         ratings['overall'] = m.group(1).replace(',', '.')
+                          ratings['overall'] = m.group(1).replace(',', '.')
             if count_txt := item.find('span', class_=re.compile(r'ratingsLabel|ratingCount')):
                 if m := re.search(r'([\d,.]+)', count_txt.get_text()): ratings['count'] = int(re.sub(r'[^\d]', '', m.group(1)))
             if ratings.get('overall') and ratings.get('count'): return ratings
@@ -224,7 +240,7 @@ def get_audible_data(asin, language):
     best_result = None
 
     for domain in domains:
-        logging.info(f"     -> Checking {domain}...")
+        logging.info(f"      -> Checking {domain}...")
         
         url = f"https://{domain}/pd/{asin}?ipRedirectOverride=true"
         cookies = {}
@@ -320,7 +336,7 @@ def get_audible_data(asin, language):
     return None
 
 def find_missing_asin(title, author, duration, lang, force_domain=None):
-    logging.info(f"     -> 🔎 Searching Replacement ASIN for '{title}'...")
+    logging.info(f"      -> 🔎 Searching Replacement ASIN for '{title}'...")
     doms = ["www.audible.com", "www.audible.de"]
     if lang and str(lang).strip().lower() in GERMAN_LANG_CODES: doms = ["www.audible.de", "www.audible.com"]
     
@@ -371,7 +387,7 @@ def scrape_gr_details(url):
     return res if 'val' in res else None
 
 def get_goodreads_data(isbn, asin, title, authors, prim_auth):
-    logging.info("     -> Checking www.goodreads.com")
+    logging.info("      -> Checking www.goodreads.com")
     # 1. ID Search
     for q_id, src in [(isbn, 'ISBN Lookup'), (asin, 'ASIN Lookup')]:
         if q_id:
@@ -382,7 +398,13 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
     
     # 2. Text Search
     searches = [f"{t} {prim_auth}" for t in [title, clean_title(title)] if t] + [title]
-    clean_target = clean_title(title)
+    
+    # Optional: Suche nach Basis-Titel (ohne Nummer), falls spezifische Suche scheitert
+    base_title = clean_title(title)
+    if base_title and base_title != title: searches.append(base_title)
+    
+    # Bereinigung für Vergleich
+    norm_target = normalize_title_text(title)
 
     for q in searches:
         r, soup = fetch_url(f"https://www.goodreads.com/search", params={"q": q})
@@ -399,21 +421,29 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
                 link = row.find('a', class_='bookTitle')
                 if not link: continue
                 found_title = link.get_text(strip=True)
-                clean_found = clean_title(found_title)
                 
-                t_score = max(difflib.SequenceMatcher(None, title.lower(), found_title.lower()).ratio(),
-                              difflib.SequenceMatcher(None, clean_target.lower(), clean_found.lower()).ratio())
+                # NORMALIZED MATCHING LOGIC
+                norm_found = normalize_title_text(found_title)
                 
-                if (len(clean_target) > 3 and clean_target.lower() in clean_found.lower()) or \
-                   (len(clean_found) > 3 and clean_found.lower() in clean_target.lower()): t_score += 0.2
+                # Berechne Score auf Basis der normalisierten Titel (Book, Vol etc. entfernt, Zahlen konvertiert)
+                t_score = difflib.SequenceMatcher(None, norm_target, norm_found).ratio()
                 
+                # Bonus für Teilstrings im normalisierten Text
+                if (len(norm_target) > 3 and norm_target in norm_found) or \
+                   (len(norm_found) > 3 and norm_found in norm_target): t_score += 0.15
+                
+                # Fallback: Check auf Volumen-Nummern Konflikt
                 f_nums, t_nums = extract_volume(found_title), extract_volume(title)
-                if (f_nums and t_nums and not f_nums & t_nums): continue
+                # Nur abbrechen, wenn BEIDE Seiten Nummern haben und diese NICHT übereinstimmen
+                if (f_nums and t_nums and not f_nums & t_nums): 
+                    # Extra Check: Wurde die Nummer vielleicht durch normalize_title aufgelöst? (Two -> 2)
+                    # Wenn t_score extrem hoch ist (>0.9), ignorieren wir den Regex-Mismatch, da normalize schlauer ist
+                    if t_score < 0.9: continue
                 
                 found_auth = row.find('a', class_='authorName').text if row.find('a', class_='authorName') else ""
                 if not match_author(authors, found_auth): continue
                 
-                if t_score > 0.7 and t_score > best_score:
+                if t_score > 0.75 and t_score > best_score:
                     best_score, best_url = t_score, "https://www.goodreads.com" + link['href']
             
             if best_url:
@@ -490,19 +520,19 @@ def process_library(lib_id, history, failed):
                 # REPLACEMENT LOGIC
                 should_search = False
                 if not asin:
-                    logging.info("     -> ⚠️ No ASIN in ABS.")
+                    logging.info("      -> ⚠️ No ASIN in ABS.")
                     should_search = True
                 elif aud_data is None:
-                    logging.info("     -> ⚠️ ASIN not found (All domains).")
+                    logging.info("      -> ⚠️ ASIN not found (All domains).")
                     should_search = True
                 elif int(aud_data.get('count', 0)) == 0:
-                    logging.info("     -> ⚠️ Found 0 Ratings.")
+                    logging.info("      -> ⚠️ Found 0 Ratings.")
                     should_search = True
                 elif (str(lang).lower() not in GERMAN_LANG_CODES) and aud_data.get('domain') == 'www.audible.de':
-                    logging.info("     -> ⚠️ Non-German Book only found on .de (Possible broken .com ASIN). Attempting Fix...")
+                    logging.info("      -> ⚠️ Non-German Book only found on .de (Possible broken .com ASIN). Attempting Fix...")
                     should_search = True
                 elif (str(lang).lower() in GERMAN_LANG_CODES) and aud_data.get('domain') == 'www.audible.com':
-                    logging.info("     -> ⚠️ German Book only found on .com (Possible broken .de ASIN). Attempting Fix...")
+                    logging.info("      -> ⚠️ German Book only found on .com (Possible broken .de ASIN). Attempting Fix...")
                     should_search = True
 
                 if should_search:
@@ -546,7 +576,7 @@ def process_library(lib_id, history, failed):
                         if has_gr: success_parts.append("Goodreads")
                         
                         success_str = f"({', '.join(success_parts)})" if success_parts else "Data Cleaned"
-                        logging.info(f"     -> ✅ SUCCESS: {success_str}")
+                        logging.info(f"      -> ✅ SUCCESS: {success_str}")
                         
                         if has_aud or has_gr: stats['success'] += 1
                     else: stats['failed'] += 1
@@ -558,12 +588,17 @@ def process_library(lib_id, history, failed):
                 update_report("goodreads", key, title, authors[0] if authors else "", meta.get('isbn'), "Not found", has_gr)
                 
                 fails = failed.get(key, 0) + 1
+                
                 if has_aud and has_gr:
                     history[key] = datetime.now().strftime("%Y-%m-%d"); failed.pop(key, None)
                 elif fails >= MAX_FAIL_ATTEMPTS:
-                    logging.info("     -> 🛑 Max attempts reached."); history[key] = datetime.now().strftime("%Y-%m-%d"); failed.pop(key, None)
+                    logging.info("      -> 🛑 Max attempts reached."); history[key] = datetime.now().strftime("%Y-%m-%d"); failed.pop(key, None)
                 else:
-                    failed[key] = fails; logging.warning(f"     -> ❌ Partial/No data.")
+                    failed[key] = fails; logging.warning(f"      -> ❌ Partial/No data (Audible: {has_aud}, GR: {has_gr}). Strike {fails}/{MAX_FAIL_ATTEMPTS}")
+                
+                # --- SAVE PROGRESS IMMEDIATELY ---
+                rw_json(HISTORY_FILE, history)
+                rw_json(FAILED_FILE, failed)
                 
                 consecutive_rl = 0
                 break # Success!
