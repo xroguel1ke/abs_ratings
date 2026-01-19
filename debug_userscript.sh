@@ -17,8 +17,6 @@ ABS_TOKEN="API-TOKEN-HERE"
 # Item Identification (Fill only ONE of these)
 # 1. By ID (The ID from the URL when you click on a book)
 ABS_ITEM_ID=""
-# 2. By Search (Simply enter the title or part of it)
-ABS_SEARCH_QUERY=""
 
 # Paths
 SCRIPT_DIR="/mnt/user/appdata/audiobookshelf/abs_scripts"
