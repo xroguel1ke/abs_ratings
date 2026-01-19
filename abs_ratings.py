@@ -30,6 +30,7 @@ MAX_FAIL_ATTEMPTS = 5
 MAX_CONSECUTIVE_RL = 3
 RECOVERY_PAUSE = 60
 BASE_SLEEP = int(os.getenv('SLEEP_TIMER', 6))
+SEARCH_PENALTY_SLEEP = 10  # Extra sleep after expensive search operations
 DRY_RUN = os.getenv('DRY_RUN', 'False').lower() == 'true'
 
 # --- HEADERS & CONSTANTS ---
@@ -42,6 +43,14 @@ USER_AGENTS = [
 ]
 
 GERMAN_LANG_CODES = ['de', 'deu', 'ger', 'german', 'deutsch']
+
+# NEW: Language Normalization Map
+LANGUAGE_MAP = {
+    'englisch': 'English',
+    'english': 'English',
+    'deutsch': 'German',
+    'german': 'German'
+}
 
 # Base Headers
 HEADERS_BASE = {
@@ -70,12 +79,10 @@ RE_CLEAN_TITLE = re.compile(r'(?i)\b(unabridged|abridged|audiobook|graphic audio
 RE_VOL = re.compile(r'(?i)(?:\b(?:book|vol\.?|volume|part|no\.?)|#)\s*(\d+)')
 
 # --- NORMALIZATION CONSTANTS ---
-# Kept German keys for title normalization logic
 NUMBER_MAP = {
     'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9', 'ten': '10',
     'eins': '1', 'zwei': '2', 'drei': '3', 'vier': '4', 'fünf': '5', 'sechs': '6', 'sieben': '7', 'acht': '8', 'neun': '9', 'zehn': '10'
 }
-# Kept German keywords for title cleaning logic
 RE_NOISE = re.compile(r'(?i)\b(?:book|vol\.?|volume|part|no\.?|nr\.?|band|teil|buch|reihe|serie|series|episode|chapter|kapitel)\b')
 
 RE_RAW_STORY = re.compile(r'story-value="([0-9.]+)"')
@@ -83,7 +90,7 @@ RE_RAW_PERFORMANCE = re.compile(r'performance-value="([0-9.]+)"')
 RE_RAW_OVERALL = re.compile(r'value="([0-9.]+)"') 
 RE_RAW_COUNT = re.compile(r'count="(\d+)"')
 
-stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated"]}
+stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated"]}
 stats['aborted_ratelimit'] = False
 reports = {"audible": {}, "goodreads": {}}
 
@@ -98,13 +105,19 @@ def setup_logging():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.FileHandler(f, encoding='utf-8'), logging.StreamHandler()])
     return f
 
+# UPDATED: Atomic Writes for Safety
 def rw_json(path, data=None):
     try:
         if data is None: 
             return json.load(open(path, 'r', encoding='utf-8')) if os.path.exists(path) else {}
         else:
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            json.dump(data, open(path, 'w', encoding='utf-8'), indent=4, ensure_ascii=False)
+            tmp_path = path + ".tmp"
+            with open(tmp_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, path)
     except: return {} if data is None else None
 
 def update_report(src, key, title, author, ident, reason, success):
@@ -118,10 +131,10 @@ def write_env_file(log_file, start_time):
     dur = f"{int((datetime.now() - start_time).total_seconds() // 60)}m {int((datetime.now() - start_time).total_seconds() % 60)}s"
     if stats['aborted_ratelimit']: sub, icon, head = "ABS Ratings: Aborted 🛑", "alert", "Rate Limit detected!"
     elif stats['failed'] > 0: sub, icon, head = "ABS Ratings: Error ❌", "alert", "Error occurred!"
-    elif any(stats[k] > 0 for k in ['success', 'recycled', 'asin_found', 'asin_migrated', 'isbn_added']): sub, icon, head = "ABS Ratings: Success ✅", "normal", "Update complete"
+    elif any(stats[k] > 0 for k in ['success', 'recycled', 'asin_found', 'asin_migrated', 'isbn_added', 'meta_updated']): sub, icon, head = "ABS Ratings: Success ✅", "normal", "Update complete"
     else: sub, icon, head = "ABS Ratings: Info ℹ️", "normal", "No changes"
     
-    body = f"Proc: {stats['processed']} | New: {stats['success']} | ASIN+: {stats['asin_found']} | Mig: {stats['asin_migrated']} | ISBN+: {stats['isbn_added']} | Fix: {stats['isbn_repaired']} | Err: {stats['failed']}"
+    body = f"Proc: {stats['processed']} | New: {stats['success']} | MetaUpd: {stats['meta_updated']} | ASIN+: {stats['asin_found']} | Mig: {stats['asin_migrated']} | ISBN+: {stats['isbn_added']} | Fix: {stats['isbn_repaired']} | Err: {stats['failed']}"
     if stats['aborted_ratelimit']: body += " | ⚠️ ABORTED (Rate Limit)"
     
     try:
@@ -167,22 +180,17 @@ def format_time(seconds):
     return f"{int(seconds // 60)}m {int(seconds % 60)}s"
 
 def match_author(abs_authors, web_author):
-    # UPDATED: Handles comma separated authors and partial matches better
     if not abs_authors or not web_author: return False
     
-    # Split web authors (e.g. "Asato Asato, Shirabii")
     web_clean = [w.strip().lower() for w in web_author.split(',')]
     
     for abs_auth in abs_authors:
         abs_clean = abs_auth.lower()
-        # Check if ABS author is substring of ANY web author (or vice versa)
         for wa in web_clean:
             if abs_clean in wa or wa in abs_clean: return True
             
-            # Token match fallback
             a_tok = set(re.split(r'[^a-z0-9]+', abs_clean))
             wa_tok = set(re.split(r'[^a-z0-9]+', wa))
-            # If intersection > 60% or enough tokens match
             if len(a_tok.intersection(wa_tok)) >= 2: return True
             if len(a_tok.intersection(wa_tok)) == 1 and len(a_tok) == 1: return True
 
@@ -272,7 +280,6 @@ def get_audible_data(asin, language):
             soup = BeautifulSoup(r.text, 'lxml')
             title_lower = (soup.title.text if soup.title else "").lower()
             
-            # Keep German search strings as they are scraped from the website
             soft_404_markers = [
                 "looks like this title is no longer available",
                 "titel ist leider nicht verfügbar",
@@ -303,22 +310,31 @@ def get_audible_data(asin, language):
             ratings = {'domain': domain}
             raw_text = r.text
             
-            # NEW: CHECK HREFLANG (Specific Tag Lookup)
-            # Directly search for 'en-us' or 'de-de' to find the exact variant without ambiguity.
             try:
-                # Check for US link (en-us) -> points to audible.com
                 if link_us := soup.find('link', attrs={'hreflang': 'en-us'}):
                     href = link_us.get('href', '').strip()
                     if "www.audible.com/" in href and (m := re.search(r'([A-Z0-9]{10})', href)):
-                        ratings['variant_asin_us'] = m.group(1) # Store specifically as US variant
+                        ratings['variant_asin_us'] = m.group(1)
 
-                # Check for DE link (de-de) -> points to audible.de
                 if link_de := soup.find('link', attrs={'hreflang': 'de-de'}):
                     href = link_de.get('href', '').strip()
                     if "www.audible.de/" in href and (m := re.search(r'([A-Z0-9]{10})', href)):
-                        ratings['variant_asin_de'] = m.group(1) # Store specifically as DE variant
+                        ratings['variant_asin_de'] = m.group(1)
             except: pass
             
+            # UPDATED: Loop through all JSON scripts to find the one with book metadata (identified by "duration" key)
+            try:
+                for json_script in soup.find_all('script', type='application/json'):
+                    if json_script.string and '"duration"' in json_script.string:
+                        try:
+                            md = json.loads(json_script.string)
+                            if isinstance(md, list): md = md[0]
+                            if isinstance(md, dict) and 'duration' in md:
+                                ratings['meta_raw'] = md
+                                break
+                        except: continue
+            except: pass
+
             # 1. TAGS (Priority 1)
             if sum_tag := soup.find('adbl-rating-summary'):
                 if is_valid_rating(sum_tag.get('performance-value')): ratings['performance'] = sum_tag.get('performance-value')
@@ -368,12 +384,10 @@ def get_audible_data(asin, language):
     return None
 
 def find_missing_asin(title, authors_list, duration, lang, force_domain=None):
-    # UPDATED: Accepts list of authors for better matching
     logging.info(f"      -> 🔎 Searching Replacement ASIN for '{title}'...")
     doms = ["www.audible.com", "www.audible.de"]
     if lang and str(lang).strip().lower() in GERMAN_LANG_CODES: doms = ["www.audible.de", "www.audible.com"]
     
-    # Use first author for Search Query, but pass FULL list to match_author
     prim_auth = authors_list[0] if authors_list else ""
     
     strategies = [
@@ -384,13 +398,6 @@ def find_missing_asin(title, authors_list, duration, lang, force_domain=None):
     for d in doms:
         for strat in strategies:
             
-            r, soup = fetch_url(f"https://www.audible.de/search" if "audible.de" in d else f"https://{d}/search", params=strat["params"], domain=d)
-            # URL fix: Ensure correct domain usage for fetch
-            if "audible.de" in d and "/search" not in r.url and r.status_code != 200:
-                 # Fallback/Correction if needed - mostly fetch_url handles it
-                 pass
-                 
-            # Note: fetch_url handles the domain structure, so just passing the search URL:
             r, soup = fetch_url(f"https://{d}/search", params=strat["params"], domain=d)
             
             if not soup: continue
@@ -403,12 +410,10 @@ def find_missing_asin(title, authors_list, duration, lang, force_domain=None):
                 if not ft: continue
                 found_title = ft.get_text(strip=True)
                 
-                # Title Match Score
                 t_score = difflib.SequenceMatcher(None, title.lower(), found_title.lower()).ratio()
                 if t_score < 0.7: 
                     continue
 
-                # Duration Check
                 dur_match = False
                 found_dur_sec = 0
                 if rt := item.find('li', class_=re.compile(r'runtimeLabel')):
@@ -418,26 +423,20 @@ def find_missing_asin(title, authors_list, duration, lang, force_domain=None):
                     if found_dur_sec > 0:
                         if duration and abs(duration - found_dur_sec) < 300: dur_match = True
                     else:
-                        dur_match = True # No duration info found -> Pass
+                        dur_match = True 
 
-                # Author Check
                 found_auth = ""
                 if auth_tag := item.find('li', class_=re.compile(r'authorLabel')):
                     found_auth = auth_tag.get_text(strip=True).replace('By:', '').strip()
                 
-                # UPDATED: Checks against ALL authors in the list
                 auth_match = match_author(authors_list, found_auth)
 
-                # --- DECISION LOGIC ---
-                # A) Title matches well AND Author matches
                 if t_score > 0.7 and auth_match:
                     if duration and found_dur_sec > 0 and not dur_match:
-                         # Log why we skip despite author match
-                         logging.info(f"        ⚠️ Skipped candidate '{found_title}': Author matches, but duration differs > 15m (ABS: {int(duration)}s vs Web: {found_dur_sec}s).")
-                         continue
+                          logging.info(f"        ⚠️ Skipped candidate '{found_title}': Author matches, but duration differs > 15m (ABS: {int(duration)}s vs Web: {found_dur_sec}s).")
+                          continue
                     return asin
 
-                # B) Title matches VERY well (>0.8) AND Duration matches (ignores Author -> Solves Kanji/Translator issues)
                 if t_score > 0.8 and dur_match and duration:
                     logging.info(f"        ✅ Accepted '{found_title}' based on Title+Duration match (Author mismatch ignored: '{prim_auth}' vs '{found_auth}')")
                     return asin
@@ -481,12 +480,8 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
     
     # 2. Text Search
     searches = [f"{t} {prim_auth}" for t in [title, clean_title(title)] if t] + [title]
-    
-    # Optional: Search for base title (without number) if specific search fails
     base_title = clean_title(title)
     if base_title and base_title != title: searches.append(base_title)
-    
-    # Cleanup for comparison
     norm_target = normalize_title_text(title)
 
     for q in searches:
@@ -505,22 +500,14 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
                 if not link: continue
                 found_title = link.get_text(strip=True)
                 
-                # NORMALIZED MATCHING LOGIC
                 norm_found = normalize_title_text(found_title)
-                
-                # Calculate score based on normalized titles (Book, Vol etc. removed, numbers converted)
                 t_score = difflib.SequenceMatcher(None, norm_target, norm_found).ratio()
                 
-                # Bonus for substrings in normalized text
                 if (len(norm_target) > 3 and norm_target in norm_found) or \
                    (len(norm_found) > 3 and norm_found in norm_target): t_score += 0.15
                 
-                # Fallback: Check for volume number conflict
                 f_nums, t_nums = extract_volume(found_title), extract_volume(title)
-                # Only abort if BOTH sides have numbers and they do NOT match
                 if (f_nums and t_nums and not f_nums & t_nums): 
-                    # Extra Check: Was the number perhaps resolved by normalize_title? (Two -> 2)
-                    # If t_score is extremely high (>0.9), ignore regex mismatch as normalize is smarter
                     if t_score < 0.9: continue
                 
                 found_auth = row.find('a', class_='authorName').text if row.find('a', class_='authorName') else ""
@@ -586,6 +573,8 @@ def process_library(lib_id, history, failed):
         eta_seconds = avg_time * remaining_items
         eta_str = format_time(eta_seconds)
         
+        search_penalty = False # Flag for extra sleep
+
         while True: # Retry Loop
             try:
                 iid, key = item['id'], f"{lib_id}_{item['id']}"
@@ -599,6 +588,14 @@ def process_library(lib_id, history, failed):
 
                 # 1. AUDIBLE
                 aud_data = get_audible_data(asin, lang)
+
+                # NEW: Update local language variable immediately if Audible provides better data
+                # This ensures the subsequent region checks use the CORRECT language
+                if aud_data and aud_data.get('meta_raw'):
+                    raw_lang = aud_data['meta_raw'].get('language')
+                    if raw_lang:
+                        # Apply Mapping (Englisch -> English)
+                        lang = LANGUAGE_MAP.get(raw_lang.strip().lower(), raw_lang)
                 
                 # REPLACEMENT LOGIC
                 should_search = False
@@ -619,25 +616,21 @@ def process_library(lib_id, history, failed):
                     should_search = True
 
                 if should_search:
+                    search_penalty = True # Mark as expensive operation
                     found = None
                     
-                    # 1. CHECK HTML LINKS (hreflang) - Direct Match
-                    # If we need German (DE) -> Look for variant_asin_de
                     if str(lang).lower() in GERMAN_LANG_CODES:
                         if aud_data and aud_data.get('variant_asin_de'):
                              found = aud_data['variant_asin_de']
                              logging.info(f"        🔗 Found ASIN via HTML Link (hreflang='de-de'): {found}")
                     
-                    # If we need English/Other (US) -> Look for variant_asin_us
                     else:
                         if aud_data and aud_data.get('variant_asin_us'):
                              found = aud_data['variant_asin_us']
                              logging.info(f"        🔗 Found ASIN via HTML Link (hreflang='en-us'): {found}")
 
-                    # 2. Fallback Search
                     if not found:
-                         # UPDATED: Pass full authors list
-                         found = find_missing_asin(title, authors, item['media'].get('duration'), lang)
+                          found = find_missing_asin(title, authors, item['media'].get('duration'), lang)
                     
                     if found:
                         if found != asin:
@@ -655,6 +648,84 @@ def process_library(lib_id, history, failed):
 
                 time.sleep(1)
                 
+                # UPDATED: Extended Metadata Sync
+                if aud_data and aud_data.get('meta_raw') and not DRY_RUN:
+                    md_raw = aud_data['meta_raw']
+                    abs_updates = {}
+                    log_updates = []
+
+                    # 1. Publisher
+                    new_pub = (md_raw.get('publisher') or {}).get('name')
+                    if new_pub and new_pub != meta.get('publisher'):
+                        abs_updates['publisher'] = new_pub
+                        log_updates.append(f"Publisher: '{meta.get('publisher')}' -> '{new_pub}'")
+
+                    # 2. Publish Year (from releaseDate "MM-DD-YY")
+                    if rel_date := md_raw.get('releaseDate'):
+                        try:
+                            # Audible sometimes uses MM-DD-YY
+                            new_year = "20" + rel_date.split('-')[-1] if len(rel_date.split('-')[-1]) == 2 else rel_date.split('-')[-1]
+                            if new_year.isdigit() and new_year != meta.get('publishedYear'):
+                                abs_updates['publishedYear'] = new_year
+                                log_updates.append(f"Year: '{meta.get('publishedYear')}' -> '{new_year}'")
+                        except: pass
+
+                    # 3. Language
+                    # Use Mapped Language!
+                    raw_l = md_raw.get('language')
+                    new_lang = LANGUAGE_MAP.get(raw_l.strip().lower(), raw_l) if raw_l else None
+                    
+                    if new_lang and new_lang != meta.get('language'):
+                        abs_updates['language'] = new_lang
+                        log_updates.append(f"Language: '{meta.get('language')}' -> '{new_lang}'")
+                    
+                    # 4. Abridged (Checkbox)
+                    fmt = md_raw.get('format', '').lower()
+                    new_abridged = True if 'abridged' in fmt and 'unabridged' not in fmt else False
+                    if new_abridged != meta.get('abridged'):
+                        abs_updates['abridged'] = new_abridged
+                        log_updates.append(f"Abridged: {meta.get('abridged')} -> {new_abridged}")
+
+                    # 5. Genres (Append only)
+                    current_genres = meta.get('genres') or []
+                    new_genres_list = [c.get('name') for c in md_raw.get('categories', []) if c.get('name')]
+                    added_genres = [g for g in new_genres_list if g not in current_genres]
+                    if added_genres:
+                        abs_updates['genres'] = current_genres + added_genres
+                        log_updates.append(f"Genres: +{added_genres}")
+
+                    # 6. Series
+                    if series_list := md_raw.get('series'):
+                        s_obj = series_list[0] # Take first series
+                        new_series = s_obj.get('name')
+                        new_seq = None
+                        if part_txt := s_obj.get('part'):
+                            if m := re.search(r'(\d+)', part_txt): new_seq = m.group(1)
+                        
+                        # Only update if series name is different OR if sequence is different (and exists)
+                        # Audible is master. Overwrite ABS if diff.
+                        update_series = False
+                        curr_series_list = meta.get('series') or []
+                        
+                        # Note: ABS supports multiple series, but usually 1. 
+                        # If ABS has no series, or the first series name differs -> Update
+                        curr_series_name = curr_series_list[0].get('name') if curr_series_list else None
+                        curr_seq = curr_series_list[0].get('sequence') if curr_series_list else None
+
+                        if new_series and (new_series != curr_series_name or (new_seq and new_seq != curr_seq)):
+                            # ABS format: "series": [{"name": "X", "sequence": "1"}]
+                            abs_updates['series'] = [{"name": new_series, "sequence": new_seq}]
+                            log_updates.append(f"Series: '{curr_series_name}' #{curr_seq} -> '{new_series}' #{new_seq}")
+
+                    if abs_updates:
+                        logging.info(f"        🛠️ Meta Updates:")
+                        for upd in log_updates:
+                             logging.info(f"          -> {upd}")
+                        abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": abs_updates})
+                        stats['meta_updated'] += 1
+                    else:
+                        logging.info("        ✅ No metadata updates necessary.")
+
                 # 2. GOODREADS
                 gr_data = get_goodreads_data(meta.get('isbn'), asin, title, authors, authors[0] if authors else "")
                 
@@ -701,7 +772,7 @@ def process_library(lib_id, history, failed):
                 else:
                     failed[key] = fails; logging.warning(f"      -> ❌ Partial/No data (Audible: {has_aud}, GR: {has_gr}). Strike {fails}/{MAX_FAIL_ATTEMPTS}")
                 
-                # SAVE IMMEDIATELY
+                # SAVE IMMEDIATELY (Atomic)
                 rw_json(HISTORY_FILE, history)
                 rw_json(FAILED_FILE, failed)
                 
@@ -718,7 +789,13 @@ def process_library(lib_id, history, failed):
                 logging.error(f"Item Error: {e}"); stats['failed'] += 1; break
         
         if stats['aborted_ratelimit']: break
-        time.sleep(BASE_SLEEP + random.uniform(1, 3))
+        
+        # UPDATED: Sleep Logic (Search Penalty)
+        sleep_dur = BASE_SLEEP + random.uniform(1, 3)
+        if search_penalty:
+            sleep_dur += SEARCH_PENALTY_SLEEP
+        
+        time.sleep(sleep_dur)
 
 def main():
     if not ABS_URL or not API_TOKEN: return print("Error: Envs missing.")
@@ -726,7 +803,7 @@ def main():
     # SETUP LOGGING FIRST
     log_file = setup_logging()
     
-    # NEW: Connection Check
+    # Connection Check
     try:
         logging.info("Checking API connection...")
         if abs_session.get(f"{ABS_URL}/api/libraries").status_code != 200:
