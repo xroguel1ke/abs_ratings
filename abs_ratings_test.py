@@ -681,10 +681,18 @@ def process_library(lib_id, history, failed):
                     raw_lang = aud_data['meta_raw'].get('language')
                     if raw_lang:
                         # Apply Mapping (Englisch -> English)
-                        lang = LANGUAGE_MAP.get(raw_lang.strip().lower(), raw_lang)
+                        # We use a temporary variable for the NEW language, preserving the OLD one for logic checks
+                        new_lang_detected = LANGUAGE_MAP.get(raw_lang.strip().lower(), raw_lang)
+                    else:
+                        new_lang_detected = None
+                else:
+                    new_lang_detected = None
                 
                 # REPLACEMENT LOGIC
                 should_search = False
+                # Define effective language for checks
+                check_lang = new_lang_detected if new_lang_detected else lang
+
                 if not asin:
                     logging.info("      -> ⚠️ No ASIN in ABS.")
                     should_search = True
@@ -694,10 +702,11 @@ def process_library(lib_id, history, failed):
                 elif int(aud_data.get('count', 0)) == 0:
                     logging.info("      -> ⚠️ Found 0 Ratings.")
                     should_search = True
-                elif (str(lang).lower() not in GERMAN_LANG_CODES) and aud_data.get('domain') == 'www.audible.de':
+                # FIXED: Logic uses original 'lang' from ABS to detect mismatches
+                elif (str(check_lang).lower() not in GERMAN_LANG_CODES) and aud_data.get('domain') == 'www.audible.de':
                     logging.info("      -> ⚠️ Non-German Book only found on .de (Possible broken .com ASIN). Attempting Fix...")
                     should_search = True
-                elif (str(lang).lower() in GERMAN_LANG_CODES) and aud_data.get('domain') == 'www.audible.com':
+                elif (str(check_lang).lower() in GERMAN_LANG_CODES) and aud_data.get('domain') == 'www.audible.com':
                     logging.info("      -> ⚠️ German Book only found on .com (Possible broken .de ASIN). Attempting Fix...")
                     should_search = True
 
@@ -705,11 +714,14 @@ def process_library(lib_id, history, failed):
                     search_penalty = True # Mark as expensive operation
                     found = None
                     
-                    if str(lang).lower() in GERMAN_LANG_CODES:
+                    # IMPROVED MIGRATION TARGET SELECTION
+                    # Use 'check_lang' (detected) instead of 'lang' (from ABS) to decide where to look
+                    target_is_german = str(check_lang).lower() in GERMAN_LANG_CODES
+                    
+                    if target_is_german:
                         if aud_data and aud_data.get('variant_asin_de'):
                              found = aud_data['variant_asin_de']
                              logging.info(f"        🔗 Found ASIN via HTML Link (hreflang='de-de'): {found}")
-                    
                     else:
                         if aud_data and aud_data.get('variant_asin_us'):
                              found = aud_data['variant_asin_us']
@@ -726,7 +738,19 @@ def process_library(lib_id, history, failed):
                                 logging.info(f"        💾 ASIN updated in ABS.")
                             asin, stats['asin_found'] = found, stats['asin_found'] + 1
                             stats['asin_migrated'] += 1
+                            
+                            # CRITICAL FIX: Refresh data using correct language context
+                            # If we switched to US/English, force lang='English' for the re-fetch to ensure .com priority
+                            if not target_is_german: 
+                                lang = "English" # Force English context for re-fetch
+                            
                             aud_data = get_audible_data(asin, lang)
+                            
+                            # Re-detect language after fetch
+                            if aud_data and aud_data.get('meta_raw'):
+                                raw_l = aud_data['meta_raw'].get('language')
+                                if raw_l: 
+                                    new_lang_detected = LANGUAGE_MAP.get(raw_l.strip().lower(), raw_l)
                         else:
                              logging.info(f"        ℹ️ Search returned same ASIN. Keeping fallback data.")
                     else:
@@ -769,17 +793,12 @@ def process_library(lib_id, history, failed):
                     
                     # 3. Language (Lock Check)
                     if 'lock_language' not in tags:
-                        raw_l = md_raw.get('language')
-                        new_lang = LANGUAGE_MAP.get(raw_l.strip().lower(), raw_l) if raw_l else None
-                        
-                        if new_lang and new_lang != meta.get('language'):
-                            abs_updates['language'] = new_lang
-                            log_updates.append(f"Language: '{meta.get('language')}' -> '{new_lang}'")
+                        if new_lang_detected and new_lang_detected != meta.get('language'):
+                            abs_updates['language'] = new_lang_detected
+                            log_updates.append(f"Language: '{meta.get('language')}' -> '{new_lang_detected}'")
                     else:
-                        raw_l = md_raw.get('language')
-                        new_lang = LANGUAGE_MAP.get(raw_l.strip().lower(), raw_l) if raw_l else None
-                        if new_lang and new_lang != meta.get('language'):
-                             logging.info(f"        🔒 Language Update Skipped (Locked): '{new_lang}'")
+                        if new_lang_detected and new_lang_detected != meta.get('language'):
+                             logging.info(f"        🔒 Language Update Skipped (Locked): '{new_lang_detected}'")
                     
                     # 4. Abridged (Checkbox)
                     fmt = md_raw.get('format', '').lower()
@@ -818,20 +837,28 @@ def process_library(lib_id, history, failed):
                                 
                                 # Extended Title Fallback Logic
                                 if s_seq is None and s_name:
-                                    search_text = title 
+                                    search_texts = []
+                                    # Prioritize Full Web Title (H1 + H2) from Audible
                                     if aud_data:
                                         aud_t = aud_data.get('title_raw', '')
                                         aud_s = aud_data.get('subtitle_raw', '')
                                         if aud_t or aud_s:
-                                            search_text = f"{aud_t} {aud_s}".strip()
+                                            search_texts.append(f"{aud_t} {aud_s}".strip())
                                     
-                                    pattern = re.escape(s_name) + r'[\s:,-]+(\d+(?:\.\d+)?)'
-                                    if m := re.search(pattern, search_text, re.IGNORECASE):
-                                        s_seq = m.group(1)
-                                    
-                                    if not s_seq:
-                                         if m := re.search(r'(?:Teil|Band|Book|Vol\.?)\s*(\d+(?:\.\d+)?)', search_text, re.IGNORECASE):
-                                             s_seq = m.group(1)
+                                    # Fallback to ABS Title
+                                    search_texts.append(title)
+
+                                    for search_text in search_texts:
+                                        # Try to match "SeriesName X" in the combined title
+                                        pattern = re.escape(s_name) + r'[\s:,-]+(\d+(?:\.\d+)?)'
+                                        if m := re.search(pattern, search_text, re.IGNORECASE):
+                                            s_seq = m.group(1)
+                                            break
+                                        
+                                        # Fallback 2: Look for generic markers (Teil X, Book X) if still None
+                                        if m := re.search(r'(?:Teil|Band|Book|Vol\.?)\s*(\d+(?:\.\d+)?)', search_text, re.IGNORECASE):
+                                            s_seq = m.group(1)
+                                            break
 
                                 if s_name:
                                     new_series_list.append({"name": s_name, "sequence": s_seq})
