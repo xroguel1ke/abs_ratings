@@ -738,29 +738,32 @@ def process_library(lib_id, history, failed):
                         abs_updates['genres'] = current_genres + added_genres
                         log_updates.append(f"Genres: +{added_genres}")
 
-                    # 6. Series
+                    # 6. Series (UPDATED: Multi-Series Support)
                     if series_list := md_raw.get('series'):
-                        s_obj = series_list[0] # Take first series
-                        new_series = s_obj.get('name')
-                        new_seq = None
-                        if part_txt := s_obj.get('part'):
-                            # FIXED: Regex now supports floats like 3.2 or 0.5
-                            if m := re.search(r'(\d+(?:\.\d+)?)', part_txt): new_seq = m.group(1)
+                        new_series_list = []
+                        # Loop through ALL series in the JSON list
+                        for s_obj in series_list:
+                            s_name = s_obj.get('name')
+                            s_seq = None
+                            if part_txt := s_obj.get('part'):
+                                # Use the improved Regex for floats (3.2)
+                                if m := re.search(r'(\d+(?:\.\d+)?)', part_txt): 
+                                    s_seq = m.group(1)
+                            
+                            if s_name:
+                                new_series_list.append({"name": s_name, "sequence": s_seq})
                         
-                        # Only update if series name is different OR if sequence is different (and exists)
-                        # Audible is master. Overwrite ABS if diff.
-                        update_series = False
+                        # Only update if the LIST of series is different from ABS
+                        # (ABS also stores a list of dicts)
                         curr_series_list = meta.get('series') or []
                         
-                        # Note: ABS supports multiple series, but usually 1. 
-                        # If ABS has no series, or the first series name differs -> Update
-                        curr_series_name = curr_series_list[0].get('name') if curr_series_list else None
-                        curr_seq = curr_series_list[0].get('sequence') if curr_series_list else None
-
-                        if new_series and (new_series != curr_series_name or (new_seq and new_seq != curr_seq)):
-                            # ABS format: "series": [{"name": "X", "sequence": "1"}]
-                            abs_updates['series'] = [{"name": new_series, "sequence": new_seq}]
-                            log_updates.append(f"Series: '{curr_series_name}' #{curr_seq} -> '{new_series}' #{new_seq}")
+                        # Simple comparison: If lists are different, update.
+                        # Note: This overwrites ABS order with Audible order.
+                        if new_series_list and new_series_list != curr_series_list:
+                            abs_updates['series'] = new_series_list
+                            # Logging for transparency
+                            s_log_str = ", ".join([f"'{x['name']}' #{x['sequence']}" for x in new_series_list])
+                            log_updates.append(f"Series Updated: {s_log_str}")
 
                     if abs_updates:
                         logging.info(f"        🛠️ Meta Updates:")
