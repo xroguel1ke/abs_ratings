@@ -207,7 +207,6 @@ def find_rating_recursive(obj):
 
 def get_headers(domain=None):
     h = HEADERS_BASE.copy()
-    # FIXED: No random rotation, just stable Chrome
     if domain and "audible.de" in domain:
         h["Accept-Language"] = "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7"
     else:
@@ -467,25 +466,50 @@ def scrape_gr_details(url):
     r, soup = fetch_url(url)
     if not soup: return None
     res = {'url': url, 'source': 'GR'}
-    for s in soup.find_all('script', type='application/ld+json'):
-        try:
-            d = json.loads(s.string)
-            if 'aggregateRating' in d:
-                res['val'] = d['aggregateRating'].get('ratingValue')
-                res['count'] = d['aggregateRating'].get('reviewCount') or d['aggregateRating'].get('ratingCount')
-            if 'isbn' in d: res['isbn'] = d['isbn']
-        except: pass
+    
+    # 1. NEW: Check for the specific "minirating" tag (Highest Priority - Fixed HTML Structure)
+    if mini := soup.find('span', class_='minirating'):
+        txt = mini.get_text()
+        if m := re.search(r'(\d+[.,]\d+)\s+avg rating', txt):
+            if is_valid_rating(m.group(1).replace(',', '.')):
+                res['val'] = m.group(1).replace(',', '.')
+        if m := re.search(r'([\d,.]+)\s+ratings', txt):
+            res['count'] = int(re.sub(r'[^\d]', '', m.group(1)))
 
+    # 2. JSON-LD (Strict Priority: ratingCount > reviewCount)
+    if not res.get('count') or not res.get('val'):
+        for s in soup.find_all('script', type='application/ld+json'):
+            try:
+                d = json.loads(s.string)
+                if 'aggregateRating' in d:
+                    # Rating
+                    val = d['aggregateRating'].get('ratingValue')
+                    if is_valid_rating(val): res['val'] = val
+                    
+                    # Count: Prioritize ratingCount (votes) over reviewCount (text)
+                    c_votes = d['aggregateRating'].get('ratingCount')
+                    c_reviews = d['aggregateRating'].get('reviewCount')
+                    
+                    if c_votes: res['count'] = int(c_votes)
+                    elif c_reviews: res['count'] = int(c_reviews) # Fallback only if no votes
+                
+                if 'isbn' in d: res['isbn'] = d['isbn']
+            except: pass
+
+    # 3. Fallback Regex (Global Text)
     if 'val' not in res:
         if m := re.search(r'(\d+[.,]\d+)\s+avg rating', soup.get_text()): res['val'] = m.group(1).replace(',', '.')
     if 'count' not in res:
         if m := re.search(r'([\d,.]+)\s+ratings', soup.get_text()): res['count'] = int(re.sub(r'[^\d]', '', m.group(1)))
+        
+    # Metadata fallback
     if 'isbn' not in res: res['isbn'] = (soup.find('meta', property="books:isbn") or {}).get('content')
     if 'isbn' not in res and (m := RE_ISBN_JSON.search(r.text)): res['isbn'] = m.group(1)
     if 'asin' not in res:
         if m := RE_ASIN_JSON.search(r.text) or RE_URL_ASIN.search(r.text): res['asin'] = m.group(1)
         if not res.get('asin'):
             if m := re.search(r'ASIN[:\s]*(B0\w+)', soup.get_text()): res['asin'] = m.group(1)
+            
     return res if 'val' in res else None
 
 def get_goodreads_data(isbn, asin, title, authors, prim_auth):
