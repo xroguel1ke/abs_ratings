@@ -4,35 +4,35 @@
 ![Platform](https://img.shields.io/badge/Platform-Unraid%20%7C%20Docker-orange)
 ![Vibecoding](https://img.shields.io/badge/Vibecoded-✨-purple)
 
-A fully automated script designed for **Audiobookshelf (ABS)** on **Unraid**. It scrapes ratings from **Audible** and **Goodreads** and injects them directly into your audiobook descriptions, keeping your library metadata rich and up-to-date.
+A fully automated script designed for **Audiobookshelf (ABS)** on **Unraid**. It scrapes ratings from **Audible** (multiple regions) and **Goodreads** and injects them directly into your audiobook descriptions.
 
 ## ✨ Features
 
-* **Dockerized Execution:** Runs in a temporary `python:3.11-slim` container. No messy dependency installation on your host system.
-* **Dual Source Scraping:** Fetches ratings from Audible (supports multiple regions: `.com`, `.de`, `.co.uk`, etc.) and Goodreads.
-* **Smart ASIN Search:** Automatically attempts to find missing ASINs based on Title, Author, and Duration if they are missing in ABS.
-* **Visual Ratings:** Adds "Moon" emojis (e.g., 🌕🌕🌗🌑🌑) to your descriptions for a quick visual overview.
-* **Recycling:** Preserves existing ratings if the scraper cannot find new data (prevents data loss).
-* **Unraid Notifications:** Sends a summary notification to the Unraid WebGUI upon completion.
-* **Rate Limit Safe:** Includes batching and sleep timers to prevent API bans.
+* **Dockerized Execution:** Runs via a temporary `python:3.11-slim` container using a wrapper script. No dependency hell on your host.
+* **Dual Source Scraping:** Fetches ratings from Audible (cross-checks `.com` & `.de`) and Goodreads.
+* **Auto-Repair & Fallback:** Automatically searches for missing ASINs/ISBNs and updates them in ABS. If a direct ID match fails, it attempts a text-based search to find the correct book.
+* **Visual Ratings:** Adds "Moon" emojis (e.g., 🌕🌕🌗🌑🌑) for a quick visual overview in your library.
+* **Smart Reporting:** Generates JSON reports for missing matches (`reports/`) and maintains a history to avoid redundant API calls.
+* **Unraid Notifications:** Sends a status summary (Success/Failures/Duration) directly to the Unraid WebGUI.
+* **Rate Limit Protection:** Built-in cool-downs and batching to keep your IP safe.
 
 ## 🚀 Installation (Unraid)
 
 This script is optimized for the **User Scripts** plugin on Unraid.
 
-1.  **Prepare the Directory:**
-    Create a folder for your scripts (e.g., inside your appdata):
+1.  **Prepare Directory:**
+    Create a folder for your scripts (e.g., in appdata):
     ```bash
     /mnt/user/appdata/audiobookshelf/abs_scripts/
     ```
-2.  **Download Files:**
+2.  **Upload Files:**
     Place `abs_ratings.py` and `userscript.sh` into this folder.
 3.  **Setup User Script:**
     * Open the **User Scripts** plugin in Unraid.
     * Add a new script (e.g., "ABS Ratings").
     * Paste the contents of `userscript.sh` into the script editor.
-4.  **Edit Configuration:**
-    Update the variables in the `userscript.sh` file to match your environment (see below).
+4.  **Configuration:**
+    Edit the variables inside `userscript.sh` to match your setup (see below).
 
 ## ⚙️ Configuration
 
@@ -40,18 +40,19 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 
 | Variable | Description | Example |
 | :--- | :--- | :--- |
-| `SCRIPT_DIR` | The absolute path to the folder containing `abs_ratings.py`. | `/mnt/user/appdata/...` |
+| `SCRIPT_DIR` | Absolute path to the folder containing `abs_ratings.py`. | `/mnt/user/appdata/...` |
 | `ABS_URL` | Your internal Audiobookshelf URL (no trailing slash). | `http://192.168.1.10:13378` |
 | `API_TOKEN` | Your ABS API Token (Bearer Token). | `eyJhbG...` |
-| `LIBRARY_IDS` | Comma-separated list of Library IDs to scan. | `library-uuid-1,library-uuid-2` |
-| `BATCH_SIZE` | How many items to process in one run. | `250` |
-| `DRY_RUN` | If `true`, no changes are saved to ABS. Good for testing. | `false` |
+| `LIBRARY_IDS` | Comma-separated list of Library IDs to scan. | `lib-uuid-1,lib-uuid-2` |
+| `BATCH_SIZE` | Items to process per run (prevents bans). | `250` |
+| `REFRESH_DAYS` | Update interval for existing ratings. | `90` |
+| `DRY_RUN` | If `true`, no changes are saved to ABS. | `false` |
 
-> **Note on Paths:** The Python script currently expects the history JSON files to be located at `/mnt/user/appdata/audiobookshelf/abs_scripts/`. If your path is different, please update `HISTORY_FILE` and `FAILED_FILE` inside `abs_ratings.py`.
+> **Note:** The script automatically creates `logs/` and `reports/` subdirectories in your script folder.
 
-## 🖼️ What it looks like
+## 🖼️ Preview
 
-The script searches for `⭐ Ratings & Infos` in your description. If not found, it creates it. If found, it updates it.
+The script looks for `⭐ Ratings & Infos` in your description. If found, it updates the block; otherwise, it appends it.
 
 **Example output in Audiobookshelf:**
 
@@ -68,14 +69,11 @@ The script searches for `⭐ Ratings & Infos` in your description. If not found,
 
 ## 🛠️ How it Works
 
-1.  The bash script initiates a `docker run` command.
-2.  It mounts your script directory into the container and passes your config as Environment Variables.
-3.  The container installs `requests`, `beautifulsoup4`, and `lxml`.
-4.  It executes `abs_ratings.py`, which:
-    * Scans your libraries.
-    * Checks if items need an update (older than 90 days).
-    * Scrapes metadata.
-    * Updates the ABS description via API.
+1.  The Bash script (`userscript.sh`) launches a Docker container mounting your script directory.
+2.  Dependencies (`requests`, `beautifulsoup4`, `lxml`) are installed on-the-fly.
+3.  The Python script scans your library, identifying items needing updates or missing metadata.
+4.  It fetches data, potentially repairs missing ASINs/ISBNs, and pushes updates to ABS.
+5.  Finally, it sends a notification to Unraid and rotates logs.
 
 ---
 <sub>Vibecoded: Concept & Logic by the developer, refined with AI assistance.</sub>
