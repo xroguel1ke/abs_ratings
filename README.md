@@ -11,6 +11,8 @@ A fully automated script designed for **Audiobookshelf (ABS)** on **Unraid**. It
 * **Dockerized Execution:** Runs via a temporary `python:3.11-slim` container using a wrapper script. No dependency hell on your host.
 * **Dual Source Scraping:** Fetches ratings from Audible (cross-checks `.com` & `.de`) and Goodreads.
 * **Auto-Repair & Fallback:** Automatically searches for missing ASINs/ISBNs and updates them in ABS. If a direct ID match fails, it attempts a text-based search to find the correct book.
+* **Multi-Series Support:** Correctly handles books that belong to multiple series (e.g., "Cosmere" & "Stormlight Archive").
+* **Manual Control (Locks):** Use tags in ABS to prevent specific fields (like Series or Language) from being overwritten.
 * **Visual Ratings:** Adds "Moon" emojis (e.g., 🌕🌕🌗🌑🌑) for a quick visual overview in your library.
 * **Smart Reporting:** Generates JSON reports for missing matches (`reports/`) and maintains a history to avoid redundant API calls.
 * **Unraid Notifications:** Sends a status summary (Success/Failures/Duration) directly to the Unraid WebGUI.
@@ -49,6 +51,21 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 | `DRY_RUN` | If `true`, no changes are saved to ABS. | `false` |
 
 > **Note:** The script automatically creates `logs/` and `reports/` subdirectories in your script folder.
+
+## 🔒 Lock Tags (Manual Control)
+
+You can prevent the script from updating specific metadata fields by adding **Tags** to your audiobooks directly in Audiobookshelf.
+
+| Tag | Effect |
+| :--- | :--- |
+| `lock_all` | **Completely skips** this item. No updates, no API calls. |
+| `lock_series` | Prevents updates to **Series** name and sequence. |
+| `lock_language` | Prevents **Language** updates. |
+| `lock_publisher` | Prevents **Publisher** updates. |
+| `lock_year` | Prevents **Publish Year** updates. |
+| `lock_genres` | Prevents adding new **Genres**. |
+| `lock_isbn` | Prevents **ISBN** repairs/updates. |
+| `lock_description` | Prevents ratings from being written to the **Description**. |
 
 ## 🖼️ Preview
 
