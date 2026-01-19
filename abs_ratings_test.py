@@ -695,7 +695,9 @@ def process_library(lib_id, history, failed):
                             log_updates.append(f"Series: '{curr_series_name}' #{curr_seq} -> '{new_series}' #{new_seq}")
 
                     if abs_updates:
-                        logging.info(f"        🛠️ Meta Updates: {', '.join(log_updates)}")
+                        logging.info(f"        🛠️ Meta Updates:")
+                        for upd in log_updates:
+                             logging.info(f"          -> {upd}")
                         abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": abs_updates})
                         stats['meta_updated'] += 1
 
