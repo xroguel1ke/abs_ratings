@@ -34,17 +34,11 @@ SEARCH_PENALTY_SLEEP = 10  # Extra sleep after expensive search operations
 DRY_RUN = os.getenv('DRY_RUN', 'False').lower() == 'true'
 
 # --- HEADERS & CONSTANTS ---
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/122.0.0.0"
-]
+# FIXED: Using a single, stable Chrome UA to prevent HTML layout shifts
+FIXED_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
 
 GERMAN_LANG_CODES = ['de', 'deu', 'ger', 'german', 'deutsch']
 
-# NEW: Language Normalization Map
 LANGUAGE_MAP = {
     'englisch': 'English',
     'english': 'English',
@@ -54,6 +48,7 @@ LANGUAGE_MAP = {
 
 # Base Headers
 HEADERS_BASE = {
+    "User-Agent": FIXED_USER_AGENT,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
     "Referer": "https://www.google.com/",
     "Upgrade-Insecure-Requests": "1",
@@ -77,6 +72,10 @@ RE_GR_BLOCK = re.compile(r'(?s)(Goodreads.*?)<br>\s*(?=⭐)')
 RE_RATING_BLOCK = re.compile(r'(?s)⭐\s*Ratings.*?⭐(?:\s|<br\s*/?>)*')
 RE_CLEAN_TITLE = re.compile(r'(?i)\b(unabridged|abridged|audiobook|graphic audio|dramatized adaptation)\b|[\(\[].*?[\)\]]')
 RE_VOL = re.compile(r'(?i)(?:\b(?:book|vol\.?|volume|part|no\.?)|#)\s*(\d+)')
+
+# --- NEW: Fallback Regex for Text Search (Brute Force) ---
+RE_TEXT_RATING = re.compile(r'([0-9]+[.,]?[0-9]*)\s*(?:out of|von)\s*5\s*(?:stars|Sternen)', re.IGNORECASE)
+RE_TEXT_COUNT = re.compile(r'\((?:[0-9]{1,3}(?:[.,][0-9]{3})*|[0-9]+)\s*(?:ratings|Bewertungen|votes)?\)', re.IGNORECASE)
 
 # --- NORMALIZATION CONSTANTS ---
 NUMBER_MAP = {
@@ -105,7 +104,6 @@ def setup_logging():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.FileHandler(f, encoding='utf-8'), logging.StreamHandler()])
     return f
 
-# UPDATED: Atomic Writes for Safety
 def rw_json(path, data=None):
     try:
         if data is None: 
@@ -209,7 +207,7 @@ def find_rating_recursive(obj):
 
 def get_headers(domain=None):
     h = HEADERS_BASE.copy()
-    h["User-Agent"] = random.choice(USER_AGENTS)
+    # FIXED: No random rotation, just stable Chrome
     if domain and "audible.de" in domain:
         h["Accept-Language"] = "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7"
     else:
@@ -233,20 +231,32 @@ def fetch_url(url, params=None, domain=None):
 
 def scrape_search_result_fallback(domain, asin):
     try:
-        h = get_headers(domain) 
-        logging.info(f"        🔎 Attempting Search Fallback on {domain}...")
-        r = requests.get(f"https://{domain}/search", params={"keywords": asin, "ipRedirectOverride": "true"}, headers=h, timeout=15)
-        soup = BeautifulSoup(r.text, 'lxml')
+        r, soup = fetch_url(f"https://{domain}/search", params={"keywords": asin, "ipRedirectOverride": "true"}, domain=domain)
+        if not soup: return None
         
         item = soup.find('li', attrs={'data-asin': asin}) or (soup.find('div', attrs={'data-asin': asin}).find_parent('li') if soup.find('div', attrs={'data-asin': asin}) else None)
         if item:
             ratings = {}
+            # 1. Standard CSS extraction
             if rate_txt := item.find('span', class_=re.compile(r'ratingLabel|ratingText')):
                 if m := re.search(r'(\d+[.,]?\d*)', rate_txt.get_text()):
                      if is_valid_rating(m.group(1).replace(',', '.')):
                            ratings['overall'] = m.group(1).replace(',', '.')
             if count_txt := item.find('span', class_=re.compile(r'ratingsLabel|ratingCount')):
                 if m := re.search(r'([\d,.]+)', count_txt.get_text()): ratings['count'] = int(re.sub(r'[^\d]', '', m.group(1)))
+            
+            # 2. Brute Force Text Extraction (if CSS failed)
+            if not ratings.get('count') or not ratings.get('overall'):
+                full_text = item.get_text()
+                if not ratings.get('overall'):
+                    if m := RE_TEXT_RATING.search(full_text):
+                        if is_valid_rating(m.group(1).replace(',', '.')):
+                            ratings['overall'] = m.group(1).replace(',', '.')
+                if not ratings.get('count'):
+                    if m := RE_TEXT_COUNT.search(full_text):
+                        val = re.sub(r'[^\d]', '', m.group(0))
+                        if val: ratings['count'] = int(val)
+
             if ratings.get('overall') and ratings.get('count'): return ratings
     except: pass
     return None
@@ -322,7 +332,7 @@ def get_audible_data(asin, language):
                         ratings['variant_asin_de'] = m.group(1)
             except: pass
             
-            # UPDATED: Loop through all JSON scripts to find the one with book metadata (identified by "duration" key)
+            # UPDATED: Correct Metadata Loop
             try:
                 for json_script in soup.find_all('script', type='application/json'):
                     if json_script.string and '"duration"' in json_script.string:
@@ -344,7 +354,7 @@ def get_audible_data(asin, language):
                     if is_valid_rating(st.get('value')): ratings['overall'] = st.get('value')
                     ratings['count'] = st.get('count')
 
-            # 2. JSON (Priority 2)
+            # 2. JSON (Priority 2) - With Count Fix
             if not ratings.get('count') or not ratings.get('overall'):
                 for s in soup.find_all('script', type='application/ld+json'):
                     try:
@@ -353,6 +363,8 @@ def get_audible_data(asin, language):
                             if 'aggregateRating' in i: 
                                 val = i['aggregateRating'].get('ratingValue')
                                 if is_valid_rating(val): ratings['overall'] = val
+                                c_val = i['aggregateRating'].get('ratingCount') or i['aggregateRating'].get('reviewCount')
+                                if c_val: ratings['count'] = int(c_val)
                     except: pass
 
             # 3. REGEX (Priority 3 - Last Resort)
@@ -373,7 +385,13 @@ def get_audible_data(asin, language):
                 logging.info(f"        ✅ SUCCESS on {domain} (Count: {count}, Rating: {ov})")
                 return ratings
             else:
-                logging.info(f"        ⚠️ Page OK (200), but 0 Ratings/Invalid Rating found.")
+                logging.info(f"        ⚠️ Page OK (200), but 0 Ratings/Invalid Rating found. Attempting Search Fallback...")
+                if fb := scrape_search_result_fallback(domain, asin):
+                     logging.info(f"        ✅ Found via Search Fallback (Page OK but empty) (Count: {fb['count']})")
+                     fb['domain'] = domain
+                     if ratings.get('meta_raw'): fb['meta_raw'] = ratings['meta_raw'] 
+                     return fb
+                
                 if best_result is None: best_result = {'count': 0, 'source': 'Empty', 'domain': domain}
 
         except Exception as e:
@@ -398,7 +416,9 @@ def find_missing_asin(title, authors_list, duration, lang, force_domain=None):
     for d in doms:
         for strat in strategies:
             
-            r, soup = fetch_url(f"https://{d}/search", params=strat["params"], domain=d)
+            r, soup = fetch_url(f"https://www.audible.de/search" if "audible.de" in d else f"https://{d}/search", params=strat["params"], domain=d)
+            if "audible.de" in d and "/search" not in r.url and r.status_code != 200:
+                 pass
             
             if not soup: continue
             
