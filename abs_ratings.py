@@ -303,21 +303,20 @@ def get_audible_data(asin, language):
             ratings = {'domain': domain}
             raw_text = r.text
             
-            # NEW: CHECK HREFLANG (Canonical Links in HTML)
-            # Scan for links to other major stores to find replacement ASINs directly
+            # NEW: CHECK HREFLANG (Specific Tag Lookup)
+            # Directly search for 'en-us' or 'de-de' to find the exact variant without ambiguity.
             try:
-                for link in soup.find_all('link', attrs={'rel': 'alternate'}):
-                    href = link.get('href', '').strip()
-                    # Check strictly for .com/ or .de/ to avoid matches like .com.au
-                    tgt = None
-                    if "www.audible.com/" in href: tgt = "www.audible.com"
-                    elif "www.audible.de/" in href: tgt = "www.audible.de"
-                    
-                    if tgt:
-                         # Extract ASIN from URL (usually at end or query)
-                         if m := re.search(r'([A-Z0-9]{10})', href):
-                             ratings['variant_asin'] = m.group(1)
-                             ratings['variant_domain'] = tgt
+                # Check for US link (en-us) -> points to audible.com
+                if link_us := soup.find('link', attrs={'hreflang': 'en-us'}):
+                    href = link_us.get('href', '').strip()
+                    if "www.audible.com/" in href and (m := re.search(r'([A-Z0-9]{10})', href)):
+                        ratings['variant_asin_us'] = m.group(1) # Store specifically as US variant
+
+                # Check for DE link (de-de) -> points to audible.de
+                if link_de := soup.find('link', attrs={'hreflang': 'de-de'}):
+                    href = link_de.get('href', '').strip()
+                    if "www.audible.de/" in href and (m := re.search(r'([A-Z0-9]{10})', href)):
+                        ratings['variant_asin_de'] = m.group(1) # Store specifically as DE variant
             except: pass
             
             # 1. TAGS (Priority 1)
@@ -622,14 +621,20 @@ def process_library(lib_id, history, failed):
                 if should_search:
                     found = None
                     
-                    # CHECK HREFLANG FROM HTML FIRST (Safe Direct Link)
-                    target_domain = "www.audible.de" if str(lang).lower() in GERMAN_LANG_CODES else "www.audible.com"
+                    # 1. CHECK HTML LINKS (hreflang) - Direct Match
+                    # If we need German (DE) -> Look for variant_asin_de
+                    if str(lang).lower() in GERMAN_LANG_CODES:
+                        if aud_data and aud_data.get('variant_asin_de'):
+                             found = aud_data['variant_asin_de']
+                             logging.info(f"        🔗 Found ASIN via HTML Link (hreflang='de-de'): {found}")
                     
-                    if aud_data and aud_data.get('variant_asin') and aud_data.get('variant_domain') == target_domain:
-                         found = aud_data['variant_asin']
-                         logging.info(f"        🔗 Found ASIN via HTML Link (hreflang): {found}")
-                    
-                    # If not found via Link, try Search
+                    # If we need English/Other (US) -> Look for variant_asin_us
+                    else:
+                        if aud_data and aud_data.get('variant_asin_us'):
+                             found = aud_data['variant_asin_us']
+                             logging.info(f"        🔗 Found ASIN via HTML Link (hreflang='en-us'): {found}")
+
+                    # 2. Fallback Search
                     if not found:
                          # UPDATED: Pass full authors list
                          found = find_missing_asin(title, authors, item['media'].get('duration'), lang)
