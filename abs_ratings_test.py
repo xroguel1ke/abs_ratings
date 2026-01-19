@@ -700,6 +700,8 @@ def process_library(lib_id, history, failed):
                              logging.info(f"          -> {upd}")
                         abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": abs_updates})
                         stats['meta_updated'] += 1
+                    else:
+                        logging.info("        ✅ No metadata updates necessary.")
 
                 # 2. GOODREADS
                 gr_data = get_goodreads_data(meta.get('isbn'), asin, title, authors, authors[0] if authors else "")
