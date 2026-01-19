@@ -558,7 +558,7 @@ def process_library(lib_id, history, failed):
                 update_report("goodreads", key, title, authors[0] if authors else "", meta.get('isbn'), "Not found", has_gr)
                 
                 fails = failed.get(key, 0) + 1
-                if has_aud or has_gr:
+                if has_aud and has_gr:
                     history[key] = datetime.now().strftime("%Y-%m-%d"); failed.pop(key, None)
                 elif fails >= MAX_FAIL_ATTEMPTS:
                     logging.info("     -> 🛑 Max attempts reached."); history[key] = datetime.now().strftime("%Y-%m-%d"); failed.pop(key, None)
