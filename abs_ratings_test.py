@@ -164,7 +164,17 @@ def moon_rating(v):
     v = safe_float(v)
     if v == 0: return "🌑" * 5
     full, decimal = int(v), v - int(v)
-    return ("🌕" * min(full, 5) + "🌗" * (1 if 0.25 <= decimal < 0.75 else 0)).ljust(5, "🌑")[:5]
+    
+    # FIX: Korrekte Rundungslogik (ab .75 wird aufgerundet)
+    if decimal >= 0.75:
+        full += 1
+        half = 0
+    elif decimal >= 0.25:
+        half = 1
+    else:
+        half = 0
+        
+    return ("🌕" * min(full, 5) + "🌗" * half).ljust(5, "🌑")[:5]
 
 def extract_volume(text): return set(RE_VOL.findall(text)) | ({m.group(1)} if (m := re.search(r'\b(\d+)$', text.strip())) else set())
 
