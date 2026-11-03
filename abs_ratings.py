@@ -544,7 +544,7 @@ def parse_messy_title(t):
         series, seq, rest = m.group(1).strip(' -:,'), m.group(2), m.group(3).strip()
         if re.search(r'(?i)\b(vol\.?|volume|book|band|teil|part|no\.?)$', series): return None  # 'X Vol. 4 Y' is a normal title
         # Guard against normal titles with numbers ("Catch 22 ..."): the series part needs at least 2 words
-        if len(series.split()) >= 2 and len(rest.split()) >= 2:
+        if len(series.split()) >= 2 and (len(rest.split()) >= 2 or (len(rest) >= 5 and re.fullmatch(r"0\d", seq))):  # 'Prince of the Doomed City 01 Entranced'
             return {'title': rest, 'series': series, 'sequence': str(float(seq)).rstrip('0').rstrip('.'), 'kind': 'series_prefix'}
     if m := RE_LEADING_NUM.match(t):
         rest_ = m.group(2).strip()
@@ -1086,6 +1086,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                        only_domain=None, narrators=None, abs_series=None, extra_candidates=None, only_extra=False, only_queries=None):
     """Find an ASIN via the Audible catalog search API. Every candidate is verified by loading
     the product (title, author, runtime). Returns the ASIN, None (no match) or False (API error)."""
+    narrators = [n for n in (narrators or []) if not any(fold_accents(n).lower() == fold_accents(a).lower() for a in (authors_list or []))]  # an ABS "narrator" equal to the author is a data error, not evidence
     prim_auth = authors_list[0] if authors_list else ""
     short = re.split(r'\s*[:(]\s*|\s+-\s+', title)[0].strip()  # 'Dragon's Kin: Dragonriders of Pern, Book 16' -> 'Dragon's Kin'
     queries = [{"keywords": f"{title} {prim_auth}".strip()}]
@@ -1098,6 +1099,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
     nq = {"author": prim_auth, "narrator": narrators[0]} if (narrators and narrators[0] and prim_auth) else None  # last resort only (see end of function)
     if only_queries: queries = list(only_queries)
     LAST_SEARCH['related'] = None
+    if not only_queries: LAST_SEARCH['weak'] = None
     api_ok = False
     near_pick = None  # accepted only via 'same narrator, runtime inside tolerance'; used if no candidate with exact runtime follows
     best_pick = None  # accepted with an INEXACT title: keep looking, a later candidate may match the title exactly ('The Wild Robot' vs '...: Booktrack Edition')
@@ -1135,6 +1137,10 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 rest = nf[len(na):].strip() if nf.startswith(na + ' ') else ''
                 if rest and rest in {normalize_title_text(re.sub(r'(?i)\s+series$', '', s.get('name') or '')) for s in abs_series}: t_score = 0.85
             if t_score < 0.85 and abs_series and series_prefixed_title(title, found_title, abs_series): t_score = 0.9
+            if t_score < 0.85 and (mm := re.match(r'^(.*?)\s*#?\s*(\d{1,2})\s*$', title or '')):  # arabic number in ABS = roman numeral on Audible
+                stem, num_, nf_all = normalize_title_text(mm.group(1)), int(mm.group(2)), normalize_title_text(found_title)
+                nxt = nf_all[len(stem) + 1:].split()[:1] if stem and nf_all.startswith(stem + ' ') else []
+                if nxt and nxt[0] in (roman(num_), str(num_)): t_score = 0.85
             if t_score < 0.85 and abs_series:
                 na_, nf_ = normalize_title_text(title), normalize_title_text(found_title)
                 if na_ and nf_.startswith(na_ + ' ') and series_number_hit(abs_series, (p.get('meta_raw') or {}).get('series')): t_score = 0.85  # ABS title = start of the Audible title + same series number
@@ -1177,7 +1183,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 if re.search(r'[^\x00-ɏ]', cand_auth) and not any(re.search(r'[^\x00-ɏ]', a) for a in authors_list):
                     auth_ok = True
                     logging.info(f"        ℹ️ Author '{cand_auth}' is written in another script; narrator and runtime agree, so it is not treated as a mismatch")
-            if strict and a_narr and c_narr and not a_narr & c_narr:  # other recording (e.g. UK vs US narrator)
+            if a_narr and c_narr and not a_narr & c_narr:  # other recording (e.g. UK vs US narrator): known and different narrators veto the hit, with or without an existing ASIN
                 logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (narrator {', '.join(p.get('narrators_raw') or [])} differs)")
                 continue
             # same narrator + runtime inside the library tolerance (15 % / 20 min): same recording, ABS file just differs a little
@@ -1225,6 +1231,8 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                     continue
                 logging.info(msg)
                 return cand
+            if duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120 and a_narr and c_narr and a_narr & c_narr and not LAST_SEARCH.get('weak'):
+                LAST_SEARCH['weak'] = {'asin': cand, 'title': found_title}  # runtime to the minute + narrator agree, title/author do not: a human decides
             logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, runtime {'✓' if dur_ok else '✗' if dur_conflict else '?'})")
         if best_pick: break  # do not search further stores when this store already has an acceptable hit
     if best_pick:
@@ -2177,12 +2185,15 @@ def process_queue(work_queue, history, failed, recheck):
                     if not found: found = find_missing_asin(search_title, authors, abs_dur, lang, raw_title=title,
                                                             required_lang=lang_target, strict=strict_search and bool(asin),
                                                             only_domain=search_only, narrators=search_narr, abs_series=meta.get("series") or [])
+                    weak_ = LAST_SEARCH.get('weak')
                     if not found and USE_AUDIBLE_API and meta.get('series') and abs_dur and not search_only:
                         LAST_MATCH.clear()
                         found = find_missing_asin_via_series(search_title, authors, abs_dur, lang, raw_title=title, required_lang=lang_target,
                                                              strict=strict_search and bool(asin), narrators=search_narr,
                                                              abs_series=meta.get('series') or [])
                     
+                    if not found and weak_ and 'lock_asin' not in tags:
+                        add_review(key, title, 'asin', weak_['asin'], f"only runtime (to the minute) and narrator match '{weak_['title']}'; title and author differ")
                     if found and found != asin and (ASIN_OWNERS.get(found, set()) - {key}):
                         logging.info(f"        ⛔ ASIN {found} already belongs to another book in the library/run: not assigned (needs a manual look)")
                         add_review(key, title, 'asin', found, 'ASIN already belongs to another book')

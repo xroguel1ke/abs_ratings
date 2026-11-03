@@ -255,3 +255,11 @@ Synthetic part (first time!): 77/80 -> 3 gaps found that never occur in the user
 regress.sh caught 3 side effects of my own changes during the hour (candidate order, early break) -> fixed; golden: library 800, synthetic 150 (3 batches). Regressions that were IMPROVEMENTS were documented: Hell Mode vol 3 (587 min exact) now gets its ASIN; House Corrino alt ASIN (UK store, same product); `alt` ASINs in golden = same product in another store.
 Fix count in this batch: 6 (library 3 + synthetic 3). Previous library-only rounds: 2,3,1,1,2.
 ## Batch A2 started (fresh 100 + SYNTH=4: 60 EN + 20 DE)
+Data finding: 19 books in the library have an ABS narrator that equals the author (data error, e.g. "Hamuo" as narrator). In the matching such a "narrator" is ignored (never evidence, never a veto). TODO hygiene: replace these narrators by the Audible narrators once the ASIN is verified (journaled, lock_narrators respected).
+
+## Batch A2 (counting #2: 100 library + 80 synthetic, Audible-only, 7:29 min, 0 errors) – NOT clean (counter 0 of 4)
+Library part: 3 ASIN changes correct (Charon's Claw, Out Law, Archmage; narrator, series, publisher+year). Fixed: The Dark Tower #1 (arabic number in ABS = roman numeral on Audible: "The Dark Tower I: The Gunslinger"); Realms of War (anthology junk metadata; runtime to the minute + narrator match "Dissolution") -> review-list proposal with reason (a human decides; no safe automatic path).
+Synthetic part: 78/80 -> (1) The Wonderful Wizard of Oz (AmazonClassics): WRONG recording accepted because an ABS narrator mismatch did not veto when the book had no ASIN -> known, different narrators now veto in every mode; (2) "Prince of the Doomed City 01 Entranced": one-word title after a zero-padded series prefix not seen as messy -> fixed. Now 80/80.
+Side effect found by regress.sh: veto broke Hell Mode / Overlord 12 because ABS "narrator" == author (19 books in the library have this data error) -> such a "narrator" is ignored in matching (never evidence, never veto).
+Fixes: library 2 + synthetic 2 (+1 side effect). Counter stays 0 of 4. Fix trend per counting batch: A1 6, A2 5.
+## Batch A3 started (SYNTH=5)

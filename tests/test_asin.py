@@ -62,6 +62,11 @@ def test_messy_number_prefix_single_word():
     assert A.parse_messy_title('007 Skyfall') is None and A.parse_messy_title('1984') is None and A.parse_messy_title('Dune') is None
 
 
+def test_messy_series_prefix_single_word():
+    assert (A.parse_messy_title('Prince of the Doomed City 01 Entranced') or {}).get('title') == 'Entranced'
+    assert A.parse_messy_title('Catch 22 Heller') is None and A.parse_messy_title('The Book of the New Sun 05 The Urth of the New Sun')
+
+
 def test_isbn_checks():
     assert A.isbn_bad_reason('B0D2LJ6SJ2') == 'value is an ASIN, not an ISBN'
     assert A.isbn_bad_reason('9780553580334') is None            # real ISBN-13 (House Corrino)
