@@ -116,3 +116,10 @@ Result: golden 200 books (round 1 + 2) = 200/200, review list empty, 1 legit not
 - Test-mode throttling only before LIVE requests (recorder.py), throttle() skipped in record/replay: 100 books replay 19 s (was 26 min). Adopted.
 - Hardcover edition ASIN path / series listing path: adopted (solve 3 of 4 "not found" cases of round 2, 0 regressions on 200 golden books).
 Hardcover: ~620 requests left today (reserve 25).
+
+## Requirement: author merge (user, 2026-11-03)
+At the end, ABS authors must be in English (Latin script) and without duplicates caused by slightly different spelling or another script
+(e.g. "Rifujin na Magonote" vs "理不尽な孫の手" = one person; accents; initials). Rules: merge only with a safe proof (same books/ASINs, same series,
+shared co-author, Audible/Hardcover author record); never merge different people with similar names; always keep the Latin-script name.
+Work items: (1) inventory of all authors in the snapshot (duplicates by accent/initials/script), (2) extend abs_series author normalization
+(accent folding, non-Latin variants linked via same-ASIN/same-series books), (3) golden cases + offline tests, (4) STATUS line "Authors".
