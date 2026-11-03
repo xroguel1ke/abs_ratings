@@ -177,7 +177,7 @@ RE_RAW_PERFORMANCE = re.compile(r'performance-value="([0-9.]+)"')
 RE_RAW_OVERALL = re.compile(r'value="([0-9.]+)"') 
 RE_RAW_COUNT = re.compile(r'count="(\d+)"')
 
-stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred", "cover_added", "desc_filled", "series_merged"]}
+stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred", "cover_added", "desc_filled", "series_merged", "other_edition"]}
 stats['aborted_ratelimit'] = False
 GR_STATE = {'blocked': False, 'cooldowns': 0, 'searches': 0}
 GR_CACHE = {}  # Filled in main()  # Set once Goodreads blocks us; GR is then skipped for the rest of the run
@@ -357,7 +357,7 @@ def normalize_title_text(t):
     if not t: return ""
     t = RE_CLEAN_TITLE.sub(' ', t)
     t = t.lower()
-    t = re.sub(r'[:\-\(\)\[\]]', ' ', t)
+    t = re.sub(r"[^\w\s]", ' ', t)  # all punctuation (commas, apostrophes, colons ...)
     for word, digit in NUMBER_MAP.items():
         t = re.sub(r'\b' + word + r'\b', digit, t)
     t = RE_NOISE.sub('', t)
@@ -789,6 +789,13 @@ def get_audible_data_web(asin, language):
     if best_result: return best_result
     return None
 
+# Words that make up Audible's marketing suffixes (': A LitRPG Adventure', ': A Xianxia Cultivation Novel')
+MARKETING_WORDS = {'litrpg', 'gamelit', 'progression', 'cultivation', 'xianxia', 'wuxia', 'isekai', 'adventure', 'adventures',
+                   'novel', 'fantasy', 'series', 'saga', 'thriller', 'romance', 'epic', 'slice', 'life', 'apocalypse',
+                   'apocalyptic', 'dungeon', 'core', 'system', 'harem', 'mystery', 'cozy', 'scifi', 'sci', 'fi', 'space',
+                   'opera', 'military', 'portal', 'urban', 'dark', 'progressive', 'monster', 'tamer', 'crafting', 'base',
+                   'building', 'kingdom', 'reincarnation', 'magic', 'academy', 'superhero', 'post', 'survival'}
+
 def search_match_score(abs_title, found_title, found_sub):
     """Title score for search candidates. Unlike title_similarity():
     - a subtitle never adds containment points ('The Hunger Games' vs 'Mockingjay' + 'The Hunger Games, Book 3')
@@ -803,18 +810,29 @@ def search_match_score(abs_title, found_title, found_sub):
     if len(nf.split()) >= 3 and f" {nf} " in f" {na} ": score = max(score, 0.85)          # Audible title inside ABS title
     if nf.startswith(na + " ") and re.search(r'\d', na):                                    # ABS title + subtitle on Audible
         score = max(score, 0.85)  # the number in the ABS title is part of the match, so it is the same volume
+    if nf.startswith(na + " ") and not extract_volume(found_title):
+        extra = set(nf[len(na):].split())
+        if extra & MARKETING_WORDS: score = max(score, 0.85)  # 'A Farm in the Afterlife: A Slice-of-Life LitRPG Adventure'
+    if len(na.split()) >= 3 and nf.endswith(" " + na): score = max(score, 0.85)  # 'Vainqueur the Dragon II: The Year of the Rogues'
     if extract_volume(found_title) and not extract_volume(abs_title):
         score = min(score, 0.75)  # 'Hell Mode' vs 'Hell Mode, Volume 3': could be any volume
     return score
+
+LAST_SEARCH = {'related': None}  # best same-title/same-author candidate of the last search (other edition)
 
 def search_audible_api(title, authors_list, duration, lang, raw_title=None, required_lang=None, strict=False,
                        only_domain=None, narrators=None):
     """Find an ASIN via the Audible catalog search API. Every candidate is verified by loading
     the product (title, author, runtime). Returns the ASIN, None (no match) or False (API error)."""
     prim_auth = authors_list[0] if authors_list else ""
+    short = re.split(r'\s*[:(]\s*|\s+-\s+', title)[0].strip()  # 'Dragon's Kin: Dragonriders of Pern, Book 16' -> 'Dragon's Kin'
     queries = [{"keywords": f"{title} {prim_auth}".strip()}]
     if prim_auth: queries.append({"title": title, "author": prim_auth})
+    if short and short != title and len(short) >= 4:
+        queries.append({"title": short, "author": prim_auth} if prim_auth else {"keywords": short})
     if raw_title and raw_title != title: queries.append({"keywords": raw_title})
+    queries.append({"keywords": title})
+    LAST_SEARCH['related'] = None
     api_ok = False
     for domain in ([only_domain] if only_domain else search_domains(required_lang or lang)):
         host, candidates = AUDIBLE_API_HOSTS[domain], []
@@ -826,12 +844,14 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 if r.status_code == 429: raise RateLimitException(f"HTTP 429 on {host} (API search)", True)
                 if r.status_code != 200: continue
                 api_ok = True
+                logging.debug(f"        search {host} {q}: {len(r.json().get('products') or [])} results")
                 for prod in r.json().get('products') or []:
                     if prod.get('asin') and prod['asin'] not in candidates: candidates.append(prod['asin'])
             except (requests.RequestException, ValueError) as e:
                 logging.warning(f"        🌐 Audible API search failed ({host}): {type(e).__name__}")
-            if len(candidates) >= 3: break
-        for cand in candidates[:5]:
+            if len(candidates) >= 4: break
+        if not candidates: logging.info(f"        ↪️ No search results on {domain} ({len(queries)} queries)")
+        for cand in candidates[:6]:
             p = get_audible_api(cand, domain)
             if not isinstance(p, dict): continue
             cand_lang = map_language((p.get('meta_raw') or {}).get('language'))
@@ -847,6 +867,11 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             auth_ok = match_author(authors_list, ", ".join(p.get('authors_raw') or []))
             dur_ok = bool(duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) < 600)
             dur_conflict = bool(duration and p.get('runtime_sec') and not dur_ok)
+            # Same book, possibly another recording (runtime/narrator differ): remembered as a ratings-only fallback
+            if t_score >= 0.85 and auth_ok and int(p.get('count') or 0) > 0:
+                rel, diff = LAST_SEARCH['related'], abs((duration or 0) - (p.get('runtime_sec') or 0))
+                if rel is None or diff < rel['_diff']:
+                    LAST_SEARCH['related'] = dict(p, _diff=diff)
             norm_n = lambda n: re.sub(r'[^a-z]', '', n.lower())
             a_narr, c_narr = {norm_n(n) for n in (narrators or []) if n}, {norm_n(n) for n in (p.get('narrators_raw') or []) if n}
             if strict and a_narr and c_narr and not a_narr & c_narr:  # other recording (e.g. UK vs US narrator)
@@ -1417,6 +1442,13 @@ def process_queue(work_queue, history, failed, recheck):
                         else: logging.info(f"        ℹ️ Search returned same ASIN. Keeping fallback data.")
                     elif search_only: logging.info(f"        ℹ️ No exact match on {search_only}. Keeping {asin} from {aud_data.get('domain') if aud_data else '?'}.")
                     else: logging.info(f"        ℹ️ No replacement found. Keeping fallback data.")
+                    rel = LAST_SEARCH.get('related')
+                    if not found and rel and not search_only and (not aud_data or int(aud_data.get('count', 0)) == 0):
+                        aud_data = dict(rel, related_edition=True)
+                        skip_meta = True
+                        logging.info(f"        📎 Using ratings of another edition: '{rel.get('title_raw')}' [{rel.get('asin')}] on {rel.get('domain')} "
+                                     f"(runtime {format_time(rel.get('runtime_sec') or 0)} vs ABS {format_time(abs_dur or 0)}). ASIN and metadata are not changed.")
+                        stats['other_edition'] += 1
 
                 if lang_conflict and aud_data and map_language((aud_data.get('meta_raw') or {}).get('language')) not in (None, lang_target):
                     skip_meta = True
@@ -1687,7 +1719,7 @@ def log_run_summary(start_time, series_result):
     lines = [
         f"Books processed: {s['processed']} (skipped/locked: {s['skipped']}, manual updates: {s['manual_retrigger']}, re-checks: {s['recheck']})",
         f"Ratings {'to write' if DRY_RUN else 'written'}: {s['success']} | Audible without ratings yet: {s['no_ratings_yet']} | Goodreads missing: {s['gr_missing']} (deferred: {s['gr_deferred']})",
-        f"ASINs found: {s['asin_found']} | Metadata updated: {s['meta_updated']} | Covers added: {s['cover_added']} | Descriptions filled: {s['desc_filled']} | ISBNs added: {s['isbn_added']}",
+        f"ASINs found: {s['asin_found']} | Ratings from another edition: {s['other_edition']} | Metadata updated: {s['meta_updated']} | Covers added: {s['cover_added']} | Descriptions filled: {s['desc_filled']} | ISBNs added: {s['isbn_added']}",
         f"Series merges: {series_result.get('merges', 0)} ({series_result.get('books_changed', 0)} books {'would change' if DRY_RUN else 'changed'}) | "
         f"Author spellings unified: {series_result.get('author_fixes', 0)} ({series_result.get('authors_changed', 0)} books)",
         f"Errors: {s['failed']}{' | Goodreads blocked' if GR_STATE['blocked'] else ''}{' | ABORTED (rate limit)' if s['aborted_ratelimit'] else ''}",
