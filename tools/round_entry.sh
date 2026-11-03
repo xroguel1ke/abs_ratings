@@ -2,7 +2,7 @@
 # Runs INSIDE the throwaway container: fake ABS (snapshot) + the dev script in DRY_RUN, then exits.
 # Aborts if the port is already answering (it must never be a real ABS).
 set -e
-PORT=18999
+PORT=${FAKE_PORT:-18999}
 if curl -fsS "http://127.0.0.1:$PORT/ping" >/dev/null 2>&1; then echo "port $PORT already in use - abort" >&2; exit 3; fi
 cd /src
 python -I tools/fake_abs.py --snapshot /src/tests/private/abs_snapshot.json --port $PORT --patch-log "$DATA_DIR/patches.jsonl" >"$DATA_DIR/fake_abs.log" 2>&1 &

@@ -17,6 +17,6 @@ EXTRA=(-e RECORD_DIR=/src/tests/private/recordings -e RECORD_REUSE=${REUSE:-0})
 [ "$MODE" = "replay" ] && EXTRA=(-e REPLAY_DIR=/src/tests/private/recordings)
 timeout 14400 docker run --rm --name "abs_ratings_test_${R}" --network host -e PYTHONDONTWRITEBYTECODE=1 \
   -v "$DEV":/src -v "$DATA":/data \
-  -e DATA_DIR=/data -e ONLY_ITEMS="$ONLY" -e LIBRARY_IDS="$LIB" -e HARDCOVER_TOKEN="$HCT" -e HARDCOVER_ENABLED=$HC_ON \
+  -e FAKE_PORT="${FAKE_PORT:-18999}" -e DATA_DIR=/data -e ONLY_ITEMS="$ONLY" -e LIBRARY_IDS="$LIB" -e HARDCOVER_TOKEN="$HCT" -e HARDCOVER_ENABLED=$HC_ON \
   -e GOODREADS_ENABLED=false -e SLEEP_TIMER=0 -e AUDIBLE_API_INTERVAL=0.5 -e REFRESH_DAYS=0 -e BATCH_SIZE=2500 -e ABS_BACKUP=false \
   "${EXTRA[@]}" ghcr.io/xroguel1ke/abs_ratings:web-ui sh /src/tools/round_entry.sh
