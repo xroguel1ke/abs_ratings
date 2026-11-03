@@ -317,3 +317,7 @@ Streak history: A1 x, A2 x, A3 x, A4 x, A5 x, A6 ok, A7 ok, A8 ok, A9 x, A10 ok 
 
 ## Batch A11 (173 fresh library books + 80 synthetic, Audible-only, 8:13 min, 0 errors) – CLEAN -> streak 2 of 4 (A10, A11)
 Library: 3 ASIN changes hand-verified (City of Miracles, Hell Mode vol 1, Dragonflight; 4-8 independent evidences each). "Snapshot" (Sanderson novella, 142 min) has no standalone audiobook on Audible = correct not found. Synthetic 80/80. Review list empty. Nothing to correct. The library pool of never-batched books is now exhausted (173 used). After this batch the Hardcover cross-check against Audible was added (applies from the next Hardcover batch).
+
+## Batch A12 (200 synthetic books [140 EN + 60 DE], Audible-only, 11:19 min, 0 errors) – CLEAN -> streak 3 of 4 (A10, A11, A12)
+200/200 correct at the first run (cases: no_asin 51, dead_asin 24, accent_free_author 18, clean_ok 18, duplicate_title 18, messy_number_prefix 18, runtime_8pct_off 17, initials_author 12, marketing_suffix 12, messy_series_prefix 6, series_name_variant 6). The never-batched library pool is exhausted (every library book was hand-verified in some batch), so fresh tests now come from synthetic books; the final full-library run happens in the closing phase.
+## Batch A13 started (SYNTH=15, 140 EN + 60 DE): 4th clean batch candidate, code frozen
