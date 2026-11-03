@@ -32,3 +32,12 @@ Open from the review: dead-ASIN check over all 8 stores + prefix proof, no-numbe
 .com-first on replacement, merge name choice, silent "ABS #x vs Audible #y" cases -> review list.
 Not yet done: golden list, fixtures/replay, evaluate.py, fake ABS, review_queue.json (see STATUS.md).
 Guardrails: .claude/settings.local.json now exists (226 deny / 6 allow, all other shares + foreign appdata folders denied).
+
+## Notification rules (set by the user 2026-11-03)
+Send via `tools/notify.sh "<title>" "<body>"` (Apprise from settings.json, works since 2026-11-03; test sent OK).
+- After every round: round no., metrics, wrong hits, Hardcover quota.
+- IMMEDIATELY when manual action by the user is needed (blocked, limit, permission prompt, open question, session needs restart).
+- Once when the terminal can safely be closed. Text must include how to reopen: `ssh/Server-Terminal: tmux attach -t abs`
+  (if tmux is gone after a server restart: `tmux new -s abs`, `cd /mnt/user/appdata/abs_ratings_dev && claude --continue`, then "weiter" / read docs/LOOP_LOG.md).
+- When the work is finished (stop criterion met).
+Never print the Apprise URL.
