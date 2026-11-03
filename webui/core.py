@@ -22,12 +22,12 @@ FIELDS = [
     ('ABS_URL', 'Audiobookshelf URL', 'str', '', 'z.B. http://192.168.50.16:13378', 'Verbindung'),
     ('API_TOKEN', 'ABS API-Token', 'secret', '', 'ABS: Einstellungen → Benutzer → API-Token', 'Verbindung'),
     ('LIBRARY_IDS', 'Bibliotheken', 'libraries', '', 'Welche ABS-Bibliotheken bearbeitet werden', 'Verbindung'),
-    ('HARDCOVER_TOKEN', 'Hardcover API-Token', 'secret', '', 'hardcover.app → Settings → API (Hardcover-Bewertungen folgen in einem späteren Schritt)', 'Verbindung'),
+    ('HARDCOVER_TOKEN', 'Hardcover API-Token', 'secret', '', 'hardcover.app → Settings → API', 'Verbindung'),
 
     ('DRY_RUN', 'Testlauf (DRY_RUN) für geplante Läufe', 'bool', True, 'An = nichts wird in ABS geschrieben, nur geplant und protokolliert', 'Lauf'),
     ('BATCH_SIZE', 'Bücher pro Lauf', 'int', 300, 'Zufällig aus allen fälligen Büchern aller Bibliotheken', 'Lauf'),
     ('REFRESH_DAYS', 'Auffrischen nach (Tage)', 'int', 90, '0 = alle Bücher sind fällig (einmaliger Komplett-Durchlauf)', 'Lauf'),
-    ('SLEEP_TIMER', 'Pause zwischen Büchern (s)', 'float', 3, 'Jede Quelle wird zusätzlich einzeln gedrosselt', 'Lauf'),
+    ('SLEEP_TIMER', 'Zusätzliche Pause zwischen Büchern (s)', 'float', 0, 'Jede Quelle hat ihren eigenen Mindestabstand (unten), 0 ist daher sicher und am schnellsten', 'Lauf'),
     ('ABS_BACKUP', 'ABS-Backup vor echten Läufen', 'bool', True, 'Legt vor jedem Lauf ohne DRY_RUN ein ABS-Backup an', 'Lauf'),
     ('ABS_TIMEOUT', 'ABS Timeout (s)', 'int', 30, '', 'Lauf'),
 
@@ -40,6 +40,9 @@ FIELDS = [
     ('GOODREADS_INTERVAL', 'Abstand Goodreads (s)', 'float', 10, '', 'Quellen'),
     ('GR_BLOCK_COOLDOWN', 'Pause nach Goodreads-Sperre (s)', 'int', 900, '', 'Quellen'),
     ('GR_MAX_COOLDOWNS', 'Pausen bis Goodreads übersprungen wird', 'int', 2, '', 'Quellen'),
+    ('HARDCOVER_ENABLED', 'Hardcover', 'bool', True, 'Braucht den Hardcover-Token (Verbindung). Nur Bewertungen, keine Metadaten. Limit: 5000 Anfragen/Tag', 'Quellen'),
+    ('HARDCOVER_INTERVAL', 'Abstand Hardcover (s)', 'float', 1.1, 'Hardcover erlaubt 60 Anfragen pro Minute', 'Quellen'),
+    ('RATING_ORDER', 'Reihenfolge im Bewertungsblock', 'str', 'audible,goodreads,hardcover', 'Komma-getrennt, z.B. audible,hardcover,goodreads', 'Quellen'),
 
     ('FILL_COVERS', 'Fehlende Cover von Audible setzen', 'bool', True, '', 'Metadaten'),
     ('GENRE_LANGUAGE', 'Genre-Sprache', 'choice:en|keep', 'en', 'en = deutsche Audible-Genres übersetzen, keep = unverändert', 'Metadaten'),
@@ -56,7 +59,7 @@ FIELDS = [
     ('LOG_LEVEL', 'Log-Level', 'choice:INFO|DEBUG', 'INFO', '', 'Logs'),
     ('LOG_RETENTION_DAYS', 'Logs aufbewahren (Tage)', 'int', 30, '', 'Logs'),
 ]
-SCRIPT_KEYS = [f[0] for f in FIELDS if f[0] not in ('LOG_RETENTION_DAYS', 'HARDCOVER_TOKEN')]
+SCRIPT_KEYS = [f[0] for f in FIELDS if f[0] != 'LOG_RETENTION_DAYS']
 DEFAULTS = {f[0]: f[3] for f in FIELDS}
 DEFAULTS.update({
     'schedule_enabled': False, 'schedule_mode': 'simple', 'schedule_days': [0, 1, 2, 3, 4, 5, 6],

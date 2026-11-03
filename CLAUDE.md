@@ -15,7 +15,7 @@ metadata clean (ASIN repair, titles, series, authors, genres, language, covers).
 | `userscript.sh` | Old way (Unraid User Scripts + temporary container). Still works. |
 
 Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf/abs_scripts` on the server):
-`rating_history.json`, `failed_history.json`, `recheck_history.json`, `goodreads_cache.json`, `series_aliases.json`,
+`rating_history.json`, `failed_history.json`, `recheck_history.json`, `goodreads_cache.json`, `hardcover_cache.json`, `series_aliases.json`,
 `series_index.json`, `changes.jsonl` (journal), `undone.jsonl`, `results.json` (per-book status for the UI),
 `overrides.json` (manual ASIN/Goodreads/ignore), `merges.json`, `merge_review.json`, `merge_decisions.json`,
 `settings.json` + `webui_runs.json` (UI), `logs/` (`run_<id>.log`, `debug_latest.log`, `console_<id>.log`),
@@ -40,6 +40,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   (`Dune` vs `Dune, les origines`), same edition, every book shares an author, no overlapping numbers, complementary
   numbers for non-identical names, no `lock_series`. Uncertain cases → `merge_review.json`; user decisions in
   `merge_decisions.json` (merge / keep / undone / confirmed) always win.
+- **Hardcover** (ratings only): series numbers differ between ABS and Hardcover (reading order, part schemes) – a different
+  number only rejects when the title is not clearly equal. Search hits need a pure title ratio ≥0.85 (no containment bonus).
 - **Goodreads** blocks bots after ~40 requests in a few minutes: interval 10 s, cool-down 900 s ×2, max 300 searches/run,
   URL cache per book, 1 request per book when possible. Never try to bypass the bot protection.
 - Respect lock tags: `lock_all`, `lock_metadata`, `lock_asin`, `lock_title`, `lock_series`, `lock_language`,

@@ -44,16 +44,26 @@ MAX_BATCH_SIZE = int(os.getenv('BATCH_SIZE', 150))
 MAX_FAIL_ATTEMPTS = 5
 MAX_CONSECUTIVE_RL = 3
 RECOVERY_PAUSE = 60
-BASE_SLEEP = float(os.getenv('SLEEP_TIMER', 3))  # Pause between items (sources are additionally throttled below)
+BASE_SLEEP = float(os.getenv('SLEEP_TIMER', 0))  # Extra pause between items. Every source has its own throttle
+                                                 # (MIN_INTERVAL), so 0 is safe; the pause only slows the run down.
 SEARCH_PENALTY_SLEEP = float(os.getenv('SEARCH_PENALTY_SLEEP', 0))  # Optional extra pause after ASIN searches
 # Minimum seconds between two requests to the same source
 MIN_INTERVAL = {
     'audible_api': float(os.getenv('AUDIBLE_API_INTERVAL', 1)),
     'audible_web': float(os.getenv('AUDIBLE_WEB_INTERVAL', 3)),
     'goodreads': float(os.getenv('GOODREADS_INTERVAL', 10)),
+    'hardcover': float(os.getenv('HARDCOVER_INTERVAL', 1.1)),  # API limit: 60 requests/min, 5000/day
 }
 USE_AUDIBLE_API = os.getenv('USE_AUDIBLE_API', 'true').lower() == 'true'
 GOODREADS_ENABLED = os.getenv('GOODREADS_ENABLED', 'true').lower() == 'true'  # false = no Goodreads requests at all
+HARDCOVER_TOKEN, _ = clean_env('HARDCOVER_TOKEN', r'A-Za-z0-9._\- ')
+HARDCOVER_TOKEN = re.sub(r'(?i)^\s*bearer\s+', '', HARDCOVER_TOKEN).strip()
+HARDCOVER_ENABLED = os.getenv('HARDCOVER_ENABLED', 'true').lower() == 'true' and bool(HARDCOVER_TOKEN)
+HC_CACHE_FILE = os.path.join(SCRIPT_DIR, "hardcover_cache.json")  # key -> {'id': Hardcover book id, 'slug': ...}
+# Order of the sources in the rating block (unknown names are ignored, missing ones are appended)
+RATING_SOURCES = ['Audible', 'Goodreads', 'Hardcover']
+RATING_ORDER = [s for s in (x.strip().capitalize() for x in os.getenv('RATING_ORDER', 'audible,goodreads,hardcover').split(',')) if s in RATING_SOURCES]
+RATING_ORDER = list(dict.fromkeys(RATING_ORDER + RATING_SOURCES))
 # Audible marketplaces. ABS may have matched a book in any of them (e.g. audible.co.uk), so all are checked
 # before an ASIN counts as broken. AUDIBLE_MARKETPLACES limits/orders them.
 ALL_MARKETS = ['com', 'co.uk', 'ca', 'com.au', 'de', 'fr', 'it', 'es']
@@ -162,8 +172,7 @@ RE_ISBN_JSON = re.compile(r'"isbn"\s*:\s*"([0-9]{10,13})"')
 RE_ASIN_JSON = re.compile(r'"asin"\s*:\s*"([A-Z0-9]{10})"')
 RE_URL_ASIN = re.compile(r'(?:creativeASIN|asin)=([A-Z0-9]{10})')
 # Old blocks are searched only inside our rating block. ABS stores '<br />' and '&amp;'.
-RE_AUDIBLE_BLOCK = re.compile(r'(?s)(Audible \(.*?)<br\s*/?>\s*(?=Goodreads \(|⭐)')
-RE_GR_BLOCK = re.compile(r'(?s)(Goodreads \(.*?)<br\s*/?>\s*(?=⭐)')
+RE_BLOCK_HEAD = re.compile(r'^(Audible|Goodreads|Hardcover) \(')  # first line of one source inside the rating block
 RE_RATING_BLOCK = re.compile(r'(?s)⭐\s*Ratings.*?⭐(?:\s|<br\s*/?>)*')
 RE_CLEAN_TITLE = re.compile(r'(?i)\b(unabridged|abridged|audiobook|graphic audio|dramatized adaptation)\b|[\(\[].*?[\)\]]')
 RE_VOL = re.compile(r'(?i)(?:\b(?:book|vol\.?|volume|part|no\.?)|#)\s*(\d+)')
@@ -182,7 +191,7 @@ RE_RAW_PERFORMANCE = re.compile(r'performance-value="([0-9.]+)"')
 RE_RAW_OVERALL = re.compile(r'value="([0-9.]+)"') 
 RE_RAW_COUNT = re.compile(r'count="(\d+)"')
 
-stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred", "cover_added", "desc_filled", "series_merged", "other_edition"]}
+stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred", "cover_added", "desc_filled", "series_merged", "other_edition", "hc_found", "hc_missing"]}
 stats['aborted_ratelimit'] = False
 GR_STATE = {'blocked': False, 'cooldowns': 0, 'searches': 0}
 GR_CACHE = {}  # Filled in main()  # Set once Goodreads blocks us; GR is then skipped for the rest of the run
@@ -1139,6 +1148,217 @@ def _search_goodreads(isbn, title, authors, prim_auth):
     logging.info("        ❌ Not found via ID or Text.")
     return None
 
+# ================= HARDCOVER =================
+# GraphQL API (https://api.hardcover.app/v1/graphql). Only ratings are taken, never metadata.
+# Lookup order: manual link -> cached book id -> ASIN/ISBN edition -> title+author search (strict match).
+HC_URL = 'https://api.hardcover.app/v1/graphql'
+HC_STATE = {'disabled': None, 'requests': 0, 'daily_left': None, 'cooldowns': 0}
+HC_CACHE, HC_PREFETCH = {}, {}  # key -> {'id', 'slug'} (persisted) | book id -> book (bulk refresh of cached books)
+HC_DAILY_RESERVE = 25  # stop before the daily limit is used up completely
+HC_BOOK_FIELDS = "id title subtitle slug rating ratings_count compilation cached_featured_series contributions { author { name } }"
+# Hits that are not the book itself (unless the ABS title says so too)
+RE_HC_SPECIAL = re.compile(r'(?i)\b(graphic novel|comic|manga|coloring|colouring|adventure module|sourcebook|summary of|study guide|'
+                           r'sparknotes|cliffsnotes|box(?:ed)? set|boxset|omnibus|collection|collector\W?s edition|books? \d+\s*[-–&]\s*\d+|summary|workbook)\b')
+# Hardcover main titles that name a whole series ('The High Druid of Shannara Trilogy')
+RE_HC_SET_TITLE = re.compile(r'(?i)\b(trilogy|duology|quartet|quintet|series|saga|set|bundle|collection|books?\s*\d+\s*[-–]\s*\d+)\s*$')
+RE_HC_SLUG = re.compile(r'hardcover\.app/books/([\w-]+)')
+
+def hc_query(query, variables=None):
+    """One GraphQL request. Returns the data dict or None. Raises SourceBlockedException on HTTP 429."""
+    if HC_STATE['disabled']: return None
+    throttle('hardcover')
+    HC_STATE['requests'] += 1
+    try:
+        r = requests.post(HC_URL, json={'query': query, 'variables': variables or {}}, timeout=20,
+                          headers={'authorization': f"Bearer {HARDCOVER_TOKEN}", 'content-type': 'application/json',
+                                   'user-agent': 'abs-ratings (Audiobookshelf rating script)'})
+    except requests.RequestException as e:
+        logging.info(f"        ⚠️ Hardcover request failed: {e}")
+        return None
+    left = r.headers.get('X-Ratelimit-Daily-Remaining') or ''
+    if left.isdigit(): HC_STATE['daily_left'] = int(left)
+    if r.status_code == 429: raise SourceBlockedException('HTTP 429')
+    if r.status_code in (401, 403):
+        HC_STATE['disabled'] = f"token rejected (HTTP {r.status_code})"
+        logging.warning(f"        🛑 Hardcover {HC_STATE['disabled']}. Skipping Hardcover for the rest of this run.")
+        return None
+    if r.status_code != 200:
+        logging.info(f"        ⚠️ Hardcover HTTP {r.status_code}: {r.text[:150]}")
+        return None
+    try: j = r.json()
+    except ValueError: return None
+    if j.get('errors'):
+        msg = str(j['errors'])[:200]
+        if re.search(r'(?i)jwt|token|unauthori', msg):
+            HC_STATE['disabled'] = 'token rejected'
+            logging.warning(f"        🛑 Hardcover rejects the token ({msg}). Skipping Hardcover for the rest of this run.")
+        else: logging.info(f"        ⚠️ Hardcover error: {msg}")
+        return None
+    if HC_STATE['daily_left'] is not None and HC_STATE['daily_left'] < HC_DAILY_RESERVE:
+        HC_STATE['disabled'] = 'daily request limit reached'
+        logging.warning(f"        ⏭️ Hardcover daily request limit almost used up ({HC_STATE['daily_left']} left). Remaining books follow in the next runs.")
+    return j.get('data') or {}
+
+def hc_result(book, source):
+    return {'id': book.get('id'), 'slug': book.get('slug'), 'url': f"https://hardcover.app/books/{book.get('slug')}",
+            'val': book.get('rating'), 'count': int(book.get('ratings_count') or 0), 'source': source, 'title': book.get('title')}
+
+def hc_authors(book):
+    return [((c or {}).get('author') or {}).get('name') for c in (book.get('contributions') or [])] or book.get('author_names') or []
+
+def hc_prefetch(keys):
+    """Refresh all cached books of this run in bulk (100 per request) instead of one request per book."""
+    ids = sorted({HC_CACHE[k]['id'] for k in keys if HC_CACHE.get(k, {}).get('id')})
+    for i in range(0, len(ids), 100):
+        try: data = hc_query(f"query($ids:[Int!]){{ books(where:{{id:{{_in:$ids}}}}){{ {HC_BOOK_FIELDS} }} }}", {'ids': ids[i:i + 100]})
+        except SourceBlockedException: break
+        for b in (data or {}).get('books') or []: HC_PREFETCH[b['id']] = b
+    if ids: logging.info(f"Hardcover: {len(HC_PREFETCH)}/{len(ids)} cached books refreshed in bulk.")
+
+def hc_title_score(targets, book, extra_names=(), pure=False):
+    """Best title similarity between our titles and the Hardcover title (with/without subtitle, alternative titles,
+    edition title). pure=True: plain ratio without the containment bonus ('Dragon Heart' vs 'Dragon Heart: Final')."""
+    names = [book.get('title') or '']
+    if book.get('subtitle'): names.append(f"{book['title']}: {book['subtitle']}")
+    names += [t for t in (book.get('alternative_titles') or []) if isinstance(t, str)][:15]
+    names += [t for t in extra_names if t]
+    best = 0.0
+    for t in targets:
+        for n in names:
+            n = html_lib.unescape(n)
+            if pure:
+                a_, b_ = normalize_title_text(t), normalize_title_text(n)
+                sc = difflib.SequenceMatcher(None, a_, b_).ratio() if a_ and b_ else 0.0
+            else: sc = title_similarity(t, n)
+            best = max(best, sc)
+    return best
+
+def hc_series_check(book, abs_series):
+    """True/False if Hardcover's main series is one of the ABS series and the number matches/differs, else None."""
+    fs = book.get('featured_series') or book.get('cached_featured_series') or {}
+    pos, name = fs.get('position'), re.sub(r'\s*\([^)]*\)\s*$', '', ((fs.get('series') or {}).get('name') or ''))
+    if pos is None or not name: return None
+    verdict = None
+    for s_name, seq in abs_series:  # a book can be in several orders ('[publication order]', '[chronological order]')
+        if s_name and seq and title_similarity(s_name, name) >= 0.85:
+            try:
+                if float(seq) == float(pos): return True
+                verdict = False
+            except (TypeError, ValueError): pass
+    return verdict
+
+def hc_words_contained(targets, book):
+    """All words of one of our titles appear in the Hardcover title ('Conquest' in 'Life Reset: Conquest')."""
+    names = [f"{book.get('title') or ''} {book.get('subtitle') or ''}"]
+    return any(set(normalize_title_text(t).split()) <= set(normalize_title_text(n).split()) for t in targets for n in names if normalize_title_text(t))
+
+def hc_acceptable(targets, authors, book, min_score, abs_series=(), extra_names=(), pure=False):
+    """Same strict rules as the other sources. Returns (ok, score, reason).
+    pure=True is the title search: stricter, because the hit is not tied to our ASIN/ISBN."""
+    if authors and not match_author(authors, ', '.join(a for a in hc_authors(book) if a)):
+        return False, 0, f"author {hc_authors(book)[:3]}"
+    series_ok = hc_series_check(book, abs_series)
+    fs = book.get('featured_series') or book.get('cached_featured_series') or {}
+    score = hc_title_score(targets, book, extra_names, pure)
+    # Series numbers often differ between ABS and Hardcover (reading order, part/volume schemes), so a different
+    # number only rejects if the title is not clearly the same ('Dragon Heart' vs 'Dragon Heart: Final')
+    if series_ok is False and score < 0.95:
+        return False, score, f"series number #{fs.get('position')} vs ABS {[q for _, q in abs_series if q]}, title score {score:.2f}"
+
+    # Same series and same number confirm the book even if ABS only has a series name as title.
+    # For search hits, our title words must also appear in the Hardcover title.
+    series_confirms = bool(series_ok) and (not pure or hc_words_contained(targets, book))
+    if score < min_score and not series_confirms: return False, score, f"title score {score:.2f}"
+    ours, theirs = set().union(*(extract_volume(t) for t in targets)), extract_volume(f"{book.get('title') or ''} {book.get('subtitle') or ''}")
+    if ours and theirs and not ours & theirs and not series_ok: return False, score, f"volume {sorted(theirs)} vs {sorted(ours)}"
+    # Our title has a number but the Hardcover title has none ('Reborn as the Villain's Lackey, Volume 2' vs the first book)
+    if pure and all(extract_volume(t) for t in targets) and not theirs and not series_ok: return False, score, f"no volume number on Hardcover (ours: {sorted(ours)})"
+    if (m := RE_HC_SET_TITLE.search(book.get('title') or '')) and not any(RE_HC_SET_TITLE.search(t) for t in targets):
+        return False, score, f"whole series ('{m.group(0)}')"
+    found_text = f"{book.get('title') or ''} {book.get('subtitle') or ''}"
+    if (m := RE_HC_SPECIAL.search(found_text)) and not any(RE_HC_SPECIAL.search(t) for t in targets):
+        return False, score, f"other format ('{m.group(0)}')"
+    if book.get('compilation') and not any(RE_HC_SPECIAL.search(t) for t in targets): return False, score, "compilation"
+    return True, max(score, 1.0 if series_confirms else 0), ''
+
+def get_hardcover_data(key, targets, authors, asin, isbn, manual_url=None, use_cache=True, abs_series=()):
+    """Returns (data, status) with status in 'found', 'not_found', 'blocked', 'disabled'."""
+    if not HARDCOVER_ENABLED: return None, 'disabled'
+    if HC_STATE['disabled']:
+        logging.info(f"      -> ⏭️ Hardcover skipped ({HC_STATE['disabled']})")
+        return None, 'blocked'
+    logging.info("      -> Checking hardcover.app")
+    while True:
+        try:
+            d = _hardcover_lookup(key, targets, authors, asin, isbn, manual_url, use_cache, abs_series)
+            if d:
+                logging.info(f"        ✅ Hardcover via {d['source']}: '{d.get('title')}' (Count: {d['count']}, Rating: {round(safe_float(d.get('val')), 2)}) {d['url']}")
+                return d, 'found'
+            return None, ('blocked' if HC_STATE['disabled'] else 'not_found')
+        except SourceBlockedException as e:
+            if HC_STATE['cooldowns'] < 2:
+                HC_STATE['cooldowns'] += 1
+                logging.warning(f"        ⏸️ Hardcover rate limit ({e}). Waiting 60s ({HC_STATE['cooldowns']}/2)...")
+                time.sleep(60); continue
+            HC_STATE['disabled'] = 'rate limit'
+            logging.warning("        🛑 Hardcover still rate limited. Skipping Hardcover for the rest of this run.")
+            return None, 'blocked'
+
+def _hardcover_lookup(key, targets, authors, asin, isbn, manual_url, use_cache, abs_series):
+    if manual_url and (m := RE_HC_SLUG.search(manual_url)):
+        data = hc_query(f"query($s:String!){{ books(where:{{slug:{{_eq:$s}}}}, limit:1){{ {HC_BOOK_FIELDS} }} }}", {'s': m.group(1)})
+        if books := (data or {}).get('books'): return hc_result(books[0], 'manual link')
+        logging.info(f"        ⚠️ Manual Hardcover link not found: {manual_url}")
+    cached = HC_CACHE.get(key) if use_cache else None
+    if cached and cached.get('id'):
+        book = HC_PREFETCH.get(cached['id'])
+        if not book:
+            data = hc_query(f"query($id:Int!){{ books(where:{{id:{{_eq:$id}}}}, limit:1){{ {HC_BOOK_FIELDS} }} }}", {'id': cached['id']})
+            book = ((data or {}).get('books') or [None])[0]
+        if book: return hc_result(book, 'cache')
+        logging.info("        ↪️ Cached Hardcover book not found anymore, searching again...")
+
+    # 1 request for all identifiers. An ID hit still has to fit (ISBNs in ABS are sometimes wrong).
+    conds = []
+    if asin and re.fullmatch(r'[A-Z0-9]{10}', asin): conds.append({'asin': {'_eq': asin}})
+    if i := normalize_isbn(isbn): conds.append({'isbn_13' if len(i) == 13 else 'isbn_10': {'_eq': i}})
+    if conds:
+        data = hc_query(f"query($w:editions_bool_exp!){{ editions(where:$w, limit:5){{ title asin isbn_13 isbn_10 book{{ {HC_BOOK_FIELDS} }} }} }}", {'w': {'_or': conds}})
+        best = None
+        for ed in (data or {}).get('editions') or []:
+            book = ed.get('book') or {}
+            ok, score, why = hc_acceptable(targets, authors, book, 0.6, abs_series, [ed.get('title')])
+            via = 'ASIN' if asin and ed.get('asin') == asin else 'ISBN'
+            if not ok: logging.info(f"        ✖ {via} hit '{book.get('title')}' rejected: {why}"); continue
+            if not best or (book.get('ratings_count') or 0) > (best[0].get('ratings_count') or 0): best = (book, via)
+        if best: return hc_result(best[0], best[1])
+
+    prim = authors[0] if authors else ''
+    queries = []
+    # Title + author first; title alone finds books whose author spelling or extra contributors confuse the search
+    for q in ([f"{targets[0]} {prim}", f"{clean_title(targets[0])} {prim}", targets[0]] if targets else []):
+        q = q.strip()
+        if q and q not in queries: queries.append(q)
+    for q in queries[:3]:
+        data = hc_query("query($q:String!){ search(query:$q, query_type:\"Book\", per_page:8, page:1){ results } }", {'q': q})
+        hits = (((data or {}).get('search') or {}).get('results') or {}).get('hits') or []
+        cands = []
+        for h in hits:
+            doc = h.get('document') or {}
+            try: doc['id'] = int(doc.get('id'))
+            except (TypeError, ValueError): continue
+            ok, score, why = hc_acceptable(targets, authors, doc, 0.85, abs_series, pure=True)
+            if ok: cands.append((score, doc))
+            else: logging.debug(f"        ✖ HC '{doc.get('title')}' rejected: {why}")
+        if cands:
+            top = max(s for s, _ in cands)
+            # Several near-equal titles (duplicates on Hardcover): take the one with the most ratings
+            score, doc = max((c for c in cands if c[0] >= top - 0.05), key=lambda c: (c[1].get('ratings_count') or 0, c[0]))
+            logging.info(f"        🔍 Hardcover search '{q}': '{doc.get('title')}' accepted (score {score:.2f}, {len(hits)} hits)")
+            return hc_result(doc, 'search')
+        logging.info(f"        🔍 Hardcover search '{q}': no matching hit ({len(hits)} hits)")
+    return None
+
 def normalize_desc(d):
     """Compare descriptions independent of how ABS stores them ('<br />' vs '<br>', '&amp;' vs '&')."""
     d = html_lib.unescape(d or '')
@@ -1149,22 +1369,41 @@ def strip_rating_block(desc):
     d = RE_RATING_BLOCK.sub('', desc or '')
     return re.sub(r'(?:\s|<br\s*/?>|<p>\s*</p>)+', ' ', d, flags=re.I).strip()
 
-def build_description(current_desc, aud, gr, old_aud, old_gr):
+def parse_rating_block(desc):
+    """Split our rating block into {source: 'Audible (n):<br>line<br>line'} (used to keep old values)."""
+    block = (RE_RATING_BLOCK.search(desc or '') or [''])[0]
+    out, cur = {}, None
+    for line in re.split(r'<br\s*/?>', block):
+        line = line.strip()
+        if line.startswith('⭐'): cur = None; continue
+        if m := RE_BLOCK_HEAD.match(line): cur = m.group(1); out[cur] = [line]
+        elif cur and line: out[cur].append(line)
+    return {k: '<br>'.join(v) for k, v in out.items()}
+
+def source_lines(src, d):
+    """Rating lines of one source, or None if it has no usable rating."""
+    if not d: return None
+    if src == 'Audible':
+        if int(d.get('count', 0) or 0) <= 0: return None
+        lines = [f"Audible ({d.get('count')}):"]
+        if v := d.get('overall'): lines.append(f"🏆 {moon_rating(v)} {round(safe_float(v), 1)} / 5 - Overall")
+        if v := d.get('performance'): lines.append(f"🎙️ {moon_rating(v)} {round(safe_float(v), 1)} / 5 - Performance")
+        if v := d.get('story'): lines.append(f"📖 {moon_rating(v)} {round(safe_float(v), 1)} / 5 - Story")
+        return lines
+    if src == 'Hardcover' and (not d.get('count') or not is_valid_rating(d.get('val'))): return None
+    lines = [f"{src} ({d.get('count', 0)}):"]
+    if (v := d.get('val')) and is_valid_rating(v): lines.append(f"🏆 {moon_rating(v)} {round(safe_float(v), 1)} / 5 - Rating")
+    return lines
+
+def build_description(current_desc, fresh, old):
+    """fresh: {source: data from this run}, old: {source: text from the existing block} (kept if nothing new).
+    Sources appear in RATING_ORDER."""
     lines = ["⭐ Ratings & Infos"]
-    if aud and int(aud.get('count',0)) > 0:
-        lines.append(f"Audible ({aud.get('count')}):")
-        if v := aud.get('overall'): lines.append(f"🏆 {moon_rating(v)} {round(safe_float(v), 1)} / 5 - Overall")
-        if v := aud.get('performance'): lines.append(f"🎙️ {moon_rating(v)} {round(safe_float(v), 1)} / 5 - Performance")
-        if v := aud.get('story'): lines.append(f"📖 {moon_rating(v)} {round(safe_float(v), 1)} / 5 - Story")
-    elif old_aud:
-        stats['recycled'] += 1; lines.append(old_aud)
-    
-    if gr:
-        lines.append(f"Goodreads ({gr.get('count', 0)}):")
-        if v := gr.get('val'): lines.append(f"🏆 {moon_rating(v)} {round(safe_float(v), 1)} / 5 - Rating")
-    elif old_gr:
-        stats['recycled'] += 1; lines.append(old_gr)
-        
+    for src in RATING_ORDER:
+        if new := source_lines(src, fresh.get(src)): lines += new
+        elif old.get(src):
+            stats['recycled'] += 1; lines.append(old[src])
+
     clean_d = RE_RATING_BLOCK.sub('', current_desc)
     clean_d = re.sub(r'(?s)\*\*Audible\*\*.*?---\s*\n*', '', clean_d)
     clean_d = re.sub(r'^(?:\s|<br\s*/?>)+', '', clean_d, flags=re.I).strip()
@@ -1212,6 +1451,7 @@ def record_attempt(key, history, failed, recheck, complete=False, recheck_days=N
     rw_json(FAILED_FILE, failed)
     rw_json(RECHECK_FILE, recheck)
     rw_json(GR_CACHE_FILE, GR_CACHE)
+    rw_json(HC_CACHE_FILE, HC_CACHE)
 
 def item_tags(item):
     """Collect tags from all places ABS may put them (root, media, media.metadata)."""
@@ -1327,6 +1567,7 @@ def build_queue(lib_id, history, recheck):
 
 def process_queue(work_queue, history, failed, recheck):
     total = len(work_queue)
+    if HARDCOVER_ENABLED: hc_prefetch([f"{it['_lib']}_{it['id']}" for it in work_queue])
     start = datetime.now()
     consecutive_rl = 0
 
@@ -1665,11 +1906,17 @@ def process_queue(work_queue, history, failed, recheck):
                         logging.info(f"        🔧 ISBN added{' (DRY_RUN, not saved)' if DRY_RUN else ''}: {new_id}")
                         stats['isbn_added'] += 1
 
+                # Hardcover: ratings only. Audible's clean title first, the ABS title as second comparison.
+                hc_targets = list(dict.fromkeys(t for t in [(aud_data or {}).get('title_raw') if not skip_meta else None, search_title, title] if t))
+                hc_data, hc_status = get_hardcover_data(key, hc_targets, authors, asin, meta.get('isbn'), ov.get('hardcover'),
+                                                        use_cache=not item.get('_manual_trigger'),
+                                                        abs_series=[(x.get('name'), x.get('sequence')) for x in (meta.get('series') or [])])
+                if hc_data and hc_data.get('id') and not DRY_RUN: HC_CACHE[key] = {'id': hc_data['id'], 'slug': hc_data.get('slug')}
+                if HARDCOVER_ENABLED: stats['hc_found' if hc_data else 'hc_missing'] += 1
+
                 if 'lock_description' not in tags:
                     cur_desc = meta.get('description') or ''  # ABS sends null for empty descriptions
-                    cur_block = (RE_RATING_BLOCK.search(cur_desc) or [''])[0]
-                    old_aud = (RE_AUDIBLE_BLOCK.search(cur_block) or [None, None])[1]
-                    old_gr = (RE_GR_BLOCK.search(cur_block) or [None, None])[1]
+                    old_blocks = parse_rating_block(cur_desc)
                     # Empty description (apart from our rating block): use Audible's summary
                     summary = (aud_data or {}).get('summary') if not skip_meta else None
                     base_desc = cur_desc
@@ -1677,11 +1924,11 @@ def process_queue(work_queue, history, failed, recheck):
                         base_desc = summary
                         stats['desc_filled'] += 1
                         logging.info("        📝 Empty description filled with Audible summary")
-                    final_desc = build_description(base_desc, aud_data, gr_data, old_aud and old_aud.strip(), old_gr and old_gr.strip())
+                    final_desc = build_description(base_desc, {'Audible': aud_data, 'Goodreads': gr_data, 'Hardcover': hc_data}, old_blocks)
 
                     has_aud = bool(aud_data and int(aud_data.get('count', 0)) > 0)
                     has_gr = bool(gr_data)
-                    parts = [n for n, ok in (("Audible", has_aud), ("Goodreads", has_gr)) if ok]
+                    parts = [n for n, ok in (("Audible", has_aud), ("Goodreads", has_gr), ("Hardcover", bool(source_lines('Hardcover', hc_data)))) if ok]
 
                     if normalize_desc(final_desc) == normalize_desc(cur_desc):
                         logging.info(f"      -> ✅ Description already up to date ({', '.join(parts) or 'no ratings'})")
@@ -1727,9 +1974,11 @@ def process_queue(work_queue, history, failed, recheck):
                 notes = []
                 if skip_meta: notes.append('metadata skipped (Audible data does not fit this book)')
                 if GOODREADS_ENABLED and not has_gr and gr_status != 'deferred': notes.append(f"Goodreads {gr_status.replace('_', ' ')}")
+                if HARDCOVER_ENABLED and not hc_data: notes.append(f"Hardcover {hc_status.replace('_', ' ')}")
                 if ov.get('ignore'): status = 'ignored'
                 set_result(key, lib_id, iid, title, authors, asin, status, reason,
-                           {'notes': notes, 'domain': (aud_data or {}).get('domain'), 'goodreads': (gr_data or {}).get('url')})
+                           {'notes': notes, 'domain': (aud_data or {}).get('domain'), 'goodreads': (gr_data or {}).get('url'),
+                            'hardcover': (hc_data or {}).get('url')})
 
                 consecutive_rl = 0
                 break 
@@ -1750,9 +1999,10 @@ def process_queue(work_queue, history, failed, recheck):
         
         if stats['aborted_ratelimit']: break
         if not needs_sleep: continue
-        sleep_dur = BASE_SLEEP + random.uniform(1, 3)
+        # Requests are throttled per source (MIN_INTERVAL); this pause is only an optional extra.
+        sleep_dur = BASE_SLEEP + (random.uniform(0, min(1.0, BASE_SLEEP / 2)) if BASE_SLEEP else 0)
         if search_penalty: sleep_dur += SEARCH_PENALTY_SLEEP
-        time.sleep(sleep_dur)
+        if sleep_dur > 0: time.sleep(sleep_dur)
 
 def log_run_header():
     logging.info("=" * 60)
@@ -1760,6 +2010,7 @@ def log_run_header():
     if os.getenv('CODE_VERSION'): logging.info(f"Code version: {os.getenv('CODE_VERSION')}")
     logging.info(f"Libraries: {', '.join(LIBRARY_IDS)} | Batch: {MAX_BATCH_SIZE} | Refresh: {REFRESH_DAYS}d | Sleep: {BASE_SLEEP}s")
     logging.info(f"Audible API: {USE_AUDIBLE_API} | Goodreads: {'on' if GOODREADS_ENABLED else 'OFF'} | Intervals: {MIN_INTERVAL} | Goodreads budget: {GOODREADS_MAX_PER_RUN or 'unlimited'}")
+    logging.info(f"Hardcover: {'on' if HARDCOVER_ENABLED else ('OFF' if HARDCOVER_TOKEN else 'OFF (no token)')} | Rating block order: {', '.join(RATING_ORDER)}")
     logging.info(f"Runtime tolerance: {RUNTIME_TOLERANCE_PCT}% and {RUNTIME_TOLERANCE_MIN}min | Covers: {FILL_COVERS} | Genre language: {GENRE_LANGUAGE}")
     logging.info(f"Series merge: {SERIES_MERGE} (lock after merge: {SERIES_LOCK_AFTER_MERGE}) | Author normalize: {AUTHOR_NORMALIZE} | Library report: {LIBRARY_REPORT} | Series only: {SERIES_ONLY}")
     logging.info(f"Change journal: {PLANNED_FILE if DRY_RUN else CHANGES_FILE}")
@@ -1768,12 +2019,17 @@ def log_run_header():
 def log_run_summary(start_time, series_result):
     dur = format_time((datetime.now() - start_time).total_seconds())
     s = stats
+    hc = HC_STATE
+    hc_line = (f"Hardcover: found {s['hc_found']} | not found {s['hc_missing']} | requests {hc['requests']}"
+               + (f" (daily limit left: {hc['daily_left']})" if hc['daily_left'] is not None else '')
+               + (f" | stopped: {hc['disabled']}" if hc['disabled'] else '')) if HARDCOVER_ENABLED else "Hardcover: off"
     lines = [
         f"Books processed: {s['processed']} (skipped/locked: {s['skipped']}, manual updates: {s['manual_retrigger']}, re-checks: {s['recheck']})",
         f"Ratings {'to write' if DRY_RUN else 'written'}: {s['success']} | Audible without ratings yet: {s['no_ratings_yet']} | Goodreads missing: {s['gr_missing']} (deferred: {s['gr_deferred']})",
         f"ASINs found: {s['asin_found']} | Ratings from another edition: {s['other_edition']} | Metadata updated: {s['meta_updated']} | Covers added: {s['cover_added']} | Descriptions filled: {s['desc_filled']} | ISBNs added: {s['isbn_added']}",
         f"Series merges: {series_result.get('merges', 0)} ({series_result.get('books_changed', 0)} books {'would change' if DRY_RUN else 'changed'}) | "
         f"Author spellings unified: {series_result.get('author_fixes', 0)} ({series_result.get('authors_changed', 0)} books)",
+        hc_line,
         f"Errors: {s['failed']}{' | Goodreads blocked' if GR_STATE['blocked'] else ''}{' | ABORTED (rate limit)' if s['aborted_ratelimit'] else ''}",
         f"Duration: {dur}",
     ]
@@ -1806,7 +2062,8 @@ DEBUG_ENV_KEYS = ['ABS_URL', 'LIBRARY_IDS', 'GOODREADS_ENABLED', 'BATCH_SIZE', '
                   'LOG_LEVEL', 'TZ', 'CODE_VERSION', 'USE_AUDIBLE_API', 'AUDIBLE_API_INTERVAL', 'AUDIBLE_WEB_INTERVAL', 'GOODREADS_INTERVAL',
                   'GR_BLOCK_COOLDOWN', 'GR_MAX_COOLDOWNS', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'FILL_COVERS', 'GENRE_LANGUAGE',
                   'SERIES_MERGE', 'SERIES_LOCK_AFTER_MERGE', 'AUTHOR_NORMALIZE', 'LIBRARY_REPORT', 'NO_RATINGS_RECHECK_DAYS',
-                  'GR_MISSING_RECHECK_DAYS', 'SEARCH_PENALTY_SLEEP', 'ABS_TIMEOUT']  # never API_TOKEN
+                  'GR_MISSING_RECHECK_DAYS', 'SEARCH_PENALTY_SLEEP', 'ABS_TIMEOUT',
+                  'HARDCOVER_ENABLED', 'HARDCOVER_INTERVAL', 'RATING_ORDER']  # never API_TOKEN
 
 def write_debug_bundle(log_file):
     """One file with everything needed for troubleshooting: settings (no token), the run log, all changes
@@ -1818,7 +2075,7 @@ def write_debug_bundle(log_file):
     out = [f"=== ABS RATINGS DEBUG BUNDLE ===", f"Run: {RUN_ID} | Created: {datetime.now().isoformat(timespec='seconds')} | DRY_RUN: {DRY_RUN}", ""]
     out.append("=== SETTINGS ===")
     out += [f"{k}={os.getenv(k)}" for k in DEBUG_ENV_KEYS if os.getenv(k) is not None]
-    out.append(f"API_TOKEN set: {bool(API_TOKEN)} (length {len(API_TOKEN or '')})")
+    out.append(f"API_TOKEN set: {bool(API_TOKEN)} (length {len(API_TOKEN or '')}) | HARDCOVER_TOKEN set: {bool(HARDCOVER_TOKEN)}")
     out.append("")
     out.append("=== RUN LOG ===")
     try:
@@ -1847,7 +2104,7 @@ def write_debug_bundle(log_file):
     except (OSError, ValueError): out.append("(no library report)")
     out.append("")
     out.append("=== STATE FILES ===")
-    for name, path in [('history', HISTORY_FILE), ('failed', FAILED_FILE), ('recheck', RECHECK_FILE), ('goodreads cache', GR_CACHE_FILE),
+    for name, path in [('history', HISTORY_FILE), ('failed', FAILED_FILE), ('recheck', RECHECK_FILE), ('goodreads cache', GR_CACHE_FILE), ('hardcover cache', HC_CACHE_FILE),
                        ('series aliases', SERIES_ALIASES_FILE), ('series index', SERIES_INDEX_FILE)]:
         d = rw_json(path)
         size = sum(len(v) for v in d.values()) if name.startswith('series') and isinstance(d, dict) else len(d)
@@ -1884,6 +2141,7 @@ def main():
     logging.info("--- Start ---")
     history, failed, recheck = rw_json(HISTORY_FILE), rw_json(FAILED_FILE), rw_json(RECHECK_FILE)
     GR_CACHE.update(rw_json(GR_CACHE_FILE))
+    HC_CACHE.update(rw_json(HC_CACHE_FILE))
     SERIES_ALIASES.update(rw_json(SERIES_ALIASES_FILE))
     SERIES_INDEX.update(rw_json(SERIES_INDEX_FILE))
     if SERIES_ALIASES or SERIES_INDEX:
@@ -1893,7 +2151,7 @@ def main():
     if ABS_BACKUP and not DRY_RUN: create_abs_backup()
     if not SERIES_ONLY:
         run_libraries(history, failed, recheck)
-        if not DRY_RUN: rw_json(HISTORY_FILE, history); rw_json(FAILED_FILE, failed); rw_json(RECHECK_FILE, recheck)
+        if not DRY_RUN: rw_json(HISTORY_FILE, history); rw_json(FAILED_FILE, failed); rw_json(RECHECK_FILE, recheck); rw_json(HC_CACHE_FILE, HC_CACHE)
         save_reports()
         if AUTHOR_NOTES: rw_json(os.path.join(REPORT_DIR, "author_variants.json"), AUTHOR_NOTES)
         rw_json(RESULTS_FILE, RESULTS)  # also in DRY_RUN: it is the web UI's view of the last check

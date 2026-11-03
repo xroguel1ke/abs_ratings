@@ -21,6 +21,7 @@ REASON_DE = {
     'On Audible, but no ratings yet': 'Bei Audible vorhanden, aber noch keine Bewertungen',
     'metadata skipped (Audible data does not fit this book)': 'Metadaten nicht übernommen (Audible-Daten passen nicht zu diesem Buch)',
     'Goodreads not found': 'Goodreads nicht gefunden', 'Goodreads blocked': 'Goodreads gesperrt', 'Goodreads disabled': 'Goodreads aus',
+    'Hardcover not found': 'Hardcover nicht gefunden', 'Hardcover blocked': 'Hardcover übersprungen (Limit/Token)',
 }
 def de(text):
     if not text: return text

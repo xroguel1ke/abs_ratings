@@ -16,8 +16,11 @@ Status: ✅ done (branch `claude/web-ui`) · 🔜 next · ⏳ later
 - ⏳ Settings export/import (without tokens)
 
 ## 4. Ratings
-- 🔜 Sources Audible / Goodreads / Hardcover on/off + drag & drop order
-- 🔜 Hardcover module (GraphQL: ISBN/ASIN, then title+author, same strict rules; cache URL). Needs a real API response first.
+- ✅ Hardcover on/off, `RATING_ORDER` (text field, e.g. `audible,goodreads,hardcover`)
+- 🔜 Sources on/off + drag & drop order in the UI
+- ✅ Hardcover module: manual link → cached id (bulk refresh, 100 per request) → ASIN/ISBN edition → title search (strict:
+  author, pure title ratio ≥0.85, volume numbers, no box sets/compilations/manga; series number confirms or rejects weak titles).
+  Tested on ~200 books: ~89% found, no wrong hits left in the sample. Limits 60/min, 5000/day (stops with 25 left).
 - 🔜 Format: moons/stars, counts, DE/EN labels, block top/bottom, live preview; minimum rating count; optional `rating:4.5+` tag
 
 ## 5. Schedule
