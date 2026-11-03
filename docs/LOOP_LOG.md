@@ -41,3 +41,8 @@ Send via `tools/notify.sh "<title>" "<body>"` (Apprise from settings.json, works
   (if tmux is gone after a server restart: `tmux new -s abs`, `cd /mnt/user/appdata/abs_ratings_dev && claude --continue`, then "weiter" / read docs/LOOP_LOG.md).
 - When the work is finished (stop criterion met).
 Never print the Apprise URL.
+
+## Standing rule: speed (user, 2026-11-03)
+After every round, if realistically possible, make the NEXT round faster (e.g. cache Audible answers within a run, fewer
+duplicate requests, better search params, parallel-safe prefetch). Measure before/after (books per minute), time-box ~30 min per
+idea, adopt or reject and log it under "Experiment log". Never at the cost of rate-limit safety or matching accuracy.

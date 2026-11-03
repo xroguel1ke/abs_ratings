@@ -8,7 +8,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
  && apt-get update && apt-get install -y --no-install-recommends tzdata curl && rm -rf /var/lib/apt/lists/*
 
-COPY abs_ratings.py abs_series.py abs_undo.py ./
+COPY abs_ratings.py abs_series.py abs_undo.py recorder.py ./
 COPY webui ./webui
 
 ARG VERSION=dev

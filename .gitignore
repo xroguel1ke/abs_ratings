@@ -25,3 +25,5 @@ merge_decisions.json
 settings.json
 webui_runs.json
 .claude/settings.local.json
+tests/private/
+tests/fixtures/real/

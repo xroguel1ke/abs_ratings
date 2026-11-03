@@ -5,6 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 import re, json, random, difflib, logging, urllib.parse
 import html as html_lib
+import recorder; recorder.install()  # no-op unless RECORD_DIR / REPLAY_DIR is set (offline tests)
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 
