@@ -1207,7 +1207,8 @@ def process_library(lib_id, history, failed, recheck):
             try:
                 iid, key = item['id'], f"{lib_id}_{item['id']}"
                 item_data = abs_session.get(f"{ABS_URL}/api/items/{iid}").json()
-                tags = item_tags(item_data)
+                from abs_series import expand_locks
+                tags = expand_locks(item_tags(item_data))
                 meta = item_data['media']['metadata']
                 title = meta.get('title')
 
@@ -1284,6 +1285,10 @@ def process_library(lib_id, history, failed, recheck):
                 elif (str(check_lang).lower() in GERMAN_LANG_CODES) and aud_data.get('domain') == 'www.audible.com':
                     logging.info("      -> ⚠️ German Book only found on .com (Possible broken .de ASIN). Attempting Fix...")
                     should_search = True
+
+                if should_search and asin and 'lock_asin' in tags:
+                    logging.info(f"      -> 🔒 ASIN search skipped (lock_asin), keeping {asin}")
+                    should_search = False  # the checks below still skip metadata if Audible doesn't fit
 
                 if should_search:
                     search_penalty = True 

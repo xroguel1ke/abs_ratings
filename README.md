@@ -105,7 +105,7 @@ Everything is decided automatically. If a match is not certain, nothing is chang
 * **Runtime check:** If the ABS file duration and Audible's runtime differ by more than `RUNTIME_TOLERANCE_PCT` (15 %) **and** `RUNTIME_TOLERANCE_MIN` (20 min), the ASIN probably points to another edition. The script searches for the right one; if none is found, only the ratings are used and no metadata is changed.
 * **Filled only when empty:** narrators, authors, publisher, year, ISBN, cover, description (Audible summary).
 * **Explicit:** only set to true when Audible marks the product as adult content.
-* **Language:** ISO codes are normalized (`eng` → `English`, `deu` → `German`, ...).
+* **Language:** ISO codes are normalized (`eng` → `English`, `deu` → `German`, ...). If ABS and Audible disagree, the title and narrator decide: if they match Audible, the ABS language is corrected; if not (translated title, different narrator, or `lock_language`), the ASIN belongs to another language edition and the edition in the ABS language is searched. If none is found, metadata is left alone.
 * **Genres from audible.de** are translated to the English Audible names (`GENRE_LANGUAGE=en`); untranslated names are listed in the library report.
 * **Publisher / Year:** only filled when empty in ABS (Audible has the audiobook edition's data).
 * **Genres:** only the most specific Audible category of each branch is added (e.g. `Space Opera`, not `Science Fiction & Fantasy`); bare top-level categories (`Literature & Fiction`) only when Audible has nothing more specific. Existing genres are kept.
@@ -161,6 +161,8 @@ You can prevent the script from updating specific metadata fields by adding **Ta
 | `lock_isbn` | Prevents **ISBN** repairs/updates. |
 | `lock_abridged` | Prevents changes to the **Abridged** flag. |
 | `lock_title` | Prevents **Title**/**Subtitle** corrections. |
+| `lock_asin` | Keeps the **ASIN** (no replacement search; if Audible's data doesn't fit the book, only ratings are used). |
+| `lock_metadata` | All metadata locks at once: only the **ratings** are updated. |
 | `lock_narrators` | Prevents filling **Narrators**. |
 | `lock_authors` | Prevents filling **Authors**. |
 | `lock_cover` | Prevents setting a **Cover**. |

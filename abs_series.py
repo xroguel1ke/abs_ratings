@@ -34,6 +34,15 @@ FORMAT_PHRASES = [r'light\s*novels?', r'\bunabridged\b', r'\bungek(ü|ue)rzt\b',
 FUZZY_NAME_RATIO = 0.9
 
 
+METADATA_LOCKS = {'lock_title', 'lock_series', 'lock_language', 'lock_genres', 'lock_publisher', 'lock_year', 'lock_narrators',
+                  'lock_authors', 'lock_cover', 'lock_explicit', 'lock_abridged', 'lock_isbn', 'lock_asin'}
+
+
+def expand_locks(tags):
+    """'lock_metadata' = every metadata lock (ratings are still written)."""
+    return tags | METADATA_LOCKS if 'lock_metadata' in tags else tags
+
+
 def series_variant(name):
     n = name.lower()
     return frozenset(k for k, pats in VARIANT_MARKERS.items() if any(re.search(p, n) for p in pats))
@@ -168,7 +177,7 @@ def collect_records(ctx):
                 'authors': [a.get('name') if isinstance(a, dict) else a for a in (md.get('authors') or []) if a],
                 'narrators': md.get('narrators') or [], 'asin': md.get('asin'), 'isbn': md.get('isbn'),
                 'series': [{'name': s.get('name'), 'sequence': s.get('sequence')} for s in (md.get('series') or []) if s.get('name')],
-                'media_tags': list(media.get('tags') or []), 'tags': {t.strip() for t in raw_tags if isinstance(t, str)},
+                'media_tags': list(media.get('tags') or []), 'tags': expand_locks({t.strip() for t in raw_tags if isinstance(t, str)}),
                 'description': md.get('description') or '', 'language': md.get('language'), 'genres': md.get('genres') or [],
                 'cover': media.get('coverPath'), 'duration': media.get('duration'),
             })
