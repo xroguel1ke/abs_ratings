@@ -14,7 +14,7 @@ ABS-only maintenance task (no Audible/Goodreads requests):
 Called from abs_ratings.py at the end of a run (or alone with SERIES_ONLY=true).
 All writes go through ctx['abs_update'], so they are journaled and respect DRY_RUN.
 """
-import re, json, html, logging, difflib, os
+import re, json, html, logging, difflib, os, unicodedata
 from collections import defaultdict
 from datetime import datetime
 
@@ -85,9 +85,16 @@ def fmt_seqs(nums):
 def _n(x): return str(int(x)) if float(x).is_integer() else str(x)
 
 
+def fold_accents(s):
+    """'Kurmaić' -> 'Kurmaic'"""
+    return "".join(c for c in unicodedata.normalize("NFKD", s or "") if not unicodedata.combining(c))
+
+def is_latin(name):
+    return not re.search(r"[^\x00-\u024F]", name or "")
+
 def author_key(name):
-    """'Chambers, Becky' / 'Becky Chambers' / 'J.M. Clarke' / 'JM Clarke' -> comparable key."""
-    n = name.lower().strip()
+    """'Chambers, Becky' / 'Becky Chambers' / 'J.M. Clarke' / 'JM Clarke' / 'Kurmaić' -> comparable key (accents ignored)."""
+    n = fold_accents(name).lower().strip()
     if ',' in n:
         last, first = [x.strip() for x in n.split(',', 1)]
         n = f"{first} {last}"
@@ -298,7 +305,7 @@ def record_merge(ctx, kind, lib, target, members, target_books):
 
 # ================= AUTHORS =================
 
-def find_author_fixes(records, decisions=None):
+def find_author_fixes(records, decisions=None, links=None):
     """Spelling variants of the same author ('R. A. Salvatore' / 'R.A. Salvatore'): the spelling used
     by more books wins (tie: alphabetical). Returns ({variant: canonical}, counts, review list).
     Uncertain pairs ('J. Smith' / 'John Smith') go to the review list; your decisions win."""
@@ -309,10 +316,41 @@ def find_author_fixes(records, decisions=None):
     fixes = {}
     for key, spellings in count.items():
         if len(spellings) < 2: continue
-        canon = sorted(spellings.items(), key=lambda x: (-x[1], x[0]))[0][0]
+        canon = sorted(spellings.items(), key=lambda x: (-x[1], 0 if fold_accents(x[0]) != x[0] else 1, x[0]))[0][0]
         for sp in spellings:
             if sp != canon and decisions.get(merge_id('author', '', sp, canon), {}).get('action') not in ('keep', 'undone'):
                 fixes[sp] = canon
+    # Proof 1: the same Audible author record (author ASIN) was seen behind both spellings (single-author books only, see abs_ratings.note_author_links).
+    by_asin = defaultdict(set)
+    for name, asins in (links or {}).items():
+        for a in asins: by_asin[a].add(name)
+    for asin, group in by_asin.items():
+        present = [n for n in group if n in {sp for sps in count.values() for sp in sps}]
+        if len({author_key(n) for n in present}) < 2: continue
+        canon = max(present, key=lambda n: (sum(count[author_key(n)].values()) if author_key(n) in count else 0, fold_accents(n) != n, n))
+        for n in present:
+            if author_key(n) != author_key(canon) and n not in fixes and decisions.get(merge_id('author', '', n, canon), {}).get('action') not in ('keep', 'undone'):
+                fixes[n] = canon
+                logging.info(f"   Same Audible author record ({asin}): '{n}' -> '{canon}'")
+    # Proof 2: author in another script (e.g. Japanese) <-> Latin-script author: only if both have a book with the IDENTICAL title and a shared narrator
+    # (the same work credited under two spellings). Sharing a series is NOT enough (series can have several real authors).
+    by_author = defaultdict(list)
+    for r in records:
+        for a in r['authors']: by_author[a].append(r)
+    tkey = lambda t: re.sub(r'[^a-z0-9]+', ' ', fold_accents(t or '').lower()).strip()
+    for a in sorted(n for n in by_author if not is_latin(n)):
+        if a in fixes: continue
+        found = set()
+        for b in by_author:
+            if b == a or not is_latin(b): continue
+            for ra in by_author[a]:
+                if any(tkey(rb['title']) == tkey(ra['title']) and set(rb.get('narrators') or []) & set(ra.get('narrators') or []) for rb in by_author[b]):
+                    found.add(b)
+        if len({author_key(b) for b in found}) == 1:
+            canon = max(found, key=lambda b: sum(count[author_key(b)].values()))
+            if decisions.get(merge_id('author', '', a, canon), {}).get('action') not in ('keep', 'undone'):
+                fixes[a] = canon
+                logging.info(f"   Author in another script: '{a}' -> '{canon}' (identical title + shared narrator)")
     # Review: same last name, first name written out vs. initial ('J. Smith' / 'John Smith')
     total = {k: sum(v.values()) for k, v in count.items()}
     by_last = defaultdict(list)
@@ -335,6 +373,7 @@ def find_author_fixes(records, decisions=None):
                 elif act not in ('keep', 'undone'):
                     review.append({'id': mid, 'kind': 'author', 'lib': '', 'series': variant, 'other': canon,
                                    'reason': 'first name vs. initial', 'series_books': total[small], 'other_books': total[big]})
+    review = [r for r in review if r["series"] not in fixes]  # already resolved by proof
     return fixes, count, review
 
 
@@ -511,7 +550,7 @@ def run(ctx):
     write_series_index(ctx, records, merges if ctx['merge'] else [])
     fixes, author_review = {}, []
     if ctx.get('author_normalize'):
-        fixes, count, author_review = find_author_fixes(records, ctx['decisions'])
+        fixes, count, author_review = find_author_fixes(records, ctx['decisions'], ctx.get('author_links'))
         logging.info(f"   Author spelling variants: {len(fixes)} (review: {len(author_review)})")
         authors_changed = apply_author_fixes(ctx, records, fixes, count)
     # Web UI files: merge history, uncertain cases, decisions (a confirmed merge may have been reopened)

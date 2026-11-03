@@ -123,3 +123,12 @@ At the end, ABS authors must be in English (Latin script) and without duplicates
 shared co-author, Audible/Hardcover author record); never merge different people with similar names; always keep the Latin-script name.
 Work items: (1) inventory of all authors in the snapshot (duplicates by accent/initials/script), (2) extend abs_series author normalization
 (accent folding, non-Latin variants linked via same-ASIN/same-series books), (3) golden cases + offline tests, (4) STATUS line "Authors".
+
+## Authors – implemented with proof rules (user: merge only if really the same; series can have several real authors)
+Rules in `abs_series.find_author_fixes` (all offline-tested in tests/test_authors.py, synthetic data):
+1. spelling variants (initials spacing, accents, "Last, First") – existing + accent folding; tie -> spelling with diacritics.
+2. Same **Audible author record** behind both spellings (only single-author books; `audible_authors.json`, filled during normal runs) -> merge (Chakraborty).
+3. Author in another script (e.g. Japanese) <-> Latin author: only if both have a book with the IDENTICAL title and a shared narrator. Sharing a series is NOT a proof (tested).
+4. Everything else (e.g. "J. Smith" vs "John Smith") stays in the review list; different people with similar names are never merged.
+Checked: Audible and Hardcover both keep the Japanese and Latin Mushoku author as separate records (no alternate names) -> no database proof, hence rule 3.
+Library result (snapshot): 5 fixes (Kurmaic/Kurmaić, Tolkien, Salvatore, Schwab, 理不尽な孫の手 -> Rifujin na Magonote), Chakraborty needs rule 2 data (review until then).

@@ -650,6 +650,7 @@ def get_audible_api(asin, domain):
 
     res = {'domain': domain, 'source': 'API', 'page_ok': True, 'title_raw': p.get('title'), 'asin': p.get('asin') or asin,
            'authors_raw': [a.get('name') for a in (p.get('authors') or []) if a.get('name')],
+           'authors_asin': [{'name': a.get('name'), 'asin': a.get('asin')} for a in (p.get('authors') or []) if a.get('name') and a.get('asin')],
            'runtime_sec': int(p.get('runtime_length_min') or 0) * 60}
     if p.get('subtitle'): res['subtitle_raw'] = p['subtitle']
     rating = p.get('rating') or {}
@@ -896,6 +897,24 @@ def save_series_asins():
         with open(SERIES_ASIN_FILE, 'w', encoding='utf-8') as f: json.dump({t: sorted(a) for t, a in SERIES_ASINS.items()}, f, ensure_ascii=False)
     except OSError: pass
 atexit.register(save_series_asins)
+
+AUTHOR_LINKS_FILE = os.path.join(SCRIPT_DIR, 'audible_authors.json')  # ABS author spelling -> Audible author record IDs (proof that two spellings are one person)
+AUTHOR_LINKS = {}
+try:
+    for _n, _a in (json.load(open(AUTHOR_LINKS_FILE, encoding='utf-8')) if os.path.exists(AUTHOR_LINKS_FILE) else {}).items(): AUTHOR_LINKS[_n] = set(_a)
+except (OSError, ValueError): pass
+
+def note_author_links(abs_authors, aud_data):
+    """Only for single-author books: the ABS author and the Audible author of the SAME verified product are the same person."""
+    aa = (aud_data or {}).get('authors_asin') or []
+    names = [a for a in (abs_authors or []) if a]
+    if len(names) == 1 and len(aa) == 1 and aa[0].get('asin'): AUTHOR_LINKS.setdefault(names[0], set()).add(aa[0]['asin'])
+
+def save_author_links():
+    try:
+        with open(AUTHOR_LINKS_FILE, 'w', encoding='utf-8') as f: json.dump({n: sorted(a) for n, a in AUTHOR_LINKS.items()}, f, ensure_ascii=False)
+    except OSError: pass
+atexit.register(save_author_links)
 
 def series_candidates(abs_series, authors_list, duration, domain):
     """ASINs of books in the same Audible series as ABS's series. Audible's catalog search misses some (older) products, a series
@@ -2092,6 +2111,7 @@ def process_queue(work_queue, history, failed, recheck):
                         else:
                             abs_updates['narrators'] = aud_narr
                             log_updates.append(f"Narrators: -> {aud_narr}")
+                    if not aud_data.get('related_edition'): note_author_links(authors, aud_data)
                     aud_auth = aud_data.get('authors_raw') or []
                     if aud_auth and not authors:
                         if 'lock_authors' in tags: logging.info(f"        🔒 Authors Update Skipped (Locked): {aud_auth}")
@@ -2408,6 +2428,7 @@ def main():
                 'aliases': SERIES_ALIASES, 'aliases_file': SERIES_ALIASES_FILE, 'index_file': SERIES_INDEX_FILE,
                 'decisions_file': os.path.join(SCRIPT_DIR, 'merge_decisions.json'), 'merges_file': os.path.join(SCRIPT_DIR, 'merges.json'),
                 'review_file': os.path.join(SCRIPT_DIR, 'merge_review.json'),
+                'author_links': {n: sorted(a) for n, a in AUTHOR_LINKS.items()},
                 'extra': {'author_notes': AUTHOR_NOTES, 'unmapped_genres': UNMAPPED_GENRES},
             })
             stats['series_merged'] = series_result.get('merges', 0)
