@@ -9,6 +9,7 @@ DATA=/mnt/user/appdata/abs_scripts_test/$R
 SET=/mnt/user/appdata/audiobookshelf/abs_scripts/settings.json     # read only
 mkdir -p "$DATA/logs" "$DEV/tests/private/recordings"
 [ -f /mnt/user/appdata/abs_scripts_test/series_index.json ] && cp -n /mnt/user/appdata/abs_scripts_test/series_index.json "$DATA/" || true
+[ -f "$DEV/tests/private/audible_series.json" ] && cp -n "$DEV/tests/private/audible_series.json" "$DATA/" || true
 ONLY=$(paste -sd, "$KEYS")
 LIB=$(jq -r '.LIBRARY_IDS' "$SET")
 HCT=$(jq -r '.HARDCOVER_TOKEN' "$SET")

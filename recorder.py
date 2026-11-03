@@ -6,8 +6,11 @@ REPLAY_DIR=<dir>  outside requests are answered from that folder; nothing leaves
                   returns HTTP 599 and is appended to <dir>/_misses.jsonl so the test can report it.
 ABS itself (ABS_URL host) is never touched here.
 """
-import hashlib, json, os, urllib.parse
+import hashlib, json, os, time, urllib.parse
 import requests
+
+_LAST_LIVE = {}  # host -> monotonic time of the last live request
+_GAP = {"api.hardcover.app": 1.1}  # seconds between live requests per host (Audible default 0.6)
 
 RECORD_DIR = os.environ.get('RECORD_DIR', '').strip()
 REPLAY_DIR = os.environ.get('REPLAY_DIR', '').strip()
@@ -45,6 +48,10 @@ def install():
                 f.write(json.dumps({'method': method, 'url': url, 'params': kw.get('params')}, default=str) + '\n')
             r = requests.Response(); r.status_code, r._content, r.url = 599, b'', url
             return r
+        host = urllib.parse.urlparse(url).netloc
+        wait = _GAP.get(host, 0.6) - (time.monotonic() - _LAST_LIVE.get(host, 0))
+        if wait > 0: time.sleep(wait)
+        _LAST_LIVE[host] = time.monotonic()
         resp = orig(self, method, url, **kw)
         try:
             with open(path, 'w', encoding='utf-8') as f:
