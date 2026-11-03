@@ -3,10 +3,10 @@
 Resume here after any interruption. Newest entries at the bottom.
 
 ## Fragen an den Nutzer
-- (none yet)
+- Handy-Benachrichtigung nicht möglich: settings.json hat keine apprise_url, Remote Control ist inaktiv. Bitte Apprise-URL im Web-UI eintragen (oder Remote Control aktivieren). Bis dahin nur GitHub-Stand lesen.
 
 ## Experiment log (idea -> measurement -> adopted/rejected)
-- (none yet)
+- Handy-Benachrichtigung nicht möglich: settings.json hat keine apprise_url, Remote Control ist inaktiv. Bitte Apprise-URL im Web-UI eintragen (oder Remote Control aktivieren). Bis dahin nur GitHub-Stand lesen.
 
 ## Phase A – full dry run 20261103-143115 (1913 books, Hardcover on, Goodreads off)
 - Planned changes: description 1882, genres 1666, language 124 (106 eng->English), asin 97, series 23, publisher 14,
