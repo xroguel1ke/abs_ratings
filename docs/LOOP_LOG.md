@@ -35,7 +35,7 @@ Guardrails: .claude/settings.local.json now exists (226 deny / 6 allow, all othe
 
 ## Notification rules (set by the user 2026-11-03)
 Send via `tools/notify.sh "<title>" "<body>"` (Apprise from settings.json, works since 2026-11-03; test sent OK).
-- After every round: round no., metrics, wrong hits, Hardcover quota.
+- After every round: round no., metrics, wrong hits, Hardcover quota, and the estimated overall progress "~NN % fertig" (same number as in docs/STATUS.md; rough early on, say so).
 - IMMEDIATELY when manual action by the user is needed (blocked, limit, permission prompt, open question, session needs restart).
 - Once when the terminal can safely be closed. Text must include how to reopen: `ssh/Server-Terminal: tmux attach -t abs`
   (if tmux is gone after a server restart: `tmux new -s abs`, `cd /mnt/user/appdata/abs_ratings_dev && claude --continue`, then "weiter" / read docs/LOOP_LOG.md).
