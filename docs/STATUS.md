@@ -1,6 +1,6 @@
 # Status (live)
 
-Updated: 2026-11-03 22:20 – rounds 3-6 evaluated (0 clean, fixes per round 2,3,1,1), review list page + status page + live progress built – overall progress: ~28 % (0 % = before the task, 100 % = stop criterion of phase C met; measured against the 20-30 h plan)
+Updated: 2026-11-03 22:45 – counting batch A1 evaluated (not clean; first run with synthetic books: 80/80 after 3 fixes), A2 running – overall progress: ~33 % (0 % = before the task, 100 % = stop criterion of phase C met; measured against the 20-30 h plan; now 4 clean batches of 100+80 needed)
 Next step: round 7 (audible-only) now; tomorrow Hardcover-focused tests + Goodreads single-request probe; then synthetic fake-ABS books, more web UI points.
 
 | Area | % | Note |
