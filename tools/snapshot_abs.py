@@ -15,7 +15,7 @@ for lib in libs:
     res = s.get(f'{url}/api/libraries/{lib}/items', timeout=120).json()
     snap['lists'][lib] = res
     for i, it in enumerate(res['results']):
-        snap['items'][it['id']] = s.get(f"{url}/api/items/{it['id']}", timeout=30).json()
+        snap['items'][it['id']] = s.get(f"{url}/api/items/{it['id']}", params={'expanded': 1}, timeout=30).json()
         if i % 200 == 0: print(f'{lib[:8]} {i}/{len(res["results"])}', flush=True)
 json.dump(snap, open(out, 'w', encoding='utf-8'), ensure_ascii=False)
 print('items:', len(snap['items']), '->', out)

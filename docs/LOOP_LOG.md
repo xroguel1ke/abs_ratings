@@ -46,3 +46,13 @@ Never print the Apprise URL.
 After every round, if realistically possible, make the NEXT round faster (e.g. cache Audible answers within a run, fewer
 duplicate requests, better search params, parallel-safe prefetch). Measure before/after (books per minute), time-box ~30 min per
 idea, adopt or reject and log it under "Experiment log". Never at the cost of rate-limit safety or matching accuracy.
+
+## Round 1 (first attempt, discarded)
+Found: ONLY_ITEMS mode passes `media: {}`, so ABS runtime was 0 -> all runtime checks off (also affects the web UI single-book test run!). Fix: item fetch uses `expanded=1`; snapshot re-taken expanded. Recordings of that run deleted (they were recorded with wrong runtimes only for ABS-side logic, but search results are re-recorded anyway).
+Also found: port 13378 is the user's real ABS; fake ABS now uses 18999 and aborts if the port already answers.
+Open question to user: is an external watchdog (mini container that notifies when LOOP_LOG.md has not changed for 2 h) wanted? Usage limit does not auto-resume this session to my knowledge -> manual `tmux attach -t abs` + "weiter" probably needed.
+
+## Watchdog (user said yes, 2026-11-03)
+Container `abs_ratings_test_watchdog` (tools/watchdog.py, read-only mounts, no autostart). Sends ONE Apprise message only when no file
+activity for 2 h (repeats after 6 h), with instructions how to continue. Stop it with `docker stop abs_ratings_test_watchdog`
+when the work is finished (Claude cannot: docker stop is on the deny list). Restart after a server reboot: see the docker run line in this commit's tools/watchdog.py header comment / LOOP_LOG.

@@ -1619,7 +1619,7 @@ def process_queue(work_queue, history, failed, recheck):
         while True: 
             try:
                 iid, key = item['id'], f"{lib_id}_{item['id']}"
-                item_data = abs_session.get(f"{ABS_URL}/api/items/{iid}").json()
+                item_data = abs_session.get(f"{ABS_URL}/api/items/{iid}", params={"expanded": 1}).json()  # expanded: includes media.duration (also in single-book mode)
                 from abs_series import expand_locks
                 tags = expand_locks(item_tags(item_data))
                 meta = item_data['media']['metadata']
