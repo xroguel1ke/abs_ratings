@@ -30,7 +30,7 @@ SEARCH_PENALTY_SLEEP = float(os.getenv('SEARCH_PENALTY_SLEEP', 0))  # Optional e
 MIN_INTERVAL = {
     'audible_api': float(os.getenv('AUDIBLE_API_INTERVAL', 1)),
     'audible_web': float(os.getenv('AUDIBLE_WEB_INTERVAL', 3)),
-    'goodreads': float(os.getenv('GOODREADS_INTERVAL', 2)),
+    'goodreads': float(os.getenv('GOODREADS_INTERVAL', 3)),
 }
 USE_AUDIBLE_API = os.getenv('USE_AUDIBLE_API', 'true').lower() == 'true'
 AUDIBLE_API_HOSTS = {"www.audible.com": "api.audible.com", "www.audible.de": "api.audible.de"}
@@ -40,6 +40,8 @@ ABS_TIMEOUT = int(os.getenv('ABS_TIMEOUT', 30))  # Seconds per ABS API request
 NO_RATINGS_RECHECK_DAYS = int(os.getenv('NO_RATINGS_RECHECK_DAYS', 7))  # New releases without ratings yet
 GR_MISSING_RECHECK_DAYS = int(os.getenv('GR_MISSING_RECHECK_DAYS', 30))  # Audible OK, Goodreads not found
 GR_BLOCKED_RECHECK_DAYS = 1  # Goodreads blocked/unreachable during the run
+GR_BLOCK_COOLDOWN = int(os.getenv('GR_BLOCK_COOLDOWN', 120))  # Pause before retrying after a Goodreads block
+GR_MAX_COOLDOWNS = int(os.getenv('GR_MAX_COOLDOWNS', 1))  # Cool-downs per run before Goodreads is skipped
 
 # --- HEADERS & CONSTANTS ---
 FIXED_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
@@ -101,7 +103,7 @@ RE_RAW_COUNT = re.compile(r'count="(\d+)"')
 
 stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck"]}
 stats['aborted_ratelimit'] = False
-GR_STATE = {'blocked': False}
+GR_STATE = {'blocked': False, 'cooldowns': 0}
 GR_CACHE = {}  # Filled in main()  # Set once Goodreads blocks us; GR is then skipped for the rest of the run
 reports = {"audible": {}, "goodreads": {}}
 
@@ -245,6 +247,10 @@ def title_similarity(a, b):
     if not na or not nb: return 0.0
     score = difflib.SequenceMatcher(None, na, nb).ratio()
     if (len(na) > 3 and na in nb) or (len(nb) > 3 and nb in na): score += 0.15
+    # One title fully contained in the other (e.g. 'From Percy Jackson - Camp Half-Blood Confidential: ...'
+    # vs 'Camp Half-Blood Confidential'): strong signal if the shorter one has at least 3 words.
+    short, long_ = sorted((na, nb), key=len)
+    if len(short.split()) >= 3 and f" {short} " in f" {long_} ": score = max(score, 0.85)
     return score
 
 def extract_volume(text): return set(RE_VOL.findall(text)) | ({m.group(1)} if (m := re.search(r'\b(\d+)$', text.strip())) else set())
@@ -412,8 +418,9 @@ def get_audible_api(asin, domain):
     # Convert to the 'meta_raw' shape the metadata sync already understands
     categories = []
     for ladder in p.get('category_ladders') or []:
-        for c in ladder.get('ladder') or []:
-            if c.get('name') and c['name'] not in categories: categories.append(c['name'])
+        # Only the finest level of each ladder ('Space Opera' instead of 'Science Fiction & Fantasy' > 'Science Fiction' > 'Space Opera')
+        leaf = ((ladder.get('ladder') or [{}])[-1] or {}).get('name')
+        if leaf and leaf not in categories: categories.append(leaf)
     res['meta_raw'] = {
         'language': p.get('language'),
         'publisher': {'name': p.get('publisher_name')} if p.get('publisher_name') else None,
@@ -722,19 +729,28 @@ def get_goodreads_data(isbn, title, authors, prim_auth, cached_url=None):
         logging.info("      -> ⏭️ Goodreads skipped (blocked earlier in this run)")
         return None, 'blocked'
     logging.info("      -> Checking www.goodreads.com")
-    try:
-        if cached_url:
-            if d := scrape_gr_details(cached_url, require_book_page=True):
-                d['source'] = 'Cache'
-                logging.info(f"        ✅ Found via cached URL (Count: {d.get('count')}, Rating: {round(safe_float(d.get('val')), 2)})")
-                return d, 'found'
-            logging.info("        ↪️ Cached Goodreads URL failed, searching again...")
-        d = _search_goodreads(isbn, title, authors, prim_auth)
-        return d, ('found' if d else 'not_found')
-    except SourceBlockedException as e:
-        GR_STATE['blocked'] = True
-        logging.warning(f"        🛑 Goodreads blocks requests: {e}. Skipping Goodreads for the rest of this run.")
-        return None, 'blocked'
+    while True:
+        try:
+            return _goodreads_lookup(isbn, title, authors, prim_auth, cached_url)
+        except SourceBlockedException as e:
+            if GR_STATE['cooldowns'] < GR_MAX_COOLDOWNS:
+                GR_STATE['cooldowns'] += 1
+                logging.warning(f"        ⏸️ Goodreads blocks requests: {e}. Cool-down {GR_BLOCK_COOLDOWN}s, then retrying ({GR_STATE['cooldowns']}/{GR_MAX_COOLDOWNS})...")
+                time.sleep(GR_BLOCK_COOLDOWN)
+                continue
+            GR_STATE['blocked'] = True
+            logging.warning(f"        🛑 Goodreads still blocks requests: {e}. Skipping Goodreads for the rest of this run.")
+            return None, 'blocked'
+
+def _goodreads_lookup(isbn, title, authors, prim_auth, cached_url):
+    if cached_url:
+        if d := scrape_gr_details(cached_url, require_book_page=True):
+            d['source'] = 'Cache'
+            logging.info(f"        ✅ Found via cached URL (Count: {d.get('count')}, Rating: {round(safe_float(d.get('val')), 2)})")
+            return d, 'found'
+        logging.info("        ↪️ Cached Goodreads URL failed, searching again...")
+    d = _search_goodreads(isbn, title, authors, prim_auth)
+    return d, ('found' if d else 'not_found')
 
 def parse_gr_search_results(soup):
     """Return [(title, absolute_url, author)] from a Goodreads search page.
@@ -1070,7 +1086,9 @@ def process_library(lib_id, history, failed, recheck):
                     # and only if Audible's title confirms it is the same book.
                     aud_title, aud_sub = aud_data.get('title_raw'), aud_data.get('subtitle_raw')
                     if aud_title and aud_title != title and (messy or asin_from_search):
-                        confirmed = asin_from_search or title_similarity(search_title, aud_title) >= 0.8
+                        candidates = [search_title]
+                        if messy and messy.get('subtitle'): candidates.append(f"{messy['title']}: {messy['subtitle']}")
+                        confirmed = asin_from_search or any(title_similarity(c, aud_title) >= 0.8 for c in candidates)
                         if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{aud_title}'")
                         elif confirmed:
                             abs_updates['title'] = aud_title
@@ -1080,20 +1098,21 @@ def process_library(lib_id, history, failed, recheck):
                                 log_updates.append(f"Subtitle: -> '{aud_sub}'")
 
                     new_pub = (md_raw.get('publisher') or {}).get('name')
+                    # Publisher and year are only filled when empty (Audible has the audiobook edition's data)
                     if 'lock_publisher' not in tags:
-                        if new_pub and new_pub != meta.get('publisher'):
+                        if new_pub and not meta.get('publisher'):
                             abs_updates['publisher'] = new_pub
                             log_updates.append(f"Publisher: '{meta.get('publisher')}' -> '{new_pub}'")
-                    elif new_pub and new_pub != meta.get('publisher'): logging.info(f"        🔒 Publisher Update Skipped (Locked): '{new_pub}'")
+                    elif new_pub and not meta.get('publisher'): logging.info(f"        🔒 Publisher Update Skipped (Locked): '{new_pub}'")
 
                     if 'lock_year' not in tags:
                         new_year = parse_release_year(md_raw.get('releaseDate'))
-                        if new_year and new_year != str(meta.get('publishedYear') or ''):
+                        if new_year and not meta.get('publishedYear'):
                             abs_updates['publishedYear'] = new_year
                             log_updates.append(f"Year: '{meta.get('publishedYear')}' -> '{new_year}'")
                     else:
                         new_year = parse_release_year(md_raw.get('releaseDate'))
-                        if new_year and new_year != str(meta.get('publishedYear') or ''): logging.info(f"        🔒 Year Update Skipped (Locked): '{new_year}'")
+                        if new_year and not meta.get('publishedYear'): logging.info(f"        🔒 Year Update Skipped (Locked): '{new_year}'")
                     
                     if 'lock_language' not in tags:
                         if new_lang_detected and new_lang_detected != meta.get('language'):
@@ -1143,6 +1162,11 @@ def process_library(lib_id, history, failed, recheck):
                                         pattern = re.escape(s_name) + r'[\s:,-]+(\d+(?:\.\d+)?)'
                                         if m := re.search(pattern, search_text, re.IGNORECASE): s_seq = m.group(1); break
                                         if m := re.search(r'(?:Teil|Band|Book|Vol\.?)\s*(\d+(?:\.\d+)?)', search_text, re.IGNORECASE): s_seq = m.group(1); break
+                                if s_name and s_seq is None:
+                                    # Audible has no number: keep the one already in ABS for this series
+                                    for cur in (meta.get('series') or []):
+                                        if (cur.get('name') or '').strip().lower() == s_name.strip().lower() and cur.get('sequence'):
+                                            s_seq = cur.get('sequence'); break
                                 if s_name: new_series_list.append({"name": s_name, "sequence": s_seq})
                             
                             curr_series_list = meta.get('series') or []

@@ -64,7 +64,9 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 | `USE_AUDIBLE_API` | Use the Audible catalog API (`false` = scrape product pages only). | `true` |
 | `AUDIBLE_API_INTERVAL` | Minimum seconds between two Audible API requests. | `1` |
 | `AUDIBLE_WEB_INTERVAL` | Minimum seconds between two Audible web page requests (searches, fallback). | `3` |
-| `GOODREADS_INTERVAL` | Minimum seconds between two Goodreads requests. | `2` |
+| `GOODREADS_INTERVAL` | Minimum seconds between two Goodreads requests. | `3` |
+| `GR_BLOCK_COOLDOWN` | Pause in seconds after Goodreads blocks, before one retry. | `120` |
+| `GR_MAX_COOLDOWNS` | Cool-downs per run before Goodreads is skipped for the rest of the run. | `1` |
 | `SEARCH_PENALTY_SLEEP` | Optional extra pause after an ASIN search. | `0` |
 
 > **Pauses:** Every source is throttled on its own (see the `*_INTERVAL` variables), so `SLEEP_TIMER` can stay small. If you ever hit a rate limit, raise the interval of the affected source first.
@@ -75,10 +77,17 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 
 * **No ratings yet:** If the Audible product page exists but nobody has rated the book yet, the script does **not** search for a replacement ASIN. It re-checks the book after `NO_RATINGS_RECHECK_DAYS`.
 * **Only Goodreads missing:** If Audible worked, a missing Goodreads match does not count as a failed attempt. The book is re-checked after `GR_MISSING_RECHECK_DAYS`.
-* **Goodreads blocked:** If Goodreads blocks the script (HTTP 403/429/503, bot challenge, login wall), Goodreads is skipped for the rest of the run and the book is re-checked the next day. The notification shows `⚠️ Goodreads blocked`.
+* **Goodreads blocked:** If Goodreads blocks the script (HTTP 403/429/503, bot challenge, login wall), the script pauses for `GR_BLOCK_COOLDOWN` seconds and retries. If it is still blocked, Goodreads is skipped for the rest of the run and the book is re-checked the next day. The notification shows `⚠️ Goodreads blocked`.
 * Only books without any Audible data get "strikes". After 5 strikes they wait for the normal `REFRESH_DAYS`.
 
 Scheduled re-checks are stored in `recheck_history.json`.
+
+## 📝 Metadata Rules
+
+* **Publisher / Year:** only filled when empty in ABS (Audible has the audiobook edition's data).
+* **Genres:** only the most specific Audible category of each branch is added (e.g. `Space Opera`, not `Science Fiction & Fantasy`). Existing genres are kept.
+* **Series:** taken from Audible. If Audible has no number for a series, the number already in ABS is kept.
+* **Title:** only corrected for broken titles (see Title Repair).
 
 ## 🔒 Lock Tags (Manual Control)
 
