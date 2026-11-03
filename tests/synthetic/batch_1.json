@@ -1,0 +1,2411 @@
+{
+ "library": "114068f9-142d-4524-b0ef-a349354b5f88",
+ "items": {
+  "syn-1-00": {
+   "id": "syn-1-00",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Detective in the Dooryard",
+     "subtitle": "Reflections of a Maine Cop",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Timothy A. Cotton"
+      }
+     ],
+     "narrators": [
+      "Timothy A. Cotton"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2020",
+     "publisher": "The Globe Pequot Publishing Group",
+     "description": "",
+     "asin": "1608937720",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 20640,
+    "tags": [],
+    "coverPath": null,
+    "size": 165120000
+   },
+   "tags": []
+  },
+  "syn-1-01": {
+   "id": "syn-1-01",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Trash Droid Files: The Complete Series in One (A Darkly Funny Sci-Fi Comedy About a Rogue Robot)",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Michael Cheney"
+      }
+     ],
+     "narrators": [
+      "Lukas Arnold"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Trash Droid Files",
+       "sequence": "1-5"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Michael Cheney",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 106200,
+    "tags": [],
+    "coverPath": null,
+    "size": 849600000
+   },
+   "tags": []
+  },
+  "syn-1-02": {
+   "id": "syn-1-02",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Glass Dolls",
+     "subtitle": "Detective Dove Milson, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "D.E. White"
+      }
+     ],
+     "narrators": [
+      "Zara Ramm"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Detective Dove Milson",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": "B081C6R12M",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 30780,
+    "tags": [],
+    "coverPath": null,
+    "size": 246240000
+   },
+   "tags": []
+  },
+  "syn-1-03": {
+   "id": "syn-1-03",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "06 The Haunting of the Holloway Family: A Riveting Paranormal Mystery Boxset",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "James Hunt"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Independently Published",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 77040,
+    "tags": [],
+    "coverPath": null,
+    "size": 616320000
+   },
+   "tags": []
+  },
+  "syn-1-04": {
+   "id": "syn-1-04",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Prince: The Prince",
+     "subtitle": "A Novel",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Nicolo Machiavelli"
+      }
+     ],
+     "narrators": [
+      "Joseph Gomez"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2019",
+     "publisher": "MuseumAudiobooks.com",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 11700,
+    "tags": [],
+    "coverPath": null,
+    "size": 93600000
+   },
+   "tags": []
+  },
+  "syn-1-05": {
+   "id": "syn-1-05",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Prince and the Player: A Gripping LitRPG Adventure",
+     "subtitle": "A hilarious and heartwarming MM romantic comedy from Nora Phoenix",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Nora Phoenix"
+      }
+     ],
+     "narrators": [
+      "Charlie Klæboe Svensson",
+      "Barclay Craig"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Prince Pact",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Boldwood Books",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 29040,
+    "tags": [],
+    "coverPath": null,
+    "size": 232320000
+   },
+   "tags": []
+  },
+  "syn-1-06": {
+   "id": "syn-1-06",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Red Prince",
+     "subtitle": "The Life of John of Gaunt, the Duke of Lancaster",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "H. Carr"
+      }
+     ],
+     "narrators": [
+      "Helen Carr"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "Blackstone Publishing",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 34380,
+    "tags": [],
+    "coverPath": null,
+    "size": 275040000
+   },
+   "tags": []
+  },
+  "syn-1-07": {
+   "id": "syn-1-07",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The City of Akul",
+     "subtitle": "The Legend of William Oh, Book 2",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Macronomicon"
+      }
+     ],
+     "narrators": [
+      "Ryan H. Reid",
+      "Justin Thomas James",
+      "Annie Ellicott",
+      "Aaron J. Morton",
+      "Jeff Hays"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Legend of William Oh",
+       "sequence": "2"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Soundbooth Theater",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 46320,
+    "tags": [],
+    "coverPath": null,
+    "size": 370560000
+   },
+   "tags": []
+  },
+  "syn-1-08": {
+   "id": "syn-1-08",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Prince",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Niccolò Machiavelli"
+      }
+     ],
+     "narrators": [
+      "Douglass Scott"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2020",
+     "publisher": "Strelbytskyy Multimedia Publishing",
+     "description": "",
+     "asin": "B085Y4MLC6",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 11469,
+    "tags": [],
+    "coverPath": null,
+    "size": 91752000
+   },
+   "tags": []
+  },
+  "syn-1-09": {
+   "id": "syn-1-09",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Admiral of Gaia",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Timothy Ellis"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Independently Published",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 34020,
+    "tags": [],
+    "coverPath": null,
+    "size": 272160000
+   },
+   "tags": []
+  },
+  "syn-1-10": {
+   "id": "syn-1-10",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Threads of Fate 03 Ocean of Tears",
+     "subtitle": "Threads of Fate, Book 3",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Michael Head"
+      }
+     ],
+     "narrators": [
+      "Travis Baldree"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Threads of Fate",
+       "sequence": "3"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 35700,
+    "tags": [],
+    "coverPath": null,
+    "size": 285600000
+   },
+   "tags": []
+  },
+  "syn-1-11": {
+   "id": "syn-1-11",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Black Ocean: Mercy for Hire",
+     "subtitle": "Complete Collection: Missions 1-16",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "J.S. Morin"
+      }
+     ],
+     "narrators": [
+      "Mikael Naramore"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Black Ocean: Mercy for Hire Series",
+       "sequence": "1-16"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2020",
+     "publisher": "Magical Scrivener Press",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 333780,
+    "tags": [],
+    "coverPath": null,
+    "size": 2670240000
+   },
+   "tags": []
+  },
+  "syn-1-12": {
+   "id": "syn-1-12",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Farside",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Lawrence P. White"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Independently Published",
+     "description": "",
+     "asin": "B0CPTD13LG",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 75600,
+    "tags": [],
+    "coverPath": null,
+    "size": 604800000
+   },
+   "tags": []
+  },
+  "syn-1-13": {
+   "id": "syn-1-13",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Night Magick",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Suri Rosen"
+      }
+     ],
+     "narrators": [
+      "Josh Gad"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2020",
+     "publisher": "Audible Originals",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 22680,
+    "tags": [],
+    "coverPath": null,
+    "size": 181440000
+   },
+   "tags": []
+  },
+  "syn-1-14": {
+   "id": "syn-1-14",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Golden Orchard",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Flora Ahn"
+      }
+     ],
+     "narrators": [
+      "Kathleen Choe"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2020",
+     "publisher": "Audible Originals",
+     "description": "",
+     "asin": "B0ZF48GL91",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 18900,
+    "tags": [],
+    "coverPath": null,
+    "size": 151200000
+   },
+   "tags": []
+  },
+  "syn-1-15": {
+   "id": "syn-1-15",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "06 The Fae Prince (Fantasy Romance)",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Amy Horikami"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Independently Published",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 20160,
+    "tags": [],
+    "coverPath": null,
+    "size": 161280000
+   },
+   "tags": []
+  },
+  "syn-1-16": {
+   "id": "syn-1-16",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Legend Rising: Legend Rising",
+     "subtitle": "Galactic Guardians, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Jonathan Yanez"
+      }
+     ],
+     "narrators": [
+      "Jeffrey Kafer"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Galactic Guardians",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 33000,
+    "tags": [],
+    "coverPath": null,
+    "size": 264000000
+   },
+   "tags": []
+  },
+  "syn-1-17": {
+   "id": "syn-1-17",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Dark Side of the Road: A Gripping LitRPG Adventure",
+     "subtitle": "Ishmael Jones Mystery Series, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Simon R. Green"
+      }
+     ],
+     "narrators": [
+      "Gildart Jackson"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Ishmael Jones Mystery",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2018",
+     "publisher": "Tantor Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 31080,
+    "tags": [],
+    "coverPath": null,
+    "size": 248640000
+   },
+   "tags": []
+  },
+  "syn-1-18": {
+   "id": "syn-1-18",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Thief and the Nightingale",
+     "subtitle": "A novel of medieval Spain",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "K. M. Butler"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Firsthand Account Press",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 48060,
+    "tags": [],
+    "coverPath": null,
+    "size": 384480000
+   },
+   "tags": []
+  },
+  "syn-1-19": {
+   "id": "syn-1-19",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Magic Slays",
+     "subtitle": "Kate Daniels, Book 5",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Ilona Andrews"
+      }
+     ],
+     "narrators": [
+      "Renée Raudman"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Kate Daniels",
+       "sequence": "5"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2011",
+     "publisher": "Tantor Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 47580,
+    "tags": [],
+    "coverPath": null,
+    "size": 380640000
+   },
+   "tags": []
+  },
+  "syn-1-20": {
+   "id": "syn-1-20",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Road to Memphis",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Mildred D. Taylor"
+      }
+     ],
+     "narrators": [
+      "Allyson Johnson"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Logan Family Saga",
+       "sequence": "7"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2018",
+     "publisher": "Listening Library",
+     "description": "",
+     "asin": "B079VTDYYP",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 33825,
+    "tags": [],
+    "coverPath": null,
+    "size": 270600000
+   },
+   "tags": []
+  },
+  "syn-1-21": {
+   "id": "syn-1-21",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Art Thief",
+     "subtitle": "A True Story of Love, Crime, and a Dangerous Obsession",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Michael Finkel"
+      }
+     ],
+     "narrators": [
+      "Edoardo Ballerini",
+      "Michael Finkel"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Random House Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 20340,
+    "tags": [],
+    "coverPath": null,
+    "size": 162720000
+   },
+   "tags": []
+  },
+  "syn-1-22": {
+   "id": "syn-1-22",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Ocean at the End of the Lane",
+     "subtitle": "A Novel",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Neil Gaiman"
+      }
+     ],
+     "narrators": [
+      "Neil Gaiman"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2013",
+     "publisher": "William Morrow",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 22920,
+    "tags": [],
+    "coverPath": null,
+    "size": 183360000
+   },
+   "tags": []
+  },
+  "syn-1-23": {
+   "id": "syn-1-23",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Blood & Steel",
+     "subtitle": "The Legends of Thezmarr, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Helen Scheuerer"
+      }
+     ],
+     "narrators": [
+      "Mollie Stark",
+      "Sebastian"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Legends of Thezmarr",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Dreamscape Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 53520,
+    "tags": [],
+    "coverPath": null,
+    "size": 428160000
+   },
+   "tags": []
+  },
+  "syn-1-24": {
+   "id": "syn-1-24",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Muir’s Gambit",
+     "subtitle": "The Spy Game Movie Origin Story",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Michael Frost Beckner"
+      }
+     ],
+     "narrators": [
+      "Todd Boyce"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Spy Game Trilogy",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Audible Studios",
+     "description": "",
+     "asin": "B0GK3DS729",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 45060,
+    "tags": [],
+    "coverPath": null,
+    "size": 360480000
+   },
+   "tags": []
+  },
+  "syn-1-25": {
+   "id": "syn-1-25",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Queen",
+     "subtitle": "Thrall, Book 3",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "K.A. Riley"
+      }
+     ],
+     "narrators": [
+      "Jessie Elwyn"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Thrall",
+       "sequence": "3"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "K. A. Riley",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 41400,
+    "tags": [],
+    "coverPath": null,
+    "size": 331200000
+   },
+   "tags": []
+  },
+  "syn-1-26": {
+   "id": "syn-1-26",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Real Magic",
+     "subtitle": "Ancient Wisdom, Modern Science, and a Guide to the Secret Power of the Universe",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Dean Radin PhD"
+      }
+     ],
+     "narrators": [
+      "Mark Bramhall"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2018",
+     "publisher": "Random House Audio",
+     "description": "",
+     "asin": "B07B6CV1LL",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 29280,
+    "tags": [],
+    "coverPath": null,
+    "size": 234240000
+   },
+   "tags": []
+  },
+  "syn-1-27": {
+   "id": "syn-1-27",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "09 The Underworld",
+     "subtitle": "Journeys to the Depths of the Ocean",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Susan Casey"
+      }
+     ],
+     "narrators": [
+      "Susan Casey"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Random House Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 42900,
+    "tags": [],
+    "coverPath": null,
+    "size": 343200000
+   },
+   "tags": []
+  },
+  "syn-1-28": {
+   "id": "syn-1-28",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Legends: Legends",
+     "subtitle": "The King & Slater Series, Book 13",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Matt Rogers"
+      }
+     ],
+     "narrators": [
+      "Kevin Kenerly"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The King & Slater Series",
+       "sequence": "13"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 33360,
+    "tags": [],
+    "coverPath": null,
+    "size": 266880000
+   },
+   "tags": []
+  },
+  "syn-1-29": {
+   "id": "syn-1-29",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Robot Swarms: A Gripping LitRPG Adventure",
+     "subtitle": "Robots that Help Humans",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Richard Murch"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Independently Published",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 15000,
+    "tags": [],
+    "coverPath": null,
+    "size": 120000000
+   },
+   "tags": []
+  }
+ },
+ "list": [
+  {
+   "id": "syn-1-00",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Detective in the Dooryard",
+     "subtitle": "Reflections of a Maine Cop",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Timothy A. Cotton"
+      }
+     ],
+     "narrators": [
+      "Timothy A. Cotton"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2020",
+     "publisher": "The Globe Pequot Publishing Group",
+     "description": "",
+     "asin": "1608937720",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 20640,
+    "tags": [],
+    "coverPath": null,
+    "size": 165120000
+   }
+  },
+  {
+   "id": "syn-1-01",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Trash Droid Files: The Complete Series in One (A Darkly Funny Sci-Fi Comedy About a Rogue Robot)",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Michael Cheney"
+      }
+     ],
+     "narrators": [
+      "Lukas Arnold"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Trash Droid Files",
+       "sequence": "1-5"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Michael Cheney",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 106200,
+    "tags": [],
+    "coverPath": null,
+    "size": 849600000
+   }
+  },
+  {
+   "id": "syn-1-02",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Glass Dolls",
+     "subtitle": "Detective Dove Milson, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "D.E. White"
+      }
+     ],
+     "narrators": [
+      "Zara Ramm"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Detective Dove Milson",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": "B081C6R12M",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 30780,
+    "tags": [],
+    "coverPath": null,
+    "size": 246240000
+   }
+  },
+  {
+   "id": "syn-1-03",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "06 The Haunting of the Holloway Family: A Riveting Paranormal Mystery Boxset",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "James Hunt"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Independently Published",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 77040,
+    "tags": [],
+    "coverPath": null,
+    "size": 616320000
+   }
+  },
+  {
+   "id": "syn-1-04",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Prince: The Prince",
+     "subtitle": "A Novel",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Nicolo Machiavelli"
+      }
+     ],
+     "narrators": [
+      "Joseph Gomez"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2019",
+     "publisher": "MuseumAudiobooks.com",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 11700,
+    "tags": [],
+    "coverPath": null,
+    "size": 93600000
+   }
+  },
+  {
+   "id": "syn-1-05",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Prince and the Player: A Gripping LitRPG Adventure",
+     "subtitle": "A hilarious and heartwarming MM romantic comedy from Nora Phoenix",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Nora Phoenix"
+      }
+     ],
+     "narrators": [
+      "Charlie Klæboe Svensson",
+      "Barclay Craig"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Prince Pact",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Boldwood Books",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 29040,
+    "tags": [],
+    "coverPath": null,
+    "size": 232320000
+   }
+  },
+  {
+   "id": "syn-1-06",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Red Prince",
+     "subtitle": "The Life of John of Gaunt, the Duke of Lancaster",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "H. Carr"
+      }
+     ],
+     "narrators": [
+      "Helen Carr"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "Blackstone Publishing",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 34380,
+    "tags": [],
+    "coverPath": null,
+    "size": 275040000
+   }
+  },
+  {
+   "id": "syn-1-07",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The City of Akul",
+     "subtitle": "The Legend of William Oh, Book 2",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Macronomicon"
+      }
+     ],
+     "narrators": [
+      "Ryan H. Reid",
+      "Justin Thomas James",
+      "Annie Ellicott",
+      "Aaron J. Morton",
+      "Jeff Hays"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Legend of William Oh",
+       "sequence": "2"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Soundbooth Theater",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 46320,
+    "tags": [],
+    "coverPath": null,
+    "size": 370560000
+   }
+  },
+  {
+   "id": "syn-1-08",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Prince",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Niccolò Machiavelli"
+      }
+     ],
+     "narrators": [
+      "Douglass Scott"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2020",
+     "publisher": "Strelbytskyy Multimedia Publishing",
+     "description": "",
+     "asin": "B085Y4MLC6",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 11469,
+    "tags": [],
+    "coverPath": null,
+    "size": 91752000
+   }
+  },
+  {
+   "id": "syn-1-09",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Admiral of Gaia",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Timothy Ellis"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Independently Published",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 34020,
+    "tags": [],
+    "coverPath": null,
+    "size": 272160000
+   }
+  },
+  {
+   "id": "syn-1-10",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Threads of Fate 03 Ocean of Tears",
+     "subtitle": "Threads of Fate, Book 3",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Michael Head"
+      }
+     ],
+     "narrators": [
+      "Travis Baldree"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Threads of Fate",
+       "sequence": "3"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 35700,
+    "tags": [],
+    "coverPath": null,
+    "size": 285600000
+   }
+  },
+  {
+   "id": "syn-1-11",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Black Ocean: Mercy for Hire",
+     "subtitle": "Complete Collection: Missions 1-16",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "J.S. Morin"
+      }
+     ],
+     "narrators": [
+      "Mikael Naramore"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Black Ocean: Mercy for Hire Series",
+       "sequence": "1-16"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2020",
+     "publisher": "Magical Scrivener Press",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 333780,
+    "tags": [],
+    "coverPath": null,
+    "size": 2670240000
+   }
+  },
+  {
+   "id": "syn-1-12",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Farside",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Lawrence P. White"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Independently Published",
+     "description": "",
+     "asin": "B0CPTD13LG",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 75600,
+    "tags": [],
+    "coverPath": null,
+    "size": 604800000
+   }
+  },
+  {
+   "id": "syn-1-13",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Night Magick",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Suri Rosen"
+      }
+     ],
+     "narrators": [
+      "Josh Gad"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2020",
+     "publisher": "Audible Originals",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 22680,
+    "tags": [],
+    "coverPath": null,
+    "size": 181440000
+   }
+  },
+  {
+   "id": "syn-1-14",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Golden Orchard",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Flora Ahn"
+      }
+     ],
+     "narrators": [
+      "Kathleen Choe"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2020",
+     "publisher": "Audible Originals",
+     "description": "",
+     "asin": "B0ZF48GL91",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 18900,
+    "tags": [],
+    "coverPath": null,
+    "size": 151200000
+   }
+  },
+  {
+   "id": "syn-1-15",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "06 The Fae Prince (Fantasy Romance)",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Amy Horikami"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Independently Published",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 20160,
+    "tags": [],
+    "coverPath": null,
+    "size": 161280000
+   }
+  },
+  {
+   "id": "syn-1-16",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Legend Rising: Legend Rising",
+     "subtitle": "Galactic Guardians, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Jonathan Yanez"
+      }
+     ],
+     "narrators": [
+      "Jeffrey Kafer"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Galactic Guardians",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 33000,
+    "tags": [],
+    "coverPath": null,
+    "size": 264000000
+   }
+  },
+  {
+   "id": "syn-1-17",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Dark Side of the Road: A Gripping LitRPG Adventure",
+     "subtitle": "Ishmael Jones Mystery Series, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Simon R. Green"
+      }
+     ],
+     "narrators": [
+      "Gildart Jackson"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Ishmael Jones Mystery",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2018",
+     "publisher": "Tantor Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 31080,
+    "tags": [],
+    "coverPath": null,
+    "size": 248640000
+   }
+  },
+  {
+   "id": "syn-1-18",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Thief and the Nightingale",
+     "subtitle": "A novel of medieval Spain",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "K. M. Butler"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Firsthand Account Press",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 48060,
+    "tags": [],
+    "coverPath": null,
+    "size": 384480000
+   }
+  },
+  {
+   "id": "syn-1-19",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Magic Slays",
+     "subtitle": "Kate Daniels, Book 5",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Ilona Andrews"
+      }
+     ],
+     "narrators": [
+      "Renée Raudman"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Kate Daniels",
+       "sequence": "5"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2011",
+     "publisher": "Tantor Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 47580,
+    "tags": [],
+    "coverPath": null,
+    "size": 380640000
+   }
+  },
+  {
+   "id": "syn-1-20",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Road to Memphis",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Mildred D. Taylor"
+      }
+     ],
+     "narrators": [
+      "Allyson Johnson"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Logan Family Saga",
+       "sequence": "7"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2018",
+     "publisher": "Listening Library",
+     "description": "",
+     "asin": "B079VTDYYP",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 33825,
+    "tags": [],
+    "coverPath": null,
+    "size": 270600000
+   }
+  },
+  {
+   "id": "syn-1-21",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Art Thief",
+     "subtitle": "A True Story of Love, Crime, and a Dangerous Obsession",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Michael Finkel"
+      }
+     ],
+     "narrators": [
+      "Edoardo Ballerini",
+      "Michael Finkel"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Random House Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 20340,
+    "tags": [],
+    "coverPath": null,
+    "size": 162720000
+   }
+  },
+  {
+   "id": "syn-1-22",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Ocean at the End of the Lane",
+     "subtitle": "A Novel",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Neil Gaiman"
+      }
+     ],
+     "narrators": [
+      "Neil Gaiman"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2013",
+     "publisher": "William Morrow",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 22920,
+    "tags": [],
+    "coverPath": null,
+    "size": 183360000
+   }
+  },
+  {
+   "id": "syn-1-23",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Blood & Steel",
+     "subtitle": "The Legends of Thezmarr, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Helen Scheuerer"
+      }
+     ],
+     "narrators": [
+      "Mollie Stark",
+      "Sebastian"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Legends of Thezmarr",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Dreamscape Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 53520,
+    "tags": [],
+    "coverPath": null,
+    "size": 428160000
+   }
+  },
+  {
+   "id": "syn-1-24",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Muir’s Gambit",
+     "subtitle": "The Spy Game Movie Origin Story",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Michael Frost Beckner"
+      }
+     ],
+     "narrators": [
+      "Todd Boyce"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Spy Game Trilogy",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Audible Studios",
+     "description": "",
+     "asin": "B0GK3DS729",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 45060,
+    "tags": [],
+    "coverPath": null,
+    "size": 360480000
+   }
+  },
+  {
+   "id": "syn-1-25",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Queen",
+     "subtitle": "Thrall, Book 3",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "K.A. Riley"
+      }
+     ],
+     "narrators": [
+      "Jessie Elwyn"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Thrall",
+       "sequence": "3"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "K. A. Riley",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 41400,
+    "tags": [],
+    "coverPath": null,
+    "size": 331200000
+   }
+  },
+  {
+   "id": "syn-1-26",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Real Magic",
+     "subtitle": "Ancient Wisdom, Modern Science, and a Guide to the Secret Power of the Universe",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Dean Radin PhD"
+      }
+     ],
+     "narrators": [
+      "Mark Bramhall"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2018",
+     "publisher": "Random House Audio",
+     "description": "",
+     "asin": "B07B6CV1LL",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 29280,
+    "tags": [],
+    "coverPath": null,
+    "size": 234240000
+   }
+  },
+  {
+   "id": "syn-1-27",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "09 The Underworld",
+     "subtitle": "Journeys to the Depths of the Ocean",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Susan Casey"
+      }
+     ],
+     "narrators": [
+      "Susan Casey"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Random House Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 42900,
+    "tags": [],
+    "coverPath": null,
+    "size": 343200000
+   }
+  },
+  {
+   "id": "syn-1-28",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Legends: Legends",
+     "subtitle": "The King & Slater Series, Book 13",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Matt Rogers"
+      }
+     ],
+     "narrators": [
+      "Kevin Kenerly"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The King & Slater Series",
+       "sequence": "13"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 33360,
+    "tags": [],
+    "coverPath": null,
+    "size": 266880000
+   }
+  },
+  {
+   "id": "syn-1-29",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Robot Swarms: A Gripping LitRPG Adventure",
+     "subtitle": "Robots that Help Humans",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Richard Murch"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Independently Published",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 15000,
+    "tags": [],
+    "coverPath": null,
+    "size": 120000000
+   }
+  }
+ ],
+ "expected": {
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-00": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "The Detective in the Dooryard",
+   "note": "synthetic case clean_ok; true product 1608937720",
+   "case": "clean_ok"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-01": {
+   "asin": "B0HM6CHVX8",
+   "status": "confirmed",
+   "title": "The Trash Droid Files: The Complete Series in One (A Darkly Funny Sci-Fi Comedy About a Rogue Robot)",
+   "note": "synthetic case no_asin; true product B0HM6CHVX8",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-02": {
+   "asin": "1039400604",
+   "status": "confirmed",
+   "title": "Glass Dolls",
+   "note": "synthetic case dead_asin; true product 1039400604",
+   "case": "dead_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-03": {
+   "asin": "B0CYCVZ6QM",
+   "status": "confirmed",
+   "title": "The Haunting of the Holloway Family: A Riveting Paranormal Mystery Boxset",
+   "note": "synthetic case messy_number_prefix; true product B0CYCVZ6QM",
+   "case": "messy_number_prefix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-04": {
+   "asin": "B07YVDMQ7M",
+   "status": "confirmed",
+   "title": "The Prince",
+   "note": "synthetic case duplicate_title; true product B07YVDMQ7M",
+   "case": "duplicate_title"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-05": {
+   "asin": "B0DQ61115P",
+   "status": "confirmed",
+   "title": "The Prince and the Player",
+   "note": "synthetic case marketing_suffix; true product B0DQ61115P",
+   "case": "marketing_suffix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-06": {
+   "asin": "1665087943",
+   "status": "confirmed",
+   "title": "The Red Prince",
+   "note": "synthetic case initials_author; true product 1665087943",
+   "case": "initials_author"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-07": {
+   "asin": "B0H5L42WNX",
+   "status": "confirmed",
+   "title": "The City of Akul",
+   "note": "synthetic case accent_free_author; true product B0H5L42WNX",
+   "case": "accent_free_author"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-08": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "The Prince",
+   "note": "synthetic case runtime_8pct_off; true product B085Y4MLC6",
+   "case": "runtime_8pct_off"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-09": {
+   "asin": "B0F218Q8RT",
+   "status": "confirmed",
+   "title": "Admiral of Gaia",
+   "note": "synthetic case no_asin; true product B0F218Q8RT",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-10": {
+   "asin": "B0GFX13XYQ",
+   "status": "confirmed",
+   "title": "Ocean of Tears",
+   "note": "synthetic case messy_series_prefix; true product B0GFX13XYQ",
+   "case": "messy_series_prefix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-11": {
+   "asin": "B08J8G7QF6",
+   "status": "confirmed",
+   "title": "Black Ocean: Mercy for Hire",
+   "note": "synthetic case no_asin; true product B08J8G7QF6",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-12": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "Farside",
+   "note": "synthetic case clean_ok; true product B0CPTD13LG",
+   "case": "clean_ok"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-13": {
+   "asin": "B08DZ3YBKN",
+   "status": "confirmed",
+   "title": "Night Magick",
+   "note": "synthetic case no_asin; true product B08DZ3YBKN",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-14": {
+   "asin": "B083PP6DDP",
+   "status": "confirmed",
+   "title": "The Golden Orchard",
+   "note": "synthetic case dead_asin; true product B083PP6DDP",
+   "case": "dead_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-15": {
+   "asin": "B0FCN199NB",
+   "status": "confirmed",
+   "title": "The Fae Prince (Fantasy Romance)",
+   "note": "synthetic case messy_number_prefix; true product B0FCN199NB",
+   "case": "messy_number_prefix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-16": {
+   "asin": "B0BBPTNWS2",
+   "status": "confirmed",
+   "title": "Legend Rising",
+   "note": "synthetic case duplicate_title; true product B0BBPTNWS2",
+   "case": "duplicate_title"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-17": {
+   "asin": "1541449967",
+   "status": "confirmed",
+   "title": "The Dark Side of the Road",
+   "note": "synthetic case marketing_suffix; true product 1541449967",
+   "case": "marketing_suffix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-18": {
+   "asin": "B0DKH4VZLH",
+   "status": "confirmed",
+   "title": "The Thief and the Nightingale",
+   "note": "synthetic case initials_author; true product B0DKH4VZLH",
+   "case": "initials_author"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-19": {
+   "asin": "B00540258G",
+   "status": "confirmed",
+   "title": "Magic Slays",
+   "note": "synthetic case accent_free_author; true product B00540258G",
+   "case": "accent_free_author"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-20": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "The Road to Memphis",
+   "note": "synthetic case runtime_8pct_off; true product B079VTDYYP",
+   "case": "runtime_8pct_off"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-21": {
+   "asin": "B0BJ4W7LB6",
+   "status": "confirmed",
+   "title": "The Art Thief",
+   "note": "synthetic case no_asin; true product B0BJ4W7LB6",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-22": {
+   "asin": "B00CRKR77U",
+   "status": "confirmed",
+   "title": "The Ocean at the End of the Lane",
+   "note": "synthetic case no_asin; true product B00CRKR77U",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-23": {
+   "asin": "B0CJ5NSM8K",
+   "status": "confirmed",
+   "title": "Blood & Steel",
+   "note": "synthetic case no_asin; true product B0CJ5NSM8K",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-24": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "Muir’s Gambit",
+   "note": "synthetic case clean_ok; true product B0GK3DS729",
+   "case": "clean_ok"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-25": {
+   "asin": "B0GPT2RG7H",
+   "status": "confirmed",
+   "title": "Queen",
+   "note": "synthetic case no_asin; true product B0GPT2RG7H",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-26": {
+   "asin": "B07BGB8HMM",
+   "status": "confirmed",
+   "title": "Real Magic",
+   "note": "synthetic case dead_asin; true product B07BGB8HMM",
+   "case": "dead_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-27": {
+   "asin": "B0BPG67LKX",
+   "status": "confirmed",
+   "title": "The Underworld",
+   "note": "synthetic case messy_number_prefix; true product B0BPG67LKX",
+   "case": "messy_number_prefix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-28": {
+   "asin": "B0B72BLKZY",
+   "status": "confirmed",
+   "title": "Legends",
+   "note": "synthetic case duplicate_title; true product B0B72BLKZY",
+   "case": "duplicate_title"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-1-29": {
+   "asin": "B0GK2M33SP",
+   "status": "confirmed",
+   "title": "Robot Swarms",
+   "note": "synthetic case marketing_suffix; true product B0GK2M33SP",
+   "case": "marketing_suffix"
+  }
+ }
+}

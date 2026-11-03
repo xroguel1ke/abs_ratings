@@ -55,8 +55,12 @@ def backups():
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--snapshot', required=True); ap.add_argument('--port', type=int, default=18999)
-    ap.add_argument('--patch-log', default='')
+    ap.add_argument('--patch-log', default=''); ap.add_argument('--extra', default='', help='synthetic batch (tools/synth_make.py) merged into the library')
     a = ap.parse_args()
     SNAP.update(json.load(open(a.snapshot, encoding='utf-8')))
     PATCH_LOG = a.patch_log or None
+    if a.extra:  # synthetic books that are NOT in the real library
+        ex = json.load(open(a.extra, encoding='utf-8'))
+        SNAP['items'].update(ex['items'])
+        SNAP['lists'].setdefault(ex['library'], {'results': []})['results'] += ex['list']
     app.run(host='0.0.0.0', port=a.port)

@@ -39,6 +39,14 @@ def test_same_recording_helper():
     assert not A.same_recording(36000, ['Someone Else'], aud)
 
 
+def test_initial_author_and_marketing_suffix():
+    assert A.match_author(['R. Rowe'], 'Rob Rowe') and A.match_author(['Rob Rowe'], 'R. Rowe')
+    assert not A.match_author(['R. Rowe'], 'Tim Rowe') and not A.match_author(['J. Smith'], 'Jane Doe')
+    assert A.search_match_score('Robot Swarms: A Gripping LitRPG Adventure', 'Robot Swarms', None) >= 0.85
+    assert A.search_match_score('Dune: Messiah', 'Dune', None) < 0.85, 'a real subtitle must never equal the short title'
+    assert A.search_match_score('Dune: Messiah', 'Dune: Messiah', None) == 1.0
+
+
 def test_isbn_checks():
     assert A.isbn_bad_reason('B0D2LJ6SJ2') == 'value is an ASIN, not an ISBN'
     assert A.isbn_bad_reason('9780553580334') is None            # real ISBN-13 (House Corrino)

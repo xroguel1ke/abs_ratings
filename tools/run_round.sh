@@ -11,6 +11,12 @@ mkdir -p "$DATA/logs" "$DEV/tests/private/recordings"
 [ -f /mnt/user/appdata/abs_scripts_test/series_index.json ] && cp -n /mnt/user/appdata/abs_scripts_test/series_index.json "$DATA/" || true
 [ -f "$DEV/tests/private/audible_series.json" ] && cp -n "$DEV/tests/private/audible_series.json" "$DATA/" || true
 ONLY=$(paste -sd, "$KEYS")
+if [ -n "$SYNTH" ]; then  # SYNTH=<seed>: add 30 synthetic books that are not in the library (generated once per seed, public data)
+  SF="$DEV/tests/synthetic/batch_${SYNTH}.json"
+  [ -f "$SF" ] || docker run --rm --name "abs_ratings_test_synth_${R}" -e PYTHONDONTWRITEBYTECODE=1 -v "$DEV":/src -w /src ghcr.io/xroguel1ke/abs_ratings:web-ui python -I tools/synth_make.py --seed "$SYNTH" --n 30 --n-de "${SYNTH_DE:-10}" --out "/src/tests/synthetic/batch_${SYNTH}.json"
+  ONLY="$(printf '%s\n' $(echo "$ONLY,$(jq -r '.expected|keys|join(",")' "$SF")" | tr ',' ' ') | sort -u | paste -sd,)"
+  SYNTH_ENV=(-e SYNTH_FILE=/src/tests/synthetic/batch_${SYNTH}.json)
+fi
 LIB=$(jq -r '.LIBRARY_IDS' "$SET")
 HCT=$(jq -r '.HARDCOVER_TOKEN' "$SET")
 HC_ON=true; [ "$HARDCOVER_OFF" = "1" ] && HC_ON=false
@@ -20,4 +26,4 @@ timeout 14400 docker run --rm --name "abs_ratings_test_${R}" --network host -e P
   -v "$DEV":/src -v "$DATA":/data \
   -e FAKE_PORT="${FAKE_PORT:-18999}" -e DATA_DIR=/data -e ONLY_ITEMS="$ONLY" -e LIBRARY_IDS="$LIB" -e HARDCOVER_TOKEN="$HCT" -e HARDCOVER_ENABLED=$HC_ON \
   -e GOODREADS_ENABLED=${GOODREADS:-false} -e GOODREADS_SAMPLE=${GR_SAMPLE:-1} -e GR_ID_TRIES=${GR_TRIES:-2} -e GOODREADS_INTERVAL=${GR_INTERVAL:-10} -e SLEEP_TIMER=0 -e AUDIBLE_API_INTERVAL=0.5 -e REFRESH_DAYS=0 -e BATCH_SIZE=2500 -e ABS_BACKUP=false \
-  "${EXTRA[@]}" ghcr.io/xroguel1ke/abs_ratings:web-ui sh /src/tools/round_entry.sh
+  "${EXTRA[@]}" "${SYNTH_ENV[@]}" ghcr.io/xroguel1ke/abs_ratings:web-ui sh /src/tools/round_entry.sh

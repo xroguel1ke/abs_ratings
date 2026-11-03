@@ -560,6 +560,10 @@ def match_author(abs_authors, web_author):
             wa_tok = set(re.split(r'[^a-z0-9]+', wa))
             if len(a_tok.intersection(wa_tok)) >= 2: return True
             if len(a_tok.intersection(wa_tok)) == 1 and len(a_tok) == 1: return True
+            a_list, w_list = [t for t in re.split(r'[^a-z0-9]+', abs_clean) if t], [t for t in re.split(r'[^a-z0-9]+', wa) if t]
+            if len(a_list) >= 2 and len(w_list) >= 2 and a_list[-1] == w_list[-1] and a_list[0] != w_list[0] and (
+                    (len(a_list[0]) == 1 and w_list[0].startswith(a_list[0])) or (len(w_list[0]) == 1 and a_list[0].startswith(w_list[0]))):
+                return True  # 'R. Rowe' = 'Rob Rowe' (initial + same last name; other evidence still has to confirm)
     return False
 
 def find_rating_recursive(obj):
@@ -920,6 +924,10 @@ def search_match_score(abs_title, found_title, found_sub):
         extra = set(nf[len(na):].split())
         if extra & MARKETING_WORDS: score = max(score, 0.85)  # 'A Farm in the Afterlife: A Slice-of-Life LitRPG Adventure'
     if len(na.split()) >= 3 and nf.endswith(" " + na): score = max(score, 0.85)  # 'Vainqueur the Dragon II: The Year of the Rogues'
+    for sep in (':', ' - '):  # 'Robot Swarms: A Gripping LitRPG Adventure' vs 'Robot Swarms': the tail is marketing (needs a marketing word, so 'Dune: Messiah' never equals 'Dune')
+        if sep in (abs_title or ''):
+            head, tail = abs_title.split(sep, 1)
+            if normalize_title_text(head) == nf and set(normalize_title_text(tail).split()) & MARKETING_WORDS: score = max(score, 0.9)
     if extract_volume(found_title) and not extract_volume(abs_title):
         score = min(score, 0.75)  # 'Hell Mode' vs 'Hell Mode, Volume 3': could be any volume
     return score
