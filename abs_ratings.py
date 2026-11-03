@@ -45,7 +45,7 @@ SEARCH_PENALTY_SLEEP = float(os.getenv('SEARCH_PENALTY_SLEEP', 0))  # Optional e
 MIN_INTERVAL = {
     'audible_api': float(os.getenv('AUDIBLE_API_INTERVAL', 1)),
     'audible_web': float(os.getenv('AUDIBLE_WEB_INTERVAL', 3)),
-    'goodreads': float(os.getenv('GOODREADS_INTERVAL', 3)),
+    'goodreads': float(os.getenv('GOODREADS_INTERVAL', 10)),
 }
 USE_AUDIBLE_API = os.getenv('USE_AUDIBLE_API', 'true').lower() == 'true'
 AUDIBLE_API_HOSTS = {"www.audible.com": "api.audible.com", "www.audible.de": "api.audible.de"}
@@ -66,8 +66,8 @@ SERIES_LOCK_AFTER_MERGE = os.getenv('SERIES_LOCK_AFTER_MERGE', 'false').lower() 
 NO_RATINGS_RECHECK_DAYS = int(os.getenv('NO_RATINGS_RECHECK_DAYS', 7))  # New releases without ratings yet
 GR_MISSING_RECHECK_DAYS = int(os.getenv('GR_MISSING_RECHECK_DAYS', 30))  # Audible OK, Goodreads not found
 GR_BLOCKED_RECHECK_DAYS = 1  # Goodreads blocked/unreachable during the run
-GR_BLOCK_COOLDOWN = int(os.getenv('GR_BLOCK_COOLDOWN', 120))  # Pause before retrying after a Goodreads block
-GR_MAX_COOLDOWNS = int(os.getenv('GR_MAX_COOLDOWNS', 1))  # Cool-downs per run before Goodreads is skipped
+GR_BLOCK_COOLDOWN = int(os.getenv('GR_BLOCK_COOLDOWN', 900))  # Pause before retrying after a Goodreads block
+GR_MAX_COOLDOWNS = int(os.getenv('GR_MAX_COOLDOWNS', 2))  # Cool-downs per run before Goodreads is skipped
 # Max Goodreads searches per run (cached URLs don't count). Keeps the first full pass under Goodreads'
 # bot detection: the rest is deferred to the next run. 0 = unlimited.
 GOODREADS_MAX_PER_RUN = int(os.getenv('GOODREADS_MAX_PER_RUN', 300))
@@ -188,18 +188,22 @@ def canonical_series(lib, name, book_authors):
         return ent['name'], 'existing'
     return name, None
 
-def language_verdict(abs_title, abs_narrators, aud, lang_locked):
+def language_verdict(abs_title, abs_narrators, aud, lang_locked, abs_series_names=()):
     """ABS and Audible language differ. 'asin_wrong' if the ASIN belongs to another language edition
     (language locked, title doesn't match, or no common narrator), else 'abs_wrong'."""
     if lang_locked: return 'asin_wrong'
     aud_t, aud_s = aud.get('title_raw') or '', aud.get('subtitle_raw') or ''
     sim = max(title_similarity(abs_title, aud_t), title_similarity(abs_title, f"{aud_t} {aud_s}"))
     if sim < 0.6: return 'asin_wrong'
-    # Same title in both languages ('Dune'): the narrator decides
+    # Same title in both languages ('Dune', 'Blood Moon'): narrator and series decide
     norm = lambda n: re.sub(r'[^a-z]', '', n.lower())
     a_narr, b_narr = {norm(n) for n in abs_narrators if n}, {norm(n) for n in (aud.get('narrators_raw') or []) if n}
-    if a_narr and b_narr and not a_narr & b_narr: return 'asin_wrong'
-    return 'abs_wrong'
+    if a_narr and b_narr: return 'abs_wrong' if a_narr & b_narr else 'asin_wrong'
+    from abs_series import series_key
+    a_ser = {series_key(x) for x in abs_series_names if x}
+    b_ser = {series_key(x.get('name') or '') for x in ((aud.get('meta_raw') or {}).get('series') or []) if x.get('name')}
+    if a_ser and b_ser: return 'abs_wrong' if a_ser & b_ser else 'asin_wrong'
+    return 'unclear'
 
 def volume_conflict(abs_title, aud_title, aud_sub):
     """True if ABS and Audible name different volume numbers ('Vol. 9' vs 'Vol. 18') -> wrong ASIN."""
@@ -1107,6 +1111,8 @@ def item_tags(item):
     raw = (item.get('tags') or []) + (media.get('tags') or []) + ((media.get('metadata') or {}).get('tags') or [])
     return {t.strip() for t in raw if isinstance(t, str)}
 
+BATCH_LEFT = {'n': MAX_BATCH_SIZE}  # BATCH_SIZE is per run, shared by all libraries
+
 def process_library(lib_id, history, failed, recheck):
     logging.info(f"--- Processing Library: {lib_id} ---")
     try:
@@ -1180,17 +1186,19 @@ def process_library(lib_id, history, failed, recheck):
             work_queue.append(item); count_recheck += 1
 
     random.shuffle(work_queue)
-    total = min(len(work_queue), MAX_BATCH_SIZE)
+    batch = BATCH_LEFT['n']
+    total = min(len(work_queue), batch)
+    BATCH_LEFT['n'] -= total
     count_fresh = len(items) - count_locked - len(work_queue)
     logging.info(f"Queue: {count_new} New, {count_manual} Manual Updates, {count_due} Due, {count_recheck} Re-checks ({count_locked} locked via lock_all). Total: {total}")
     logging.info(f"       {count_fresh} books are up to date (refreshed within the last {REFRESH_DAYS} days) and are not processed."
-                 + (f" Batch limit {MAX_BATCH_SIZE} not reached." if len(work_queue) < MAX_BATCH_SIZE else f" {len(work_queue) - MAX_BATCH_SIZE} more follow in the next runs."))
+                 + (f" Batch: {total} of {MAX_BATCH_SIZE} books in this library." if len(work_queue) <= batch else f" {len(work_queue) - batch} more follow in the next runs (batch limit {MAX_BATCH_SIZE} per run)."))
     stats['skipped'] += count_locked
     
     start = datetime.now()
     consecutive_rl = 0
 
-    for idx, item in enumerate(work_queue[:MAX_BATCH_SIZE]):
+    for idx, item in enumerate(work_queue[:total]):
         if stats['aborted_ratelimit']: break
         
         elapsed = (datetime.now() - start).total_seconds()
@@ -1251,14 +1259,19 @@ def process_library(lib_id, history, failed, recheck):
                 lang_conflict, lang_target = False, None
                 abs_lang = map_language(lang) if lang else None
                 if aud_data and new_lang_detected and abs_lang and abs_lang != new_lang_detected:
-                    verdict = language_verdict(search_title, meta.get('narrators') or [], aud_data, 'lock_language' in tags)
-                    if verdict == 'asin_wrong':
+                    verdict = language_verdict(search_title, meta.get('narrators') or [], aud_data, 'lock_language' in tags,
+                                               [x.get('name') for x in (meta.get('series') or [])])
+                    if verdict == 'unclear':
+                        skip_meta = True
+                        logging.info(f"      -> ⚠️ Language mismatch: ABS {abs_lang} vs Audible {new_lang_detected}, and no narrator/series to decide which is right. "
+                                     f"Nothing is changed except the ratings.")
+                    elif verdict == 'asin_wrong':
                         lang_conflict, lang_target = True, abs_lang
                         check_lang = abs_lang
                         logging.info(f"      -> ⚠️ Language mismatch: ABS {abs_lang} vs Audible {new_lang_detected} for '{aud_data.get('title_raw')}'. "
                                      f"{'Language is locked' if 'lock_language' in tags else 'Title/narrator point to another edition'}: searching the {abs_lang} edition...")
                     else:
-                        logging.info(f"      -> ℹ️ Language mismatch: ABS {abs_lang} vs Audible {new_lang_detected}. Title and narrator match Audible: ABS language is corrected.")
+                        logging.info(f"      -> ℹ️ Language mismatch: ABS {abs_lang} vs Audible {new_lang_detected}. Title and narrator/series match Audible: ABS language is corrected.")
 
                 if not asin:
                     logging.info("      -> ⚠️ No ASIN in ABS.")
@@ -1279,12 +1292,12 @@ def process_library(lib_id, history, failed, recheck):
                 elif int(aud_data.get('count', 0)) == 0:
                     logging.info("      -> ⚠️ Found 0 Ratings.")
                     should_search = True
-                elif (str(check_lang).lower() not in GERMAN_LANG_CODES) and aud_data.get('domain') == 'www.audible.de':
-                    logging.info("      -> ⚠️ Non-German Book only found on .de (Possible broken .com ASIN). Attempting Fix...")
-                    should_search = True
-                elif (str(check_lang).lower() in GERMAN_LANG_CODES) and aud_data.get('domain') == 'www.audible.com':
-                    logging.info("      -> ⚠️ German Book only found on .com (Possible broken .de ASIN). Attempting Fix...")
-                    should_search = True
+                elif map_language(check_lang) == 'English' and aud_data.get('domain') == 'www.audible.de':
+                    logging.info("      -> ⚠️ English book only found on .de (possibly broken .com ASIN). Searching the English edition...")
+                    should_search, lang_target = True, 'English'
+                elif map_language(check_lang) == 'German' and aud_data.get('domain') == 'www.audible.com':
+                    logging.info("      -> ⚠️ German book only found on .com (possibly broken .de ASIN). Searching the German edition...")
+                    should_search, lang_target = True, 'German' 
 
                 if should_search and asin and 'lock_asin' in tags:
                     logging.info(f"      -> 🔒 ASIN search skipped (lock_asin), keeping {asin}")
