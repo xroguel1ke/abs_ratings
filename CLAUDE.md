@@ -24,6 +24,7 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
 ## Hard rules (learned from real dry runs on ~2000 books – don't loosen without data)
 - **Every ABS write goes through `abs_update()` / `abs_set_cover()`** → journaled (old → new), DRY_RUN only plans.
 - **Fill only when empty:** publisher, year, narrators, authors, ISBN (Goodreads ISBN is the print edition), cover, description base.
+  Exception ISBN (user decision 2026-11-03): an existing ISBN may be replaced only if it is provably wrong (invalid checksum, e.g. an ASIN in the ISBN field, or it resolves to a DIFFERENT work with title and author contradicting), the book is verified, and a verified replacement exists; otherwise review list. Journaled, lock_isbn respected.
 - **Series:** Audible series only if the book has *no* series in ABS; otherwise only fill missing numbers. Never add
   full-cast/dramatized/GraphicAudio/abridged/manga series to a normal edition. Names go through aliases + series index.
 - **Titles:** only replaced for messy file-name titles (`The Book of the New Sun 05 Title`, zero-padded numbers only;

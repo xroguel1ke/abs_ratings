@@ -159,3 +159,9 @@ Order for Goodreads ratings: (1) Hardcover Goodreads ID -> direct page, verified
 Open Library (ISBN lookup, identifiers.goodreads): adopted only if it covers the ~4 % Hardcover misses (measurement pending).
 Open Library: 0/15 found by ISBN (also for well-known titles) -> not adopted. Hardcover stays option 1, existing Goodreads search option 2.
 Data finding: some ABS ISBN fields contain an ASIN (e.g. B0D2LJ6SJ2) -> treat as ASIN, not ISBN (plausibility/hygiene item).
+
+## Decision (user, 2026-11-03): wrong ISBNs may be overwritten – only with proof
+Relaxes the hard rule "ISBN only filled when empty". Overwrite an existing ISBN only if ALL hold: (1) old ISBN provably wrong: invalid checksum (incl. the 636 ASIN values in the ISBN field) OR resolves on Hardcover to a DIFFERENT work (title AND author contradict; a different edition of the same work is NOT wrong, e.g. print vs audio ISBN);
+(2) the book itself is verified (verified ASIN or verified Hardcover hit); (3) the new ISBN comes from a verified source (Hardcover edition of that book / Goodreads page) – if none: no change, review list with reason, never delete;
+(4) lock_isbn respected, journaled old -> new (undo). ASIN-looking value in the ISBN field: if the ASIN field is empty and the value is a plausible ASIN -> move it to ASIN (verified through the Audible product), ISBN gets a verified real ISBN or stays as is.
+Implementation after the audit, with tests: "must NOT overwrite" cases (print ISBN of same work, locked, no verified replacement).
