@@ -1164,7 +1164,10 @@ def process_library(lib_id, history, failed, recheck):
 
     random.shuffle(work_queue)
     total = min(len(work_queue), MAX_BATCH_SIZE)
+    count_fresh = len(items) - count_locked - len(work_queue)
     logging.info(f"Queue: {count_new} New, {count_manual} Manual Updates, {count_due} Due, {count_recheck} Re-checks ({count_locked} locked via lock_all). Total: {total}")
+    logging.info(f"       {count_fresh} books are up to date (refreshed within the last {REFRESH_DAYS} days) and are not processed."
+                 + (f" Batch limit {MAX_BATCH_SIZE} not reached." if len(work_queue) < MAX_BATCH_SIZE else f" {len(work_queue) - MAX_BATCH_SIZE} more follow in the next runs."))
     stats['skipped'] += count_locked
     
     start = datetime.now()
