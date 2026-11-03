@@ -1542,7 +1542,8 @@ def hc_words_contained(targets, book):
 def hc_acceptable(targets, authors, book, min_score, abs_series=(), extra_names=(), pure=False):
     """Same strict rules as the other sources. Returns (ok, score, reason).
     pure=True is the title search: stricter, because the hit is not tied to our ASIN/ISBN."""
-    if authors and not match_author(authors, ', '.join(a for a in hc_authors(book) if a)):
+    # A Hardcover book without any author entry cannot contradict us; for ASIN/ISBN-tied hits (not a title search) the identifier decides.
+    if authors and (hc_authors(book) or pure) and not match_author(authors, ', '.join(a for a in hc_authors(book) if a)):
         return False, 0, f"author {hc_authors(book)[:3]}"
     series_ok = hc_series_check(book, abs_series)
     fs = book.get('featured_series') or book.get('cached_featured_series') or {}
@@ -1565,7 +1566,11 @@ def hc_acceptable(targets, authors, book, min_score, abs_series=(), extra_names=
     found_text = f"{book.get('title') or ''} {book.get('subtitle') or ''}"
     if (m := RE_HC_SPECIAL.search(found_text)) and not any(RE_HC_SPECIAL.search(t) for t in targets):
         return False, score, f"other format ('{m.group(0)}')"
-    if book.get('compilation') and not any(RE_HC_SPECIAL.search(t) for t in targets): return False, score, "compilation"
+    if book.get('compilation') and not any(RE_HC_SPECIAL.search(t) for t in targets):
+        # 'Midnight Tides' is flagged as compilation because Parts 1+2 exist separately, but it sits as ONE book (single position) in its series
+        pos = fs.get('position')
+        single = isinstance(pos, (int, float)) and float(pos).is_integer()
+        if not (score >= 0.99 and single): return False, score, "compilation"
     return True, max(score, 1.0 if series_confirms else 0), ''
 
 def get_hardcover_data(key, targets, authors, asin, isbn, manual_url=None, use_cache=True, abs_series=()):
