@@ -454,6 +454,19 @@ def build_report(ctx, records, merges, rejected, extra):
         if r['asin']: by_asin[(r['lib'], r['asin'])].append(r['title'])
     dups = [{'asin': a, 'titles': t} for (_, a), t in by_asin.items() if len(t) > 1]
 
+    # Duplicate RECORDINGS: same author + same narrator + duration within 2 s, different title/folder (the same book twice in the library)
+    rec_groups = defaultdict(list)
+    for r in records:
+        if r.get('duration') and r['authors'] and r['narrators']:
+            rec_groups[(r['lib'], tuple(sorted(author_key(a) for a in r['authors'])), tuple(sorted(n.lower() for n in r['narrators'])))].append(r)
+    dup_rec = []
+    for grp in rec_groups.values():
+        grp.sort(key=lambda x: x['duration'])
+        for i, a_ in enumerate(grp):
+            for b_ in grp[i + 1:]:
+                if b_['duration'] - a_['duration'] > 2: break
+                dup_rec.append({'titles': [a_['title'], b_['title']], 'seconds': int(a_['duration']), 'asins': [a_['asin'], b_['asin']]})
+
     # Author spelling variants across the library
     variants = defaultdict(set)
     for r in records:
@@ -465,7 +478,7 @@ def build_report(ctx, records, merges, rejected, extra):
     rep.update({
         'merges': [{'target': m['target'].name, 'target_books': fmt_seqs(m['target'].seqs),
                     'merged': [{'name': s.name, 'books': fmt_seqs(s.seqs), 'count': len(s.entries), 'match': s.relation} for s in m['members']]} for m in merges],
-        'not_merged': rejected, 'series_gaps': gaps, 'series_without_number': no_seq, 'duplicate_asins': dups,
+        'not_merged': rejected, 'series_gaps': gaps, 'series_without_number': no_seq, 'duplicate_asins': dups, 'duplicate_recordings': dup_rec,
         'author_variants_library': author_var,
         'author_fixes': [{'from': k, 'to': v} for k, v in sorted(extra.get('author_fixes', {}).items())], 'author_variants_audible': extra.get('author_notes', []),
         'unmapped_genres': sorted(extra.get('unmapped_genres', [])),
@@ -513,6 +526,8 @@ table{{border-collapse:collapse;width:100%;display:block;overflow-x:auto}} td,th
 <h2>Gaps in series ({len(rep['series_gaps'])})</h2><p class="muted">Missing numbers between the lowest and highest book you have. Can be books you don't own.</p>{table(rep['series_gaps'], ['series', 'have', 'missing'])}
 <h2>Books without series number ({len(rep['series_without_number'])})</h2>{table(rep['series_without_number'], ['series', 'title'])}
 <h2>Duplicate ASINs ({len(rep['duplicate_asins'])})</h2>{table([{'asin': d['asin'], 'titles': ' | '.join(d['titles'])} for d in rep['duplicate_asins']], ['asin', 'titles'])}
+<h2>Duplicate recordings ({len(rep.get('duplicate_recordings', []))}) - the same book twice (same author, narrator, length within 2 s)</h2>{table([{'titles': ' | '.join(d['titles']), 'seconds': d['seconds'], 'asins': ' | '.join(str(a) for a in d['asins'])} for d in rep.get('duplicate_recordings', [])], ['titles', 'seconds', 'asins'])}
+<h2>Duplicate recordings ({len(rep.get('duplicate_recordings', []))}) – the same book twice (same author, narrator, length within 2 s)</h2>{table([{'titles': ' | '.join(d['titles']), 'seconds': d['seconds'], 'asins': ' | '.join(str(a) for a in d['asins'])} for d in rep.get('duplicate_recordings', [])], ['titles', 'seconds', 'asins'])}
 <h2>Author spellings unified ({len(rep['author_fixes'])})</h2>{table(rep['author_fixes'], ['from', 'to'])}
 <h2>Author spelling ABS vs Audible ({len(rep['author_variants_audible'])})</h2>{table([{'title': n['title'], 'abs': ', '.join(n['abs']), 'audible': n['audible']} for n in rep['author_variants_audible']], ['title', 'abs', 'audible'])}
 <h2>Missing fields</h2>{miss}
