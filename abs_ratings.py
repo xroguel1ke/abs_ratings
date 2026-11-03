@@ -1064,6 +1064,10 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 continue
             found_title = p.get('title_raw') or ''
             t_score = search_match_score(title, found_title, p.get('subtitle_raw'))
+            if t_score < 0.85 and abs_series:  # 'Bloodline' vs 'Bloodline: The Root of All Evil': the extension is exactly ABS's own series name
+                na, nf = normalize_title_text(title), normalize_title_text(found_title)
+                rest = nf[len(na):].strip() if nf.startswith(na + ' ') else ''
+                if rest and rest in {normalize_title_text(re.sub(r'(?i)\s+series$', '', s.get('name') or '')) for s in abs_series}: t_score = 0.85
             f_nums, t_nums = volume_of(found_title, p.get('subtitle_raw')), extract_volume(title)
             if f_nums and t_nums and not f_nums & t_nums:  # different volume: never the same book
                 logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (volume {','.join(sorted(f_nums))} vs {','.join(sorted(t_nums))})")

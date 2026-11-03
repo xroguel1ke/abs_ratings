@@ -213,3 +213,8 @@ Hardcover not-found analysis (8): fixed 3 (Faraway Paladin: HC book without auth
 Fixes were needed -> round 4 NOT clean (counter stays 0).
 ## Counting rule refinement
 Audible-clean and Hardcover-clean rounds are tracked separately; production-ready needs both (3 clean rounds each, all paths exercised). Today: Audible-only rounds (HARDCOVER_OFF=1) while the HC quota is used up; tomorrow Hardcover-focused tests incl. every HC hit cross-checked against Audible.
+
+## Round 5 (Audible-only, 2:27 min, 0 errors) – NOT clean
+1 ASIN change (Black Summoner vol 8 via series listing, 8 evidences) correct. Fix needed: Bloodline (ThinkTwice, ABS series "The Root of All Evil #1") – Audible title "Bloodline: The Root of All Evil" was rejected (title 0.46) although author, runtime 1368 min, narrator, publisher+year matched: a title extension that equals ABS's OWN series name now counts as the same title. Review-list proposal kind `title` for Realms of War (known class). Not clean -> counter 0.
+Fix trend per round: R3 2, R4 3 (Hardcover), R5 1.
+## Round 6 (Audible-only) started
