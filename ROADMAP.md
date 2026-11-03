@@ -93,3 +93,10 @@ Status: ✅ done (branch `claude/web-ui`) · 🔜 next · ⏳ later
    - field has a NEW value that is neither old nor ours -> assume a manual change by the user: respect it, mark the book "manually maintained" (optionally set the lock tag), never overwrite.
    - Limit: ABS does not record who changed a field, so this is a conservative rule (doubt = user's change), not proof.
 3. Web UI: "recently changed by someone else" list, setting for the daily sample size and the build-up/maintenance switch.
+
+## Certainty score per book (user wish, 2026-11-03) – TODO
+- 0-100 per processed book, stored in `results.json` (+ the evidence list that produced it), shown on the book page and as a sortable column in the book list (web UI).
+- Weights (proposal): title 25 (exact/very similar), author 20, runtime 20 (±2 min) or 10 (inside tolerance), narrator 12, series/volume number 10, publisher+year 8, Hardcover confirmation (ISBN/ASIN) 5.
+  Deductions: ASIN found by search instead of kept from ABS -5, "other edition" -20, only one rating source -5, hit via ISBN field or series listing -5, near-tolerance runtime path -5.
+  Review-list cases score low automatically; unchanged, product-confirmed ASINs score high.
+- The evidence list already exists in the log (`evidence: title, author, ...`) and is stored in `LAST_MATCH`; the score is computed from it, so no new matching logic is needed.

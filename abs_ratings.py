@@ -1020,6 +1020,25 @@ def add_review(key, title, kind, candidate, reason, evidence=None):
               'run': RUN_ID, 'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'status': 'open'})
     rw_json(REVIEW_FILE, q)
 
+def roman(n):
+    out = ""
+    for v, s in ((1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"), (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i")):
+        while n >= v: out += s; n -= v
+    return out
+
+def series_prefixed_title(abs_title, found_title, abs_series):
+    """'Grand Design' (series '12 Miles Below' #3) <-> '12 Miles Below III: Grand Design': Audible title = ABS series name + volume number
+    (arabic, roman or 'Book N') + ABS title."""
+    na, nf = normalize_title_text(abs_title), normalize_title_text(found_title)
+    if not na or not nf.endswith(" " + na): return False
+    prefix = nf[:-len(na)].strip()
+    for s in abs_series or []:
+        name = normalize_title_text(re.sub(r"(?i)\s+series$", "", s.get("name") or ""))
+        try: num = float(s.get("sequence")); nums = {str(int(num))} | ({roman(int(num))} if num.is_integer() and 0 < num < 4000 else set())
+        except (TypeError, ValueError): nums = set()
+        if name and nums and prefix in {f"{name} {n}" for n in nums}: return True
+    return False
+
 def search_audible_api(title, authors_list, duration, lang, raw_title=None, required_lang=None, strict=False,
                        only_domain=None, narrators=None, abs_series=None, extra_candidates=None, only_extra=False):
     """Find an ASIN via the Audible catalog search API. Every candidate is verified by loading
@@ -1068,6 +1087,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 na, nf = normalize_title_text(title), normalize_title_text(found_title)
                 rest = nf[len(na):].strip() if nf.startswith(na + ' ') else ''
                 if rest and rest in {normalize_title_text(re.sub(r'(?i)\s+series$', '', s.get('name') or '')) for s in abs_series}: t_score = 0.85
+            if t_score < 0.85 and abs_series and series_prefixed_title(title, found_title, abs_series): t_score = 0.9
             f_nums, t_nums = volume_of(found_title, p.get('subtitle_raw')), extract_volume(title)
             if f_nums and t_nums and not f_nums & t_nums:  # different volume: never the same book
                 logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (volume {','.join(sorted(f_nums))} vs {','.join(sorted(t_nums))})")
@@ -1980,6 +2000,20 @@ def process_queue(work_queue, history, failed, recheck):
                 skip_meta = False
                 abs_dur = (item_data.get('media') or {}).get('duration') or (item.get('media') or {}).get('duration')
 
+                asin_hint_note = None
+                if not asin and 'lock_asin' not in tags and isbn_bad_reason(meta.get('isbn')) == 'value is an ASIN, not an ISBN':
+                    hint = re.sub(r'[\s-]', '', str(meta.get('isbn'))).upper()
+                    hd = get_audible_data(hint, lang) if not (ASIN_OWNERS.get(hint, set()) - {key}) else None
+                    if hd and hd.get('title_raw'):
+                        hv, hwhy = asin_plausibility(search_title, authors, hd['title_raw'], hd.get('subtitle_raw'), hd.get('authors_raw'),
+                                                     meta.get('narrators') or [], hd.get('narrators_raw'), abs_dur, hd.get('runtime_sec'))
+                        if hv in ('ok', 'asin_ok_metadata_differs') and not runtime_mismatch(abs_dur, hd.get('runtime_sec')):
+                            logging.info(f"      -> 💡 ASIN found in the ISBN field: {hint} = '{hd['title_raw']}' ({', '.join(hwhy)}, runtime ok)")
+                            if abs_update(iid, key, title, {'asin': hint}, {'asin': None}, 'isbn_field_asin'):
+                                logging.info(f"        💾 ASIN {'would be set (DRY_RUN)' if DRY_RUN else 'set in ABS'}.")
+                            ASIN_OWNERS.setdefault(hint, set()).add(key); asin = hint
+                        else: logging.info(f"      -> ℹ️ ISBN field holds {hint} but it does not fit this book ({hv}, {', '.join(hwhy)}): ignored")
+                    else: logging.info(f"      -> ℹ️ ISBN field holds {hint}, which is no Audible product: ignored")
                 aud_data = get_audible_data(asin, lang)
 
                 if aud_data and aud_data.get('meta_raw'):
