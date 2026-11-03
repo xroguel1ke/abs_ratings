@@ -1104,6 +1104,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
     api_ok = False
     near_pick = None  # accepted only via 'same narrator, runtime inside tolerance'; used if no candidate with exact runtime follows
     best_pick = None  # accepted with an INEXACT title: keep looking, a later candidate may match the title exactly ('The Wild Robot' vs '...: Booktrack Edition')
+    pending_pick = None  # exact title accepted WITHOUT publisher+year although ABS knows both: keep looking for a re-release that matches (2020 vs 2023 listing of the same recording)
     if only_extra: queries = []  # series-listing path: no search queries, only the given candidates
     domains = [only_domain] if only_domain else search_domains(required_lang or lang)
     if only_extra: domains = domains[:1]
@@ -1236,6 +1237,9 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 if t_score < 0.99:
                     if best_pick is None or (round(t_score, 2), dur_ok) > best_pick[0]: best_pick = ((round(t_score, 2), dur_ok), cand, dict(LAST_MATCH), msg)
                     continue
+                if not pub_year and SEARCH_CTX.get('pub') and SEARCH_CTX.get('year'):
+                    if pending_pick is None: pending_pick = (cand, dict(LAST_MATCH), msg)
+                    continue
                 logging.info(msg)
                 return cand
             if duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120 and a_narr and c_narr and a_narr & c_narr and not LAST_SEARCH.get('weak'):
@@ -1247,6 +1251,10 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             if res: return res
             if rel_b and not LAST_SEARCH['related']: LAST_SEARCH['related'] = rel_b
         if best_pick: break  # do not search further stores when this store already has an acceptable hit
+    if pending_pick:
+        LAST_MATCH.clear(); LAST_MATCH.update(pending_pick[1])
+        logging.info(pending_pick[2])
+        return pending_pick[0]
     if best_pick:
         LAST_MATCH.clear(); LAST_MATCH.update(best_pick[2])
         logging.info(best_pick[3])

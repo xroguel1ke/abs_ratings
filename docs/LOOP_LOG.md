@@ -302,3 +302,9 @@ Rule: Hardcover/Goodreads live requests only from deliberately started sequentia
 ## Batch A8 (counting #8: 100 library + 80 synthetic, Audible-only, 6:41 min, 0 errors) – CLEAN (counter 3 of 4)
 Library: 4 ASIN changes hand-verified (A Tangled Road to Justice, Blood Moon, Rise of the King, Unbound; 4-6 independent evidences each); ISHURA 04 = Spanish edition by Norma Editorial (narrator == author data error), no Audible candidate -> correct "not found". Synthetic 80/80. Review list empty. Nothing to correct.
 Qualification plan: 4 clean Audible batches (A6, A7, A8 done; A9 next) + 3 clean Hardcover-path batches (H1-H3: Hardcover ID/ASIN/ISBN paths, ISBN repair, every Hardcover hit cross-checked against Audible; quota resets 01:00) + Goodreads sample verified.
+
+## Batch A9 (counting #9: 100 library + 80 synthetic, Audible-only, 7:28 min, 0 errors) – NOT clean (1 fix), counter stays 3 of 4
+Library: 4 ASIN changes correct (Skies of Pern, Tower of the Swallow [title 0.89 + author + narrator + series number + distinctive title], Night of the Hunter, Catching Fire), 0 library fixes. "Overlord" (1239 min, Chris Guerrero): Audible Vol. 1 is 481 min with the same narrator -> probably a multi-volume file, no safe match = correct not found.
+Synthetic 79/80: "The Prince" (Machiavelli, Douglass Scott): the 2023 re-release B0CR6P9671 (178 min) was taken instead of the 2020 listing B085Y4MLC6 (177 min) that matches ABS publisher AND year. Fix: an exact-title hit WITHOUT publisher+year evidence (while ABS knows both) is kept pending and the remaining candidates are checked; a candidate with publisher+year wins. 80/80.
+Counter: 3 of 4 (A6, A7, A8 clean). A10 runs with this frozen code.
+## Batch A10 started
