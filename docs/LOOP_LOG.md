@@ -206,3 +206,10 @@ While a process waits (Goodreads pause, long runs), start the next independent t
 
 ## Round 4 – counting round (code frozen at commit 07e63f3, 21:17), clean rounds so far 0 of 3
 TODO noted: web UI onboarding tour (first visit, restartable from settings, Material style) – see ROADMAP.md "Web UI onboarding".
+
+## Round 4 result (HC quota left 110 -> no more live Hardcover today)
+100 fresh books, 5:14 min, 0 errors. ASIN changes (4) all hand-verified correct: Talonsister (series listing path), Black Summoner Vol 2 (incl. publisher+year), The Hunger Games (Tatiana Maslany, Scholastic 2018), Six of Crows (same 7 narrators, Audible Studios 2015). Not on Audible (other recording only): The Dolphins of Pern (ABS Mel Foster/Brilliance 2014; Audible only has Louis Hill 2025, 0 ratings).
+Hardcover not-found analysis (8): fixed 3 (Faraway Paladin: HC book without author + ASIN hit; Midnight Tides: flagged compilation but single series position; The Summer Tree: same) ; legit not on HC: The Zero Secret, Arch Magus Publisher's Packs (box sets), Konosuba / Boys & Their Monsters (no HC match found).
+Fixes were needed -> round 4 NOT clean (counter stays 0).
+## Counting rule refinement
+Audible-clean and Hardcover-clean rounds are tracked separately; production-ready needs both (3 clean rounds each, all paths exercised). Today: Audible-only rounds (HARDCOVER_OFF=1) while the HC quota is used up; tomorrow Hardcover-focused tests incl. every HC hit cross-checked against Audible.
