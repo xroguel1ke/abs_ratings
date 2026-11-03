@@ -177,3 +177,12 @@ Candidates (measure before/after, ≤30 min each, adopt only if regress.sh stays
 2. Dead-ASIN lookup across the 8 Audible stores concurrently (different hosts, 1 request each, abort on first 429) – expected ~8 s -> ~2 s per such book.
 3. ABS item prefetch (local server) – small.
 Relevant mainly for the final full-library run (~2h15) and later scheduled runs; scheduled after the matching items.
+
+## ASIN audit result (whole library, 1864 ASINs, 2026-11-03) + changes
+- 1736 ASINs found, 128 not found in any of the 8 stores (dead/legacy ASINs; handled by the replacement search), 45 books without ASIN.
+- Deterministic plausibility check (`asin_plausibility`, no LLM): 1739 ok, **2 wrong** (Alice im Wunderland, Paranormal Payback – both already fixed by the search), **5 "ASIN right, ABS title/author differ"** ("Realms of War" x5 = War of the Spider Queen vols 2-6: runtime to the minute + narrator + series number identical; ABS title is the series name, author the series editor) -> review proposal kind `title`, not auto-changed (title rule).
+- First rule version flagged the 5 Realms of War as "wrong" (false positive) -> refined: runtime ±2 min + shared narrator = right ASIN.
+- Volume check: 13 conflicts -> 3 after fixing zero-padding ("Vol. 02" = "Vol. 2") and subtitle-number handling; remaining: 2 real (Mushoku Vol 18/19, duplicate ASIN with vol 9/20) + 1 numbering-scheme difference (Murderbot "Book 8" vs Audible "Book 7") now ignored when `same_recording` (runtime ±2 min + shared narrator).
+- Runtime mismatches >15 %/20 min: 13 (other recordings/collections; go through the existing search route, to be analysed in rounds): Sherlock Holmes Definitive Collection, Dune, The Butlerian Jihad, Legends & Lattes #1 (729 vs 438), The God-Stone War, The Archmage Unbound, Tom Sawyer, Casual Farming 3, Edgedancer, By the Grace of the Gods vol 3, Lies Weeping (fixed), + the two wrong ones.
+- Integration in process_queue: verdict `wrong` -> search for the right ASIN (non-strict, ABS narrators ignored because polluted by the wrong product); nothing taken from the wrong product; review entry if no safe replacement. regress.sh caught a first version that lost Alice/Paranormal (strict narrator veto) -> fixed.
+- tests/test_asin.py added (6 tests incl. "must not fire" cases); regress.sh includes it.

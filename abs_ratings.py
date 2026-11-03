@@ -216,13 +216,18 @@ def canonical_series(lib, name, book_authors):
         return ent['name'], 'existing'
     return name, None
 
-def asin_plausibility(abs_title, abs_authors, aud_title, aud_sub, aud_authors, abs_narrators=(), aud_narrators=()):
+def asin_plausibility(abs_title, abs_authors, aud_title, aud_sub, aud_authors, abs_narrators=(), aud_narrators=(), abs_dur=None, aud_dur=None):
     """Deterministic check (no LLM): does the product behind the ASIN look like THIS book?
     Returns (verdict, reasons): 'wrong' = title AND author contradict (the ASIN belongs to another book), 'suspicious' = one of them is off, 'ok'."""
     t = max(search_match_score(abs_title, aud_title, aud_sub), title_similarity(clean_title(abs_title), clean_title(aud_title or "")))
     auth = match_author(abs_authors, ", ".join(aud_authors or [])) if (abs_authors and aud_authors) else None  # None = cannot tell
     reasons = [f"title {t:.2f}", "author " + {True: "✓", False: "✗", None: "?"}[auth]]
-    if t < 0.5 and auth is False: return "wrong", reasons
+    if t < 0.5 and auth is False:
+        norm_n = lambda n: re.sub(r"[^a-z]", "", n.lower())
+        narr_hit = bool({norm_n(n) for n in abs_narrators or [] if n} & {norm_n(n) for n in aud_narrators or [] if n})
+        if narr_hit and abs_dur and aud_dur and abs(abs_dur - aud_dur) <= 120:  # same recording: the ASIN is right, ABS title/author are what is off
+            return "asin_ok_metadata_differs", reasons + ["narrator ✓", "runtime ±2 min"]
+        return "wrong", reasons
     if (t < 0.5 and auth is not True) or (auth is False and t < 0.85): return "suspicious", reasons
     return "ok", reasons
 
@@ -246,8 +251,15 @@ def language_verdict(abs_title, abs_narrators, aud, lang_locked, abs_series_name
 def volume_conflict(abs_title, aud_title, aud_sub):
     """True if ABS and Audible name different volume numbers ('Vol. 9' vs 'Vol. 18') -> wrong ASIN."""
     a = extract_volume(abs_title or '')
-    b = extract_volume(f"{aud_title or ''} {aud_sub or ''}")
+    b = volume_of(aud_title, aud_sub)
     return bool(a and b and not a & b)
+
+def same_recording(abs_dur, abs_narrators, aud):
+    """Same recording: runtime within 2 min AND a shared narrator. Then a differing volume NUMBER is a numbering scheme difference
+    ('Book 8' in ABS vs 'Book 7' on Audible), not a wrong ASIN."""
+    if not (abs_dur and aud and aud.get('runtime_sec') and abs(abs_dur - aud['runtime_sec']) <= 120): return False
+    n = lambda xs: {re.sub(r'[^a-z]', '', x.lower()) for x in (xs or []) if x}
+    return bool(n(abs_narrators) & n(aud.get('narrators_raw')))
 
 BOXSET_RE = re.compile(r"\b\d+\s*[-–]\s*\d+\b|\b(trilog(y|ie)|box\s*set|boxed set|omnibus|sammelband|gesamtausgabe|publisher.?s pack|complete (series|collection)|collection)\b|\bbooks?\s+\d+\s*(?:-|–|&|and|,)\s*\d+", re.I)
 def is_boxset_title(t): return bool(t and BOXSET_RE.search(t))
@@ -496,7 +508,13 @@ def title_similarity(a, b):
     if len(short.split()) >= 3 and f" {short} " in f" {long_} ": score = max(score, 0.85)
     return score
 
-def extract_volume(text): return set(RE_VOL.findall(text)) | ({m.group(1)} if (m := re.search(r'\b(\d+)$', text.strip())) else set())
+def extract_volume(text):
+    raw = set(RE_VOL.findall(text)) | ({m.group(1)} if (m := re.search(r'\b(\d+)$', text.strip())) else set())
+    return {x.lstrip('0') or '0' for x in raw}  # 'Vol. 02' == 'Vol. 2'
+
+def volume_of(title, sub):
+    """Volume numbers of an Audible product: title and subtitle separately (a number at the end of the SUBTITLE is not the volume)."""
+    return extract_volume(title or '') | extract_volume(sub or '')
 
 def format_time(seconds):
     if seconds < 60: 
@@ -1019,7 +1037,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 continue
             found_title = p.get('title_raw') or ''
             t_score = search_match_score(title, found_title, p.get('subtitle_raw'))
-            f_nums, t_nums = extract_volume(found_title + ' ' + (p.get('subtitle_raw') or '')), extract_volume(title)
+            f_nums, t_nums = volume_of(found_title, p.get('subtitle_raw')), extract_volume(title)
             if f_nums and t_nums and not f_nums & t_nums:  # different volume: never the same book
                 logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (volume {','.join(sorted(f_nums))} vs {','.join(sorted(t_nums))})")
                 continue
@@ -1892,6 +1910,14 @@ def process_queue(work_queue, history, failed, recheck):
                     else:
                         logging.info(f"      -> ℹ️ Language mismatch: ABS {abs_lang} vs Audible {new_lang_detected}. Title and narrator/series match Audible: ABS language is corrected.")
 
+                # Deterministic plausibility check (no LLM): does the product behind the ASIN look like this book at all?
+                plaus, plaus_why = "ok", []
+                if asin and aud_data and aud_data.get("title_raw"):
+                    plaus, plaus_why = asin_plausibility(search_title, authors, aud_data["title_raw"], aud_data.get("subtitle_raw"), aud_data.get("authors_raw"),
+                                                         meta.get("narrators") or [], aud_data.get("narrators_raw"), abs_dur, aud_data.get("runtime_sec"))
+                    if plaus == "asin_ok_metadata_differs":
+                        logging.info(f"      -> ℹ️ ASIN is right (same narrator and runtime) but ABS title/authors differ from Audible '{aud_data.get('title_raw')}' ({', '.join(plaus_why)}): proposal in the review list")
+                        add_review(key, title, "title", aud_data.get("title_raw"), "ASIN confirmed by runtime and narrator; ABS title/author differ", plaus_why)
                 if not asin:
                     logging.info("      -> ⚠️ No ASIN in ABS.")
                     should_search = True
@@ -1900,7 +1926,10 @@ def process_queue(work_queue, history, failed, recheck):
                     should_search, strict_search = True, True
                 elif lang_conflict:
                     should_search = True
-                elif aud_data.get('title_raw') and volume_conflict(title, aud_data.get('title_raw'), aud_data.get('subtitle_raw')):
+                elif plaus == "wrong":
+                    logging.info(f"      -> ⛔ ASIN {asin} belongs to another book: Audible '{aud_data.get('title_raw')}' ({', '.join(plaus_why)}). Searching the right one...")
+                    should_search = True  # not strict: ABS narrators of such a book were filled from the wrong product and must not veto the right one
+                elif aud_data.get('title_raw') and volume_conflict(title, aud_data.get('title_raw'), aud_data.get('subtitle_raw')) and not same_recording(abs_dur, meta.get('narrators'), aud_data):
                     logging.info(f"      -> ⚠️ Volume mismatch: ABS '{title}' vs Audible '{aud_data.get('title_raw')}'. ASIN probably belongs to another volume, searching...")
                     should_search = True
                 elif runtime_mismatch(abs_dur, aud_data.get('runtime_sec')):
@@ -1936,16 +1965,17 @@ def process_queue(work_queue, history, failed, recheck):
 
                     LAST_MATCH.clear()
                     SEARCH_CTX.clear()
+                    search_narr = [] if plaus == "wrong" else (meta.get("narrators") or [])
                     SEARCH_CTX['dup_claim'] = bool(asin and (ASIN_OWNERS.get(asin, set()) - {key}))  # another ABS book has the same ASIN
                     if asin and aud_data and aud_data.get('title_raw'):
                         SEARCH_CTX.update({'old_title': aud_data['title_raw'], 'old_authors': ', '.join(aud_data.get('authors_raw') or [])})
                     if not found: found = find_missing_asin(search_title, authors, abs_dur, lang, raw_title=title,
                                                             required_lang=lang_target, strict=strict_search and bool(asin),
-                                                            only_domain=search_only, narrators=meta.get('narrators') or [], abs_series=meta.get("series") or [])
+                                                            only_domain=search_only, narrators=search_narr, abs_series=meta.get("series") or [])
                     if not found and USE_AUDIBLE_API and meta.get('series') and abs_dur and not search_only:
                         LAST_MATCH.clear()
                         found = find_missing_asin_via_series(search_title, authors, abs_dur, lang, raw_title=title, required_lang=lang_target,
-                                                             strict=strict_search and bool(asin), narrators=meta.get('narrators') or [],
+                                                             strict=strict_search and bool(asin), narrators=search_narr,
                                                              abs_series=meta.get('series') or [])
                     
                     if found and found != asin and (ASIN_OWNERS.get(found, set()) - {key}):
@@ -1976,6 +2006,9 @@ def process_queue(work_queue, history, failed, recheck):
                         else: logging.info(f"        ℹ️ Search returned same ASIN. Keeping fallback data.")
                     elif search_only: logging.info(f"        ℹ️ No exact match on {search_only}. Keeping {asin} from {aud_data.get('domain') if aud_data else '?'}.")
                     else: logging.info(f"        ℹ️ No replacement found. Keeping fallback data.")
+                    if plaus == "wrong" and not (found and found != asin):  # nothing taken from a product that is another book
+                        add_review(key, title, "asin", asin, "ASIN belongs to another book and no safe replacement was found", plaus_why)
+                        aud_data, skip_meta = None, True
                     rel = LAST_SEARCH.get('related')
                     if not found and rel and not search_only and (not aud_data or int(aud_data.get('count', 0)) == 0):
                         aud_data = dict(rel, related_edition=True)
@@ -1987,7 +2020,7 @@ def process_queue(work_queue, history, failed, recheck):
                 if lang_conflict and aud_data and map_language((aud_data.get('meta_raw') or {}).get('language')) not in (None, lang_target):
                     skip_meta = True
                     logging.info(f"      -> ⏭️ Metadata sync skipped: no {lang_target} edition found, ASIN stays as it is. Only ratings are used.")
-                elif aud_data and aud_data.get('title_raw') and volume_conflict(title, aud_data.get('title_raw'), aud_data.get('subtitle_raw')) \
+                elif aud_data and aud_data.get('title_raw') and volume_conflict(title, aud_data.get('title_raw'), aud_data.get('subtitle_raw')) and not same_recording(abs_dur, meta.get('narrators'), aud_data) \
                         and not asin_from_search:
                     skip_meta = True
                     logging.info(f"      -> ⏭️ Metadata sync skipped: volume number still differs from Audible ('{aud_data.get('title_raw')}'). Only ratings are used.")
