@@ -1610,13 +1610,22 @@ def hc_fetch_gr_ids(hc_id):
     except SourceBlockedException: raise
     except Exception: return []
 
+def hc_audible_crosscheck(hc, aud):
+    """Is the Hardcover book the same book as the Audible product? Returns (ok, why). Title similar AND author matching; both missing = mismatch."""
+    t = max(title_similarity(clean_title(hc.get('title') or ''), clean_title(aud.get('title_raw') or '')),
+            search_match_score(aud.get('title_raw') or '', hc.get('title') or '', ''), search_match_score(hc.get('title') or '', aud.get('title_raw') or '', aud.get('subtitle_raw')))
+    a = match_author(aud.get('authors_raw') or [], ', '.join(hc.get('authors') or [])) if (aud.get('authors_raw') and hc.get('authors')) else None
+    why = f"title {t:.2f}, author {'?' if a is None else '✓' if a else '✗'}"
+    return (t >= 0.7 and a is not False), why
+
 def hc_goodreads_ids(book):
     """Goodreads book IDs Hardcover knows for this book (one per edition; the rating belongs to the work, any edition page shows it)."""
     return [m["external_id"] for m in (book or {}).get("book_mappings") or [] if str(m.get("external_id", "")).isdigit()]
 
 def hc_result(book, source):
     return {'gr_ids': hc_goodreads_ids(book), 'id': book.get('id'), 'slug': book.get('slug'), 'url': f"https://hardcover.app/books/{book.get('slug')}",
-            'val': book.get('rating'), 'count': int(book.get('ratings_count') or 0), 'source': source, 'title': book.get('title')}
+            'val': book.get('rating'), 'count': int(book.get('ratings_count') or 0), 'source': source, 'title': book.get('title'),
+            'authors': [a for a in hc_authors(book) if a]}
 
 def hc_authors(book):
     return [((c or {}).get('author') or {}).get('name') for c in (book.get('contributions') or [])] or book.get('author_names') or []
@@ -2433,6 +2442,13 @@ def process_queue(work_queue, history, failed, recheck):
                                                         use_cache=not item.get('_manual_trigger'),
                                                         abs_series=[(x.get('name'), x.get('sequence')) for x in (meta.get('series') or [])])
                 if hc_data and hc_data.get('id') and not DRY_RUN: HC_CACHE[key] = {'id': hc_data['id'], 'slug': hc_data.get('slug')}
+                if hc_data and aud_data and aud_data.get('title_raw') and not aud_data.get('related_edition') and not skip_meta:  # every Hardcover hit is cross-checked against the Audible product
+                    cc_ok, cc_why = hc_audible_crosscheck(hc_data, aud_data)
+                    if not cc_ok:
+                        logging.info(f"        ⚠️ Hardcover '{hc_data.get('title')}' does not look like Audible '{aud_data.get('title_raw')}' ({cc_why}): Hardcover ratings are NOT used (review list)")
+                        add_review(key, title, 'hardcover', hc_data.get('url'), f"Hardcover book differs from the Audible product ({cc_why})")
+                        hc_data = None
+                    else: logging.info(f"        ✓ Hardcover cross-check against Audible: {cc_why}")
                 if HARDCOVER_ENABLED: stats['hc_found' if hc_data else 'hc_missing'] += 1
                 if hc_data and (not aud_data or aud_data.get('related_edition')) and 'lock_asin' not in tags:
                     via = hc_audio_asin(hc_data, abs_dur, authors, hc_targets, meta.get('narrators') or [], lang)

@@ -67,6 +67,14 @@ def test_messy_series_prefix_single_word():
     assert A.parse_messy_title('Catch 22 Heller') is None and A.parse_messy_title('The Book of the New Sun 05 The Urth of the New Sun')
 
 
+def test_hardcover_audible_crosscheck():
+    aud = {'title_raw': 'Dragon Heart', 'subtitle_raw': 'Book 12', 'authors_raw': ['Ben Scott']}
+    assert A.hc_audible_crosscheck({'title': 'Dragon Heart: Book 12', 'authors': ['Ben Scott']}, aud)[0]
+    assert A.hc_audible_crosscheck({'title': 'Dragon Heart', 'authors': []}, aud)[0], 'no author on Hardcover is no contradiction'
+    assert not A.hc_audible_crosscheck({'title': 'Dragon Heart', 'authors': ['Other Person']}, aud)[0]
+    assert not A.hc_audible_crosscheck({'title': 'Completely Different Book', 'authors': ['Ben Scott']}, aud)[0]
+
+
 def test_isbn_checks():
     assert A.isbn_bad_reason('B0D2LJ6SJ2') == 'value is an ASIN, not an ISBN'
     assert A.isbn_bad_reason('9780553580334') is None            # real ISBN-13 (House Corrino)
