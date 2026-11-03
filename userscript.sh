@@ -1,12 +1,12 @@
 #!/bin/bash
 # name=ABS Ratings Updater
-# description=Starts a temporary Python container to scrape Audible and Goodreads ratings <br>for Audiobookshelf and inserts them into the ABS comments field.
+# description=Starts a temporary Python container that adds Audible and Goodreads ratings to Audiobookshelf,<br>keeps metadata clean and merges split series.
 # arrayStarted=true
 
 # ================= CONFIGURATION =================
 
-# 1. Paths
-SCRIPT_DIR="PATH_TO_abs_ratings.py"
+# 1. Paths (abs_ratings.py, abs_series.py and abs_undo.py must be in this folder)
+SCRIPT_DIR="PATH_TO_YOUR_SCRIPT_FOLDER"
 SCRIPT_NAME="abs_ratings.py"
 
 # 2. Audiobookshelf Connection
@@ -15,38 +15,80 @@ ABS_URL="http://<YOUR_SERVER_IP>:<PORT>"
 # 3. Authentication
 API_TOKEN="<YOUR_API_TOKEN_HERE>"
 
-# 4. Target Libraries
+# 4. Target Libraries (comma separated)
 LIBRARY_IDS="<LIBRARY_ID_1>,<LIBRARY_ID_2>"
 
 # 5. Execution Settings
-BATCH_SIZE=250
-SLEEP_TIMER=3        # Pause between books (each source is additionally throttled)
-REFRESH_DAYS=90
-DRY_RUN=false
+BATCH_SIZE=300             # Books per run
+SLEEP_TIMER=3              # Pause between books (each source is additionally throttled)
+REFRESH_DAYS=90            # Refresh ratings after X days
+DRY_RUN=true               # true = change nothing, only log + reports/planned_changes_*.jsonl
 SERIES_ONLY=false          # true = only series merge + library report (ABS only, no Audible/Goodreads)
 GOODREADS_MAX_PER_RUN=300  # Goodreads searches per run (first pass is spread over several runs)
+LOG_LEVEL=INFO             # INFO or DEBUG
+TIMEZONE="Europe/Berlin"   # Timestamps in the logs
 
-# 6. Log Settings
-LOG_RETENTION_DAYS=14
+# 6. Undo (optional): enter a run id (see log summary or: UNDO_RUN="list") to undo that run INSTEAD of a normal run
+UNDO_RUN=""
+UNDO_APPLY=false           # false = only show what would be undone, true = really undo
+
+# 7. Notifications & Logs
+NOTIFY_SUCCESS=true        # Unraid notification after every run (errors are always notified)
+LOG_RETENTION_DAYS=14      # Also removes old planned_changes_*.jsonl files
 
 # ================= END CONFIGURATION =================
 
 LOG_DIR="${SCRIPT_DIR}/logs"
-mkdir -p "$LOG_DIR"
+REPORT_DIR="${SCRIPT_DIR}/reports"
+CONTAINER_NAME="abs-ratings"
+NOTIFY="/usr/local/emhttp/webGui/scripts/notify"
+mkdir -p "$LOG_DIR" "$REPORT_DIR"
 
 echo "------------------------------------------------"
 echo "Starting ABS Ratings Update (Docker Run Method)"
 echo "Date: $(date)"
 echo "------------------------------------------------"
 
-# Clean up old logs (Keep last X days)
+# Required files
+for f in abs_ratings.py abs_series.py abs_undo.py; do
+    if [ ! -f "$SCRIPT_DIR/$f" ]; then
+        echo "Error: $SCRIPT_DIR/$f is missing."
+        $NOTIFY -e "ABS Ratings" -s "ABS Ratings: Datei fehlt ❌" -d "$f fehlt in $SCRIPT_DIR" -i "alert"
+        exit 1
+    fi
+done
+
+# Never run twice at the same time (e.g. a manual start while the nightly run is still busy)
+if docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
+    echo "Error: A run is still in progress (container '$CONTAINER_NAME'). Aborting."
+    $NOTIFY -e "ABS Ratings" -s "ABS Ratings: Übersprungen ⏭️" -d "Ein vorheriger Lauf ist noch aktiv." -i "warning"
+    exit 1
+fi
+
+# Clean up old logs and planned-change files (keep last X days)
 find "$LOG_DIR" -type f -name "*.log" -mtime +$LOG_RETENTION_DAYS -delete
+find "$REPORT_DIR" -type f -name "planned_changes_*.jsonl" -mtime +$LOG_RETENTION_DAYS -delete
 
 # Remove old env file if exists
 rm -f "$SCRIPT_DIR/last_run.env"
 
-# Launch Docker
-docker run --rm \
+# Undo mode instead of a normal run
+if [ -n "$UNDO_RUN" ]; then
+    if [ "$UNDO_RUN" = "list" ]; then UNDO_ARGS="--list"; else UNDO_ARGS="--run $UNDO_RUN"; fi
+    [ "$UNDO_APPLY" = "true" ] && UNDO_ARGS="$UNDO_ARGS --apply"
+    echo "UNDO mode: abs_undo.py $UNDO_ARGS"
+    docker run --rm --name "$CONTAINER_NAME" \
+      -v "$SCRIPT_DIR:$SCRIPT_DIR" \
+      -e ABS_URL="$ABS_URL" -e API_TOKEN="$API_TOKEN" -e TZ="$TIMEZONE" \
+      python:3.11-slim \
+      /bin/bash -c "pip install -q --disable-pip-version-check --root-user-action=ignore requests > /dev/null && python3 -u \"$SCRIPT_DIR/abs_undo.py\" $UNDO_ARGS"
+    echo "------------------------------------------------"
+    echo "Undo finished. Set UNDO_RUN=\"\" again for normal runs."
+    exit 0
+fi
+
+# Launch Docker (-u = unbuffered output, so the User Scripts log shows progress live)
+docker run --rm --name "$CONTAINER_NAME" \
   -v "$SCRIPT_DIR:$SCRIPT_DIR" \
   -e ABS_URL="$ABS_URL" \
   -e API_TOKEN="$API_TOKEN" \
@@ -57,8 +99,10 @@ docker run --rm \
   -e DRY_RUN="$DRY_RUN" \
   -e SERIES_ONLY="$SERIES_ONLY" \
   -e GOODREADS_MAX_PER_RUN="$GOODREADS_MAX_PER_RUN" \
+  -e LOG_LEVEL="$LOG_LEVEL" \
+  -e TZ="$TIMEZONE" \
   python:3.11-slim \
-  /bin/bash -c "pip install requests beautifulsoup4 lxml > /dev/null 2>&1 && python3 \"$SCRIPT_DIR/$SCRIPT_NAME\""
+  /bin/bash -c "pip install -q --disable-pip-version-check --root-user-action=ignore requests beautifulsoup4 lxml > /tmp/pip.log 2>&1 || { echo 'pip install failed:'; cat /tmp/pip.log; exit 1; }; python3 -u \"$SCRIPT_DIR/$SCRIPT_NAME\""
 
 # ================= NOTIFICATION =================
 
@@ -66,20 +110,17 @@ docker run --rm \
 if [ -f "$SCRIPT_DIR/last_run.env" ]; then
     source "$SCRIPT_DIR/last_run.env"
 
-    # Formatting separators (based on your snippet)
     SEP=" | "
     BIG_SEP=" || "
-
-    # Construct Message
-    # Format: [ HEADER ] | Duration: XX | Log: filename || DETAILS: ...
     FINAL_MSG="${ABS_HEADER}${SEP}Dauer: ${ABS_DURATION}${SEP}Log: ${ABS_LOG_FILE}${BIG_SEP}${ABS_REPORT_BODY}"
 
-    # Send Notification
-    /usr/local/emhttp/webGui/scripts/notify -e "ABS Ratings" -s "$ABS_SUBJECT" -d "$FINAL_MSG" -i "$ABS_ICON"
-
+    # Errors are always notified, successful runs only with NOTIFY_SUCCESS=true
+    if [ "$NOTIFY_SUCCESS" = "true" ] || [ "$ABS_ICON" = "alert" ]; then
+        $NOTIFY -e "ABS Ratings" -s "$ABS_SUBJECT" -d "$FINAL_MSG" -i "$ABS_ICON"
+    fi
 else
     echo "Error: No result environment file found. Python script might have crashed."
-    /usr/local/emhttp/webGui/scripts/notify -e "ABS Ratings" -s "ABS Update: Kritischer Fehler ❌" -d "Das Python-Script konnte nicht korrekt beendet werden. Bitte Logs prüfen." -i "alert"
+    $NOTIFY -e "ABS Ratings" -s "ABS Update: Kritischer Fehler ❌" -d "Das Python-Script konnte nicht korrekt beendet werden. Bitte Logs prüfen." -i "alert"
 fi
 
 echo "------------------------------------------------"

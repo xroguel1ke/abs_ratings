@@ -80,6 +80,8 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 
 > **Note:** The script automatically creates `logs/` and `reports/` subdirectories in your script folder.
 
+**Userscript extras:** `TIMEZONE` for log timestamps, `NOTIFY_SUCCESS` (errors are always notified), `UNDO_RUN` / `UNDO_APPLY` to undo a run directly from the User Scripts plugin (`UNDO_RUN="list"` shows all runs). The userscript refuses to start while a previous run is still active and checks that all three `.py` files are present.
+
 ### Large libraries
 
 Audible ratings and metadata come from the API and are fast (one request per book). Goodreads has no API and blocks bots after a while, so the **first** pass is spread over several runs: each run searches Goodreads for at most `GOODREADS_MAX_PER_RUN` books, the rest is re-checked the next day. Once a book is found, its Goodreads URL is cached, so later refreshes need one request per book.
