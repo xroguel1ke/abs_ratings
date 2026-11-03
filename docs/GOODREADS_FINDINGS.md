@@ -22,3 +22,7 @@ Next probes (planned): wait ≥45 min, 1 request -> if ok continue at 30-60 s in
 | 2026-11-03 ~20:40 (our test 1, 15 h later) | 4 | 3 ok, 4th = WAF challenge |
 Interpretation (hypothesis): per-IP accumulation over hours; ~25-30 per night is tolerated; a burst puts the IP on a watch list that decays slowly (> 15 h). Not a general tightening by Goodreads.
 Plan: pause Goodreads tests, then a few requests per day; production default ≈ 25 Goodreads requests per run (GOODREADS_SAMPLE chosen from the batch size), stop at first block.
+
+## Probe 2 (2026-11-03 21:28, ~1 h after the block, 45 s interval, REUSE mode)
+First LIVE request was blocked at once (HTTP 202 bot challenge). The 3 earlier pages came from our recordings (no request). => the block lasts > 1 h (first block ~20:40).
+Next probe: tomorrow morning, ONE request. No further Goodreads traffic until then.
