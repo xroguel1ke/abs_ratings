@@ -267,6 +267,7 @@ BOXSET_RE = re.compile(r"\b\d+\s*[-–]\s*\d+\b|\b(trilog(y|ie)|box\s*set|boxed 
 def is_boxset_title(t): return bool(t and BOXSET_RE.search(t))
 
 ASIN_OWNERS = {}  # asin -> set of item keys (ABS library + ASINs planned in this run); an ASIN is never given to a second book
+ISBN_OWNERS = {}  # isbn -> set of item keys (an ISBN is never given to a second book)
 
 def _seq_num(v):
     m = re.search(r"\d+(?:\.\d+)?", str(v or ""))
@@ -1787,6 +1788,8 @@ def run_libraries(history, failed, recheck):
                 for it in abs_session.get(f"{ABS_URL}/api/libraries/{lib_id}/items").json()['results']:
                     a = ((it.get('media') or {}).get('metadata') or {}).get('asin')
                     if a: ASIN_OWNERS.setdefault(a, set()).add(f"{lib_id}_{it['id']}")
+                    i_ = normalize_isbn(((it.get('media') or {}).get('metadata') or {}).get('isbn'))
+                    if i_: ISBN_OWNERS.setdefault(i_, set()).add(f"{lib_id}_{it['id']}")
             except Exception as e: logging.warning(f"Could not load ASIN owners for {lib_id}: {e}")
         for k in ONLY_ITEMS:
             lib, _, iid = k.partition('_')
@@ -1821,6 +1824,8 @@ def build_queue(lib_id, history, recheck):
     for it in items:  # remember who owns which ASIN (duplicate-ASIN guard)
         a = ((it.get('media') or {}).get('metadata') or {}).get('asin')
         if a: ASIN_OWNERS.setdefault(a, set()).add(f"{lib_id}_{it['id']}")
+        i_ = normalize_isbn(((it.get('media') or {}).get('metadata') or {}).get('isbn'))
+        if i_: ISBN_OWNERS.setdefault(i_, set()).add(f"{lib_id}_{it['id']}")
 
     for item in items:
         key = f"{lib_id}_{item['id']}"
@@ -2280,6 +2285,10 @@ def process_queue(work_queue, history, failed, recheck):
                     elif verified:
                         try: fix = hc_replacement_isbn(hc_data, asin, abs_dur)
                         except SourceBlockedException: fix = None
+                        if fix and (ISBN_OWNERS.get(fix[0], set()) - {key}):
+                            logging.info(f"        ⛔ ISBN {fix[0]} already belongs to another book: not assigned")
+                            fix = None
+                        elif fix: ISBN_OWNERS.setdefault(fix[0], set()).add(key)
                         if fix and abs_update(iid, key, title, {'isbn': fix[0]}, meta, 'isbn_fix'):
                             logging.info(f"        🔧 ISBN '{meta.get('isbn')}' is wrong ({bad_isbn}): replaced by {fix[0]} ({fix[1]}, Hardcover){' (DRY_RUN, not saved)' if DRY_RUN else ''}")
                             stats['isbn_repaired'] += 1
