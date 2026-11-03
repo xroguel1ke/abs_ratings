@@ -106,8 +106,9 @@ Everything is decided automatically. If a match is not certain, nothing is chang
 * **Language:** ISO codes are normalized (`eng` → `English`, `deu` → `German`, ...).
 * **Genres from audible.de** are translated to the English Audible names (`GENRE_LANGUAGE=en`); untranslated names are listed in the library report.
 * **Publisher / Year:** only filled when empty in ABS (Audible has the audiobook edition's data).
-* **Genres:** only the most specific Audible category of each branch is added (e.g. `Space Opera`, not `Science Fiction & Fantasy`). Existing genres are kept.
-* **Series:** taken from Audible. If Audible has no number for a series, the number already in ABS is kept.
+* **Genres:** only the most specific Audible category of each branch is added (e.g. `Space Opera`, not `Science Fiction & Fantasy`); bare top-level categories (`Literature & Fiction`) only when Audible has nothing more specific. Existing genres are kept.
+* **Series:** Audible's series are **added**; existing ABS series are never removed and existing numbers never blanked or overwritten. Series names go through `series_aliases.json` and the existing ABS series first.
+* **Wrong ASIN detection:** different volume numbers in ABS and Audible title (`Vol. 9` vs `Vol. 18`) or a large runtime difference trigger a search for the right ASIN; if none is found, metadata is left alone.
 * **Title:** only corrected for broken titles (see Title Repair).
 
 ## 📚 Series Merge & Library Report (ABS only)
@@ -122,7 +123,9 @@ At the end of every run a second task runs **only against ABS** (no Audible/Good
 * for names that are not identical, the numbers must complement each other (e.g. `1-3, 5-7` + `4, 8-9`),
 * no book of the smaller series has `lock_series`.
 
-The smaller series is renamed to the series that had more books, and **all books of the merged series get the tag `lock_series`**, so the Audible sync can't split them again. Every decision (merged or not, and why) is in the log.
+The smaller series is renamed to the series that had more books. The merge is remembered in `series_aliases.json` (`{"library id": {"old name": "series name"}}`, editable): from then on the Audible sync writes the merged name automatically, so no lock tag is needed and the books keep getting updates (numbers, additional series). `series_index.json` lists all series in ABS, so a new book whose Audible series name matches an existing series (same normalized name, same edition, shared author) joins it instead of creating a split. Every decision (merged or not, and why) is in the log. `SERIES_LOCK_AFTER_MERGE=true` restores the old behaviour (tag `lock_series`).
+
+**Author spellings.** `R. A. Salvatore` / `R.A. Salvatore` (same name except dots, spaces, case, `Last, First`) are unified to the spelling used by more books. Done per book, so `abs_undo.py` can revert it. Disable with `AUTHOR_NORMALIZE=false`.
 
 **Library report** (`reports/library_report.html` + `.json`): merges, similar series that were *not* merged and why, gaps in series, books without series number, duplicate ASINs, author spelling variants, books without ASIN/cover/description/narrators/language/genres, untranslated genres.
 

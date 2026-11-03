@@ -4,6 +4,7 @@ import time
 import requests
 from bs4 import BeautifulSoup
 import re, json, random, difflib, logging, urllib.parse
+import html as html_lib
 from datetime import datetime, timezone, timedelta
 
 # ================= CONFIGURATION =================
@@ -26,6 +27,8 @@ FAILED_FILE = os.path.join(SCRIPT_DIR, "failed_history.json")
 RECHECK_FILE = os.path.join(SCRIPT_DIR, "recheck_history.json")  # key -> UTC time of an early re-check
 GR_CACHE_FILE = os.path.join(SCRIPT_DIR, "goodreads_cache.json")  # key -> Goodreads book URL
 RUN_ID = datetime.now().strftime('%Y%m%d-%H%M%S')
+SERIES_ALIASES_FILE = os.path.join(SCRIPT_DIR, "series_aliases.json")  # {library: {"alias name": "series name"}} (editable)
+SERIES_INDEX_FILE = os.path.join(SCRIPT_DIR, "series_index.json")      # Series that exist in ABS (written by the series task)
 CHANGES_FILE = os.path.join(SCRIPT_DIR, "changes.jsonl")  # Every applied change (old -> new), used by abs_undo.py
 PLANNED_FILE = os.path.join(REPORT_DIR, f"planned_changes_{RUN_ID}.jsonl")  # DRY_RUN: what would have been changed
 ENV_OUTPUT_FILE = os.path.join(SCRIPT_DIR, "last_run.env")
@@ -57,6 +60,8 @@ GENRE_LANGUAGE = os.getenv('GENRE_LANGUAGE', 'en').lower()            # 'en' = t
 SERIES_MERGE = os.getenv('SERIES_MERGE', 'true').lower() == 'true'    # ABS-only series merge task at the end
 LIBRARY_REPORT = os.getenv('LIBRARY_REPORT', 'true').lower() == 'true'
 SERIES_ONLY = os.getenv('SERIES_ONLY', 'false').lower() == 'true'     # Only run the ABS-only series/report task
+AUTHOR_NORMALIZE = os.getenv('AUTHOR_NORMALIZE', 'true').lower() == 'true'  # Unify author spellings (series task)
+SERIES_LOCK_AFTER_MERGE = os.getenv('SERIES_LOCK_AFTER_MERGE', 'false').lower() == 'true'  # Old behaviour: tag lock_series
 NO_RATINGS_RECHECK_DAYS = int(os.getenv('NO_RATINGS_RECHECK_DAYS', 7))  # New releases without ratings yet
 GR_MISSING_RECHECK_DAYS = int(os.getenv('GR_MISSING_RECHECK_DAYS', 30))  # Audible OK, Goodreads not found
 GR_BLOCKED_RECHECK_DAYS = 1  # Goodreads blocked/unreachable during the run
@@ -141,8 +146,9 @@ RE_ASIN = re.compile(r'ASIN[:\s]*(B0\w+)')
 RE_ISBN_JSON = re.compile(r'"isbn"\s*:\s*"([0-9]{10,13})"')
 RE_ASIN_JSON = re.compile(r'"asin"\s*:\s*"([A-Z0-9]{10})"')
 RE_URL_ASIN = re.compile(r'(?:creativeASIN|asin)=([A-Z0-9]{10})')
-RE_AUDIBLE_BLOCK = re.compile(r'(?s)(Audible.*?)<br>\s*(?=Goodreads|⭐)')
-RE_GR_BLOCK = re.compile(r'(?s)(Goodreads.*?)<br>\s*(?=⭐)')
+# Old blocks are searched only inside our rating block. ABS stores '<br />' and '&amp;'.
+RE_AUDIBLE_BLOCK = re.compile(r'(?s)(Audible \(.*?)<br\s*/?>\s*(?=Goodreads \(|⭐)')
+RE_GR_BLOCK = re.compile(r'(?s)(Goodreads \(.*?)<br\s*/?>\s*(?=⭐)')
 RE_RATING_BLOCK = re.compile(r'(?s)⭐\s*Ratings.*?⭐(?:\s|<br\s*/?>)*')
 RE_CLEAN_TITLE = re.compile(r'(?i)\b(unabridged|abridged|audiobook|graphic audio|dramatized adaptation)\b|[\(\[].*?[\)\]]')
 RE_VOL = re.compile(r'(?i)(?:\b(?:book|vol\.?|volume|part|no\.?)|#)\s*(\d+)')
@@ -167,6 +173,25 @@ GR_STATE = {'blocked': False, 'cooldowns': 0, 'searches': 0}
 GR_CACHE = {}  # Filled in main()  # Set once Goodreads blocks us; GR is then skipped for the rest of the run
 reports = {"audible": {}, "goodreads": {}}
 AUTHOR_NOTES = []  # Author spelling differences between ABS and Audible (report only)
+SERIES_ALIASES, SERIES_INDEX = {}, {}  # Loaded in main()
+
+def canonical_series(lib, name, book_authors):
+    """Map a series name delivered by Audible to the name used in ABS:
+    1. series_aliases.json (merges done earlier), 2. an existing ABS series with the same normalized
+    name, same edition and a shared author. Prevents Audible from splitting series again."""
+    from abs_series import series_key, series_variant, author_key
+    if target := SERIES_ALIASES.get(lib, {}).get(name): return target, 'alias'
+    idx_key = f"{','.join(sorted(series_variant(name)))}|{series_key(name)}"
+    ent = SERIES_INDEX.get(lib, {}).get(idx_key)
+    if ent and ent['name'] != name and ({author_key(a) for a in book_authors} & set(ent.get('authors', []))):
+        return ent['name'], 'existing'
+    return name, None
+
+def volume_conflict(abs_title, aud_title, aud_sub):
+    """True if ABS and Audible name different volume numbers ('Vol. 9' vs 'Vol. 18') -> wrong ASIN."""
+    a = extract_volume(abs_title or '')
+    b = extract_volume(f"{aud_title or ''} {aud_sub or ''}")
+    return bool(a and b and not a & b)
 
 class RateLimitException(Exception):
     def __init__(self, msg, is_hard=False): super().__init__(msg); self.is_hard = is_hard
@@ -540,7 +565,10 @@ def get_audible_api(asin, domain):
 
     # Convert to the 'meta_raw' shape the metadata sync already understands
     categories = []
-    for ladder in p.get('category_ladders') or []:
+    ladders = [l.get('ladder') or [] for l in (p.get('category_ladders') or [])]
+    if any(len(l) >= 2 for l in ladders): ladders = [l for l in ladders if len(l) >= 2]  # skip bare top-level categories
+    for lad in ladders:
+        ladder = {'ladder': lad}
         # Only the finest level of each ladder ('Space Opera' instead of 'Science Fiction & Fantasy' > 'Science Fiction' > 'Space Opera')
         leaf = ((ladder.get('ladder') or [{}])[-1] or {}).get('name')
         if leaf and leaf not in categories: categories.append(leaf)
@@ -995,6 +1023,11 @@ def _search_goodreads(isbn, title, authors, prim_auth):
     logging.info("        ❌ Not found via ID or Text.")
     return None
 
+def normalize_desc(d):
+    """Compare descriptions independent of how ABS stores them ('<br />' vs '<br>', '&amp;' vs '&')."""
+    d = html_lib.unescape(d or '')
+    return re.sub(r'\s+', ' ', re.sub(r'<br\s*/?>', '<br>', d)).strip()
+
 def strip_rating_block(desc):
     """Description text without our rating block (used to detect 'empty' descriptions)."""
     d = RE_RATING_BLOCK.sub('', desc or '')
@@ -1198,6 +1231,9 @@ def process_library(lib_id, history, failed, recheck):
                 elif aud_data is None:
                     logging.info("      -> ⚠️ ASIN not found (All domains).")
                     should_search = True
+                elif aud_data.get('title_raw') and volume_conflict(title, aud_data.get('title_raw'), aud_data.get('subtitle_raw')):
+                    logging.info(f"      -> ⚠️ Volume mismatch: ABS '{title}' vs Audible '{aud_data.get('title_raw')}'. ASIN probably belongs to another volume, searching...")
+                    should_search = True
                 elif runtime_mismatch(abs_dur, aud_data.get('runtime_sec')):
                     logging.info(f"      -> ⚠️ Runtime mismatch: ABS {format_time(abs_dur)} vs Audible {format_time(aud_data['runtime_sec'])}. ASIN probably points to another edition, searching...")
                     should_search = True
@@ -1245,7 +1281,11 @@ def process_library(lib_id, history, failed, recheck):
                         else: logging.info(f"        ℹ️ Search returned same ASIN. Keeping fallback data.")
                     else: logging.info(f"        ℹ️ No replacement found. Keeping fallback data.")
 
-                if aud_data and runtime_mismatch(abs_dur, aud_data.get('runtime_sec')):
+                if aud_data and aud_data.get('title_raw') and volume_conflict(title, aud_data.get('title_raw'), aud_data.get('subtitle_raw')) \
+                        and not asin_from_search:
+                    skip_meta = True
+                    logging.info(f"      -> ⏭️ Metadata sync skipped: volume number still differs from Audible ('{aud_data.get('title_raw')}'). Only ratings are used.")
+                elif aud_data and runtime_mismatch(abs_dur, aud_data.get('runtime_sec')):
                     skip_meta = True
                     logging.info(f"      -> ⏭️ Metadata sync skipped: runtime still differs (ABS {format_time(abs_dur)} vs Audible {format_time(aud_data['runtime_sec'])}). Only ratings are used.")
 
@@ -1320,37 +1360,36 @@ def process_library(lib_id, history, failed, recheck):
 
                     if 'lock_series' not in tags:
                         if series_list := md_raw.get('series'):
-                            new_series_list = []
+                            # Additive: existing ABS series are never removed and existing numbers never blanked
+                            cur_list = [{"name": x.get('name'), "sequence": x.get('sequence')} for x in (meta.get('series') or []) if x.get('name')]
+                            new_list = [dict(x) for x in cur_list]
+                            from abs_series import series_key as _skey, series_variant as _svar
+                            same = lambda a, b: a == b or (_skey(a) == _skey(b) and _svar(a) == _svar(b))
                             for s_obj in series_list:
-                                s_name = s_obj.get('name')
+                                s_name = (s_obj.get('name') or '').strip()
+                                if not s_name: continue
                                 s_seq = None
                                 if part_txt := s_obj.get('part'):
-                                    if m := re.search(r'(\d+(?:\.\d+)?)', part_txt): s_seq = m.group(1)
-                                if s_seq is None and s_name:
+                                    if m := re.search(r'(\d+(?:\.\d+)?)', str(part_txt)): s_seq = m.group(1)
+                                if s_seq is None:
                                     search_texts = []
-                                    if aud_data:
-                                        aud_t = aud_data.get('title_raw', '')
-                                        aud_s = aud_data.get('subtitle_raw', '')
-                                        if aud_t or aud_s: search_texts.append(f"{aud_t} {aud_s}".strip())
-                                    search_texts.append(title)
+                                    aud_t, aud_s = aud_data.get('title_raw', ''), aud_data.get('subtitle_raw', '')
+                                    if aud_t or aud_s: search_texts.append(f"{aud_t} {aud_s}".strip())
                                     for search_text in search_texts:
-                                        pattern = re.escape(s_name) + r'[\s:,-]+(\d+(?:\.\d+)?)'
+                                        pattern = re.escape(s_name) + r'[\s:,-]+(?:Book\s+|Band\s+|Teil\s+|Vol\.?\s*)?(\d+(?:\.\d+)?)'
                                         if m := re.search(pattern, search_text, re.IGNORECASE): s_seq = m.group(1); break
-                                        if m := re.search(r'(?:Teil|Band|Book|Vol\.?)\s*(\d+(?:\.\d+)?)', search_text, re.IGNORECASE): s_seq = m.group(1); break
-                                if s_name and s_seq is None:
-                                    # Audible has no number: keep the one already in ABS for this series
-                                    for cur in (meta.get('series') or []):
-                                        if (cur.get('name') or '').strip().lower() == s_name.strip().lower() and cur.get('sequence'):
-                                            s_seq = cur.get('sequence'); break
-                                if s_name: new_series_list.append({"name": s_name, "sequence": s_seq})
-                            
-                            curr_series_list = meta.get('series') or []
-                            curr_series_norm = []
-                            for s in curr_series_list: curr_series_norm.append({"name": s.get('name'), "sequence": s.get('sequence')})
-                            if new_series_list and new_series_list != curr_series_norm:
-                                abs_updates['series'] = new_series_list
-                                s_log_str = ", ".join([f"'{x['name']}' #{x['sequence']}" for x in new_series_list])
-                                log_updates.append(f"Series Updated: {s_log_str}")
+                                canon, why = canonical_series(lib_id, s_name, authors)
+                                if why: logging.info(f"        🔗 Series '{s_name}' -> '{canon}' ({'alias list' if why == 'alias' else 'existing ABS series'})")
+                                existing = next((x for x in new_list if same(x['name'], canon)), None)
+                                if existing:
+                                    if not existing.get('sequence') and s_seq: existing['sequence'] = s_seq
+                                    elif s_seq and existing.get('sequence') and str(existing['sequence']) != str(s_seq):
+                                        logging.info(f"        ℹ️ Series '{canon}': ABS #{existing['sequence']} vs Audible #{s_seq} (ABS kept)")
+                                else:
+                                    new_list.append({"name": canon, "sequence": s_seq})
+                            if new_list != cur_list:
+                                abs_updates['series'] = new_list
+                                log_updates.append("Series: " + ", ".join(f"'{x['name']}' #{x['sequence']}" for x in new_list))
                     else: logging.info("        🔒 Series Update Skipped (Locked)")
 
                     # Narrators / authors: only filled when empty
@@ -1408,8 +1447,9 @@ def process_library(lib_id, history, failed, recheck):
 
                 if 'lock_description' not in tags:
                     cur_desc = meta.get('description') or ''  # ABS sends null for empty descriptions
-                    old_aud = (RE_AUDIBLE_BLOCK.search(cur_desc) or [None, None])[1]
-                    old_gr = (RE_GR_BLOCK.search(cur_desc) or [None, None])[1]
+                    cur_block = (RE_RATING_BLOCK.search(cur_desc) or [''])[0]
+                    old_aud = (RE_AUDIBLE_BLOCK.search(cur_block) or [None, None])[1]
+                    old_gr = (RE_GR_BLOCK.search(cur_block) or [None, None])[1]
                     # Empty description (apart from our rating block): use Audible's summary
                     summary = (aud_data or {}).get('summary') if not skip_meta else None
                     base_desc = cur_desc
@@ -1423,7 +1463,7 @@ def process_library(lib_id, history, failed, recheck):
                     has_gr = bool(gr_data)
                     parts = [n for n, ok in (("Audible", has_aud), ("Goodreads", has_gr)) if ok]
 
-                    if final_desc == cur_desc:
+                    if normalize_desc(final_desc) == normalize_desc(cur_desc):
                         logging.info(f"      -> ✅ Description already up to date ({', '.join(parts) or 'no ratings'})")
                         if has_aud or has_gr: stats['success'] += 1
                     elif abs_update(iid, key, title, {'description': final_desc}, meta, 'ratings'):
@@ -1484,7 +1524,7 @@ def log_run_header():
     logging.info(f"Libraries: {', '.join(LIBRARY_IDS)} | Batch: {MAX_BATCH_SIZE} | Refresh: {REFRESH_DAYS}d | Sleep: {BASE_SLEEP}s")
     logging.info(f"Audible API: {USE_AUDIBLE_API} | Intervals: {MIN_INTERVAL} | Goodreads budget: {GOODREADS_MAX_PER_RUN or 'unlimited'}")
     logging.info(f"Runtime tolerance: {RUNTIME_TOLERANCE_PCT}% and {RUNTIME_TOLERANCE_MIN}min | Covers: {FILL_COVERS} | Genre language: {GENRE_LANGUAGE}")
-    logging.info(f"Series merge: {SERIES_MERGE} | Library report: {LIBRARY_REPORT} | Series only: {SERIES_ONLY}")
+    logging.info(f"Series merge: {SERIES_MERGE} (lock after merge: {SERIES_LOCK_AFTER_MERGE}) | Author normalize: {AUTHOR_NORMALIZE} | Library report: {LIBRARY_REPORT} | Series only: {SERIES_ONLY}")
     logging.info(f"Change journal: {PLANNED_FILE if DRY_RUN else CHANGES_FILE}")
     logging.info("=" * 60)
 
@@ -1495,7 +1535,8 @@ def log_run_summary(start_time, series_result):
         f"Books processed: {s['processed']} (skipped/locked: {s['skipped']}, manual updates: {s['manual_retrigger']}, re-checks: {s['recheck']})",
         f"Ratings {'to write' if DRY_RUN else 'written'}: {s['success']} | Audible without ratings yet: {s['no_ratings_yet']} | Goodreads missing: {s['gr_missing']} (deferred: {s['gr_deferred']})",
         f"ASINs found: {s['asin_found']} | Metadata updated: {s['meta_updated']} | Covers added: {s['cover_added']} | Descriptions filled: {s['desc_filled']} | ISBNs added: {s['isbn_added']}",
-        f"Series merges: {series_result.get('merges', 0)} ({series_result.get('books_changed', 0)} books {'would change' if DRY_RUN else 'changed'})",
+        f"Series merges: {series_result.get('merges', 0)} ({series_result.get('books_changed', 0)} books {'would change' if DRY_RUN else 'changed'}) | "
+        f"Author spellings unified: {series_result.get('author_fixes', 0)} ({series_result.get('authors_changed', 0)} books)",
         f"Errors: {s['failed']}{' | Goodreads blocked' if GR_STATE['blocked'] else ''}{' | ABORTED (rate limit)' if s['aborted_ratelimit'] else ''}",
         f"Duration: {dur}",
     ]
@@ -1538,6 +1579,10 @@ def main():
     logging.info("--- Start ---")
     history, failed, recheck = rw_json(HISTORY_FILE), rw_json(FAILED_FILE), rw_json(RECHECK_FILE)
     GR_CACHE.update(rw_json(GR_CACHE_FILE))
+    SERIES_ALIASES.update(rw_json(SERIES_ALIASES_FILE))
+    SERIES_INDEX.update(rw_json(SERIES_INDEX_FILE))
+    if SERIES_ALIASES or SERIES_INDEX:
+        logging.info(f"Series aliases: {sum(len(v) for v in SERIES_ALIASES.values())} | Known series: {sum(len(v) for v in SERIES_INDEX.values())}")
     if not SERIES_ONLY:
         for lib in LIBRARY_IDS: process_library(lib, history, failed, recheck)
         if not DRY_RUN: rw_json(HISTORY_FILE, history); rw_json(FAILED_FILE, failed); rw_json(RECHECK_FILE, recheck)
@@ -1551,6 +1596,8 @@ def main():
             series_result = abs_series.run({
                 'session': abs_session, 'abs_url': ABS_URL, 'library_ids': LIBRARY_IDS, 'dry_run': DRY_RUN,
                 'abs_update': abs_update, 'report_dir': REPORT_DIR, 'merge': SERIES_MERGE, 'report': LIBRARY_REPORT,
+                'lock_after_merge': SERIES_LOCK_AFTER_MERGE, 'author_normalize': AUTHOR_NORMALIZE,
+                'aliases': SERIES_ALIASES, 'aliases_file': SERIES_ALIASES_FILE, 'index_file': SERIES_INDEX_FILE,
                 'extra': {'author_notes': AUTHOR_NOTES, 'unmapped_genres': UNMAPPED_GENRES},
             })
             stats['series_merged'] = series_result.get('merges', 0)

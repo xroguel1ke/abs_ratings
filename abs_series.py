@@ -2,8 +2,12 @@
 ABS-only maintenance task (no Audible/Goodreads requests):
 
 1. Series merge: finds series that are really the same series (Audible often uses different
-   names within one series), merges the smaller one into the series that had more entries and
-   locks the series field of all affected books (tag 'lock_series').
+   names within one series) and merges the smaller one into the series that had more entries.
+   The merge is remembered in series_aliases.json, so the Audible sync maps the old name to the
+   merged series from then on (no lock tag needed). series_index.json lists all existing series,
+   so new books join an existing series instead of creating a split one.
+1b. Author spellings: 'R. A. Salvatore' / 'R.A. Salvatore' are unified to the spelling used by
+   more books (per book, so it can be undone).
 2. Library report: reports/library_report.html (+ .json) with series gaps, duplicates,
    missing fields, author spelling variants, unmerged similar series ...
 
@@ -207,7 +211,8 @@ def find_merges(records):
 
 def apply_merges(ctx, merges):
     """Rename the merged series on every book and lock the series field of the whole group."""
-    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    abs_update, dry, lock = ctx['abs_update'], ctx['dry_run'], ctx.get('lock_after_merge', False)
+    aliases = ctx.setdefault('aliases', {})
     changed = 0
     for m in merges:
         tgt = m['target']
@@ -215,8 +220,11 @@ def apply_merges(ctx, merges):
         logging.info(f"   🔗 MERGE{' (DRY_RUN)' if dry else ''}: into '{tgt.name}' ({len(tgt.entries)} books, #{fmt_seqs(tgt.seqs)})")
         for s in m['members']:
             logging.info(f"        <- '{s.name}' ({len(s.entries)} books, #{fmt_seqs(s.seqs)}) [name: {s.relation}, shared author, no number conflict]")
-        logging.info(f"        => '{tgt.name}' afterwards: #{fmt_seqs(all_seqs)}")
+        logging.info(f"        => '{tgt.name}' afterwards: #{fmt_seqs(all_seqs)}"
+                     f"{' (alias saved)' if not dry else ''}")
         member_names = {s.name for s in m['members']}
+        if not dry:
+            for n in member_names: aliases.setdefault(m['lib'], {})[n] = tgt.name
         group_records = {r['id']: r for s in [tgt] + m['members'] for r, _ in s.entries}
         for rid, r in group_records.items():
             key = f"{r['lib']}_{rid}"
@@ -234,7 +242,7 @@ def apply_merges(ctx, merges):
             if new_series != r['series']:
                 updates['series'] = new_series
             new_tags = None
-            if 'lock_series' not in r['tags']:
+            if lock and 'lock_series' not in r['tags']:
                 new_tags = sorted(set(r['media_tags']) | {'lock_series'})
             if not updates and new_tags is None: continue
             what = []
@@ -245,6 +253,65 @@ def apply_merges(ctx, merges):
                           tags=new_tags, old_tags=r['media_tags'] if new_tags is not None else None):
                 changed += 1
     return changed
+
+
+# ================= AUTHORS =================
+
+def find_author_fixes(records):
+    """Spelling variants of the same author ('R. A. Salvatore' / 'R.A. Salvatore'): the spelling used
+    by more books wins (tie: alphabetical). Returns {variant: canonical}."""
+    count = defaultdict(lambda: defaultdict(int))
+    for r in records:
+        for a in r['authors']: count[author_key(a)][a] += 1
+    fixes = {}
+    for key, spellings in count.items():
+        if len(spellings) < 2: continue
+        canon = sorted(spellings.items(), key=lambda x: (-x[1], x[0]))[0][0]
+        for sp in spellings:
+            if sp != canon: fixes[sp] = canon
+    return fixes, count
+
+
+def apply_author_fixes(ctx, records, fixes, count):
+    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    changed = 0
+    for variant, canon in sorted(fixes.items()):
+        logging.info(f"   ✍️ AUTHOR{' (DRY_RUN)' if dry else ''}: '{variant}' ({count[author_key(variant)][variant]} books) -> '{canon}' ({count[author_key(canon)][canon]} books)")
+    for r in records:
+        if not any(a in fixes for a in r['authors']): continue
+        if 'lock_authors' in r['tags']:
+            logging.info(f"        🔒 '{r['title']}' has lock_authors, not changed"); continue
+        new_auth = []
+        for a in r['authors']:
+            a = fixes.get(a, a)
+            if a not in new_auth: new_auth.append(a)
+        logging.info(f"        ✏️ '{r['title']}': authors {r['authors']} -> {new_auth}")
+        if abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'authors': [{'name': a} for a in new_auth]},
+                      {'authors': [{'name': a} for a in r['authors']]}, 'author_normalize'):
+            changed += 1
+    return changed
+
+
+def write_series_index(ctx, records, merges):
+    """series_index.json: normalized series key -> name used in ABS (+ authors), after merges.
+    Used by the Audible sync to put new books into existing series."""
+    renamed = {(m['lib'], s.name): m['target'].name for m in merges for s in m['members']} if not ctx['dry_run'] else {}
+    books = defaultdict(lambda: defaultdict(lambda: {'count': 0, 'authors': set()}))
+    for r in records:
+        for s in r['series']:
+            name = renamed.get((r['lib'], s['name']), s['name'])
+            k = f"{','.join(sorted(series_variant(name)))}|{series_key(name)}"
+            e = books[(r['lib'], k)][name]
+            e['count'] += 1
+            e['authors'].update(author_key(a) for a in r['authors'])
+    index = defaultdict(dict)
+    for (lib, k), names in books.items():
+        if not k.split('|', 1)[1]: continue
+        name, e = sorted(names.items(), key=lambda x: (-x[1]['count'], x[0]))[0]
+        index[lib][k] = {'name': name, 'authors': sorted(set().union(*(v['authors'] for v in names.values())))}
+    try:
+        with open(ctx['index_file'], 'w', encoding='utf-8') as f: json.dump(index, f, indent=1, ensure_ascii=False)
+    except OSError as e: logging.error(f"   Could not write series index: {e}")
 
 
 # ================= REPORT =================
@@ -287,7 +354,8 @@ def build_report(ctx, records, merges, rejected, extra):
         'merges': [{'target': m['target'].name, 'target_books': fmt_seqs(m['target'].seqs),
                     'merged': [{'name': s.name, 'books': fmt_seqs(s.seqs), 'count': len(s.entries), 'match': s.relation} for s in m['members']]} for m in merges],
         'not_merged': rejected, 'series_gaps': gaps, 'series_without_number': no_seq, 'duplicate_asins': dups,
-        'author_variants_library': author_var, 'author_variants_audible': extra.get('author_notes', []),
+        'author_variants_library': author_var,
+        'author_fixes': [{'from': k, 'to': v} for k, v in sorted(extra.get('author_fixes', {}).items())], 'author_variants_audible': extra.get('author_notes', []),
         'unmapped_genres': sorted(extra.get('unmapped_genres', [])),
         'missing': {
             'asin': missing(lambda r: not r['asin']), 'cover': missing(lambda r: not r['cover']),
@@ -333,7 +401,7 @@ table{{border-collapse:collapse;width:100%;display:block;overflow-x:auto}} td,th
 <h2>Gaps in series ({len(rep['series_gaps'])})</h2><p class="muted">Missing numbers between the lowest and highest book you have. Can be books you don't own.</p>{table(rep['series_gaps'], ['series', 'have', 'missing'])}
 <h2>Books without series number ({len(rep['series_without_number'])})</h2>{table(rep['series_without_number'], ['series', 'title'])}
 <h2>Duplicate ASINs ({len(rep['duplicate_asins'])})</h2>{table([{'asin': d['asin'], 'titles': ' | '.join(d['titles'])} for d in rep['duplicate_asins']], ['asin', 'titles'])}
-<h2>Author spelling variants in library ({len(rep['author_variants_library'])})</h2>{lst([' / '.join(v) for v in rep['author_variants_library']])}
+<h2>Author spellings unified ({len(rep['author_fixes'])})</h2>{table(rep['author_fixes'], ['from', 'to'])}
 <h2>Author spelling ABS vs Audible ({len(rep['author_variants_audible'])})</h2>{table([{'title': n['title'], 'abs': ', '.join(n['abs']), 'audible': n['audible']} for n in rep['author_variants_audible']], ['title', 'abs', 'audible'])}
 <h2>Missing fields</h2>{miss}
 <h2>Untranslated audible.de genres ({len(rep['unmapped_genres'])})</h2>{lst(rep['unmapped_genres'])}
@@ -347,15 +415,26 @@ def run(ctx):
     records = collect_records(ctx)
     logging.info(f"   {len(records)} books loaded.")
     merges, rejected = find_merges(records)
-    changed = 0
+    changed = authors_changed = 0
     if ctx['merge']:
         logging.info(f"   Series merges found: {len(merges)}")
         changed = apply_merges(ctx, merges)
         for r in rejected:
             logging.info(f"   ⏭️ Not merged: '{r['series']}' / '{r['other']}': {r['reason']}")
+        if not ctx['dry_run'] and ctx.get('aliases'):
+            try:
+                with open(ctx['aliases_file'], 'w', encoding='utf-8') as f: json.dump(ctx['aliases'], f, indent=2, ensure_ascii=False)
+            except OSError as e: logging.error(f"   Could not write series aliases: {e}")
+    write_series_index(ctx, records, merges if ctx['merge'] else [])
+    fixes = {}
+    if ctx.get('author_normalize'):
+        fixes, count = find_author_fixes(records)
+        logging.info(f"   Author spelling variants: {len(fixes)}")
+        authors_changed = apply_author_fixes(ctx, records, fixes, count)
     if ctx['report']:
-        rep = build_report(ctx, records, merges if ctx['merge'] else [], rejected, ctx.get('extra', {}))
+        extra = dict(ctx.get('extra', {}), author_fixes=fixes)
+        rep = build_report(ctx, records, merges if ctx['merge'] else [], rejected, extra)
         logging.info(f"   📄 Report written: {os.path.join(ctx['report_dir'], 'library_report.html')} "
                      f"(gaps: {len(rep['series_gaps'])}, duplicates: {len(rep['duplicate_asins'])}, "
                      f"author variants: {len(rep['author_variants_library'])})")
-    return {'merges': len(merges), 'books_changed': changed}
+    return {'merges': len(merges), 'books_changed': changed, 'author_fixes': len(fixes), 'authors_changed': authors_changed}
