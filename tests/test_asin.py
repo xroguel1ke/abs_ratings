@@ -39,6 +39,16 @@ def test_same_recording_helper():
     assert not A.same_recording(36000, ['Someone Else'], aud)
 
 
+def test_isbn_checks():
+    assert A.isbn_bad_reason('B0D2LJ6SJ2') == 'value is an ASIN, not an ISBN'
+    assert A.isbn_bad_reason('9780553580334') is None            # real ISBN-13 (House Corrino)
+    assert A.isbn_bad_reason('978-0-553-58033-4') is None
+    assert A.isbn_bad_reason('9780553580335') == 'check digit is wrong'
+    assert A.isbn_bad_reason('0553110845') is None               # real ISBN-10
+    assert A.isbn_bad_reason('') is None and A.isbn_bad_reason(None) is None
+    assert A.isbn_bad_reason('12345') == 'not a valid ISBN format'
+
+
 if __name__ == '__main__':
     n = 0
     for name, fn in sorted(globals().items()):

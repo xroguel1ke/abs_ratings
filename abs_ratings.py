@@ -473,6 +473,23 @@ def normalize_isbn(v):
     if re.fullmatch(r'\d{9}[\dX]', c): return c
     return None
 
+def isbn_checksum_ok(c):
+    """True for a valid ISBN-10 or ISBN-13 (cleaned string)."""
+    if not c: return False
+    if len(c) == 13 and c.isdigit(): return (10 - sum(int(d) * (1 if i % 2 == 0 else 3) for i, d in enumerate(c[:12])) % 10) % 10 == int(c[12])
+    if len(c) == 10 and re.fullmatch(r'\d{9}[\dX]', c): return sum((10 - i) * (10 if d == 'X' else int(d)) for i, d in enumerate(c)) % 11 == 0
+    return False
+
+def isbn_bad_reason(v):
+    """Why an ABS ISBN value is provably wrong (None = looks fine or empty). An ASIN or a number with a wrong check digit is no ISBN."""
+    if not v or not str(v).strip(): return None
+    raw = re.sub(r'[\s-]', '', str(v)).upper()
+    if re.fullmatch(r'B0[A-Z0-9]{8}', raw): return 'value is an ASIN, not an ISBN'
+    c = normalize_isbn(raw)
+    if not c: return 'not a valid ISBN format'
+    if not isbn_checksum_ok(c): return 'check digit is wrong'
+    return None
+
 RE_DUP_TITLE = re.compile(r'^\s*(.+?)\s*:\s*\1\s*(?::\s*(.+))?$', re.IGNORECASE)
 # 'The Book of the New Sun 05 The Urth of the New Sun': number directly between two names, separated by spaces only.
 # 'Casual Farming 3: A Slow Living LitRPG' / 'ANIMA, Vol. 4: Light Novel' (colon after the number) are normal titles.
@@ -1643,6 +1660,18 @@ def hc_audio_asin(hc, abs_dur, authors, targets, narrators, lang):
             return asin, ['hardcover-edition-asin', 'author', 'runtime', 'title' if t_abs >= 0.85 else 'title-via-hardcover-isbn'], p
     return None
 
+def hc_replacement_isbn(hc, asin, abs_dur):
+    """ISBN-13 of a Hardcover edition of the (verified) book: the edition carrying our ASIN or the audio length first, otherwise any print edition.
+    Returns (isbn, how) or None."""
+    data = hc_query("query($id:Int!){ editions(where:{book_id:{_eq:$id}, isbn_13:{_is_null:false}}, limit:25){ isbn_13 asin audio_seconds } }", {'id': hc['id']})
+    eds = [(normalize_isbn(e.get('isbn_13')), e) for e in ((data or {}).get('editions') or [])]
+    eds = [(i, e) for i, e in eds if i and isbn_checksum_ok(i)]
+    for i, e in eds:
+        if asin and e.get('asin') == asin: return i, 'edition with our ASIN'
+    for i, e in eds:
+        if abs_dur and e.get('audio_seconds') and abs(e['audio_seconds'] - abs_dur) <= 600: return i, 'audio edition with matching length'
+    return (eds[0][0], 'other edition of the same book') if eds else None
+
 def normalize_desc(d):
     """Compare descriptions independent of how ABS stores them ('<br />' vs '<br>', '&amp;' vs '&')."""
     d = html_lib.unescape(d or '')
@@ -2243,6 +2272,20 @@ def process_queue(work_queue, history, failed, recheck):
                         asin, aud_data = via[0], via[2]
                         stats['asin_found'] += 1; stats['asin_migrated'] += 1
 
+                bad_isbn = isbn_bad_reason(meta.get('isbn'))
+                if bad_isbn:
+                    verified = bool(hc_data and hc_data.get('id') and hc_data.get('source') in ('ASIN', 'search', 'cache', 'manual link') and asin and aud_data and not skip_meta)
+                    fix = None
+                    if 'lock_isbn' in tags: logging.info(f"        🔒 ISBN '{meta.get('isbn')}' looks wrong ({bad_isbn}) but is locked")
+                    elif verified:
+                        try: fix = hc_replacement_isbn(hc_data, asin, abs_dur)
+                        except SourceBlockedException: fix = None
+                        if fix and abs_update(iid, key, title, {'isbn': fix[0]}, meta, 'isbn_fix'):
+                            logging.info(f"        🔧 ISBN '{meta.get('isbn')}' is wrong ({bad_isbn}): replaced by {fix[0]} ({fix[1]}, Hardcover){' (DRY_RUN, not saved)' if DRY_RUN else ''}")
+                            stats['isbn_repaired'] += 1
+                    if not fix and 'lock_isbn' not in tags:
+                        logging.info(f"        ℹ️ ISBN '{meta.get('isbn')}' looks wrong ({bad_isbn}); no verified replacement, left unchanged (review list)")
+                        add_review(key, title, 'isbn', meta.get('isbn'), f"ISBN looks wrong ({bad_isbn}); no verified replacement")
                 gr_title = (aud_data or {}).get('title_raw') or search_title  # Audible's clean title searches best
                 cached_url = ov.get('goodreads') or (None if item.get('_manual_trigger') else GR_CACHE.get(key))
                 hc_gids = (hc_data or {}).get('gr_ids') or (hc_fetch_gr_ids(hc_data['id']) if hc_data and hc_data.get('id') and GOODREADS_ENABLED and not GR_STATE['blocked'] else [])
