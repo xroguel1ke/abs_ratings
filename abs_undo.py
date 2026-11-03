@@ -11,7 +11,7 @@ Needs ABS_URL and API_TOKEN as environment variables (same as abs_ratings.py).
 Changes are undone newest first, so a field ends up with the value it had before the selected changes.
 Undone entries are recorded in undone.jsonl and skipped next time.
 """
-import os, sys, json, argparse
+import os, re, sys, json, argparse
 from collections import Counter
 import requests
 
@@ -52,7 +52,8 @@ def main():
            and (not a.field or e['field'] == a.field)]
     if not sel: print("Nothing to undo for this selection."); return
 
-    url, token = os.getenv('ABS_URL', '').rstrip('/'), os.getenv('API_TOKEN')
+    url = re.sub(r'[^A-Za-z0-9:/._\-\[\]%]', '', os.getenv('ABS_URL', '')).rstrip('/')
+    token = re.sub(r'[^A-Za-z0-9._\-]', '', os.getenv('API_TOKEN', ''))  # strip copy & paste artefacts
     if a.apply and (not url or not token): sys.exit("ABS_URL and API_TOKEN must be set.")
     sess = requests.Session()
     sess.headers.update({"Authorization": f"Bearer {token}", "Content-Type": "application/json"})

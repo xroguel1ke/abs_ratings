@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import requests
 from bs4 import BeautifulSoup
@@ -6,8 +7,15 @@ import re, json, random, difflib, logging, urllib.parse
 from datetime import datetime, timezone, timedelta
 
 # ================= CONFIGURATION =================
-ABS_URL = os.getenv('ABS_URL', '').rstrip('/')
-API_TOKEN = os.getenv('API_TOKEN')
+def clean_env(value, allowed):
+    """Remove invisible characters that sneak in via copy & paste (zero-width spaces, line breaks, quotes...)."""
+    raw = os.getenv(value, '') or ''
+    cleaned = re.sub(f'[^{allowed}]', '', raw)
+    return cleaned, len(raw) - len(cleaned)
+
+ABS_URL, _URL_REMOVED = clean_env('ABS_URL', r'A-Za-z0-9:/._\-\[\]%')
+ABS_URL = ABS_URL.rstrip('/')
+API_TOKEN, _TOKEN_REMOVED = clean_env('API_TOKEN', r'A-Za-z0-9._\-')  # JWT: only these characters
 LIBRARY_IDS = [l.strip() for l in os.getenv('LIBRARY_IDS', '').split(',') if l.strip()]
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -260,9 +268,10 @@ def update_report(src, key, title, author, ident, reason, success):
 def save_reports():
     for k, v in reports.items(): rw_json(os.path.join(REPORT_DIR, f"missing_{k}.json"), sorted(v.values(), key=lambda x: x['title']))
 
-def write_env_file(log_file, start_time):
+def write_env_file(log_file, start_time, error=None):
     dur = f"{int((datetime.now() - start_time).total_seconds() // 60)}m {int((datetime.now() - start_time).total_seconds() % 60)}s"
-    if stats['aborted_ratelimit']: sub, icon, head = "ABS Ratings: Aborted 🛑", "alert", "Rate Limit detected!"
+    if error: sub, icon, head = "ABS Ratings: Start failed ❌", "alert", "Error"
+    elif stats['aborted_ratelimit']: sub, icon, head = "ABS Ratings: Aborted 🛑", "alert", "Rate Limit detected!"
     elif stats['failed'] > 0: sub, icon, head = "ABS Ratings: Error ❌", "alert", "Error occurred!"
     elif any(stats[k] > 0 for k in ['success', 'recycled', 'asin_found', 'asin_migrated', 'isbn_added', 'meta_updated', 'series_merged']): sub, icon, head = "ABS Ratings: Success ✅", "normal", "Update complete"
     else: sub, icon, head = "ABS Ratings: Info ℹ️", "normal", "No changes"
@@ -272,6 +281,7 @@ def write_env_file(log_file, start_time):
     if stats['gr_deferred']: body += f" | GR deferred: {stats['gr_deferred']}"
     if stats['aborted_ratelimit']: body += " | ⚠️ ABORTED (Rate Limit)"
     if DRY_RUN: body += " | DRY RUN"
+    if error: body = error.replace("'", "")
     
     try:
         with open(ENV_OUTPUT_FILE, 'w', encoding='utf-8') as f:
@@ -1491,22 +1501,35 @@ def log_run_summary(start_time, series_result):
     logging.info("=" * 60)
     logging.debug(f"Raw stats: {stats}")
 
+def fail_early(log_file, start_time, msg):
+    """Log a fatal start-up error and hand it to the Unraid notification."""
+    logging.error(msg)
+    stats['failed'] += 1
+    write_env_file(log_file, start_time, error=msg)
+
 def main():
-    if not ABS_URL or not API_TOKEN: return print("Error: Envs missing.")
+    start_time = datetime.now()
     log_file = setup_logging()
     log_run_header()
+    if _TOKEN_REMOVED or _URL_REMOVED:
+        logging.warning(f"Removed {_TOKEN_REMOVED} invisible/invalid character(s) from API_TOKEN and {_URL_REMOVED} from ABS_URL (copy & paste artefacts).")
+    if not ABS_URL or not API_TOKEN or not LIBRARY_IDS:
+        return fail_early(log_file, start_time, "ABS_URL, API_TOKEN or LIBRARY_IDS missing in the userscript.")
     try:
         logging.info("Checking API connection...")
-        if abs_session.get(f"{ABS_URL}/api/libraries").status_code != 200:
-            return print("Error: Cannot connect to ABS API (Check URL/Token).")
+        r = abs_session.get(f"{ABS_URL}/api/libraries")
+        if r.status_code == 401:
+            return fail_early(log_file, start_time, "ABS rejected the API token (HTTP 401). Create a new token in ABS and paste it again.")
+        if r.status_code != 200:
+            return fail_early(log_file, start_time, f"Cannot connect to ABS API (HTTP {r.status_code}). Check ABS_URL.")
+        logging.info("ABS connection OK.")
     except Exception as e:
-        return print(f"Error: Connection failed: {e}")
+        return fail_early(log_file, start_time, f"Connection to ABS failed: {e}")
 
     reports['audible'] = {x['key']: x for x in rw_json(os.path.join(REPORT_DIR, "missing_audible.json"))}
     reports['goodreads'] = {x['key']: x for x in rw_json(os.path.join(REPORT_DIR, "missing_goodreads.json"))}
     
     logging.info("--- Start ---")
-    start_time = datetime.now()
     history, failed, recheck = rw_json(HISTORY_FILE), rw_json(FAILED_FILE), rw_json(RECHECK_FILE)
     GR_CACHE.update(rw_json(GR_CACHE_FILE))
     if not SERIES_ONLY:
