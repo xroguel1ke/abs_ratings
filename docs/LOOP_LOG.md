@@ -146,3 +146,9 @@ Purpose: find all books whose ASIN belongs to another book (like Paranormal Payb
 
 ## Standing rule: bundle long runs (user, 2026-11-03)
 Very long runs (full-library audits / full dry runs) only when several reasons have accumulated; no status polling while they run (background waiter only).
+
+## Finding: Hardcover `book_mappings` (user question 2026-11-03) – measured on 70 random library books
+- platform 1 (Goodreads): 67/70 books have Goodreads IDs (avg 12.7 per book = one per edition, rating is per work). -> build `https://www.goodreads.com/book/show/<id>` directly, NO search; verify title+author on the page; max 2 IDs tried; interval/limits unchanged (≥10 s, ≤~30 requests per 100-book round, GOODREADS_SAMPLE=10 in tests, stop on first block). Query: `books{ book_mappings(where:{platform_id:{_eq:1}}){external_id} }` (add to HC_BOOK_FIELDS, 1 extra field in the existing request).
+- platform 32 (Audible): 16/70 have ASINs per store (us/uk/ca/au/fr/de/it/jp, format `ASIN:store`) -> extra ASIN source, store-correct (English -> :us), always verified with the Audible product (title/author/runtime/narrator).
+- platform 19 (Amazon): 0/70 – not usable.
+TODO (after the audit finishes): implement both, offline-test with recorded Hardcover answers, regress.sh, then a small live Goodreads sample.
