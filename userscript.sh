@@ -5,9 +5,14 @@
 
 # ================= CONFIGURATION =================
 
-# 1. Paths (abs_ratings.py, abs_series.py and abs_undo.py must be in this folder)
+# 1. Paths (data, logs and reports are stored here; the .py files are downloaded into it)
 SCRIPT_DIR="PATH_TO_YOUR_SCRIPT_FOLDER"
 SCRIPT_NAME="abs_ratings.py"
+
+# 1b. Code source: the .py files are downloaded from GitHub before every run
+AUTO_UPDATE=true                      # false = use the .py files that are already in SCRIPT_DIR
+GITHUB_REPO="xroguel1ke/abs_ratings"
+GIT_BRANCH="main"                     # e.g. "main" or a test branch like "claude/festive-fermi-xhscdy"
 
 # 2. Audiobookshelf Connection
 ABS_URL="http://<YOUR_SERVER_IP>:<PORT>"
@@ -49,14 +54,53 @@ echo "Starting ABS Ratings Update (Docker Run Method)"
 echo "Date: $(date)"
 echo "------------------------------------------------"
 
-# Required files
-for f in abs_ratings.py abs_series.py abs_undo.py; do
-    if [ ! -f "$SCRIPT_DIR/$f" ]; then
-        echo "Error: $SCRIPT_DIR/$f is missing."
-        $NOTIFY -e "ABS Ratings" -s "ABS Ratings: Datei fehlt ❌" -d "$f fehlt in $SCRIPT_DIR" -i "alert"
-        exit 1
+# ================= CODE UPDATE FROM GITHUB =================
+# Downloads the .py files of GIT_BRANCH. Uses the exact commit (no stale GitHub cache), downloads into a
+# temp folder first and only replaces the files when everything arrived. If GitHub is unreachable,
+# the files already in SCRIPT_DIR are used.
+CODE_FILES="abs_ratings.py abs_series.py abs_undo.py"
+CODE_VERSION="local files"
+if [ "$AUTO_UPDATE" = "true" ]; then
+    echo "Updating code from GitHub: $GITHUB_REPO @ $GIT_BRANCH"
+    SHA=$(curl -fsS --max-time 20 -H "Accept: application/vnd.github.sha" \
+          "https://api.github.com/repos/$GITHUB_REPO/commits/$GIT_BRANCH" 2>/dev/null)
+    if [ -z "$SHA" ] || [ ${#SHA} -ne 40 ]; then
+        echo "Warning: Could not resolve branch '$GIT_BRANCH' on GitHub. Using local files."
+        $NOTIFY -e "ABS Ratings" -s "ABS Ratings: GitHub nicht erreichbar ⚠️" -d "Branch $GIT_BRANCH nicht gefunden/erreichbar, lokale Dateien werden genutzt." -i "warning"
+    else
+        TMP_DL=$(mktemp -d)
+        DL_OK=true
+        for f in $CODE_FILES; do
+            CODE=$(curl -sS --max-time 30 -w "%{http_code}" -o "$TMP_DL/$f" \
+                   "https://raw.githubusercontent.com/$GITHUB_REPO/$SHA/$f")
+            if [ "$CODE" = "404" ]; then
+                rm -f "$TMP_DL/$f"          # File doesn't exist in this branch (e.g. older version)
+            elif [ "$CODE" != "200" ] || [ ! -s "$TMP_DL/$f" ]; then
+                echo "Warning: Download of $f failed (HTTP $CODE)."; DL_OK=false
+            fi
+        done
+        if [ "$DL_OK" = "true" ] && [ -s "$TMP_DL/abs_ratings.py" ]; then
+            for f in $CODE_FILES; do
+                if [ -f "$TMP_DL/$f" ]; then cp "$TMP_DL/$f" "$SCRIPT_DIR/$f"
+                else rm -f "$SCRIPT_DIR/$f"; fi  # Remove files that don't belong to this branch
+            done
+            CODE_VERSION="$GIT_BRANCH @ ${SHA:0:7}"
+            echo "$CODE_VERSION ($(date '+%Y-%m-%d %H:%M'))" > "$SCRIPT_DIR/.code_version"
+            echo "Code updated: $CODE_VERSION ($(cd "$TMP_DL" && ls | tr '\n' ' '))"
+        else
+            echo "Warning: Download incomplete. Using local files."
+            $NOTIFY -e "ABS Ratings" -s "ABS Ratings: Update fehlgeschlagen ⚠️" -d "Download von $GIT_BRANCH unvollständig, lokale Dateien werden genutzt." -i "warning"
+        fi
+        rm -rf "$TMP_DL"
     fi
-done
+fi
+[ "$CODE_VERSION" = "local files" ] && [ -f "$SCRIPT_DIR/.code_version" ] && CODE_VERSION="$(cat "$SCRIPT_DIR/.code_version") (cached)"
+
+if [ ! -f "$SCRIPT_DIR/$SCRIPT_NAME" ]; then
+    echo "Error: $SCRIPT_DIR/$SCRIPT_NAME is missing."
+    $NOTIFY -e "ABS Ratings" -s "ABS Ratings: Datei fehlt ❌" -d "$SCRIPT_NAME fehlt in $SCRIPT_DIR" -i "alert"
+    exit 1
+fi
 
 # Never run twice at the same time (e.g. a manual start while the nightly run is still busy)
 if docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
@@ -74,6 +118,7 @@ rm -f "$SCRIPT_DIR/last_run.env"
 
 # Undo mode instead of a normal run
 if [ -n "$UNDO_RUN" ]; then
+    if [ ! -f "$SCRIPT_DIR/abs_undo.py" ]; then echo "Error: abs_undo.py is not part of branch $GIT_BRANCH."; exit 1; fi
     if [ "$UNDO_RUN" = "list" ]; then UNDO_ARGS="--list"; else UNDO_ARGS="--run $UNDO_RUN"; fi
     [ "$UNDO_APPLY" = "true" ] && UNDO_ARGS="$UNDO_ARGS --apply"
     echo "UNDO mode: abs_undo.py $UNDO_ARGS"
@@ -101,6 +146,7 @@ docker run --rm --name "$CONTAINER_NAME" \
   -e GOODREADS_MAX_PER_RUN="$GOODREADS_MAX_PER_RUN" \
   -e LOG_LEVEL="$LOG_LEVEL" \
   -e TZ="$TIMEZONE" \
+  -e CODE_VERSION="$CODE_VERSION" \
   python:3.11-slim \
   /bin/bash -c "pip install -q --disable-pip-version-check --root-user-action=ignore requests beautifulsoup4 lxml > /tmp/pip.log 2>&1 || { echo 'pip install failed:'; cat /tmp/pip.log; exit 1; }; python3 -u \"$SCRIPT_DIR/$SCRIPT_NAME\""
 

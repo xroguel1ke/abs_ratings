@@ -30,8 +30,9 @@ This script is optimized for the **User Scripts** plugin on Unraid.
     ```bash
     /mnt/user/appdata/audiobookshelf/abs_scripts/
     ```
-2.  **Upload Files:**
-    Place `abs_ratings.py`, `abs_series.py`, `abs_undo.py` and `userscript.sh` into this folder.
+2.  **Code:**
+    Nothing to upload: with `AUTO_UPDATE=true` the userscript downloads the `.py` files of `GIT_BRANCH` from GitHub before every run (exact commit, temp folder first, falls back to the last downloaded version if GitHub is unreachable). Switch between `main` and a test branch by changing `GIT_BRANCH`. The used version is shown in the log header (`Code version: <branch> @ <commit>`).
+    With `AUTO_UPDATE=false`, place `abs_ratings.py`, `abs_series.py` and `abs_undo.py` into this folder yourself.
 3.  **Setup User Script:**
     * Open the **User Scripts** plugin in Unraid.
     * Add a new script (e.g., "ABS Ratings").

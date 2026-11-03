@@ -1475,6 +1475,7 @@ def process_library(lib_id, history, failed, recheck):
 def log_run_header():
     logging.info("=" * 60)
     logging.info(f"ABS Ratings run {RUN_ID}{'  ***  DRY RUN: nothing is written to ABS  ***' if DRY_RUN else ''}")
+    if os.getenv('CODE_VERSION'): logging.info(f"Code version: {os.getenv('CODE_VERSION')}")
     logging.info(f"Libraries: {', '.join(LIBRARY_IDS)} | Batch: {MAX_BATCH_SIZE} | Refresh: {REFRESH_DAYS}d | Sleep: {BASE_SLEEP}s")
     logging.info(f"Audible API: {USE_AUDIBLE_API} | Intervals: {MIN_INTERVAL} | Goodreads budget: {GOODREADS_MAX_PER_RUN or 'unlimited'}")
     logging.info(f"Runtime tolerance: {RUNTIME_TOLERANCE_PCT}% and {RUNTIME_TOLERANCE_MIN}min | Covers: {FILL_COVERS} | Genre language: {GENRE_LANGUAGE}")
