@@ -1011,6 +1011,8 @@ REVIEW_FILE = os.path.join(SCRIPT_DIR, 'review_queue.json')
 
 def add_review(key, title, kind, candidate, reason, evidence=None):
     """Uncertain automatic decision: nothing is written, the user decides in the review list (review_queue.json)."""
+    decided = rw_json(os.path.join(SCRIPT_DIR, 'review_decisions.json')) or {}
+    if f"{kind}|{key}|{candidate}" in decided: return  # user already decided (accepted or rejected)
     q = rw_json(REVIEW_FILE) or []
     if not isinstance(q, list): q = []
     if any(x.get('key') == key and x.get('kind') == kind and x.get('candidate') == candidate for x in q): return

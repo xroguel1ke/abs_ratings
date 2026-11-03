@@ -96,6 +96,7 @@ def dashboard():
     merged = [m for m in core.merges().values() if dec.get(m['id'], {}).get('action') not in ('confirmed', 'undone')]
     merged.sort(key=lambda m: m.get('last_seen', ''), reverse=True)
     rv = core.review()
+    queue = core.open_queue()
     runs = core.RUNNER.runs()
     last = next((r for r in runs if r['kind'] in ('full', 'series') and r['status'] != 'running'), None)
     gr_note = ''
@@ -104,8 +105,9 @@ def dashboard():
              'other_edition': counts.get('other_edition', 0), 'not_found': counts.get('not_found', 0),
              'no_ratings_yet': counts.get('no_ratings_yet', 0), 'ignored': counts.get('ignored', 0),
              'merged': len(merged), 'review': len(rv.get('series', [])) + len(rv.get('authors', [])),
+             'queue': len(queue),
              'history': core.history_count()}
-    return render_template('dashboard.html', tab=tab, tiles=tiles, problems=problems, merged=merged, review=rv,
+    return render_template('dashboard.html', tab=tab, tiles=tiles, problems=problems, merged=merged, review=rv, queue=queue,
                            last=last, gr_note=gr_note, status_filter=status_filter, q=q, counts=counts,
                            settings=core.load_settings())
 
@@ -159,6 +161,24 @@ def merged_action(mid, action):
             return redirect(url_for('run_view', run_id=run_id))
         flash('Zusammenführung verworfen (war nur geplant).', 'ok')
     return redirect(url_for('dashboard', tab='merged'))
+
+
+@app.route('/queue/<path:qid>/<action>', methods=['POST'])
+@login_required
+def queue_action(qid, action):
+    """Prüfliste: accept = take the proposal, reject = keep the book as it is (the script does not propose it again)."""
+    if action not in ('accept', 'reject'): abort(400)
+    item = next((x for x in core.open_queue() if x['id'] == qid), None)
+    if not item: abort(404)
+    if action == 'accept' and item.get('kind') == 'asin' and item.get('candidate'):
+        core.save_override(item['key'], {'asin': item['candidate']})
+        flash(f"ASIN {item['candidate']} gemerkt: wird beim nächsten Lauf für dieses Buch geschrieben (und gesperrt). Mit \"Erst als Testlauf\" auf der Buchseite kannst du es vorher prüfen.", 'ok')
+    elif action == 'accept':
+        flash(f"Vorschlag bestätigt: {item.get('candidate')}. Für diese Art (ISBN/Titel) wird er noch nicht automatisch geschrieben — bitte in ABS übernehmen.", 'ok')
+    else:
+        flash('Vorschlag verworfen: das Buch bleibt unverändert.', 'ok')
+    core.set_queue_decision(qid, action)
+    return redirect(url_for('dashboard', tab='queue'))
 
 
 @app.route('/review/<path:mid>/<action>', methods=['POST'])

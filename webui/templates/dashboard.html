@@ -19,6 +19,7 @@
 <div class="tabs">
  <a href="?tab=problems" class="{{ 'active' if tab=='problems' }}">Probleme ({{ tiles.problems }})</a>
  <a href="?tab=merged" class="{{ 'active' if tab=='merged' }}">Merged ({{ tiles.merged }})</a>
+ <a href="?tab=queue" class="{{ 'active' if tab=='queue' }}">Prüfliste ({{ tiles.queue }})</a>
  <a href="?tab=review" class="{{ 'active' if tab=='review' }}">Merge-Review ({{ tiles.review }})</a>
  <a href="{{ url_for('report') }}" target="_blank">Bibliotheks-Report ↗</a>
 </div>
@@ -44,6 +45,16 @@
 <td class="row"><form method="post" action="{{ url_for('merged_action', mid=m.id, action='confirm') }}"><button>✓ Passt</button></form>
 <form method="post" action="{{ url_for('merged_action', mid=m.id, action='undo') }}" onsubmit="return confirm('Zusammenführung rückgängig machen?')"><button class="danger">↶ Rückgängig</button></form></td></tr>
 {% else %}<tr><td colspan="5" class="muted">Nichts offen.</td></tr>{% endfor %}</table></div>
+
+{% elif tab=='queue' %}
+<p class="muted small">Hier landen Treffer, bei denen die Belege für eine automatische Änderung nicht reichen (neue ASIN, Titelvorschlag, ISBN). Nichts wird ohne dich geschrieben. „Verwerfen“ lässt das Buch unverändert und der Vorschlag kommt nicht wieder.</p>
+<div class="card tablewrap"><table><tr><th>Art</th><th>Buch</th><th>Vorschlag</th><th>Grund / Belege</th><th></th></tr>
+{% for x in queue %}<tr><td>{{ {'asin': 'ASIN', 'isbn': 'ISBN', 'title': 'Titel'}.get(x.kind, x.kind) }}</td>
+<td><a href="{{ url_for('problem', key=x.key) }}">{{ x.title }}</a></td><td><code>{{ x.candidate }}</code></td>
+<td class="small">{{ x.reason }}{% if x.evidence %}<div class="muted">{{ x.evidence | join(', ') }}</div>{% endif %}</td>
+<td class="row"><form method="post" action="{{ url_for('queue_action', qid=x.id, action='accept') }}"><button class="primary">Übernehmen</button></form>
+<form method="post" action="{{ url_for('queue_action', qid=x.id, action='reject') }}"><button>Verwerfen</button></form></td></tr>
+{% else %}<tr><td colspan="5" class="muted">Die Prüfliste ist leer.</td></tr>{% endfor %}</table></div>
 
 {% elif tab=='review' %}
 <p class="muted small">Unsichere Fälle: Namen passen, aber die Belege reichen nicht für eine automatische Entscheidung. Deine Entscheidung wird beim nächsten Lauf (oder „Nur Reihen & Report“) angewendet.</p>

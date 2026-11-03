@@ -332,6 +332,19 @@ def overrides(): return _load_json(os.path.join(CONFIG_DIR, 'overrides.json'), {
 def merges(): return _load_json(os.path.join(CONFIG_DIR, 'merges.json'), {})
 def review(): return _load_json(os.path.join(CONFIG_DIR, 'merge_review.json'), {'series': [], 'authors': []})
 def decisions(): return _load_json(os.path.join(CONFIG_DIR, 'merge_decisions.json'), {})
+def review_queue():
+    q = _load_json(os.path.join(CONFIG_DIR, 'review_queue.json'), [])
+    return q if isinstance(q, list) else []
+def queue_decisions(): return _load_json(os.path.join(CONFIG_DIR, 'review_decisions.json'), {})
+def queue_id(x): return f"{x.get('kind')}|{x.get('key')}|{x.get('candidate')}"
+def open_queue():
+    """Uncertain automatic decisions (ASIN / ISBN / title proposals) that wait for the user; decided ones are hidden."""
+    d = queue_decisions()
+    return [dict(x, id=queue_id(x)) for x in review_queue() if queue_id(x) not in d and x.get('status', 'open') == 'open']
+def set_queue_decision(qid, action):
+    with _lock:
+        d = queue_decisions(); d[qid] = {'action': action, 'ts': datetime.now().isoformat(timespec='seconds')}
+        _save_json(os.path.join(CONFIG_DIR, 'review_decisions.json'), d)
 def history_count(): return len(_load_json(os.path.join(CONFIG_DIR, 'rating_history.json'), {}))
 
 
