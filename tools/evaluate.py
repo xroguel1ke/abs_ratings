@@ -1,12 +1,16 @@
 """Compare a planned_changes_<run>.jsonl with the golden list and flag suspicious changes.
-Usage: python tools/evaluate.py <planned_changes.jsonl> [golden.json]
+Usage: python tools/evaluate.py <planned_changes.jsonl> [golden.json] [keys.txt]
+keys.txt (optional): only golden books listed there (one libid_itemid per line) are judged = the books of THIS run
 golden.json: {"books": {key: {"asin": "B0.."|null, "status": "confirmed"|"review", "title":..., "note":...}}}
  - asin null  = no automatic ASIN change expected; status review = must NOT be written automatically (review list).
 Exit code 1 if any golden book deviates (wrong or missing result)."""
 import json, sys, collections
 
 planned = [json.loads(l) for l in open(sys.argv[1], encoding='utf-8') if l.strip()]
-golden = json.load(open(sys.argv[2] if len(sys.argv) > 2 else 'tests/private/golden.json', encoding='utf-8'))['books']
+golden = json.load(open(sys.argv[2] if len(sys.argv) > 2 else "tests/private/golden.json", encoding="utf-8"))["books"]
+if len(sys.argv) > 3:
+    run_keys = {l.strip() for l in open(sys.argv[3], encoding="utf-8") if l.strip()}
+    golden = {k: v for k, v in golden.items() if k in run_keys}
 by_key = collections.defaultdict(lambda: collections.defaultdict(list))
 for e in planned: by_key[e['key']][e['field']].append(e)
 

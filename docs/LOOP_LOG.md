@@ -100,3 +100,19 @@ Besides fixing individual cases: in every round actively look for the same CLASS
 look-alike books, author/accent variants, short generic titles) in the whole library data, not only in the batch. Prefer a sustainable
 rule that works without a human (offline-validated against the golden list and the full-library recordings) before any book may land in
 the manual review list. Review list = last resort, each entry with a written reason.
+
+## Round 2 (12 remaining border cases + 88 random fresh books) – closed
+First live run: 7.8 min, 0 errors, Hardcover 96/100 (daily limit left 773 before; ~620 after the re-runs). Analysis of every "not found" (rule: review list = last resort):
+- House Corrino (no ASIN): exists on Audible (B003ABUSI0, 24h09). Audible search never returns it (not with 50 results either). Fix: **Hardcover edition ASIN path** – Hardcover lists the Audible ASIN + audio length of the audio edition; accepted only if the Audible product confirms author, runtime ±10 min, title, narrator not contradicting.
+- Dragon's Kin (Pern 16): exists (B002V8N9QG, 502 min, Dick Hill); hidden from catalog search (even author search 150 results). Fix: **Audible series listing path** – series product `relationships` lists all children; one bulk request (`asins=`) prefilters by runtime ±10 min + author; then the normal evidence gate. Series ASINs cached in `audible_series.json` (filled from every product loaded).
+- The Last Threshold: exists (B00AXZZI7W), runtime 14 % off, same narrator. Fix: runtime tolerance (15 %/20 min) accepted if narrator matches (+ one more evidence); exact-runtime candidate always beats an approximate one.
+- All the Weyrs of Pern: only the 2025 Alex C. Stewart recording exists (series listing: 52 books checked, none with 950±10 min) -> golden `not_on_audible` with evidence.
+- Mushoku Tensei Vol 18 (weak evidence): ABS author romanised vs Audible Japanese script -> not a mismatch when narrator + runtime (±2 min) agree.
+- Reborn ... (2 ABS books claim the same ASIN, one ABS series number is wrong): exact runtime (387 min = vol 3) decides when a series-number conflict exists AND the ASIN is claimed twice.
+- Lies Weeping, Emily Wilde #3, A Thousand Li: The First War, Mother of Learning, Paranormal Payback, Alice im Wunderland: now matched with their own ASIN (verified by hand, see golden.json notes).
+Bugs found: ONLY_ITEMS mode lacked ASIN owners (duplicate-ASIN guard) and runtime (fixed).
+Result: golden 200 books (round 1 + 2) = 200/200, review list empty, 1 legit not-on-Audible.
+### Experiment log
+- Test-mode throttling only before LIVE requests (recorder.py), throttle() skipped in record/replay: 100 books replay 19 s (was 26 min). Adopted.
+- Hardcover edition ASIN path / series listing path: adopted (solve 3 of 4 "not found" cases of round 2, 0 regressions on 200 golden books).
+Hardcover: ~620 requests left today (reserve 25).
