@@ -10,7 +10,7 @@ import hashlib, json, os, time, urllib.parse
 import requests
 
 _LAST_LIVE = {}  # host -> monotonic time of the last live request
-_GAP = {"api.hardcover.app": 1.1}  # seconds between live requests per host (Audible default 0.6)
+_GAP = {"api.hardcover.app": 1.1, "www.goodreads.com": float(os.environ.get("GOODREADS_INTERVAL", 10))}  # seconds between live requests per host (Audible default 0.6)
 
 RECORD_DIR = os.environ.get('RECORD_DIR', '').strip()
 REPLAY_DIR = os.environ.get('REPLAY_DIR', '').strip()

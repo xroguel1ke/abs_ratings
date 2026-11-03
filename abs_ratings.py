@@ -93,7 +93,9 @@ NO_RATINGS_RECHECK_DAYS = int(os.getenv('NO_RATINGS_RECHECK_DAYS', 7))  # New re
 GR_MISSING_RECHECK_DAYS = int(os.getenv('GR_MISSING_RECHECK_DAYS', 30))  # Audible OK, Goodreads not found
 GR_BLOCKED_RECHECK_DAYS = 1  # Goodreads blocked/unreachable during the run
 GR_BLOCK_COOLDOWN = int(os.getenv('GR_BLOCK_COOLDOWN', 900))  # Pause before retrying after a Goodreads block
-GR_MAX_COOLDOWNS = int(os.getenv('GR_MAX_COOLDOWNS', 2))  # Cool-downs per run before Goodreads is skipped
+GR_MAX_COOLDOWNS = int(os.getenv('GR_MAX_COOLDOWNS', 0))  # Cool-downs per run before Goodreads is skipped (0 = stop at the first block, next batch tries again)
+GOODREADS_SAMPLE = max(1, int(os.getenv('GOODREADS_SAMPLE', 1)))  # Goodreads only for every Nth book (the others are re-checked later); 1 = every book
+GR_ID_TRIES = int(os.getenv('GR_ID_TRIES', 2))  # max Goodreads pages tried per book via Hardcover IDs
 # Max Goodreads searches per run (cached URLs don't count). Keeps the first full pass under Goodreads'
 # bot detection: the rest is deferred to the next run. 0 = unlimited.
 GOODREADS_MAX_PER_RUN = int(os.getenv('GOODREADS_MAX_PER_RUN', 300))
@@ -1185,6 +1187,7 @@ def scrape_gr_details(url, require_book_page=False):
     # the rating of an arbitrary first result, so only accept real book pages here.
     if require_book_page and "/book/show/" not in r.url: return None
     res = {'url': r.url, 'source': 'GR'}
+    res['page_title'] = page_title(soup)
     if mini := soup.find('span', class_='minirating'):
         txt = mini.get_text()
         if m := re.search(r'(\d+[.,]\d+)\s+avg rating', txt):
@@ -1202,6 +1205,8 @@ def scrape_gr_details(url, require_book_page=False):
                     if c_votes: res['count'] = int(c_votes)
                     elif c_reviews: res['count'] = int(c_reviews) 
                 if d.get('isbn'): res['isbn'] = d['isbn']
+                if d.get('name'): res['name'] = d['name']
+                if d.get('author'): res['author'] = ", ".join(a.get('name', '') for a in (d['author'] if isinstance(d['author'], list) else [d['author']]) if isinstance(a, dict))
             except: pass
     if 'val' not in res:
         if m := re.search(r'(\d+[.,]\d+)\s+avg rating', soup.get_text()): res['val'] = m.group(1).replace(',', '.')
@@ -1218,7 +1223,7 @@ def scrape_gr_details(url, require_book_page=False):
         return None
     return res
 
-def get_goodreads_data(isbn, title, authors, prim_auth, cached_url=None):
+def get_goodreads_data(isbn, title, authors, prim_auth, cached_url=None, hc_ids=None, force=False):
     """Returns (data, status) with status in 'found', 'not_found', 'blocked', 'deferred', 'disabled'.
     cached_url: Goodreads book page found in an earlier run (1 request instead of a search)."""
     if not GOODREADS_ENABLED:
@@ -1227,10 +1232,15 @@ def get_goodreads_data(isbn, title, authors, prim_auth, cached_url=None):
     if GR_STATE['blocked']:
         logging.info("      -> ⏭️ Goodreads skipped (blocked earlier in this run)")
         return None, 'blocked'
+    GR_STATE['seen'] = GR_STATE.get('seen', 0) + 1
+    if GOODREADS_SAMPLE > 1 and not force and GR_STATE['seen'] % GOODREADS_SAMPLE != 0:
+        logging.info(f"      -> ⏭️ Goodreads: not this book's turn (every {GOODREADS_SAMPLE}. book); it is re-checked later")
+        stats['gr_deferred'] += 1
+        return None, 'deferred'
     logging.info("      -> Checking www.goodreads.com")
     while True:
         try:
-            return _goodreads_lookup(isbn, title, authors, prim_auth, cached_url)
+            return _goodreads_lookup(isbn, title, authors, prim_auth, cached_url, hc_ids)
         except SourceBlockedException as e:
             if GR_STATE['cooldowns'] < GR_MAX_COOLDOWNS:
                 GR_STATE['cooldowns'] += 1
@@ -1241,7 +1251,24 @@ def get_goodreads_data(isbn, title, authors, prim_auth, cached_url=None):
             logging.warning(f"        🛑 Goodreads still blocks requests: {e}. Skipping Goodreads for the rest of this run.")
             return None, 'blocked'
 
-def _goodreads_lookup(isbn, title, authors, prim_auth, cached_url):
+def gr_page_matches(d, title, authors):
+    """The Goodreads page must be THIS book: title similar and (author matches or page lists no author)."""
+    t = max(title_similarity(clean_title(title), clean_title(d.get('name') or d.get('page_title') or '')),
+            search_match_score(title, d.get('name') or d.get('page_title') or '', ''))
+    a_ok = match_author(authors, d['author']) if d.get('author') else None
+    return t >= 0.8 and a_ok is not False, t, a_ok
+
+def _goodreads_lookup(isbn, title, authors, prim_auth, cached_url, hc_ids=None):
+    # Option 1: Goodreads IDs from Hardcover -> the book page directly (1 request, no search)
+    for gid in (hc_ids or [])[:GR_ID_TRIES]:
+        d = scrape_gr_details(f"https://www.goodreads.com/book/show/{gid}", require_book_page=True)
+        if not d: continue
+        ok, t, a_ok = gr_page_matches(d, title, authors)
+        logging.info(f"        🔗 Goodreads page via Hardcover ID {gid}: '{d.get('name') or d.get('page_title')}' title {t:.2f}, author {'?' if a_ok is None else '✓' if a_ok else '✗'}")
+        if ok and d.get('count'):
+            d['source'] = 'Hardcover-ID'
+            logging.info(f"        ✅ Goodreads via Hardcover ID (Count: {d.get('count')}, Rating: {round(safe_float(d.get('val')), 2)})")
+            return d, 'found'
     if cached_url:
         if d := scrape_gr_details(cached_url, require_book_page=True):
             d['source'] = 'Cache'
@@ -1373,7 +1400,7 @@ HC_URL = 'https://api.hardcover.app/v1/graphql'
 HC_STATE = {'disabled': None, 'requests': 0, 'daily_left': None, 'cooldowns': 0}
 HC_CACHE, HC_PREFETCH = {}, {}  # key -> {'id', 'slug'} (persisted) | book id -> book (bulk refresh of cached books)
 HC_DAILY_RESERVE = 25  # stop before the daily limit is used up completely
-HC_BOOK_FIELDS = "id title subtitle slug rating ratings_count compilation cached_featured_series contributions { author { name } }"
+HC_BOOK_FIELDS = "id title subtitle slug rating ratings_count compilation cached_featured_series contributions { author { name } } book_mappings(where:{platform_id:{_eq:1}}, limit:8){ external_id }"
 # Hits that are not the book itself (unless the ABS title says so too)
 RE_HC_SPECIAL = re.compile(r'(?i)\b(graphic novel|comic|manga|coloring|colouring|adventure module|sourcebook|summary of|study guide|'
                            r'sparknotes|cliffsnotes|box(?:ed)? set|boxset|omnibus|collection|collector\W?s edition|books? \d+\s*[-–&]\s*\d+|summary|workbook)\b')
@@ -1417,8 +1444,20 @@ def hc_query(query, variables=None):
         logging.warning(f"        ⏭️ Hardcover daily request limit almost used up ({HC_STATE['daily_left']} left). Remaining books follow in the next runs.")
     return j.get('data') or {}
 
+def hc_fetch_gr_ids(hc_id):
+    """Search hits have no book_mappings: one small extra request."""
+    try:
+        data = hc_query("query($id:Int!){ books(where:{id:{_eq:$id}}, limit:1){ book_mappings(where:{platform_id:{_eq:1}}, limit:8){ external_id } } }", {'id': hc_id})
+        return hc_goodreads_ids(((data or {}).get('books') or [{}])[0])
+    except SourceBlockedException: raise
+    except Exception: return []
+
+def hc_goodreads_ids(book):
+    """Goodreads book IDs Hardcover knows for this book (one per edition; the rating belongs to the work, any edition page shows it)."""
+    return [m["external_id"] for m in (book or {}).get("book_mappings") or [] if str(m.get("external_id", "")).isdigit()]
+
 def hc_result(book, source):
-    return {'id': book.get('id'), 'slug': book.get('slug'), 'url': f"https://hardcover.app/books/{book.get('slug')}",
+    return {'gr_ids': hc_goodreads_ids(book), 'id': book.get('id'), 'slug': book.get('slug'), 'url': f"https://hardcover.app/books/{book.get('slug')}",
             'val': book.get('rating'), 'count': int(book.get('ratings_count') or 0), 'source': source, 'title': book.get('title')}
 
 def hc_authors(book):
@@ -2187,20 +2226,6 @@ def process_queue(work_queue, history, failed, recheck):
                             stats['cover_added'] += 1
                             logging.info(f"        🖼️ Cover {'would be set (DRY_RUN)' if DRY_RUN else 'set'} from Audible: {aud_data['cover_url']}")
 
-                gr_title = (aud_data or {}).get('title_raw') or search_title  # Audible's clean title searches best
-                cached_url = ov.get('goodreads') or (None if item.get('_manual_trigger') else GR_CACHE.get(key))
-                gr_data, gr_status = get_goodreads_data(meta.get('isbn'), gr_title, authors, authors[0] if authors else "", cached_url)
-                if gr_data and gr_data.get('url') and not DRY_RUN: GR_CACHE[key] = gr_data['url']
-                
-                if gr_data and not meta.get('isbn'):
-                    # Only fill an empty ISBN, and only with a real ISBN (never an ASIN). Goodreads has the print
-                    # edition's ISBN, so an existing ISBN is never overwritten.
-                    new_id = normalize_isbn(gr_data.get('isbn'))
-                    if new_id and 'lock_isbn' in tags: logging.info("        🔒 ISBN Update Skipped (Locked)")
-                    elif new_id and abs_update(iid, key, title, {'isbn': new_id}, meta, 'goodreads_isbn'):
-                        logging.info(f"        🔧 ISBN added{' (DRY_RUN, not saved)' if DRY_RUN else ''}: {new_id}")
-                        stats['isbn_added'] += 1
-
                 # Hardcover: ratings only. Audible's clean title first, the ABS title as second comparison.
                 hc_targets = list(dict.fromkeys(t for t in [(aud_data or {}).get('title_raw') if not skip_meta else None, search_title, title] if t))
                 hc_data, hc_status = get_hardcover_data(key, hc_targets, authors, asin, meta.get('isbn'), ov.get('hardcover'),
@@ -2217,6 +2242,22 @@ def process_queue(work_queue, history, failed, recheck):
                             logging.info(f"        💾 ASIN {'would be updated (DRY_RUN)' if DRY_RUN else 'updated in ABS'}.")
                         asin, aud_data = via[0], via[2]
                         stats['asin_found'] += 1; stats['asin_migrated'] += 1
+
+                gr_title = (aud_data or {}).get('title_raw') or search_title  # Audible's clean title searches best
+                cached_url = ov.get('goodreads') or (None if item.get('_manual_trigger') else GR_CACHE.get(key))
+                hc_gids = (hc_data or {}).get('gr_ids') or (hc_fetch_gr_ids(hc_data['id']) if hc_data and hc_data.get('id') and GOODREADS_ENABLED and not GR_STATE['blocked'] else [])
+                gr_data, gr_status = get_goodreads_data(meta.get('isbn'), gr_title, authors, authors[0] if authors else "", cached_url, hc_gids,
+                                                        force=bool(item.get('_manual_trigger') or ONLY_ITEMS))
+                if gr_data and gr_data.get('url') and not DRY_RUN: GR_CACHE[key] = gr_data['url']
+                
+                if gr_data and not meta.get('isbn'):
+                    # Only fill an empty ISBN, and only with a real ISBN (never an ASIN). Goodreads has the print
+                    # edition's ISBN, so an existing ISBN is never overwritten.
+                    new_id = normalize_isbn(gr_data.get('isbn'))
+                    if new_id and 'lock_isbn' in tags: logging.info("        🔒 ISBN Update Skipped (Locked)")
+                    elif new_id and abs_update(iid, key, title, {'isbn': new_id}, meta, 'goodreads_isbn'):
+                        logging.info(f"        🔧 ISBN added{' (DRY_RUN, not saved)' if DRY_RUN else ''}: {new_id}")
+                        stats['isbn_added'] += 1
 
                 if 'lock_description' not in tags:
                     cur_desc = meta.get('description') or ''  # ABS sends null for empty descriptions
