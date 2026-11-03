@@ -263,3 +263,4 @@ Synthetic part: 78/80 -> (1) The Wonderful Wizard of Oz (AmazonClassics): WRONG 
 Side effect found by regress.sh: veto broke Hell Mode / Overlord 12 because ABS "narrator" == author (19 books in the library have this data error) -> such a "narrator" is ignored in matching (never evidence, never veto).
 Fixes: library 2 + synthetic 2 (+1 side effect). Counter stays 0 of 4. Fix trend per counting batch: A1 6, A2 5.
 ## Batch A3 started (SYNTH=5)
+TODO noted: description update from Audible when ABS text is a truncated/very short version (ROADMAP.md).

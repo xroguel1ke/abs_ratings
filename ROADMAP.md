@@ -100,3 +100,9 @@ Status: ✅ done (branch `claude/web-ui`) · 🔜 next · ⏳ later
   Deductions: ASIN found by search instead of kept from ABS -5, "other edition" -20, only one rating source -5, hit via ISBN field or series listing -5, near-tolerance runtime path -5.
   Review-list cases score low automatically; unchanged, product-confirmed ASINs score high.
 - The evidence list already exists in the log (`evidence: title, author, ...`) and is stored in `LAST_MATCH`; the score is computed from it, so no new matching logic is needed.
+
+## Description update when Audible's is much more complete (user wish, 2026-11-03) – TODO
+Today: description filled only when empty (rating block aside). New: replace the ABS description (without our rating block) by Audible's summary ONLY if it is provably not the user's own text:
+(a) the ABS text is a prefix / truncated part of Audible's text, or (b) it is very short (< 30 % of Audible's length and < 300 characters).
+Never when `lock_description` is set; journaled old -> new (undo); rating block stays on top. A long self-written description is never replaced. Tests: truncated -> replaced, own long text -> kept, locked -> kept.
+Rating blocks (already so): per source, new ratings replace the old block of that source; if a source finds nothing this run, the old block of that source is kept.
