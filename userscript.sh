@@ -24,11 +24,12 @@ API_TOKEN="<YOUR_API_TOKEN_HERE>"
 LIBRARY_IDS="<LIBRARY_ID_1>,<LIBRARY_ID_2>"
 
 # 5. Execution Settings
-BATCH_SIZE=300             # Books per run
+BATCH_SIZE=300             # Books per run (random books from all libraries together)
 SLEEP_TIMER=3              # Pause between books (each source is additionally throttled)
 REFRESH_DAYS=90            # Refresh ratings after X days
 DRY_RUN=true               # true = change nothing, only log + reports/planned_changes_*.jsonl
 SERIES_ONLY=false          # true = only series merge + library report (ABS only, no Audible/Goodreads)
+GOODREADS_ENABLED=true     # false = no Goodreads requests at all (existing Goodreads ratings are kept)
 GOODREADS_MAX_PER_RUN=300  # Goodreads searches per run (first pass is spread over several runs)
 LOG_LEVEL=INFO             # INFO or DEBUG
 TIMEZONE="Europe/Berlin"   # Timestamps in the logs
@@ -143,6 +144,7 @@ docker run --rm --name "$CONTAINER_NAME" \
   -e REFRESH_DAYS="$REFRESH_DAYS" \
   -e DRY_RUN="$DRY_RUN" \
   -e SERIES_ONLY="$SERIES_ONLY" \
+  -e GOODREADS_ENABLED="$GOODREADS_ENABLED" \
   -e GOODREADS_MAX_PER_RUN="$GOODREADS_MAX_PER_RUN" \
   -e LOG_LEVEL="$LOG_LEVEL" \
   -e TZ="$TIMEZONE" \

@@ -48,6 +48,7 @@ MIN_INTERVAL = {
     'goodreads': float(os.getenv('GOODREADS_INTERVAL', 10)),
 }
 USE_AUDIBLE_API = os.getenv('USE_AUDIBLE_API', 'true').lower() == 'true'
+GOODREADS_ENABLED = os.getenv('GOODREADS_ENABLED', 'true').lower() == 'true'  # false = no Goodreads requests at all
 AUDIBLE_API_HOSTS = {"www.audible.com": "api.audible.com", "www.audible.de": "api.audible.de"}
 AUDIBLE_API_GROUPS = "rating,series,product_attrs,product_desc,category_ladders,contributors,media"
 DRY_RUN = os.getenv('DRY_RUN', 'False').lower() == 'true'
@@ -901,8 +902,11 @@ def scrape_gr_details(url, require_book_page=False):
     return res
 
 def get_goodreads_data(isbn, title, authors, prim_auth, cached_url=None):
-    """Returns (data, status) with status in 'found', 'not_found', 'blocked'.
+    """Returns (data, status) with status in 'found', 'not_found', 'blocked', 'deferred', 'disabled'.
     cached_url: Goodreads book page found in an earlier run (1 request instead of a search)."""
+    if not GOODREADS_ENABLED:
+        logging.info("      -> ⏭️ Goodreads disabled (GOODREADS_ENABLED=false)")
+        return None, 'disabled'
     if GR_STATE['blocked']:
         logging.info("      -> ⏭️ Goodreads skipped (blocked earlier in this run)")
         return None, 'blocked'
@@ -1111,14 +1115,32 @@ def item_tags(item):
     raw = (item.get('tags') or []) + (media.get('tags') or []) + ((media.get('metadata') or {}).get('tags') or [])
     return {t.strip() for t in raw if isinstance(t, str)}
 
-BATCH_LEFT = {'n': MAX_BATCH_SIZE}  # BATCH_SIZE is per run, shared by all libraries
-
 def process_library(lib_id, history, failed, recheck):
-    logging.info(f"--- Processing Library: {lib_id} ---")
+    """One library on its own (used by tests). Normal runs use run_libraries()."""
+    queue = build_queue(lib_id, history, recheck)
+    random.shuffle(queue)
+    process_queue(queue[:MAX_BATCH_SIZE], history, failed, recheck)
+
+def run_libraries(history, failed, recheck):
+    """Collect the due books of ALL libraries into one pool, shuffle it and process BATCH_SIZE random books."""
+    pool = []
+    for lib in LIBRARY_IDS: pool += build_queue(lib, history, recheck)
+    random.shuffle(pool)
+    batch = pool[:MAX_BATCH_SIZE]
+    per_lib = defaultdict(int)
+    for it in batch: per_lib[it['_lib']] += 1
+    logging.info(f"Pool: {len(pool)} due books in {len(LIBRARY_IDS)} libraries. This run: {len(batch)} random books "
+                 f"({', '.join(f'{l[:8]}: {n}' for l, n in per_lib.items()) or '-'})"
+                 + (f", {len(pool) - len(batch)} follow in the next runs." if len(pool) > len(batch) else "."))
+    process_queue(batch, history, failed, recheck)
+
+def build_queue(lib_id, history, recheck):
+    """Due books of one library (new, manually changed, due for refresh, re-checks). Each item gets '_lib'."""
+    logging.info(f"--- Library: {lib_id} ---")
     try:
         r = abs_session.get(f"{ABS_URL}/api/libraries/{lib_id}/items")
         items = r.json()['results']
-    except Exception as e: logging.error(f"Lib Error: {e}"); return
+    except Exception as e: logging.error(f"Lib Error: {e}"); return []
 
     # --- NEW QUEUE LOGIC (UTC ONLY) ---
     work_queue = []
@@ -1185,21 +1207,21 @@ def process_library(lib_id, history, failed, recheck):
             item['_recheck'] = True
             work_queue.append(item); count_recheck += 1
 
-    random.shuffle(work_queue)
-    batch = BATCH_LEFT['n']
-    total = min(len(work_queue), batch)
-    BATCH_LEFT['n'] -= total
     count_fresh = len(items) - count_locked - len(work_queue)
-    logging.info(f"Queue: {count_new} New, {count_manual} Manual Updates, {count_due} Due, {count_recheck} Re-checks ({count_locked} locked via lock_all). Total: {total}")
-    logging.info(f"       {count_fresh} books are up to date (refreshed within the last {REFRESH_DAYS} days) and are not processed."
-                 + (f" Batch: {total} of {MAX_BATCH_SIZE} books in this library." if len(work_queue) <= batch else f" {len(work_queue) - batch} more follow in the next runs (batch limit {MAX_BATCH_SIZE} per run)."))
+    logging.info(f"Due: {count_new} New, {count_manual} Manual Updates, {count_due} Due, {count_recheck} Re-checks ({count_locked} locked via lock_all). "
+                 f"{count_fresh} books are up to date (refreshed within the last {REFRESH_DAYS} days).")
     stats['skipped'] += count_locked
-    
+    for it in work_queue: it['_lib'] = lib_id
+    return work_queue
+
+def process_queue(work_queue, history, failed, recheck):
+    total = len(work_queue)
     start = datetime.now()
     consecutive_rl = 0
 
-    for idx, item in enumerate(work_queue[:total]):
+    for idx, item in enumerate(work_queue):
         if stats['aborted_ratelimit']: break
+        lib_id = item['_lib']
         
         elapsed = (datetime.now() - start).total_seconds()
         items_done = idx + 1
@@ -1548,12 +1570,12 @@ def process_library(lib_id, history, failed, recheck):
                 elif has_aud:
                     # Audible worked. Missing Goodreads is no strike, just re-check earlier.
                     stats['gr_missing'] += 1
-                    days = GR_BLOCKED_RECHECK_DAYS if gr_status in ('blocked', 'deferred') else GR_MISSING_RECHECK_DAYS
+                    days = GR_BLOCKED_RECHECK_DAYS if gr_status in ('blocked', 'deferred', 'disabled') else GR_MISSING_RECHECK_DAYS
                     logging.info(f"      -> ℹ️ Audible OK, Goodreads {gr_status.replace('_', ' ')}.")
                     record_attempt(key, history, failed, recheck, recheck_days=days)
                 elif no_ratings_yet:
                     stats['no_ratings_yet'] += 1
-                    days = GR_BLOCKED_RECHECK_DAYS if gr_status in ('blocked', 'deferred') else NO_RATINGS_RECHECK_DAYS
+                    days = GR_BLOCKED_RECHECK_DAYS if gr_status in ('blocked', 'deferred', 'disabled') else NO_RATINGS_RECHECK_DAYS
                     record_attempt(key, history, failed, recheck, recheck_days=days)
                 else:
                     logging.warning(f"      -> ⚠️ No Audible data (Audible: {has_aud}, GR: {has_gr})")
@@ -1585,7 +1607,7 @@ def log_run_header():
     logging.info(f"ABS Ratings run {RUN_ID}{'  ***  DRY RUN: nothing is written to ABS  ***' if DRY_RUN else ''}")
     if os.getenv('CODE_VERSION'): logging.info(f"Code version: {os.getenv('CODE_VERSION')}")
     logging.info(f"Libraries: {', '.join(LIBRARY_IDS)} | Batch: {MAX_BATCH_SIZE} | Refresh: {REFRESH_DAYS}d | Sleep: {BASE_SLEEP}s")
-    logging.info(f"Audible API: {USE_AUDIBLE_API} | Intervals: {MIN_INTERVAL} | Goodreads budget: {GOODREADS_MAX_PER_RUN or 'unlimited'}")
+    logging.info(f"Audible API: {USE_AUDIBLE_API} | Goodreads: {'on' if GOODREADS_ENABLED else 'OFF'} | Intervals: {MIN_INTERVAL} | Goodreads budget: {GOODREADS_MAX_PER_RUN or 'unlimited'}")
     logging.info(f"Runtime tolerance: {RUNTIME_TOLERANCE_PCT}% and {RUNTIME_TOLERANCE_MIN}min | Covers: {FILL_COVERS} | Genre language: {GENRE_LANGUAGE}")
     logging.info(f"Series merge: {SERIES_MERGE} (lock after merge: {SERIES_LOCK_AFTER_MERGE}) | Author normalize: {AUTHOR_NORMALIZE} | Library report: {LIBRARY_REPORT} | Series only: {SERIES_ONLY}")
     logging.info(f"Change journal: {PLANNED_FILE if DRY_RUN else CHANGES_FILE}")
@@ -1619,7 +1641,7 @@ def fail_early(log_file, start_time, msg):
     logging.info(f"Debug bundle (send this one for troubleshooting): {os.path.join(LOG_DIR, 'debug_latest.log')}")
     write_debug_bundle(log_file)
 
-DEBUG_ENV_KEYS = ['ABS_URL', 'LIBRARY_IDS', 'BATCH_SIZE', 'SLEEP_TIMER', 'REFRESH_DAYS', 'DRY_RUN', 'SERIES_ONLY', 'GOODREADS_MAX_PER_RUN',
+DEBUG_ENV_KEYS = ['ABS_URL', 'LIBRARY_IDS', 'GOODREADS_ENABLED', 'BATCH_SIZE', 'SLEEP_TIMER', 'REFRESH_DAYS', 'DRY_RUN', 'SERIES_ONLY', 'GOODREADS_MAX_PER_RUN',
                   'LOG_LEVEL', 'TZ', 'CODE_VERSION', 'USE_AUDIBLE_API', 'AUDIBLE_API_INTERVAL', 'AUDIBLE_WEB_INTERVAL', 'GOODREADS_INTERVAL',
                   'GR_BLOCK_COOLDOWN', 'GR_MAX_COOLDOWNS', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'FILL_COVERS', 'GENRE_LANGUAGE',
                   'SERIES_MERGE', 'SERIES_LOCK_AFTER_MERGE', 'AUTHOR_NORMALIZE', 'LIBRARY_REPORT', 'NO_RATINGS_RECHECK_DAYS',
@@ -1706,7 +1728,7 @@ def main():
     if SERIES_ALIASES or SERIES_INDEX:
         logging.info(f"Series aliases: {sum(len(v) for v in SERIES_ALIASES.values())} | Known series: {sum(len(v) for v in SERIES_INDEX.values())}")
     if not SERIES_ONLY:
-        for lib in LIBRARY_IDS: process_library(lib, history, failed, recheck)
+        run_libraries(history, failed, recheck)
         if not DRY_RUN: rw_json(HISTORY_FILE, history); rw_json(FAILED_FILE, failed); rw_json(RECHECK_FILE, recheck)
         save_reports()
         if AUTHOR_NOTES: rw_json(os.path.join(REPORT_DIR, "author_variants.json"), AUTHOR_NOTES)

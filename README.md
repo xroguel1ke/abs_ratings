@@ -50,7 +50,7 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 | `ABS_URL` | Your internal Audiobookshelf URL (no trailing slash). | `http://192.168.1.10:13378` |
 | `API_TOKEN` | Your ABS API Token (Bearer Token). | `eyJhbG...` |
 | `LIBRARY_IDS` | Comma-separated list of Library IDs to scan. | `lib-uuid-1,lib-uuid-2` |
-| `BATCH_SIZE` | Items to process per run (prevents bans). | `250` |
+| `BATCH_SIZE` | Books per run, picked at random from the due books of all libraries together. | `300` |
 | `SLEEP_TIMER` | Pause in seconds between two books. | `3` |
 | `REFRESH_DAYS` | Update interval for existing ratings. | `90` |
 | `DRY_RUN` | If `true`, nothing is written to ABS and the run history is not updated. | `false` |
@@ -68,6 +68,7 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 | `GOODREADS_INTERVAL` | Minimum seconds between two Goodreads requests. | `10` |
 | `GR_BLOCK_COOLDOWN` | Pause in seconds after Goodreads blocks, before retrying. | `900` |
 | `GR_MAX_COOLDOWNS` | Cool-downs per run before Goodreads is skipped for the rest of the run. | `2` |
+| `GOODREADS_ENABLED` | `false` = no Goodreads requests at all (existing Goodreads ratings in the description are kept). | `true` |
 | `GOODREADS_MAX_PER_RUN` | Max Goodreads searches per run (cached books don't count, `0` = unlimited). The rest follows in the next runs. | `300` |
 | `SEARCH_PENALTY_SLEEP` | Optional extra pause after an ASIN search. | `0` |
 | `RUNTIME_TOLERANCE_PCT` / `RUNTIME_TOLERANCE_MIN` | Runtime difference that counts as another edition (both must be exceeded). | `15` / `20` |
