@@ -24,3 +24,4 @@ merge_review.json
 merge_decisions.json
 settings.json
 webui_runs.json
+.claude/settings.local.json

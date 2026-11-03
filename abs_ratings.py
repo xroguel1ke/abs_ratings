@@ -237,6 +237,27 @@ def volume_conflict(abs_title, aud_title, aud_sub):
     b = extract_volume(f"{aud_title or ''} {aud_sub or ''}")
     return bool(a and b and not a & b)
 
+BOXSET_RE = re.compile(r"\b\d+\s*[-–]\s*\d+\b|\b(trilog(y|ie)|box\s*set|boxed set|omnibus|sammelband|gesamtausgabe|publisher.?s pack|complete (series|collection)|collection)\b|\bbooks?\s+\d+\s*(?:-|–|&|and|,)\s*\d+", re.I)
+def is_boxset_title(t): return bool(t and BOXSET_RE.search(t))
+
+ASIN_OWNERS = {}  # asin -> set of item keys (ABS library + ASINs planned in this run); an ASIN is never given to a second book
+
+def series_seq_conflict(abs_series, cand_series):
+    """True if ABS and a candidate both state a number for the same series and the numbers differ (-> other volume)."""
+    for a in abs_series or []:
+        an, aseq = normalize_title_text(a.get("name") or ""), str(a.get("sequence") or "").strip()
+        if not an or not aseq: continue
+        for c in cand_series or []:
+            cn = normalize_title_text(c.get("name") or c.get("title") or "")
+            m = re.search(r"\d+(?:\.\d+)?", str(c.get("sequence") or c.get("part") or ""))
+            cseq = m.group(0) if m else ""
+            if cseq and (an == cn or difflib.SequenceMatcher(None, an, cn).ratio() >= 0.9):
+                try:
+                    if float(aseq) != float(cseq): return True
+                except ValueError:
+                    if aseq != cseq: return True
+    return False
+
 class RateLimitException(Exception):
     def __init__(self, msg, is_hard=False): super().__init__(msg); self.is_hard = is_hard
 
@@ -836,7 +857,7 @@ def search_match_score(abs_title, found_title, found_sub):
 LAST_SEARCH = {'related': None}  # best same-title/same-author candidate of the last search (other edition)
 
 def search_audible_api(title, authors_list, duration, lang, raw_title=None, required_lang=None, strict=False,
-                       only_domain=None, narrators=None):
+                       only_domain=None, narrators=None, abs_series=None):
     """Find an ASIN via the Audible catalog search API. Every candidate is verified by loading
     the product (title, author, runtime). Returns the ASIN, None (no match) or False (API error)."""
     prim_auth = authors_list[0] if authors_list else ""
@@ -879,11 +900,15 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             if f_nums and t_nums and not f_nums & t_nums:  # different volume: never the same book
                 logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (volume {','.join(sorted(f_nums))} vs {','.join(sorted(t_nums))})")
                 continue
+            if series_seq_conflict(abs_series, (p.get('meta_raw') or {}).get('series')):  # ABS and Audible number the same series differently
+                logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (series number differs from ABS)")
+                continue
             auth_ok = match_author(authors_list, ", ".join(p.get('authors_raw') or []))
             dur_ok = bool(duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) < 600)
             dur_conflict = bool(duration and p.get('runtime_sec') and not dur_ok)
             # Same book, possibly another recording (runtime/narrator differ): remembered as a ratings-only fallback
-            if t_score >= 0.85 and auth_ok and int(p.get('count') or 0) > 0:
+            rel_dur_ok = not (duration and p.get('runtime_sec')) or abs(duration - p['runtime_sec']) <= max(2700, 0.25 * duration)
+            if t_score >= 0.85 and auth_ok and int(p.get('count') or 0) > 0 and rel_dur_ok and is_boxset_title(found_title) == is_boxset_title(title):
                 rel, diff = LAST_SEARCH['related'], abs((duration or 0) - (p.get('runtime_sec') or 0))
                 if rel is None or diff < rel['_diff']:
                     LAST_SEARCH['related'] = dict(p, _diff=diff)
@@ -903,11 +928,11 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
     return None if api_ok else False
 
 def find_missing_asin(title, authors_list, duration, lang, raw_title=None, required_lang=None, strict=False,
-                      only_domain=None, narrators=None):
+                      only_domain=None, narrators=None, abs_series=None):
     logging.info(f"      -> 🔎 Searching Replacement ASIN for '{title}'{f' on {only_domain}' if only_domain else ''}"
                  f"{' (strict: title, author, runtime and narrator must match)' if strict else ''}...")
     if USE_AUDIBLE_API:
-        res = search_audible_api(title, authors_list, duration, lang, raw_title, required_lang, strict, only_domain, narrators)
+        res = search_audible_api(title, authors_list, duration, lang, raw_title, required_lang, strict, only_domain, narrators, abs_series)
         if only_domain: return res or None  # preferred-store search: no web fallback, keep the existing ASIN
         if res is not False: return res
         logging.info("        ↪️ API search unavailable, falling back to web search...")
@@ -1499,6 +1524,10 @@ def build_queue(lib_id, history, recheck):
     now = datetime.now()
     now_utc = datetime.now(timezone.utc)
 
+    for it in items:  # remember who owns which ASIN (duplicate-ASIN guard)
+        a = ((it.get('media') or {}).get('metadata') or {}).get('asin')
+        if a: ASIN_OWNERS.setdefault(a, set()).add(f"{lib_id}_{it['id']}")
+
     for item in items:
         key = f"{lib_id}_{item['id']}"
 
@@ -1699,11 +1728,15 @@ def process_queue(work_queue, history, failed, recheck):
 
                     if not found: found = find_missing_asin(search_title, authors, item['media'].get('duration'), lang, raw_title=title,
                                                             required_lang=lang_target, strict=strict_search and bool(asin),
-                                                            only_domain=search_only, narrators=meta.get('narrators') or [])
+                                                            only_domain=search_only, narrators=meta.get('narrators') or [], abs_series=meta.get("series") or [])
                     
+                    if found and found != asin and (ASIN_OWNERS.get(found, set()) - {key}):
+                        logging.info(f"        ⛔ ASIN {found} already belongs to another book in the library/run: not assigned (needs a manual look)")
+                        found = None
                     if found:
                         if found != asin:
                             logging.info(f"        ✨ NEW ASIN Found: {found}")
+                            ASIN_OWNERS.setdefault(found, set()).add(key)
                             if abs_update(iid, key, title, {'asin': found}, {'asin': asin}, 'asin_search'):
                                 logging.info(f"        💾 ASIN {'would be updated (DRY_RUN)' if DRY_RUN else 'updated in ABS'}.")
                             asin, stats['asin_found'] = found, stats['asin_found'] + 1
@@ -1829,7 +1862,10 @@ def process_queue(work_queue, history, failed, recheck):
                                 s_seq = None
                                 if part_txt := s_obj.get('part'):
                                     if m := re.search(r'(\d+(?:\.\d+)?)', str(part_txt)): s_seq = m.group(1)
-                                if s_seq is None:
+                                if s_seq is not None and is_boxset_title(title):  # 'Trilogie 1-3' is not book 5
+                                    logging.info(f"        ℹ️ Series '{s_name}': no number for a box set / collection ('{title}')")
+                                    s_seq = None
+                                elif s_seq is None and not is_boxset_title(title):
                                     aud_t, aud_s = aud_data.get('title_raw', ''), aud_data.get('subtitle_raw', '')
                                     text = f"{aud_t} {aud_s}".strip()
                                     pattern = re.escape(s_name) + r'[\s:,-]+(?:Book\s+|Band\s+|Teil\s+|Vol\.?\s*)?(\d+(?:\.\d+)?)'

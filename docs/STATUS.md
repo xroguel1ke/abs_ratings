@@ -1,7 +1,7 @@
 # Status (live)
 
-Updated: 2026-11-03 – Phase A, round 0 – overall estimate: ~60 % (matching works on most books; verification infra missing)
-Next step: evaluate Opus review of the full dry run, build tests/golden.json + offline replay + tools/evaluate.py, fake ABS.
+Updated: 2026-11-03 – Phase A, round 0 – overall estimate: ~62 %
+Next step: golden list + recorded fixtures + offline replay + tools/evaluate.py, then remaining Opus fixes.
 
 | Area | % | Note |
 |---|---|---|
