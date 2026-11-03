@@ -1096,8 +1096,8 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
     if raw_title and raw_title != title: queries.append({"keywords": raw_title})
     queries.append({"keywords": title})
     if narrators and narrators[0]: queries.append({"keywords": f"{title} {prim_auth} {narrators[0]}".strip()})  # generic titles ('The Prince'): the narrator surfaces the right recording
-    nq = {"author": prim_auth, "narrator": narrators[0]} if (narrators and narrators[0] and prim_auth) else None  # last resort only (see end of function)
-    nq2 = {"keywords": title, "narrator": narrators[0]} if (narrators and narrators[0]) else None
+    nq = {"author": prim_auth, "narrator": narrators[0], "num_results": 20} if (narrators and narrators[0] and prim_auth) else None  # last resort only (see end of function)
+    nq2 = {"keywords": title, "narrator": narrators[0], "num_results": 20} if (narrators and narrators[0]) else None
     if only_queries: queries = list(only_queries)
     LAST_SEARCH['related'] = None
     if not only_queries: LAST_SEARCH['weak'] = None
@@ -1112,19 +1112,20 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
         for q in queries:
             throttle('audible_api')
             try:
-                r = requests.get(f"https://{host}/1.0/catalog/products", params={**q, "num_results": 5, "response_groups": "product_attrs"},
+                r = requests.get(f"https://{host}/1.0/catalog/products", params={"num_results": 5, **q, "response_groups": "product_attrs"},
                                  headers={"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}, timeout=15)
                 if r.status_code == 429: raise RateLimitException(f"HTTP 429 on {host} (API search)", True)
                 if r.status_code != 200: continue
                 api_ok = True
                 logging.debug(f"        search {host} {q}: {len(r.json().get('products') or [])} results")
                 for prod in r.json().get('products') or []:
+                    if only_queries and duration and prod.get("runtime_length_min") and abs(prod["runtime_length_min"] * 60 - duration) > max(600, 0.1 * duration): continue  # last resort: only candidates with a plausible runtime are fetched
                     if prod.get('asin') and prod['asin'] not in candidates: candidates.append(prod['asin'])
             except (requests.RequestException, ValueError) as e:
                 logging.warning(f"        🌐 Audible API search failed ({host}): {type(e).__name__}")
             if len(candidates) >= 4: break
         if not candidates and not only_extra: logging.info(f"        ↪️ No search results on {domain} ({len(queries)} queries)")
-        for cand in candidates[:max(6, len(extra_candidates or []))]:  # series-listing candidates are all checked (closest runtime first)
+        for cand in candidates[:max(6, len(extra_candidates or []), 12 if only_queries else 0)]:  # series-listing candidates are all checked (closest runtime first)
             p = get_audible_api(cand, domain)
             if not isinstance(p, dict): continue
             cand_lang = map_language((p.get('meta_raw') or {}).get('language'))

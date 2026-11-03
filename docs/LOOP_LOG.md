@@ -273,3 +273,9 @@ Synthetic: 79/80 -> "Twisted" (generic title, authors with initials): second las
 Rule added: 4 independent signals (author ✓ + runtime to the minute + narrator + all ABS title words contained in the Audible title) are enough without series number.
 Fix count: library 2 + synthetic 1. Trend: A1 6, A2 5, A3 3. Counter stays 0 of 4.
 ## Batch A4 started
+
+## Batch A4 (counting #4: 100 library + 80 synthetic, Audible-only, 6:51 min, 0 errors) – NOT clean (counter 0 of 4), but much closer
+Library part: 3 ASIN changes correct (The World of Ice & Fire, Moreta, Empire of the Damned), review list empty, 0 library fixes needed.
+Synthetic: 79/80 -> "The Island" (very generic title, author "S. Brody", AI narrator "Virtual Voice" who narrates thousands of books): last-resort queries fetch 20 results and prefilter them by runtime (±10 %) before loading products -> 80/80.
+Fix count: library 0 + synthetic 1. Trend per counting batch: A1 6, A2 5, A3 3, A4 1.
+Report: duplicate recordings (same author+narrator, duration within 2 s) added to the library report (found: Throne == Throne Hunters 5).
