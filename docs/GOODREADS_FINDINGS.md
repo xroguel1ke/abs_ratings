@@ -26,3 +26,6 @@ Plan: pause Goodreads tests, then a few requests per day; production default ≈
 ## Probe 2 (2026-11-03 21:28, ~1 h after the block, 45 s interval, REUSE mode)
 First LIVE request was blocked at once (HTTP 202 bot challenge). The 3 earlier pages came from our recordings (no request). => the block lasts > 1 h (first block ~20:40).
 Next probe: tomorrow morning, ONE request. No further Goodreads traffic until then.
+
+## Probe 3 (2026-11-03 23:03): ONE plain request to /book/show/213285211 -> HTTP 200, full page (310 KB), no challenge.
+The block that started ~20:40 (test 1) was lifted within <= 2 h 23 min (probe 2 at 21:28 was still blocked). Next: 6 books via Hardcover IDs at 60 s interval (stop at the first block).
