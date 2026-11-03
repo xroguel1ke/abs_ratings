@@ -94,3 +94,9 @@ Production has no LLM, so the checks must be deterministic rules in the script:
 2. Verdict wrong: take NO ratings/narrators/publisher/series/genres from that ASIN; search a replacement through the multi-evidence gate; else review list ("ASIN belongs to another book").
 3. Report "metadata filled from a wrong ASIN" (narrators/publisher not matching the ASIN's product) with undo via the journal.
 4. Validation: record the product behind the ASIN of all ~1920 books once (~16 min), replay the rule offline against the whole library, review every "wrong" verdict by hand, then adopt.
+
+## Standing rule: proactively hunt for this class of problem (user, 2026-11-03)
+Besides fixing individual cases: in every round actively look for the same CLASS of problem (wrong ASIN, metadata polluted by a wrong ASIN,
+look-alike books, author/accent variants, short generic titles) in the whole library data, not only in the batch. Prefer a sustainable
+rule that works without a human (offline-validated against the golden list and the full-library recordings) before any book may land in
+the manual review list. Review list = last resort, each entry with a written reason.
