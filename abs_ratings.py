@@ -17,6 +17,9 @@ HISTORY_FILE = os.path.join(SCRIPT_DIR, "rating_history.json")
 FAILED_FILE = os.path.join(SCRIPT_DIR, "failed_history.json")
 RECHECK_FILE = os.path.join(SCRIPT_DIR, "recheck_history.json")  # key -> UTC time of an early re-check
 GR_CACHE_FILE = os.path.join(SCRIPT_DIR, "goodreads_cache.json")  # key -> Goodreads book URL
+RUN_ID = datetime.now().strftime('%Y%m%d-%H%M%S')
+CHANGES_FILE = os.path.join(SCRIPT_DIR, "changes.jsonl")  # Every applied change (old -> new), used by abs_undo.py
+PLANNED_FILE = os.path.join(REPORT_DIR, f"planned_changes_{RUN_ID}.jsonl")  # DRY_RUN: what would have been changed
 ENV_OUTPUT_FILE = os.path.join(SCRIPT_DIR, "last_run.env")
 
 REFRESH_DAYS = int(os.getenv('REFRESH_DAYS', 90))
@@ -34,9 +37,18 @@ MIN_INTERVAL = {
 }
 USE_AUDIBLE_API = os.getenv('USE_AUDIBLE_API', 'true').lower() == 'true'
 AUDIBLE_API_HOSTS = {"www.audible.com": "api.audible.com", "www.audible.de": "api.audible.de"}
-AUDIBLE_API_GROUPS = "rating,series,product_attrs,product_desc,category_ladders,contributors"
+AUDIBLE_API_GROUPS = "rating,series,product_attrs,product_desc,category_ladders,contributors,media"
 DRY_RUN = os.getenv('DRY_RUN', 'False').lower() == 'true'
 ABS_TIMEOUT = int(os.getenv('ABS_TIMEOUT', 30))  # Seconds per ABS API request
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
+# Runtime check: ABS file duration vs. Audible runtime. Both limits must be exceeded to count as a different edition.
+RUNTIME_TOLERANCE_PCT = float(os.getenv('RUNTIME_TOLERANCE_PCT', 15))
+RUNTIME_TOLERANCE_MIN = float(os.getenv('RUNTIME_TOLERANCE_MIN', 20))
+FILL_COVERS = os.getenv('FILL_COVERS', 'true').lower() == 'true'      # Set Audible cover when ABS has none
+GENRE_LANGUAGE = os.getenv('GENRE_LANGUAGE', 'en').lower()            # 'en' = translate audible.de genres, 'keep' = as delivered
+SERIES_MERGE = os.getenv('SERIES_MERGE', 'true').lower() == 'true'    # ABS-only series merge task at the end
+LIBRARY_REPORT = os.getenv('LIBRARY_REPORT', 'true').lower() == 'true'
+SERIES_ONLY = os.getenv('SERIES_ONLY', 'false').lower() == 'true'     # Only run the ABS-only series/report task
 NO_RATINGS_RECHECK_DAYS = int(os.getenv('NO_RATINGS_RECHECK_DAYS', 7))  # New releases without ratings yet
 GR_MISSING_RECHECK_DAYS = int(os.getenv('GR_MISSING_RECHECK_DAYS', 30))  # Audible OK, Goodreads not found
 GR_BLOCKED_RECHECK_DAYS = 1  # Goodreads blocked/unreachable during the run
@@ -52,11 +64,48 @@ FIXED_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 GERMAN_LANG_CODES = ['de', 'deu', 'ger', 'german', 'deutsch']
 
 LANGUAGE_MAP = {
-    'englisch': 'English',
-    'english': 'English',
-    'deutsch': 'German',
-    'german': 'German'
+    'englisch': 'English', 'english': 'English', 'en': 'English', 'eng': 'English', 'en-us': 'English', 'en-gb': 'English',
+    'deutsch': 'German', 'german': 'German', 'de': 'German', 'deu': 'German', 'ger': 'German', 'de-de': 'German',
+    'french': 'French', 'französisch': 'French', 'fr': 'French', 'fra': 'French', 'fre': 'French',
+    'spanish': 'Spanish', 'spanisch': 'Spanish', 'es': 'Spanish', 'spa': 'Spanish',
+    'italian': 'Italian', 'italienisch': 'Italian', 'it': 'Italian', 'ita': 'Italian',
+    'dutch': 'Dutch', 'niederländisch': 'Dutch', 'nl': 'Dutch', 'nld': 'Dutch', 'dut': 'Dutch',
+    'japanese': 'Japanese', 'japanisch': 'Japanese', 'ja': 'Japanese', 'jpn': 'Japanese',
 }
+
+# audible.de category names -> audible.com names (best effort; unmapped names are kept and listed in the report)
+GENRE_MAP_DE = {
+    'science-fiction & fantasy': 'Science Fiction & Fantasy', 'science fiction & fantasy': 'Science Fiction & Fantasy',
+    'science-fiction': 'Science Fiction', 'fantasy': 'Fantasy', 'epische fantasy': 'Epic', 'episch': 'Epic',
+    'high fantasy': 'High Fantasy', 'dark fantasy': 'Dark Fantasy', 'urban fantasy': 'Urban', 'humorvolle fantasy': 'Humorous',
+    'abenteuer': 'Adventure', 'action & abenteuer': 'Action & Adventure', 'action und abenteuer': 'Action & Adventure',
+    'dystopien': 'Dystopian', 'dystopie': 'Dystopian', 'postapokalyptisch': 'Post-Apocalyptic', 'postapokalypse': 'Post-Apocalyptic',
+    'space opera': 'Space Opera', 'militär': 'Military', 'militär-science-fiction': 'Military', 'cyberpunk': 'Cyberpunk',
+    'zeitreisen': 'Time Travel', 'erstkontakt': 'First Contact', 'außerirdische': 'Alien Invasion',
+    'drachen & fabelwesen': 'Dragons & Mythical Creatures', 'märchen & sagen': 'Fairy Tales', 'mythologie': 'Myths & Legends',
+    'krimis & thriller': 'Mystery, Thriller & Suspense', 'krimi & thriller': 'Mystery, Thriller & Suspense',
+    'thriller': 'Thriller & Suspense', 'krimis': 'Mystery', 'krimi': 'Mystery', 'psychothriller': 'Psychological',
+    'horror': 'Horror', 'paranormal': 'Paranormal', 'historisch': 'Historical', 'historische romane': 'Historical Fiction',
+    'literatur & belletristik': 'Literature & Fiction', 'belletristik': 'Literature & Fiction', 'romane': 'Literature & Fiction',
+    'klassiker': 'Classics', 'zeitgenössisch': 'Contemporary', 'zeitgenössische literatur': 'Contemporary',
+    'humor': 'Comedy & Humor', 'comedy & humor': 'Comedy & Humor', 'liebesromane': 'Romance', 'romantik': 'Romance', 'erotik': 'Erotica',
+    'kinderhörbücher': "Children's Audiobooks", 'kinder': "Children's Audiobooks", 'jugendhörbücher': 'Teen & Young Adult',
+    'jugendliche & junge erwachsene': 'Teen & Young Adult',
+    'biografien & erinnerungen': 'Biographies & Memoirs', 'biografien': 'Biographies & Memoirs', 'geschichte': 'History',
+    'wissenschaft & technik': 'Science & Engineering', 'wissenschaft': 'Science', 'gesundheit & wellness': 'Health & Wellness',
+    'religion & spiritualität': 'Religion & Spirituality', 'politik & sozialwissenschaften': 'Politics & Social Sciences',
+    'wirtschaft & karriere': 'Business & Careers', 'ratgeber': 'Relationships, Parenting & Personal Development',
+    'hörspiele': 'Radio & TV', 'kurzgeschichten': 'Short Stories', 'anthologien & kurzgeschichten': 'Anthologies & Short Stories',
+}
+UNMAPPED_GENRES = set()
+
+def map_genre(name, domain):
+    """Translate audible.de genre names to English (GENRE_LANGUAGE=en)."""
+    if GENRE_LANGUAGE != 'en' or 'audible.de' not in str(domain): return name
+    mapped = GENRE_MAP_DE.get(name.strip().lower())
+    if mapped: return mapped
+    UNMAPPED_GENRES.add(name)
+    return name
 
 HEADERS_BASE = {
     "User-Agent": FIXED_USER_AGENT,
@@ -104,11 +153,12 @@ RE_RAW_PERFORMANCE = re.compile(r'performance-value="([0-9.]+)"')
 RE_RAW_OVERALL = re.compile(r'value="([0-9.]+)"') 
 RE_RAW_COUNT = re.compile(r'count="(\d+)"')
 
-stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred"]}
+stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred", "cover_added", "desc_filled", "series_merged"]}
 stats['aborted_ratelimit'] = False
 GR_STATE = {'blocked': False, 'cooldowns': 0, 'searches': 0}
 GR_CACHE = {}  # Filled in main()  # Set once Goodreads blocks us; GR is then skipped for the rest of the run
 reports = {"audible": {}, "goodreads": {}}
+AUTHOR_NOTES = []  # Author spelling differences between ABS and Audible (report only)
 
 class RateLimitException(Exception):
     def __init__(self, msg, is_hard=False): super().__init__(msg); self.is_hard = is_hard
@@ -133,8 +183,61 @@ def map_language(raw):
 def setup_logging():
     os.makedirs(LOG_DIR, exist_ok=True)
     f = os.path.join(LOG_DIR, f"run_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.FileHandler(f, encoding='utf-8'), logging.StreamHandler()])
+    logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO), format='%(asctime)s - %(levelname)s - %(message)s',
+                        handlers=[logging.FileHandler(f, encoding='utf-8'), logging.StreamHandler()])
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
     return f
+
+# ================= CHANGE JOURNAL =================
+
+def _plain(v):
+    """Make ABS values journal-friendly (series/authors lose their internal ids)."""
+    if isinstance(v, list):
+        return [{k: x.get(k) for k in ('name', 'sequence') if k in x} if isinstance(x, dict) else x for x in v]
+    return v
+
+def journal_change(iid, key, title, field, old, new, source):
+    """Append one change to changes.jsonl (or the planned-changes file in DRY_RUN)."""
+    entry = {'run': RUN_ID, 'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'item': iid, 'key': key,
+             'title': title, 'field': field, 'old': _plain(old), 'new': _plain(new), 'source': source, 'dry_run': DRY_RUN}
+    path = PLANNED_FILE if DRY_RUN else CHANGES_FILE
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'a', encoding='utf-8') as f: f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except OSError as e: logging.error(f"Journal write failed: {e}")
+
+def abs_update(iid, key, title, updates, old_meta, source, tags=None, old_tags=None):
+    """The only way this script writes metadata/tags to ABS. Journals every field (old -> new).
+    In DRY_RUN nothing is sent, the change is only written to the planned-changes file."""
+    if not updates and tags is None: return True
+    if not DRY_RUN:
+        payload = {}
+        if updates: payload['metadata'] = updates
+        if tags is not None: payload['tags'] = tags
+        r = abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json=payload)
+        if r.status_code != 200:
+            logging.error(f"        ❌ ABS update failed for '{title}' (HTTP {r.status_code}): {r.text[:200]}")
+            return False
+    for field, new in (updates or {}).items():
+        journal_change(iid, key, title, field, (old_meta or {}).get(field), new, source)
+    if tags is not None: journal_change(iid, key, title, 'tags', old_tags, tags, source)
+    return True
+
+def abs_set_cover(iid, key, title, url, source):
+    """Set a cover from URL (only used when ABS has no cover). Undo removes the cover again."""
+    if not DRY_RUN:
+        r = abs_session.post(f"{ABS_URL}/api/items/{iid}/cover", json={"url": url})
+        if r.status_code != 200:
+            logging.error(f"        ❌ Cover upload failed for '{title}' (HTTP {r.status_code}): {r.text[:200]}")
+            return False
+    journal_change(iid, key, title, 'cover', None, url, source)
+    return True
+
+def runtime_mismatch(abs_sec, aud_sec):
+    """True if ABS file duration and Audible runtime differ by more than both tolerances (other edition)."""
+    if not abs_sec or not aud_sec: return False
+    diff = abs(float(abs_sec) - float(aud_sec))
+    return diff > RUNTIME_TOLERANCE_MIN * 60 and diff > float(aud_sec) * RUNTIME_TOLERANCE_PCT / 100
 
 def rw_json(path, data=None):
     try:
@@ -161,13 +264,14 @@ def write_env_file(log_file, start_time):
     dur = f"{int((datetime.now() - start_time).total_seconds() // 60)}m {int((datetime.now() - start_time).total_seconds() % 60)}s"
     if stats['aborted_ratelimit']: sub, icon, head = "ABS Ratings: Aborted 🛑", "alert", "Rate Limit detected!"
     elif stats['failed'] > 0: sub, icon, head = "ABS Ratings: Error ❌", "alert", "Error occurred!"
-    elif any(stats[k] > 0 for k in ['success', 'recycled', 'asin_found', 'asin_migrated', 'isbn_added', 'meta_updated']): sub, icon, head = "ABS Ratings: Success ✅", "normal", "Update complete"
+    elif any(stats[k] > 0 for k in ['success', 'recycled', 'asin_found', 'asin_migrated', 'isbn_added', 'meta_updated', 'series_merged']): sub, icon, head = "ABS Ratings: Success ✅", "normal", "Update complete"
     else: sub, icon, head = "ABS Ratings: Info ℹ️", "normal", "No changes"
     
-    body = f"Proc: {stats['processed']} | New: {stats['success']} | ManUpd: {stats['manual_retrigger']} | MetaUpd: {stats['meta_updated']} | ASIN+: {stats['asin_found']} | Mig: {stats['asin_migrated']} | ISBN+: {stats['isbn_added']} | Fix: {stats['isbn_repaired']} | NoRatYet: {stats['no_ratings_yet']} | GR-: {stats['gr_missing']} | Err: {stats['failed']}"
+    body = f"Proc: {stats['processed']} | New: {stats['success']} | ManUpd: {stats['manual_retrigger']} | MetaUpd: {stats['meta_updated']} | ASIN+: {stats['asin_found']} | Mig: {stats['asin_migrated']} | ISBN+: {stats['isbn_added']} | Fix: {stats['isbn_repaired']} | NoRatYet: {stats['no_ratings_yet']} | GR-: {stats['gr_missing']} | Cover+: {stats['cover_added']} | Series merged: {stats['series_merged']} | Err: {stats['failed']}"
     if GR_STATE['blocked']: body += " | ⚠️ Goodreads blocked"
     if stats['gr_deferred']: body += f" | GR deferred: {stats['gr_deferred']}"
     if stats['aborted_ratelimit']: body += " | ⚠️ ABORTED (Rate Limit)"
+    if DRY_RUN: body += " | DRY RUN"
     
     try:
         with open(ENV_OUTPUT_FILE, 'w', encoding='utf-8') as f:
@@ -387,7 +491,7 @@ def get_audible_api(asin, domain):
     throttle('audible_api')
     url = f"https://{host}/1.0/catalog/products/{asin}"
     try:
-        r = requests.get(url, params={"response_groups": AUDIBLE_API_GROUPS},
+        r = requests.get(url, params={"response_groups": AUDIBLE_API_GROUPS, "image_sizes": "500,1215"},
                          headers={"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}, timeout=15)
     except requests.RequestException as e:
         logging.warning(f"        🌐 Audible API request failed ({host}): {type(e).__name__}: {e}")
@@ -425,6 +529,11 @@ def get_audible_api(asin, domain):
         # Only the finest level of each ladder ('Space Opera' instead of 'Science Fiction & Fantasy' > 'Science Fiction' > 'Space Opera')
         leaf = ((ladder.get('ladder') or [{}])[-1] or {}).get('name')
         if leaf and leaf not in categories: categories.append(leaf)
+    res['narrators_raw'] = [n.get('name') for n in (p.get('narrators') or []) if n.get('name')]
+    res['summary'] = p.get('publisher_summary') or p.get('merchandising_summary')
+    res['adult'] = bool(p.get('is_adult_product'))
+    imgs = {k: v for k, v in (p.get('product_images') or {}).items() if str(k).isdigit() and v}
+    if imgs: res['cover_url'] = imgs[max(imgs, key=int)]
     res['meta_raw'] = {
         'language': p.get('language'),
         'publisher': {'name': p.get('publisher_name')} if p.get('publisher_name') else None,
@@ -871,6 +980,11 @@ def _search_goodreads(isbn, title, authors, prim_auth):
     logging.info("        ❌ Not found via ID or Text.")
     return None
 
+def strip_rating_block(desc):
+    """Description text without our rating block (used to detect 'empty' descriptions)."""
+    d = RE_RATING_BLOCK.sub('', desc or '')
+    return re.sub(r'(?:\s|<br\s*/?>|<p>\s*</p>)+', ' ', d, flags=re.I).strip()
+
 def build_description(current_desc, aud, gr, old_aud, old_gr):
     lines = ["⭐ Ratings & Infos"]
     if aud and int(aud.get('count',0)) > 0:
@@ -1047,6 +1161,8 @@ def process_library(lib_id, history, failed, recheck):
                 search_title = messy['title'] if messy else title
                 if messy: logging.info(f"      -> 🧹 Messy title detected ({messy['kind']}), searching as '{search_title}'")
                 asin_from_search = False
+                skip_meta = False
+                abs_dur = (item_data.get('media') or {}).get('duration') or (item.get('media') or {}).get('duration')
 
                 aud_data = get_audible_data(asin, lang)
 
@@ -1064,6 +1180,9 @@ def process_library(lib_id, history, failed, recheck):
                     should_search = True
                 elif aud_data is None:
                     logging.info("      -> ⚠️ ASIN not found (All domains).")
+                    should_search = True
+                elif runtime_mismatch(abs_dur, aud_data.get('runtime_sec')):
+                    logging.info(f"      -> ⚠️ Runtime mismatch: ABS {format_time(abs_dur)} vs Audible {format_time(aud_data['runtime_sec'])}. ASIN probably points to another edition, searching...")
                     should_search = True
                 elif int(aud_data.get('count', 0)) == 0 and aud_data.get('page_ok'):
                     logging.info(f"      -> 🆕 Product page exists on {aud_data.get('domain')}, but no ratings yet. No replacement search, re-check in {NO_RATINGS_RECHECK_DAYS} days.")
@@ -1096,9 +1215,8 @@ def process_library(lib_id, history, failed, recheck):
                     if found:
                         if found != asin:
                             logging.info(f"        ✨ NEW ASIN Found: {found}")
-                            if not DRY_RUN: 
-                                abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"asin": found}})
-                                logging.info(f"        💾 ASIN updated in ABS.")
+                            if abs_update(iid, key, title, {'asin': found}, {'asin': asin}, 'asin_search'):
+                                logging.info(f"        💾 ASIN {'would be updated (DRY_RUN)' if DRY_RUN else 'updated in ABS'}.")
                             asin, stats['asin_found'] = found, stats['asin_found'] + 1
                             stats['asin_migrated'] += 1
                             asin_from_search = True
@@ -1110,8 +1228,11 @@ def process_library(lib_id, history, failed, recheck):
                         else: logging.info(f"        ℹ️ Search returned same ASIN. Keeping fallback data.")
                     else: logging.info(f"        ℹ️ No replacement found. Keeping fallback data.")
 
+                if aud_data and runtime_mismatch(abs_dur, aud_data.get('runtime_sec')):
+                    skip_meta = True
+                    logging.info(f"      -> ⏭️ Metadata sync skipped: runtime still differs (ABS {format_time(abs_dur)} vs Audible {format_time(aud_data['runtime_sec'])}). Only ratings are used.")
 
-                if aud_data and aud_data.get('meta_raw'):
+                if aud_data and aud_data.get('meta_raw') and not skip_meta:
                     md_raw = aud_data['meta_raw']
                     abs_updates = {}
                     log_updates = []
@@ -1148,6 +1269,9 @@ def process_library(lib_id, history, failed, recheck):
                         new_year = parse_release_year(md_raw.get('releaseDate'))
                         if new_year and not meta.get('publishedYear'): logging.info(f"        🔒 Year Update Skipped (Locked): '{new_year}'")
                     
+                    if not new_lang_detected and meta.get('language'):
+                        norm = map_language(meta['language'])  # e.g. 'eng' -> 'English'
+                        if norm != meta['language']: new_lang_detected = norm
                     if 'lock_language' not in tags:
                         if new_lang_detected and new_lang_detected != meta.get('language'):
                             abs_updates['language'] = new_lang_detected
@@ -1166,14 +1290,14 @@ def process_library(lib_id, history, failed, recheck):
 
                     if 'lock_genres' not in tags:
                         current_genres = meta.get('genres') or []
-                        new_genres_list = [c.get('name') for c in (md_raw.get('categories') or []) if c.get('name')]
+                        new_genres_list = list(dict.fromkeys(map_genre(c.get('name'), aud_data.get('domain')) for c in (md_raw.get('categories') or []) if c.get('name')))
                         added_genres = [g for g in new_genres_list if g not in current_genres]
                         if added_genres:
                             abs_updates['genres'] = current_genres + added_genres
                             log_updates.append(f"Genres: +{added_genres}")
                     else:
                         current_genres = meta.get('genres') or []
-                        new_genres_list = [c.get('name') for c in (md_raw.get('categories') or []) if c.get('name')]
+                        new_genres_list = list(dict.fromkeys(map_genre(c.get('name'), aud_data.get('domain')) for c in (md_raw.get('categories') or []) if c.get('name')))
                         added_genres = [g for g in new_genres_list if g not in current_genres]
                         if added_genres: logging.info(f"        🔒 Genre Update Skipped (Locked): +{added_genres}")
 
@@ -1212,48 +1336,83 @@ def process_library(lib_id, history, failed, recheck):
                                 log_updates.append(f"Series Updated: {s_log_str}")
                     else: logging.info("        🔒 Series Update Skipped (Locked)")
 
+                    # Narrators / authors: only filled when empty
+                    aud_narr = aud_data.get('narrators_raw') or []
+                    if aud_narr and not meta.get('narrators'):
+                        if 'lock_narrators' in tags: logging.info(f"        🔒 Narrators Update Skipped (Locked): {aud_narr}")
+                        else:
+                            abs_updates['narrators'] = aud_narr
+                            log_updates.append(f"Narrators: -> {aud_narr}")
+                    aud_auth = aud_data.get('authors_raw') or []
+                    if aud_auth and not authors:
+                        if 'lock_authors' in tags: logging.info(f"        🔒 Authors Update Skipped (Locked): {aud_auth}")
+                        else:
+                            abs_updates['authors'] = [{'name': n} for n in aud_auth]
+                            log_updates.append(f"Authors: -> {aud_auth}")
+                    elif aud_auth and authors:
+                        abs_norm = {re.sub(r'[^a-z]', '', a.lower()) for a in authors if a}
+                        for an in aud_auth:
+                            if re.sub(r'[^a-z]', '', an.lower()) not in abs_norm and match_author(authors, an):
+                                AUTHOR_NOTES.append({'title': title, 'abs': authors, 'audible': an})
+                                logging.info(f"        ℹ️ Author spelling differs: ABS {authors} vs Audible '{an}' (not changed, listed in report)")
+                    # Explicit: only ever set to True when Audible marks the product as adult
+                    if aud_data.get('adult') and not meta.get('explicit'):
+                        if 'lock_explicit' in tags: logging.info("        🔒 Explicit Update Skipped (Locked)")
+                        else:
+                            abs_updates['explicit'] = True
+                            log_updates.append("Explicit: False -> True")
+
                     if abs_updates:
                         logging.info(f"        🛠️ Meta Updates{' (DRY_RUN, not saved)' if DRY_RUN else ''}:")
                         for upd in log_updates: logging.info(f"          -> {upd}")
-                        if not DRY_RUN: abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": abs_updates})
-                        stats['meta_updated'] += 1
+                        if abs_update(iid, key, title, abs_updates, meta, 'audible_meta'): stats['meta_updated'] += 1
                     else: logging.info("        ✅ No metadata updates necessary.")
+
+                    # Cover: only when ABS has none
+                    if FILL_COVERS and aud_data.get('cover_url') and not (item_data.get('media') or {}).get('coverPath'):
+                        if 'lock_cover' in tags: logging.info("        🔒 Cover Update Skipped (Locked)")
+                        elif abs_set_cover(iid, key, title, aud_data['cover_url'], 'audible_cover'):
+                            stats['cover_added'] += 1
+                            logging.info(f"        🖼️ Cover {'would be set (DRY_RUN)' if DRY_RUN else 'set'} from Audible: {aud_data['cover_url']}")
 
                 gr_title = (aud_data or {}).get('title_raw') or search_title  # Audible's clean title searches best
                 cached_url = None if item.get('_manual_trigger') else GR_CACHE.get(key)
                 gr_data, gr_status = get_goodreads_data(meta.get('isbn'), gr_title, authors, authors[0] if authors else "", cached_url)
                 if gr_data and gr_data.get('url') and not DRY_RUN: GR_CACHE[key] = gr_data['url']
                 
-                if gr_data and not DRY_RUN:
-                    if 'lock_isbn' not in tags:
-                          # Only accept real ISBNs (never write an ASIN into the ISBN field)
-                          new_id = normalize_isbn(gr_data.get('isbn'))
-                          if new_id and normalize_isbn(meta.get('isbn')) != new_id:
-                            logging.info(f"        🔧 ISBN Fixed/Added: {new_id}")
-                            abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"isbn": new_id}})
-                            stats['isbn_added' if not meta.get('isbn') else 'isbn_repaired'] += 1
-                    else: logging.info("        🔒 ISBN Update Skipped (Locked)")
+                if gr_data and not meta.get('isbn'):
+                    # Only fill an empty ISBN, and only with a real ISBN (never an ASIN). Goodreads has the print
+                    # edition's ISBN, so an existing ISBN is never overwritten.
+                    new_id = normalize_isbn(gr_data.get('isbn'))
+                    if new_id and 'lock_isbn' in tags: logging.info("        🔒 ISBN Update Skipped (Locked)")
+                    elif new_id and abs_update(iid, key, title, {'isbn': new_id}, meta, 'goodreads_isbn'):
+                        logging.info(f"        🔧 ISBN added{' (DRY_RUN, not saved)' if DRY_RUN else ''}: {new_id}")
+                        stats['isbn_added'] += 1
 
                 if 'lock_description' not in tags:
                     cur_desc = meta.get('description') or ''  # ABS sends null for empty descriptions
                     old_aud = (RE_AUDIBLE_BLOCK.search(cur_desc) or [None, None])[1]
                     old_gr = (RE_GR_BLOCK.search(cur_desc) or [None, None])[1]
-                    final_desc = build_description(cur_desc, aud_data, gr_data, old_aud and old_aud.strip(), old_gr and old_gr.strip())
-                    
+                    # Empty description (apart from our rating block): use Audible's summary
+                    summary = (aud_data or {}).get('summary') if not skip_meta else None
+                    base_desc = cur_desc
+                    if summary and not strip_rating_block(cur_desc):
+                        base_desc = summary
+                        stats['desc_filled'] += 1
+                        logging.info("        📝 Empty description filled with Audible summary")
+                    final_desc = build_description(base_desc, aud_data, gr_data, old_aud and old_aud.strip(), old_gr and old_gr.strip())
+
                     has_aud = bool(aud_data and int(aud_data.get('count', 0)) > 0)
                     has_gr = bool(gr_data)
-                    
-                    if not DRY_RUN:
-                        if abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": {"description": final_desc}}).status_code == 200:
-                            success_parts = []
-                            if has_aud: success_parts.append("Audible")
-                            if has_gr: success_parts.append("Goodreads")
-                            success_str = f"({', '.join(success_parts)})" if success_parts else "Data Cleaned"
-                            logging.info(f"      -> ✅ SUCCESS: {success_str}")
-                            if has_aud or has_gr: stats['success'] += 1
-                        else: stats['failed'] += 1
-                    else:
+                    parts = [n for n, ok in (("Audible", has_aud), ("Goodreads", has_gr)) if ok]
+
+                    if final_desc == cur_desc:
+                        logging.info(f"      -> ✅ Description already up to date ({', '.join(parts) or 'no ratings'})")
                         if has_aud or has_gr: stats['success'] += 1
+                    elif abs_update(iid, key, title, {'description': final_desc}, meta, 'ratings'):
+                        logging.info(f"      -> ✅ {'WOULD UPDATE (DRY_RUN)' if DRY_RUN else 'SUCCESS'}: ratings block ({', '.join(parts) or 'data cleaned'})")
+                        if has_aud or has_gr: stats['success'] += 1
+                    else: stats['failed'] += 1
                 else:
                     logging.info("      -> 🔒 Description Update Skipped (Locked)")
                     has_aud = bool(aud_data and int(aud_data.get('count', 0)) > 0)
@@ -1301,9 +1460,39 @@ def process_library(lib_id, history, failed, recheck):
         if search_penalty: sleep_dur += SEARCH_PENALTY_SLEEP
         time.sleep(sleep_dur)
 
+def log_run_header():
+    logging.info("=" * 60)
+    logging.info(f"ABS Ratings run {RUN_ID}{'  ***  DRY RUN: nothing is written to ABS  ***' if DRY_RUN else ''}")
+    logging.info(f"Libraries: {', '.join(LIBRARY_IDS)} | Batch: {MAX_BATCH_SIZE} | Refresh: {REFRESH_DAYS}d | Sleep: {BASE_SLEEP}s")
+    logging.info(f"Audible API: {USE_AUDIBLE_API} | Intervals: {MIN_INTERVAL} | Goodreads budget: {GOODREADS_MAX_PER_RUN or 'unlimited'}")
+    logging.info(f"Runtime tolerance: {RUNTIME_TOLERANCE_PCT}% and {RUNTIME_TOLERANCE_MIN}min | Covers: {FILL_COVERS} | Genre language: {GENRE_LANGUAGE}")
+    logging.info(f"Series merge: {SERIES_MERGE} | Library report: {LIBRARY_REPORT} | Series only: {SERIES_ONLY}")
+    logging.info(f"Change journal: {PLANNED_FILE if DRY_RUN else CHANGES_FILE}")
+    logging.info("=" * 60)
+
+def log_run_summary(start_time, series_result):
+    dur = format_time((datetime.now() - start_time).total_seconds())
+    s = stats
+    lines = [
+        f"Books processed: {s['processed']} (skipped/locked: {s['skipped']}, manual updates: {s['manual_retrigger']}, re-checks: {s['recheck']})",
+        f"Ratings {'to write' if DRY_RUN else 'written'}: {s['success']} | Audible without ratings yet: {s['no_ratings_yet']} | Goodreads missing: {s['gr_missing']} (deferred: {s['gr_deferred']})",
+        f"ASINs found: {s['asin_found']} | Metadata updated: {s['meta_updated']} | Covers added: {s['cover_added']} | Descriptions filled: {s['desc_filled']} | ISBNs added: {s['isbn_added']}",
+        f"Series merges: {series_result.get('merges', 0)} ({series_result.get('books_changed', 0)} books {'would change' if DRY_RUN else 'changed'})",
+        f"Errors: {s['failed']}{' | Goodreads blocked' if GR_STATE['blocked'] else ''}{' | ABORTED (rate limit)' if s['aborted_ratelimit'] else ''}",
+        f"Duration: {dur}",
+    ]
+    logging.info("=" * 60)
+    logging.info(f"SUMMARY{' (DRY RUN - nothing was changed)' if DRY_RUN else ''}")
+    for l in lines: logging.info("  " + l)
+    if DRY_RUN: logging.info(f"  Planned changes: {PLANNED_FILE}")
+    else: logging.info(f"  Undo this run: python3 abs_undo.py --run {RUN_ID} --apply")
+    logging.info("=" * 60)
+    logging.debug(f"Raw stats: {stats}")
+
 def main():
     if not ABS_URL or not API_TOKEN: return print("Error: Envs missing.")
     log_file = setup_logging()
+    log_run_header()
     try:
         logging.info("Checking API connection...")
         if abs_session.get(f"{ABS_URL}/api/libraries").status_code != 200:
@@ -1318,10 +1507,27 @@ def main():
     start_time = datetime.now()
     history, failed, recheck = rw_json(HISTORY_FILE), rw_json(FAILED_FILE), rw_json(RECHECK_FILE)
     GR_CACHE.update(rw_json(GR_CACHE_FILE))
-    for lib in LIBRARY_IDS: process_library(lib, history, failed, recheck)
-    if not DRY_RUN: rw_json(HISTORY_FILE, history); rw_json(FAILED_FILE, failed); rw_json(RECHECK_FILE, recheck)
-    save_reports()
+    if not SERIES_ONLY:
+        for lib in LIBRARY_IDS: process_library(lib, history, failed, recheck)
+        if not DRY_RUN: rw_json(HISTORY_FILE, history); rw_json(FAILED_FILE, failed); rw_json(RECHECK_FILE, recheck)
+        save_reports()
+        if AUTHOR_NOTES: rw_json(os.path.join(REPORT_DIR, "author_variants.json"), AUTHOR_NOTES)
+
+    series_result = {}
+    if SERIES_MERGE or LIBRARY_REPORT:
+        try:
+            import abs_series
+            series_result = abs_series.run({
+                'session': abs_session, 'abs_url': ABS_URL, 'library_ids': LIBRARY_IDS, 'dry_run': DRY_RUN,
+                'abs_update': abs_update, 'report_dir': REPORT_DIR, 'merge': SERIES_MERGE, 'report': LIBRARY_REPORT,
+                'extra': {'author_notes': AUTHOR_NOTES, 'unmapped_genres': UNMAPPED_GENRES},
+            })
+            stats['series_merged'] = series_result.get('merges', 0)
+        except ImportError:
+            logging.error("abs_series.py not found next to abs_ratings.py - series task skipped.")
+        except Exception as e:
+            logging.exception(f"Series task failed: {e}")
     write_env_file(log_file, start_time)
-    logging.info(f"--- Done. Stats: {stats} ---")
+    log_run_summary(start_time, series_result)
 
 if __name__ == "__main__": main()

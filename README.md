@@ -31,7 +31,7 @@ This script is optimized for the **User Scripts** plugin on Unraid.
     /mnt/user/appdata/audiobookshelf/abs_scripts/
     ```
 2.  **Upload Files:**
-    Place `abs_ratings.py` and `userscript.sh` into this folder.
+    Place `abs_ratings.py`, `abs_series.py`, `abs_undo.py` and `userscript.sh` into this folder.
 3.  **Setup User Script:**
     * Open the **User Scripts** plugin in Unraid.
     * Add a new script (e.g., "ABS Ratings").
@@ -69,6 +69,12 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 | `GR_MAX_COOLDOWNS` | Cool-downs per run before Goodreads is skipped for the rest of the run. | `1` |
 | `GOODREADS_MAX_PER_RUN` | Max Goodreads searches per run (cached books don't count, `0` = unlimited). The rest follows in the next runs. | `300` |
 | `SEARCH_PENALTY_SLEEP` | Optional extra pause after an ASIN search. | `0` |
+| `RUNTIME_TOLERANCE_PCT` / `RUNTIME_TOLERANCE_MIN` | Runtime difference that counts as another edition (both must be exceeded). | `15` / `20` |
+| `FILL_COVERS` | Set the Audible cover when ABS has none. | `true` |
+| `GENRE_LANGUAGE` | `en` = translate audible.de genres, `keep` = keep as delivered. | `en` |
+| `SERIES_MERGE` / `LIBRARY_REPORT` | ABS-only series merge / library report at the end of the run. | `true` |
+| `SERIES_ONLY` | Only run the series merge + report (no Audible/Goodreads). | `false` |
+| `LOG_LEVEL` | `INFO` or `DEBUG`. | `INFO` |
 
 > **Pauses:** Every source is throttled on its own (see the `*_INTERVAL` variables), so `SLEEP_TIMER` can stay small. If you ever hit a rate limit, raise the interval of the affected source first.
 
@@ -89,10 +95,48 @@ Scheduled re-checks are stored in `recheck_history.json`.
 
 ## 📝 Metadata Rules
 
+Everything is decided automatically. If a match is not certain, nothing is changed (the reason is logged).
+
+* **Runtime check:** If the ABS file duration and Audible's runtime differ by more than `RUNTIME_TOLERANCE_PCT` (15 %) **and** `RUNTIME_TOLERANCE_MIN` (20 min), the ASIN probably points to another edition. The script searches for the right one; if none is found, only the ratings are used and no metadata is changed.
+* **Filled only when empty:** narrators, authors, publisher, year, ISBN, cover, description (Audible summary).
+* **Explicit:** only set to true when Audible marks the product as adult content.
+* **Language:** ISO codes are normalized (`eng` → `English`, `deu` → `German`, ...).
+* **Genres from audible.de** are translated to the English Audible names (`GENRE_LANGUAGE=en`); untranslated names are listed in the library report.
 * **Publisher / Year:** only filled when empty in ABS (Audible has the audiobook edition's data).
 * **Genres:** only the most specific Audible category of each branch is added (e.g. `Space Opera`, not `Science Fiction & Fantasy`). Existing genres are kept.
 * **Series:** taken from Audible. If Audible has no number for a series, the number already in ABS is kept.
 * **Title:** only corrected for broken titles (see Title Repair).
+
+## 📚 Series Merge & Library Report (ABS only)
+
+At the end of every run a second task runs **only against ABS** (no Audible/Goodreads requests):
+
+**Series merge.** Audible often uses different series names within one series. Two series are merged when **all** of these are true:
+* the names are the same after normalization (`The Osten Ard Saga` = `Osten Ard`), or one contains the other with at most 2 extra words, or they are very similar,
+* they are the same edition: *Full Cast*, *Dramatized*, *GraphicAudio*, *Abridged* and *Manga* versions are never merged with the plain series,
+* every book of the smaller series shares an author with the larger one,
+* no book number exists in both series,
+* for names that are not identical, the numbers must complement each other (e.g. `1-3, 5-7` + `4, 8-9`),
+* no book of the smaller series has `lock_series`.
+
+The smaller series is renamed to the series that had more books, and **all books of the merged series get the tag `lock_series`**, so the Audible sync can't split them again. Every decision (merged or not, and why) is in the log.
+
+**Library report** (`reports/library_report.html` + `.json`): merges, similar series that were *not* merged and why, gaps in series, books without series number, duplicate ASINs, author spelling variants, books without ASIN/cover/description/narrators/language/genres, untranslated genres.
+
+Run only this task (fast, no external requests): `SERIES_ONLY=true`. Disable with `SERIES_MERGE=false` / `LIBRARY_REPORT=false`.
+
+## ↩️ Change Journal & Undo
+
+Every change is written to `changes.jsonl` (old value → new value). In `DRY_RUN` the planned changes go to `reports/planned_changes_<run>.jsonl` instead.
+
+```bash
+python3 abs_undo.py --list                          # runs and number of changes
+python3 abs_undo.py --run 20261103-031927           # show what would be undone
+python3 abs_undo.py --run 20261103-031927 --apply   # undo a whole run
+python3 abs_undo.py --item <item id> --apply        # undo one book
+python3 abs_undo.py --run <id> --field series --apply
+```
+`abs_undo.py` needs `ABS_URL` and `API_TOKEN` (run it in the same Docker container as the main script). Covers set by the script are removed again.
 
 ## 🔒 Lock Tags (Manual Control)
 
@@ -109,6 +153,10 @@ You can prevent the script from updating specific metadata fields by adding **Ta
 | `lock_isbn` | Prevents **ISBN** repairs/updates. |
 | `lock_abridged` | Prevents changes to the **Abridged** flag. |
 | `lock_title` | Prevents **Title**/**Subtitle** corrections. |
+| `lock_narrators` | Prevents filling **Narrators**. |
+| `lock_authors` | Prevents filling **Authors**. |
+| `lock_cover` | Prevents setting a **Cover**. |
+| `lock_explicit` | Prevents setting the **Explicit** flag. |
 | `lock_description` | Prevents ratings from being written to the **Description**. |
 
 ## 🖼️ Preview

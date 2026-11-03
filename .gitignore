@@ -12,3 +12,5 @@ recheck_history.json
 goodreads_cache.json
 *.json.tmp
 last_run.env
+changes.jsonl
+undone.jsonl

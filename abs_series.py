@@ -1,0 +1,358 @@
+"""
+ABS-only maintenance task (no Audible/Goodreads requests):
+
+1. Series merge: finds series that are really the same series (Audible often uses different
+   names within one series), merges the smaller one into the series that had more entries and
+   locks the series field of all affected books (tag 'lock_series').
+2. Library report: reports/library_report.html (+ .json) with series gaps, duplicates,
+   missing fields, author spelling variants, unmerged similar series ...
+
+Called from abs_ratings.py at the end of a run (or alone with SERIES_ONLY=true).
+All writes go through ctx['abs_update'], so they are journaled and respect DRY_RUN.
+"""
+import re, json, html, logging, difflib, os
+from collections import defaultdict
+from datetime import datetime
+
+# Markers that make a series a different "edition" (never merged with the plain series)
+VARIANT_MARKERS = {
+    'fullcast': [r'full[\s-]*cast'],
+    'dramatized': [r'dramati[sz](ed|ation)', r'audio\s*drama', r'radio\s*drama', r'h(ö|oe)rspiel'],
+    'graphicaudio': [r'graphic\s*audio'],
+    'abridged': [r'\babridged\b', r'gek(ü|ue)rzt'],
+    'manga': [r'\bmanga\b', r'\bcomics?\b', r'graphic\s*novel'],
+}
+GENERIC_WORDS = {'series', 'saga', 'reihe', 'serie', 'trilogy', 'trilogie', 'cycle', 'zyklus', 'sequence',
+                 'novels', 'novel', 'books', 'book', 'romane', 'roman', 'collection', 'edition', 'editions'}
+LEADING_ARTICLES = {'the', 'a', 'an', 'der', 'die', 'das', 'le', 'la'}
+FUZZY_NAME_RATIO = 0.9
+
+
+def series_variant(name):
+    n = name.lower()
+    return frozenset(k for k, pats in VARIANT_MARKERS.items() if any(re.search(p, n) for p in pats))
+
+
+def series_key(name):
+    """Normalized series name: no edition markers, punctuation, leading article or generic words."""
+    n = name.lower()
+    for pats in VARIANT_MARKERS.values():
+        for p in pats: n = re.sub(p, ' ', n)
+    n = re.sub(r'[\(\)\[\]]', ' ', n)
+    n = re.sub(r'[^\w\s]', ' ', n)
+    words = n.split()
+    while words and words[0] in LEADING_ARTICLES: words = words[1:]
+    while words and words[-1] in GENERIC_WORDS: words = words[:-1]
+    return ' '.join(words)
+
+
+def parse_seq(seq):
+    """'3' -> 3.0, '2.5' -> 2.5, '1-3' / 'Book 4' -> first number, None if no number."""
+    if seq is None: return None
+    m = re.search(r'\d+(?:\.\d+)?', str(seq))
+    return float(m.group()) if m else None
+
+
+def fmt_seqs(nums):
+    """[1,2,3,5,6,7] -> '1-3, 5-7'"""
+    nums = sorted(set(nums))
+    if not nums: return '-'
+    out, start, prev = [], nums[0], nums[0]
+    for x in nums[1:] + [None]:
+        if x is not None and x == prev + 1 and float(x).is_integer() and float(prev).is_integer():
+            prev = x; continue
+        out.append(f"{_n(start)}-{_n(prev)}" if start != prev else _n(start))
+        if x is not None: start = prev = x
+    return ', '.join(out)
+
+
+def _n(x): return str(int(x)) if float(x).is_integer() else str(x)
+
+
+def author_key(name):
+    """'Chambers, Becky' / 'Becky Chambers' / 'J.M. Clarke' / 'JM Clarke' -> comparable key."""
+    n = name.lower().strip()
+    if ',' in n:
+        last, first = [x.strip() for x in n.split(',', 1)]
+        n = f"{first} {last}"
+    n = re.sub(r'\b([a-z])\.\s*', r'\1', n)  # J. M. -> jm
+    return ' '.join(re.sub(r'[^\w\s]', ' ', n).split())
+
+
+class Series:
+    def __init__(self, name):
+        self.name = name
+        self.key = series_key(name)
+        self.variant = series_variant(name)
+        self.entries = []  # (record, seq_string)
+
+    @property
+    def seqs(self): return [s for s in (parse_seq(q) for _, q in self.entries) if s is not None]
+
+    @property
+    def item_ids(self): return {r['id'] for r, _ in self.entries}
+
+    @property
+    def authors(self): return {author_key(a) for r, _ in self.entries for a in r['authors']}
+
+
+def name_relation(a, b):
+    """How strongly two series names match: 'exact', 'contained', 'similar' or None."""
+    if not a.key or not b.key: return None
+    if a.key == b.key: return 'exact'
+    short, long_ = sorted((a.key, b.key), key=len)
+    # Contained only counts if the longer name adds at most 2 words
+    # ('Osten Ard' / 'Osten Ard Chronicles' yes, 'Mistborn' / 'Mistborn Wax and Wayne' no)
+    if len(short) >= 4 and re.search(r'(^|\s)' + re.escape(short) + r'(\s|$)', long_) \
+            and len(long_.split()) - len(short.split()) <= 2: return 'contained'
+    if difflib.SequenceMatcher(None, a.key, b.key).ratio() >= FUZZY_NAME_RATIO: return 'similar'
+    return None
+
+
+def merge_check(group, cand):
+    """Can 'cand' be merged into 'group' (list of Series, first = target)? Returns (ok, relation, reason)."""
+    target = group[0]
+    rel = name_relation(target, cand)
+    if not rel: return False, None, 'names not similar'
+    if target.variant != cand.variant:
+        return False, rel, f"different edition ({', '.join(sorted(target.variant)) or 'plain'} vs {', '.join(sorted(cand.variant)) or 'plain'})"
+    g_authors = set().union(*(s.authors for s in group))
+    if not (g_authors & cand.authors): return False, rel, 'no shared author'
+    # A manually locked book means the user decided on this series name: don't touch the series
+    locked = [r['title'] for r, _ in cand.entries if 'lock_series' in r['tags']]
+    if locked: return False, rel, f"contains book(s) with lock_series: {', '.join(locked[:3])}"
+    # Every single book of the smaller series must share an author with the target
+    foreign = [r['title'] for r, _ in cand.entries if not ({author_key(a) for a in r['authors']} & g_authors)]
+    if foreign: return False, rel, f"book(s) by other authors: {', '.join(foreign[:3])}"
+    # Books that are in both series (duplicate entries) don't count as conflicts
+    g_ids = set().union(*(s.item_ids for s in group))
+    g_seqs = {parse_seq(q) for s in group for r, q in s.entries if parse_seq(q) is not None and r['id'] not in cand.item_ids}
+    c_seqs = {parse_seq(q) for r, q in cand.entries if parse_seq(q) is not None and r['id'] not in g_ids}
+    if overlap := g_seqs & c_seqs:
+        return False, rel, f"book numbers overlap ({fmt_seqs(overlap)})"
+    if rel != 'exact':
+        # Fuzzy names need the book numbers to complement each other (fill gaps or continue the series)
+        if not c_seqs or not g_seqs: return False, rel, 'not enough numbered books to prove it is the same series'
+        lo, hi = min(g_seqs), max(g_seqs)
+        fills = any(lo < x < hi or x == hi + 1 or x == lo - 1 for x in c_seqs)
+        if not fills: return False, rel, f"numbers don't complement ({fmt_seqs(g_seqs)} vs {fmt_seqs(c_seqs)})"
+    return True, rel, 'ok'
+
+
+def collect_records(ctx):
+    """Load every book of the configured libraries with full metadata (ABS only)."""
+    sess, url = ctx['session'], ctx['abs_url']
+    records = []
+    for lib in ctx['library_ids']:
+        try: items = sess.get(f"{url}/api/libraries/{lib}/items").json()['results']
+        except Exception as e:
+            logging.error(f"Series task: cannot load library {lib}: {e}"); continue
+        logging.info(f"   Loading {len(items)} items of library {lib} ...")
+        for it in items:
+            try: d = sess.get(f"{url}/api/items/{it['id']}").json()
+            except Exception as e:
+                logging.warning(f"   Could not load item {it.get('id')}: {e}"); continue
+            media = d.get('media') or {}
+            md = media.get('metadata') or {}
+            if d.get('mediaType', 'book') != 'book': continue
+            raw_tags = (d.get('tags') or []) + (media.get('tags') or []) + (md.get('tags') or [])
+            records.append({
+                'id': d['id'], 'lib': lib, 'title': md.get('title') or '?',
+                'authors': [a.get('name') if isinstance(a, dict) else a for a in (md.get('authors') or []) if a],
+                'narrators': md.get('narrators') or [], 'asin': md.get('asin'), 'isbn': md.get('isbn'),
+                'series': [{'name': s.get('name'), 'sequence': s.get('sequence')} for s in (md.get('series') or []) if s.get('name')],
+                'media_tags': list(media.get('tags') or []), 'tags': {t.strip() for t in raw_tags if isinstance(t, str)},
+                'description': md.get('description') or '', 'language': md.get('language'), 'genres': md.get('genres') or [],
+                'cover': media.get('coverPath'), 'duration': media.get('duration'),
+            })
+    return records
+
+
+def find_merges(records):
+    """Returns (merges, rejected). merges: list of dicts {lib, target, members:[Series], evidence}."""
+    merges, rejected = [], []
+    by_lib = defaultdict(dict)
+    for r in records:
+        for s in r['series']:
+            ser = by_lib[r['lib']].setdefault(s['name'], Series(s['name']))
+            ser.entries.append((r, s.get('sequence')))
+    for lib, series_map in by_lib.items():
+        # Largest series first: they become merge targets ("the series that had more entries")
+        ordered = sorted(series_map.values(), key=lambda s: (-len(s.entries), s.name.lower()))
+        groups = []  # list of [target, member, member ...]
+        for ser in ordered:
+            fits, related = [], []
+            for g in groups:
+                ok, rel, reason = merge_check(g, ser)
+                if ok: fits.append((g, rel))
+                elif rel: related.append((g[0], reason))
+            if len(fits) == 1:
+                fits[0][0].append(ser)
+                ser.relation = fits[0][1]
+            else:
+                if len(fits) > 1:
+                    rejected.append({'lib': lib, 'series': ser.name, 'other': ', '.join(g[0].name for g, _ in fits),
+                                     'reason': 'matches more than one series (ambiguous)'})
+                for tgt, reason in related:
+                    rejected.append({'lib': lib, 'series': ser.name, 'other': tgt.name, 'reason': reason})
+                groups.append([ser])
+        for g in groups:
+            if len(g) > 1:
+                merges.append({'lib': lib, 'target': g[0], 'members': g[1:]})
+    return merges, rejected
+
+
+def apply_merges(ctx, merges):
+    """Rename the merged series on every book and lock the series field of the whole group."""
+    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    changed = 0
+    for m in merges:
+        tgt = m['target']
+        all_seqs = tgt.seqs + [x for s in m['members'] for x in s.seqs]
+        logging.info(f"   🔗 MERGE{' (DRY_RUN)' if dry else ''}: into '{tgt.name}' ({len(tgt.entries)} books, #{fmt_seqs(tgt.seqs)})")
+        for s in m['members']:
+            logging.info(f"        <- '{s.name}' ({len(s.entries)} books, #{fmt_seqs(s.seqs)}) [name: {s.relation}, shared author, no number conflict]")
+        logging.info(f"        => '{tgt.name}' afterwards: #{fmt_seqs(all_seqs)}")
+        member_names = {s.name for s in m['members']}
+        group_records = {r['id']: r for s in [tgt] + m['members'] for r, _ in s.entries}
+        for rid, r in group_records.items():
+            key = f"{r['lib']}_{rid}"
+            if 'lock_series' in r['tags'] and any(x['name'] in member_names for x in r['series']):
+                logging.info(f"        🔒 '{r['title']}' has lock_series, not changed")
+                continue
+            new_series, seen = [], {}
+            for x in r['series']:
+                name = tgt.name if x['name'] in member_names else x['name']
+                if name in seen:  # Same series twice after renaming: keep the entry with a number
+                    if not new_series[seen[name]]['sequence'] and x.get('sequence'): new_series[seen[name]]['sequence'] = x['sequence']
+                    continue
+                seen[name] = len(new_series); new_series.append({'name': name, 'sequence': x.get('sequence')})
+            updates = {}
+            if new_series != r['series']:
+                updates['series'] = new_series
+            new_tags = None
+            if 'lock_series' not in r['tags']:
+                new_tags = sorted(set(r['media_tags']) | {'lock_series'})
+            if not updates and new_tags is None: continue
+            what = []
+            if updates: what.append(f"series: {', '.join(x['name'] + (' #' + str(x['sequence']) if x['sequence'] else '') for x in new_series)}")
+            if new_tags is not None: what.append("+tag lock_series")
+            logging.info(f"        ✏️ '{r['title']}': {' | '.join(what)}")
+            if abs_update(r['id'], key, r['title'], updates, {'series': r['series']}, 'series_merge',
+                          tags=new_tags, old_tags=r['media_tags'] if new_tags is not None else None):
+                changed += 1
+    return changed
+
+
+# ================= REPORT =================
+
+def build_report(ctx, records, merges, rejected, extra):
+    """Collect findings (ABS data only) and write reports/library_report.html + .json."""
+    rep = {'generated': datetime.now().strftime('%Y-%m-%d %H:%M'), 'dry_run': ctx['dry_run'], 'books': len(records)}
+    member_to_target = {(m['lib'], s.name): m['target'].name for m in merges for s in m['members']}
+
+    # Series after (planned) merges: gaps and books without number
+    series = defaultdict(list)
+    for r in records:
+        for s in r['series']:
+            name = member_to_target.get((r['lib'], s['name']), s['name'])
+            series[(r['lib'], name)].append((r, s.get('sequence')))
+    gaps, no_seq = [], []
+    for (lib, name), entries in sorted(series.items(), key=lambda x: x[0][1].lower()):
+        nums = sorted({int(n) for n in (parse_seq(q) for _, q in entries) if n is not None and float(n).is_integer()})
+        if len(nums) >= 2:
+            missing = [x for x in range(nums[0], nums[-1] + 1) if x not in nums]
+            if missing: gaps.append({'series': name, 'have': fmt_seqs(nums), 'missing': fmt_seqs(missing)})
+        for r, q in entries:
+            if parse_seq(q) is None and len(entries) > 1: no_seq.append({'series': name, 'title': r['title']})
+
+    # Duplicates (same ASIN twice in one library)
+    by_asin = defaultdict(list)
+    for r in records:
+        if r['asin']: by_asin[(r['lib'], r['asin'])].append(r['title'])
+    dups = [{'asin': a, 'titles': t} for (_, a), t in by_asin.items() if len(t) > 1]
+
+    # Author spelling variants across the library
+    variants = defaultdict(set)
+    for r in records:
+        for a in r['authors']: variants[author_key(a)].add(a)
+    author_var = [sorted(v) for v in variants.values() if len(v) > 1]
+
+    def missing(pred): return sorted(r['title'] for r in records if pred(r) and 'lock_all' not in r['tags'])
+    no_desc_re = re.compile(r'(?s)⭐\s*Ratings.*?⭐')
+    rep.update({
+        'merges': [{'target': m['target'].name, 'target_books': fmt_seqs(m['target'].seqs),
+                    'merged': [{'name': s.name, 'books': fmt_seqs(s.seqs), 'count': len(s.entries), 'match': s.relation} for s in m['members']]} for m in merges],
+        'not_merged': rejected, 'series_gaps': gaps, 'series_without_number': no_seq, 'duplicate_asins': dups,
+        'author_variants_library': author_var, 'author_variants_audible': extra.get('author_notes', []),
+        'unmapped_genres': sorted(extra.get('unmapped_genres', [])),
+        'missing': {
+            'asin': missing(lambda r: not r['asin']), 'cover': missing(lambda r: not r['cover']),
+            'description': missing(lambda r: not re.sub(r'<[^>]+>|\s', '', no_desc_re.sub('', r['description']))),
+            'narrators': missing(lambda r: not r['narrators']), 'language': missing(lambda r: not r['language']),
+            'genres': missing(lambda r: not r['genres']), 'authors': missing(lambda r: not r['authors']),
+        },
+    })
+    os.makedirs(ctx['report_dir'], exist_ok=True)
+    with open(os.path.join(ctx['report_dir'], 'library_report.json'), 'w', encoding='utf-8') as f:
+        json.dump(rep, f, indent=2, ensure_ascii=False)
+    with open(os.path.join(ctx['report_dir'], 'library_report.html'), 'w', encoding='utf-8') as f:
+        f.write(render_html(rep))
+    return rep
+
+
+def render_html(rep):
+    e = lambda x: html.escape(str(x))
+    def table(rows, cols):
+        if not rows: return '<p class="ok">Nothing found.</p>'
+        head = ''.join(f'<th>{e(c)}</th>' for c in cols)
+        body = ''.join('<tr>' + ''.join(f'<td>{e(r.get(c, "") if isinstance(r, dict) else r)}</td>' for c in cols) + '</tr>' for r in rows)
+        return f'<table><tr>{head}</tr>{body}</table>'
+    def lst(items):
+        if not items: return '<p class="ok">Nothing found.</p>'
+        return '<ul>' + ''.join(f'<li>{e(i)}</li>' for i in items) + '</ul>'
+    merges = ''.join(f"<div class='card'><b>{e(m['target'])}</b> (#{e(m['target_books'])})<ul>" +
+                     ''.join(f"<li>&larr; {e(x['name'])} (#{e(x['books'])}, {x['count']} books, name match: {e(x['match'])})</li>" for x in m['merged']) +
+                     "</ul></div>" for m in rep['merges']) or '<p class="ok">No series to merge.</p>'
+    miss = ''.join(f"<details><summary>No {e(k)}: {len(v)}</summary>{lst(v)}</details>" for k, v in rep['missing'].items())
+    return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ABS Library Report</title><style>
+:root{{--bg:#fff;--fg:#1d1d1f;--muted:#6e6e73;--line:#e5e5ea;--card:#f5f5f7;--ok:#1a7f37}}
+@media (prefers-color-scheme:dark){{:root{{--bg:#1c1c1e;--fg:#f2f2f7;--muted:#a1a1a6;--line:#38383a;--card:#2c2c2e;--ok:#4cc26a}}}}
+body{{background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;max-width:1000px;margin:0 auto;padding:16px}}
+h1{{font-size:1.5em}} h2{{margin-top:2em;border-bottom:1px solid var(--line)}} .muted{{color:var(--muted)}} .ok{{color:var(--ok)}}
+table{{border-collapse:collapse;width:100%;display:block;overflow-x:auto}} td,th{{border-bottom:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top}}
+.card{{background:var(--card);border-radius:8px;padding:8px 12px;margin:8px 0}} summary{{cursor:pointer;padding:4px 0}}
+</style></head><body>
+<h1>ABS Library Report</h1><p class="muted">{e(rep['generated'])} · {rep['books']} books{' · DRY RUN (nothing was changed)' if rep['dry_run'] else ''}</p>
+<h2>Series merges ({len(rep['merges'])})</h2>{merges}
+<h2>Similar series not merged ({len(rep['not_merged'])})</h2>{table(rep['not_merged'], ['series', 'other', 'reason'])}
+<h2>Gaps in series ({len(rep['series_gaps'])})</h2><p class="muted">Missing numbers between the lowest and highest book you have. Can be books you don't own.</p>{table(rep['series_gaps'], ['series', 'have', 'missing'])}
+<h2>Books without series number ({len(rep['series_without_number'])})</h2>{table(rep['series_without_number'], ['series', 'title'])}
+<h2>Duplicate ASINs ({len(rep['duplicate_asins'])})</h2>{table([{'asin': d['asin'], 'titles': ' | '.join(d['titles'])} for d in rep['duplicate_asins']], ['asin', 'titles'])}
+<h2>Author spelling variants in library ({len(rep['author_variants_library'])})</h2>{lst([' / '.join(v) for v in rep['author_variants_library']])}
+<h2>Author spelling ABS vs Audible ({len(rep['author_variants_audible'])})</h2>{table([{'title': n['title'], 'abs': ', '.join(n['abs']), 'audible': n['audible']} for n in rep['author_variants_audible']], ['title', 'abs', 'audible'])}
+<h2>Missing fields</h2>{miss}
+<h2>Untranslated audible.de genres ({len(rep['unmapped_genres'])})</h2>{lst(rep['unmapped_genres'])}
+</body></html>"""
+
+
+def run(ctx):
+    """Entry point. ctx: session, abs_url, library_ids, dry_run, abs_update, report_dir, merge, report, extra."""
+    logging.info("=" * 60)
+    logging.info(f"📚 SERIES & LIBRARY TASK (ABS only, no Audible/Goodreads requests){' - DRY_RUN' if ctx['dry_run'] else ''}")
+    records = collect_records(ctx)
+    logging.info(f"   {len(records)} books loaded.")
+    merges, rejected = find_merges(records)
+    changed = 0
+    if ctx['merge']:
+        logging.info(f"   Series merges found: {len(merges)}")
+        changed = apply_merges(ctx, merges)
+        for r in rejected:
+            logging.info(f"   ⏭️ Not merged: '{r['series']}' / '{r['other']}': {r['reason']}")
+    if ctx['report']:
+        rep = build_report(ctx, records, merges if ctx['merge'] else [], rejected, ctx.get('extra', {}))
+        logging.info(f"   📄 Report written: {os.path.join(ctx['report_dir'], 'library_report.html')} "
+                     f"(gaps: {len(rep['series_gaps'])}, duplicates: {len(rep['duplicate_asins'])}, "
+                     f"author variants: {len(rep['author_variants_library'])})")
+    return {'merges': len(merges), 'books_changed': changed}

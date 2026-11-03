@@ -23,6 +23,8 @@ BATCH_SIZE=250
 SLEEP_TIMER=3        # Pause between books (each source is additionally throttled)
 REFRESH_DAYS=90
 DRY_RUN=false
+SERIES_ONLY=false          # true = only series merge + library report (ABS only, no Audible/Goodreads)
+GOODREADS_MAX_PER_RUN=300  # Goodreads searches per run (first pass is spread over several runs)
 
 # 6. Log Settings
 LOG_RETENTION_DAYS=14
@@ -53,6 +55,8 @@ docker run --rm \
   -e SLEEP_TIMER="$SLEEP_TIMER" \
   -e REFRESH_DAYS="$REFRESH_DAYS" \
   -e DRY_RUN="$DRY_RUN" \
+  -e SERIES_ONLY="$SERIES_ONLY" \
+  -e GOODREADS_MAX_PER_RUN="$GOODREADS_MAX_PER_RUN" \
   python:3.11-slim \
   /bin/bash -c "pip install requests beautifulsoup4 lxml > /dev/null 2>&1 && python3 \"$SCRIPT_DIR/$SCRIPT_NAME\""
 
