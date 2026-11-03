@@ -1000,7 +1000,7 @@ def series_candidates(abs_series, authors_list, duration, domain):
         except (requests.RequestException, ValueError): prods = []
         for p in prods:
             rt = int(p.get('runtime_length_min') or 0) * 60
-            if rt and (abs(rt - duration) <= 600 or not runtime_mismatch(duration, rt)) and match_author(authors_list, ', '.join(a.get('name') or '' for a in (p.get('authors') or []))):
+            if rt and abs(rt - duration) <= max(600, 0.25 * duration) and match_author(authors_list, ', '.join(a.get('name') or '' for a in (p.get('authors') or []))):
                 out.append((abs(rt - duration), p["asin"]))
     return [a for _, a in sorted(out)]  # closest runtime first
 
@@ -1084,10 +1084,15 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             auth_ok = match_author(authors_list, ", ".join(p.get('authors_raw') or []))
             dur_ok = bool(duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) < 600)
             dur_conflict = bool(duration and p.get('runtime_sec') and not dur_ok)
+            norm_n = lambda n: re.sub(r'[^a-z]', '', n.lower())
+            a_narr, c_narr = {norm_n(n) for n in (narrators or []) if n}, {norm_n(n) for n in (p.get('narrators_raw') or []) if n}
             # Same book, possibly another recording (runtime/narrator differ): remembered as a ratings-only fallback
             rel_dur_ok = not (duration and p.get('runtime_sec')) or abs(duration - p['runtime_sec']) <= max(2700, 0.25 * duration)
             if t_score >= 0.85 and auth_ok and int(p.get('count') or 0) > 0 and rel_dur_ok and is_boxset_title(found_title) == is_boxset_title(title) \
-                    and not series_seq_unconfirmed(abs_series, (p.get('meta_raw') or {}).get('series')):
+                    and not (a_narr and c_narr and not a_narr & c_narr) \
+                    and (not series_seq_unconfirmed(abs_series, (p.get("meta_raw") or {}).get("series"))
+                         or (t_score >= 0.99 and any(an is not None and cn is not None and an == cn and an >= 2  # exact title + same number, series named differently
+                                                     for _, an in _series_pairs(abs_series) for _, cn in _series_pairs((p.get("meta_raw") or {}).get("series"))))):
                 rel, diff = LAST_SEARCH['related'], abs((duration or 0) - (p.get('runtime_sec') or 0))
                 if rel is None or diff < rel['_diff']:
                     LAST_SEARCH['related'] = dict(p, _diff=diff)

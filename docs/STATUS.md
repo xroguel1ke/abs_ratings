@@ -1,7 +1,7 @@
 # Status (live)
 
-Updated: 2026-11-03 21:20 – Phase A done, ASIN audit done (library: 2 wrong ASINs, both fixed) – overall progress: ~20 % (0 % = before the task, 100 % = stop criterion of phase C met; measured against the 20-30 h plan)
-Next step: ASIN audit of the whole library (record all products once, offline plausibility rule), round 3 (100 fresh books), synthetic fake-ABS books, review-queue UI page.
+Updated: 2026-11-03 22:20 – rounds 3-6 evaluated (0 clean, fixes per round 2,3,1,1), review list page + status page + live progress built – overall progress: ~28 % (0 % = before the task, 100 % = stop criterion of phase C met; measured against the 20-30 h plan)
+Next step: round 7 (audible-only) now; tomorrow Hardcover-focused tests + Goodreads single-request probe; then synthetic fake-ABS books, more web UI points.
 
 | Area | % | Note |
 |---|---|---|
