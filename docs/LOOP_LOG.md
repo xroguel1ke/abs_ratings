@@ -314,3 +314,6 @@ After A9 I wrote "counter stays 3 of 4". WRONG: four clean batches IN A ROW are 
 ## Batch A10 (100 library + 80 synthetic, Audible-only, 6:40 min, 0 errors) – CLEAN -> streak 1 of 4
 Library: 2 ASIN changes hand-verified: Dragonsdawn (title, author, narrator, volume, publisher+year) and The Archmage Unbound (ABS file = Todd McLaren 1012 min, Tantor 2013; the old ASIN was the Podium 2022 recording by Alex Wyndham, 813 min -> ABS publisher/year had been polluted by the wrong ASIN; B00BEMKJD6 matches runtime EXACTLY + narrator). Review list: only the known class "Realms of War" title proposal. Synthetic 80/80. Nothing to correct.
 Streak history: A1 x, A2 x, A3 x, A4 x, A5 x, A6 ok, A7 ok, A8 ok, A9 x, A10 ok -> current streak 1 of 4.
+
+## Batch A11 (173 fresh library books + 80 synthetic, Audible-only, 8:13 min, 0 errors) – CLEAN -> streak 2 of 4 (A10, A11)
+Library: 3 ASIN changes hand-verified (City of Miracles, Hell Mode vol 1, Dragonflight; 4-8 independent evidences each). "Snapshot" (Sanderson novella, 142 min) has no standalone audiobook on Audible = correct not found. Synthetic 80/80. Review list empty. Nothing to correct. The library pool of never-batched books is now exhausted (173 used). After this batch the Hardcover cross-check against Audible was added (applies from the next Hardcover batch).
