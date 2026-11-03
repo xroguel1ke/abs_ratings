@@ -1297,6 +1297,10 @@ def process_library(lib_id, history, failed, recheck):
                     # Title fix: only for broken titles (messy pattern or ASIN found by search),
                     # and only if Audible's title confirms it is the same book.
                     aud_title, aud_sub = aud_data.get('title_raw'), aud_data.get('subtitle_raw')
+                    # 'Camp Half-Blood Confidential (Percy Jackson and the Olympians)': the series belongs in the series field
+                    if aud_title and (m := re.match(r'^(.+?)\s*\(([^()]+)\)\s*$', aud_title)):
+                        aud_series_names = {(x.get('name') or '').strip().lower() for x in (md_raw.get('series') or [])}
+                        if m.group(2).strip().lower() in aud_series_names: aud_title = m.group(1).strip()
                     if aud_title and aud_title != title and (messy or asin_from_search):
                         candidates = [search_title]
                         if messy and messy.get('subtitle'): candidates.append(f"{messy['title']}: {messy['subtitle']}")
