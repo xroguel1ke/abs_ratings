@@ -3,7 +3,7 @@ import re
 import time
 import requests
 from bs4 import BeautifulSoup
-import re, json, random, difflib, logging, urllib.parse
+import re, json, random, difflib, logging, urllib.parse, unicodedata
 import html as html_lib
 import recorder; recorder.install()  # no-op unless RECORD_DIR / REPLAY_DIR is set (offline tests)
 from datetime import datetime, timezone, timedelta
@@ -496,11 +496,15 @@ def format_time(seconds):
         return f"{hours}h {minutes}m"
     return f"{int(seconds // 60)}m {int(seconds % 60)}s"
 
+def fold_accents(s):
+    """'Kurmaić' -> 'Kurmaic' so that spelling without diacritics still matches."""
+    return "".join(c for c in unicodedata.normalize("NFKD", s or "") if not unicodedata.combining(c))
+
 def match_author(abs_authors, web_author):
     if not abs_authors or not web_author: return False
-    web_clean = [w.strip().lower() for w in web_author.split(',')]
+    web_clean = [fold_accents(w).strip().lower() for w in web_author.split(',')]
     for abs_auth in abs_authors:
-        abs_clean = abs_auth.lower()
+        abs_clean = fold_accents(abs_auth).lower()
         for wa in web_clean:
             if abs_clean in wa or wa in abs_clean: return True
             a_tok = set(re.split(r'[^a-z0-9]+', abs_clean))
@@ -871,6 +875,7 @@ def search_match_score(abs_title, found_title, found_sub):
 
 LAST_SEARCH = {'related': None}  # best same-title/same-author candidate of the last search (other edition)
 LAST_MATCH = {}  # evidence of the last accepted search hit: {asin, confirmed, evidence[]}
+SEARCH_CTX = {}  # {'old_title','old_authors'}: what the current ASIN in ABS points to (set by the caller)
 REVIEW_FILE = os.path.join(SCRIPT_DIR, 'review_queue.json')
 
 def add_review(key, title, kind, candidate, reason, evidence=None):
@@ -956,7 +961,10 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 exact_long = len(normalize_title_text(title).split()) >= 4  # long, distinctive title (a short generic one such as 'Alice im Wunderland' is not enough)
                 evidence = [n for n, v in (('title', t_score >= 0.85), ('author', auth_ok), ('runtime', dur_ok), ('narrator', narr_hit),
                                            ('volume-number', vol_hit), ('series-number', ser_hit), ('distinctive-title', exact_long)) if v]
-                extra = sum([narr_hit, vol_hit, ser_hit, exact_long])
+                old_wrong = bool(SEARCH_CTX.get('old_title') and search_match_score(title, SEARCH_CTX['old_title'], '') < 0.5
+                                 and not match_author(authors_list, SEARCH_CTX.get('old_authors') or ''))  # current ASIN is a different book
+                if old_wrong: evidence.append('old-asin-is-another-book')
+                extra = sum([narr_hit, vol_hit, ser_hit, exact_long, old_wrong])
                 confirmed = auth_ok and t_score >= 0.85 and ((dur_ok and extra >= 1) or extra >= 2)
                 ev_txt = ", ".join(evidence)
                 LAST_MATCH.clear(); LAST_MATCH.update({'asin': cand, 'confirmed': confirmed, 'evidence': evidence, 'title': found_title})
@@ -1765,6 +1773,9 @@ def process_queue(work_queue, history, failed, recheck):
                              logging.info(f"        🔗 Found ASIN via HTML Link (hreflang='en-us'): {found}")
 
                     LAST_MATCH.clear()
+                    SEARCH_CTX.clear()
+                    if asin and aud_data and aud_data.get('title_raw'):
+                        SEARCH_CTX.update({'old_title': aud_data['title_raw'], 'old_authors': ', '.join(aud_data.get('authors_raw') or [])})
                     if not found: found = find_missing_asin(search_title, authors, abs_dur, lang, raw_title=title,
                                                             required_lang=lang_target, strict=strict_search and bool(asin),
                                                             only_domain=search_only, narrators=meta.get('narrators') or [], abs_series=meta.get("series") or [])

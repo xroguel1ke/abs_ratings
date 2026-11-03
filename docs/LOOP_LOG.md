@@ -74,3 +74,11 @@ Bugs found with this round (also in the web UI single-book test run): runtime of
 - tools/evaluate.py + tests/private/golden.json (100 books; private because the repo is public and the golden list contains the user's library titles).
 - Offline replay of 100 books: 10 s (throttle() skipped in replay).
 - Open: web UI page for review_queue.json; synthetic fake-ABS books; remaining Opus fixes (dead-ASIN over all 8 stores, .com-first on replacement, merge name choice, silent "ABS #x vs Audible #y" cases into the review list).
+
+## Review-list cases analysed (user asked: do they exist on Audible, why not fixable?)
+All 3 exist on Audible and were fixable:
+- Mother of Learning Arc 1: ABS author "Kurmaic" vs Audible "Kurmaić" -> author match now folds accents (`fold_accents`).
+- Paranormal Payback: current ASIN B09LJY57WR is "Eyes of the Void" (Tchaikovsky) = totally different book (explains wrong narrator in ABS); candidate has exact title, author, runtime to the minute.
+- Alice im Wunderland: current ASIN is "That Time I Got Reincarnated as a Slime, Vol. 5" (explains wrong narrator); candidate matches title/author/runtime.
+New evidence type `old-asin-is-another-book` (title score < 0.5 AND author mismatch for the product behind the current ASIN). Replay of the 100 round-1 books: golden 100/100, review list empty.
+Note: ABS narrators/metadata of such books were polluted by wrong ASINs in earlier runs -> consider a later report "metadata filled from a wrong ASIN".
