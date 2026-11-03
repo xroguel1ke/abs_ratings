@@ -243,20 +243,33 @@ def is_boxset_title(t): return bool(t and BOXSET_RE.search(t))
 
 ASIN_OWNERS = {}  # asin -> set of item keys (ABS library + ASINs planned in this run); an ASIN is never given to a second book
 
+def _seq_num(v):
+    m = re.search(r"\d+(?:\.\d+)?", str(v or ""))
+    return float(m.group(0)) if m else None
+
+def _series_pairs(series):
+    from abs_series import series_key
+    out = []
+    for s in series or []:
+        k = series_key(s.get("name") or s.get("title") or "")
+        if k: out.append((k, _seq_num(s.get("sequence") if s.get("sequence") not in (None, "") else s.get("part"))))
+    return out
+
 def series_seq_conflict(abs_series, cand_series):
     """True if ABS and a candidate both state a number for the same series and the numbers differ (-> other volume)."""
-    for a in abs_series or []:
-        an, aseq = normalize_title_text(a.get("name") or ""), str(a.get("sequence") or "").strip()
-        if not an or not aseq: continue
-        for c in cand_series or []:
-            cn = normalize_title_text(c.get("name") or c.get("title") or "")
-            m = re.search(r"\d+(?:\.\d+)?", str(c.get("sequence") or c.get("part") or ""))
-            cseq = m.group(0) if m else ""
-            if cseq and (an == cn or difflib.SequenceMatcher(None, an, cn).ratio() >= 0.9):
-                try:
-                    if float(aseq) != float(cseq): return True
-                except ValueError:
-                    if aseq != cseq: return True
+    for ak, an in _series_pairs(abs_series):
+        for ck, cn in _series_pairs(cand_series):
+            if an is not None and cn is not None and (ak == ck or difflib.SequenceMatcher(None, ak, ck).ratio() >= 0.9) and an != cn:
+                return True
+    return False
+
+def series_seq_unconfirmed(abs_series, cand_series):
+    """True if ABS says 'volume 2 or higher' of a series but the candidate shows no matching number
+    (e.g. ABS 'Hell Mode #3' vs Audible 'Hell Mode' without number -> probably volume 1)."""
+    cands = _series_pairs(cand_series)
+    for ak, an in _series_pairs(abs_series):
+        if an is None or an <= 1: continue
+        if not any(cn == an and (ak == ck or difflib.SequenceMatcher(None, ak, ck).ratio() >= 0.9) for ck, cn in cands): return True
     return False
 
 class RateLimitException(Exception):
@@ -270,6 +283,7 @@ class SourceBlockedException(Exception):
 _last_request = {}
 def throttle(source):
     """Wait until MIN_INTERVAL[source] seconds have passed since the last request to that source."""
+    if recorder.REPLAY_DIR: return  # offline replay: no network, no need to wait
     wait = MIN_INTERVAL.get(source, 0) - (time.monotonic() - _last_request.get(source, 0))
     if wait > 0: time.sleep(wait + random.uniform(0, 0.5))
     _last_request[source] = time.monotonic()
@@ -909,7 +923,8 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             dur_conflict = bool(duration and p.get('runtime_sec') and not dur_ok)
             # Same book, possibly another recording (runtime/narrator differ): remembered as a ratings-only fallback
             rel_dur_ok = not (duration and p.get('runtime_sec')) or abs(duration - p['runtime_sec']) <= max(2700, 0.25 * duration)
-            if t_score >= 0.85 and auth_ok and int(p.get('count') or 0) > 0 and rel_dur_ok and is_boxset_title(found_title) == is_boxset_title(title):
+            if t_score >= 0.85 and auth_ok and int(p.get('count') or 0) > 0 and rel_dur_ok and is_boxset_title(found_title) == is_boxset_title(title) \
+                    and not series_seq_unconfirmed(abs_series, (p.get('meta_raw') or {}).get('series')):
                 rel, diff = LAST_SEARCH['related'], abs((duration or 0) - (p.get('runtime_sec') or 0))
                 if rel is None or diff < rel['_diff']:
                     LAST_SEARCH['related'] = dict(p, _diff=diff)
@@ -1727,7 +1742,7 @@ def process_queue(work_queue, history, failed, recheck):
                              found = aud_data['variant_asin_us']
                              logging.info(f"        🔗 Found ASIN via HTML Link (hreflang='en-us'): {found}")
 
-                    if not found: found = find_missing_asin(search_title, authors, item['media'].get('duration'), lang, raw_title=title,
+                    if not found: found = find_missing_asin(search_title, authors, abs_dur, lang, raw_title=title,
                                                             required_lang=lang_target, strict=strict_search and bool(asin),
                                                             only_domain=search_only, narrators=meta.get('narrators') or [], abs_series=meta.get("series") or [])
                     

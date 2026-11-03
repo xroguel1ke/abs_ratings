@@ -13,7 +13,7 @@ ONLY=$(paste -sd, "$KEYS")
 LIB=$(jq -r '.LIBRARY_IDS' "$SET")
 HCT=$(jq -r '.HARDCOVER_TOKEN' "$SET")
 HC_ON=true; [ "$HARDCOVER_OFF" = "1" ] && HC_ON=false
-EXTRA=(-e RECORD_DIR=/src/tests/private/recordings)
+EXTRA=(-e RECORD_DIR=/src/tests/private/recordings -e RECORD_REUSE=${REUSE:-0})
 [ "$MODE" = "replay" ] && EXTRA=(-e REPLAY_DIR=/src/tests/private/recordings)
 timeout 14400 docker run --rm --name "abs_ratings_test_${R}" --network host -e PYTHONDONTWRITEBYTECODE=1 \
   -v "$DEV":/src -v "$DATA":/data \

@@ -56,3 +56,14 @@ Open question to user: is an external watchdog (mini container that notifies whe
 Container `abs_ratings_test_watchdog` (tools/watchdog.py, read-only mounts, no autostart). Sends ONE Apprise message only when no file
 activity for 2 h (repeats after 6 h), with instructions how to continue. Stop it with `docker stop abs_ratings_test_watchdog`
 when the work is finished (Claude cannot: docker stop is on the deny list). Restart after a server reboot: see the docker run line in this commit's tools/watchdog.py header comment / LOOP_LOG.
+
+## Round 1 result (100 border cases from the full run, fake ABS = read-only snapshot of the real library, DRY_RUN, Hardcover on, Goodreads off)
+Run 3 (correct runtimes): 26 min, 0 errors, 84 ASIN changes (full run: 86 for the same books).
+Now blocked: "A Thousand Li: The First War" -> "The First Stop" (series number differs), "Reborn ... #4" -> Audible #3 (series number differs).
+Box sets: Waldsee Trilogie 1-3 and Arch Magus Publisher's Pack get no series number any more.
+Other-edition ratings: 4 in this batch (the "Hell Mode" #3 -> vol 1 case still slipped through -> fix `series_seq_unconfirmed` added, replay r02 verifies).
+Still open from review: Mother of Learning (author ✗ accepted), Paranormal Payback, Alice im Wunderland (title+author+runtime only, no narrator).
+Bugs found with this round (also in the web UI single-book test run): runtime of the book was empty in ONLY_ITEMS mode (queue item had `media: {}`) -> all runtime checks off. Fixed with `expanded=1` + `abs_dur` in the ASIN search call.
+### Experiment log
+- RECORD_REUSE (serve known answers from disk): 26 min vs 30 min before -> small gain only, because `throttle()` still waits 0.5 s per call although the answer comes from disk. Adopted (harmless); real gain needs throttling only for live requests.
+- Replay mode: throttle() skipped (no network) -> adopted, replay of 100 books should take well under a minute.
