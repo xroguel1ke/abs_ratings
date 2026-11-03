@@ -185,7 +185,10 @@ def canonical_series(lib, name, book_authors):
     if target := SERIES_ALIASES.get(lib, {}).get(name): return target, 'alias'
     idx_key = f"{','.join(sorted(series_variant(name)))}|{series_key(name)}"
     ent = SERIES_INDEX.get(lib, {}).get(idx_key)
-    if ent and ent['name'] != name and ({author_key(a) for a in book_authors} & set(ent.get('authors', []))):
+    # Only map if exactly one ABS series has this normalized name and the Audible name itself doesn't exist
+    # ('Dune' and 'The Dune Sequence' both exist -> keep 'Dune')
+    if ent and len(ent.get('names', [])) == 1 and name not in ent['names'] \
+            and ({author_key(a) for a in book_authors} & set(ent.get('authors', []))):
         return ent['name'], 'existing'
     return name, None
 
@@ -387,7 +390,9 @@ def normalize_isbn(v):
     return None
 
 RE_DUP_TITLE = re.compile(r'^\s*(.+?)\s*:\s*\1\s*(?::\s*(.+))?$', re.IGNORECASE)
-RE_SERIES_PREFIX = re.compile(r'^\s*(.{4,}?)\s+(?:#|Book\s+|Vol\.?\s*|Band\s+|Teil\s+)?(\d{1,3}(?:\.\d)?)\s*[-:–.]?\s+(.{3,})$', re.IGNORECASE)
+# 'The Book of the New Sun 05 The Urth of the New Sun': number directly between two names, separated by spaces only.
+# 'Casual Farming 3: A Slow Living LitRPG' / 'ANIMA, Vol. 4: Light Novel' (colon after the number) are normal titles.
+RE_SERIES_PREFIX = re.compile(r'^\s*([^:]{4,}?)\s+(\d{1,3})\s+([^:].{2,})$')
 
 RE_LEADING_NUM = re.compile(r'^\s*(0\d{1,2})\s*[-.:]?\s+(.{3,})$')  # '01 Nightside the Long Sun' (zero-padded only)
 
@@ -401,6 +406,7 @@ def parse_messy_title(t):
         return {'title': m.group(1).strip(), 'subtitle': (m.group(2) or '').strip() or None, 'kind': 'duplicate'}
     if m := RE_SERIES_PREFIX.match(t):
         series, seq, rest = m.group(1).strip(' -:,'), m.group(2), m.group(3).strip()
+        if re.search(r'(?i)\b(vol\.?|volume|book|band|teil|part|no\.?)$', series): return None  # 'X Vol. 4 Y' is a normal title
         # Guard against normal titles with numbers ("Catch 22 ..."): the series part needs at least 2 words
         if len(series.split()) >= 2 and len(rest.split()) >= 2:
             return {'title': rest, 'series': series, 'sequence': str(float(seq)).rstrip('0').rstrip('.'), 'kind': 'series_prefix'}
@@ -1673,10 +1679,10 @@ def write_debug_bundle(log_file):
     counts = defaultdict(int)
     for e in entries: counts[f"{e['source']}/{e['field']}"] += 1
     out.append("Counts: " + (", ".join(f"{k}: {v}" for k, v in sorted(counts.items())) or "none"))
-    for e in entries[:5000]:
+    for e in entries[:20000]:
         n = 200 if e['field'] == 'description' else 300
         out.append(f"[{e['source']}] {e['title']} | {e['field']}: {short(e['old'], n)} -> {short(e['new'], n)}")
-    if len(entries) > 5000: out.append(f"... {len(entries) - 5000} more changes in {jf}")
+    if len(entries) > 20000: out.append(f"... {len(entries) - 20000} more changes in {jf}")
     out.append("")
     out.append("=== LIBRARY REPORT (summary) ===")
     try:

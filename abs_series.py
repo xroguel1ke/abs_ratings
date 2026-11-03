@@ -317,7 +317,7 @@ def write_series_index(ctx, records, merges):
     for (lib, k), names in books.items():
         if not k.split('|', 1)[1]: continue
         name, e = sorted(names.items(), key=lambda x: (-x[1]['count'], x[0]))[0]
-        index[lib][k] = {'name': name, 'authors': sorted(set().union(*(v['authors'] for v in names.values())))}
+        index[lib][k] = {'name': name, 'names': sorted(names), 'authors': sorted(set().union(*(v['authors'] for v in names.values())))}
     try:
         with open(ctx['index_file'], 'w', encoding='utf-8') as f: json.dump(index, f, indent=1, ensure_ascii=False)
     except OSError as e: logging.error(f"   Could not write series index: {e}")
