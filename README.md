@@ -9,14 +9,15 @@ A fully automated script designed for **Audiobookshelf (ABS)** on **Unraid**. It
 ## ✨ Features
 
 * **Dockerized Execution:** Runs via a temporary `python:3.11-slim` container using a wrapper script. No dependency hell on your host.
-* **Dual Source Scraping:** Fetches ratings from Audible (cross-checks `.com` & `.de`) and Goodreads.
+* **Audible Catalog API:** Ratings (overall/performance/story) and metadata come from Audible's JSON API (`.com` & `.de`). Scraping the product pages is only used as a fallback.
+* **Goodreads:** Ratings via ISBN/ASIN lookup or text search with title/author/volume matching.
 * **Auto-Repair & Fallback:** Automatically searches for missing ASINs/ISBNs and updates them in ABS. If a direct ID match fails, it attempts a text-based search to find the correct book.
 * **Multi-Series Support:** Correctly handles books that belong to multiple series (e.g., "Cosmere" & "Stormlight Archive").
 * **Manual Control (Locks):** Use tags in ABS to prevent specific fields (like Series or Language) from being overwritten.
 * **Visual Ratings:** Adds "Moon" emojis (e.g., 🌕🌕🌗🌑🌑) for a quick visual overview in your library.
 * **Smart Reporting:** Generates JSON reports for missing matches (`reports/`) and maintains a history to avoid redundant API calls.
 * **Unraid Notifications:** Sends a status summary (Success/Failures/Duration) directly to the Unraid WebGUI.
-* **Rate Limit Protection:** Built-in cool-downs and batching to keep your IP safe.
+* **Rate Limit Protection:** Per-source request throttling, cool-downs and batching to keep your IP safe.
 
 ## 🚀 Installation (Unraid)
 
@@ -47,6 +48,7 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 | `API_TOKEN` | Your ABS API Token (Bearer Token). | `eyJhbG...` |
 | `LIBRARY_IDS` | Comma-separated list of Library IDs to scan. | `lib-uuid-1,lib-uuid-2` |
 | `BATCH_SIZE` | Items to process per run (prevents bans). | `250` |
+| `SLEEP_TIMER` | Pause in seconds between two books. | `3` |
 | `REFRESH_DAYS` | Update interval for existing ratings. | `90` |
 | `DRY_RUN` | If `true`, nothing is written to ABS and the run history is not updated. | `false` |
 
@@ -57,6 +59,12 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 | `ABS_TIMEOUT` | Timeout in seconds for each ABS API request. | `30` |
 | `NO_RATINGS_RECHECK_DAYS` | Re-check interval for new releases that have no Audible ratings yet. | `7` |
 | `GR_MISSING_RECHECK_DAYS` | Re-check interval when Audible worked but Goodreads found nothing. | `30` |
+| `USE_AUDIBLE_API` | Use the Audible catalog API (`false` = scrape product pages only). | `true` |
+| `AUDIBLE_API_INTERVAL` | Minimum seconds between two Audible API requests. | `1` |
+| `AUDIBLE_WEB_INTERVAL` | Minimum seconds between two Audible web page requests (searches, fallback). | `3` |
+| `GOODREADS_INTERVAL` | Minimum seconds between two Goodreads requests. | `3` |
+
+> **Pauses:** Every source is throttled on its own (see the `*_INTERVAL` variables), so `SLEEP_TIMER` can stay small. If you ever hit a rate limit, raise the interval of the affected source first.
 
 > **Note:** The script automatically creates `logs/` and `reports/` subdirectories in your script folder.
 
@@ -107,8 +115,9 @@ The script looks for `⭐ Ratings & Infos` in your description. If found, it upd
 1.  The Bash script (`userscript.sh`) launches a Docker container mounting your script directory.
 2.  Dependencies (`requests`, `beautifulsoup4`, `lxml`) are installed on-the-fly.
 3.  The Python script scans your library, identifying items needing updates or missing metadata.
-4.  It fetches data, potentially repairs missing ASINs/ISBNs, and pushes updates to ABS.
-5.  Finally, it sends a notification to Unraid and rotates logs.
+4.  It fetches ratings and metadata from the Audible catalog API (falling back to the product pages if needed) and from Goodreads, potentially repairs missing ASINs/ISBNs, and pushes updates to ABS.
+5.  If Goodreads search results can't be parsed (layout change), the first such page is saved to `logs/goodreads_search_sample.html` for inspection.
+6.  Finally, it sends a notification to Unraid and rotates logs.
 
 ---
 <sub>Vibecoded: Concept & Logic by the developer, refined with AI assistance.</sub>

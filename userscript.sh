@@ -20,7 +20,7 @@ LIBRARY_IDS="<LIBRARY_ID_1>,<LIBRARY_ID_2>"
 
 # 5. Execution Settings
 BATCH_SIZE=250
-SLEEP_TIMER=10
+SLEEP_TIMER=3        # Pause between books (each source is additionally throttled)
 REFRESH_DAYS=90
 DRY_RUN=false
 

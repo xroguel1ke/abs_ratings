@@ -23,8 +23,17 @@ MAX_BATCH_SIZE = int(os.getenv('BATCH_SIZE', 150))
 MAX_FAIL_ATTEMPTS = 5
 MAX_CONSECUTIVE_RL = 3
 RECOVERY_PAUSE = 60
-BASE_SLEEP = int(os.getenv('SLEEP_TIMER', 6))
+BASE_SLEEP = float(os.getenv('SLEEP_TIMER', 3))  # Pause between items (sources are additionally throttled below)
 SEARCH_PENALTY_SLEEP = 10  # Extra sleep after expensive search operations
+# Minimum seconds between two requests to the same source
+MIN_INTERVAL = {
+    'audible_api': float(os.getenv('AUDIBLE_API_INTERVAL', 1)),
+    'audible_web': float(os.getenv('AUDIBLE_WEB_INTERVAL', 3)),
+    'goodreads': float(os.getenv('GOODREADS_INTERVAL', 3)),
+}
+USE_AUDIBLE_API = os.getenv('USE_AUDIBLE_API', 'true').lower() == 'true'
+AUDIBLE_API_HOSTS = {"www.audible.com": "api.audible.com", "www.audible.de": "api.audible.de"}
+AUDIBLE_API_GROUPS = "rating,series,product_attrs,product_desc,category_ladders,contributors"
 DRY_RUN = os.getenv('DRY_RUN', 'False').lower() == 'true'
 ABS_TIMEOUT = int(os.getenv('ABS_TIMEOUT', 30))  # Seconds per ABS API request
 NO_RATINGS_RECHECK_DAYS = int(os.getenv('NO_RATINGS_RECHECK_DAYS', 7))  # New releases without ratings yet
@@ -101,6 +110,18 @@ class SourceBlockedException(Exception):
     """A non-critical source (Goodreads) blocks us. Skip the source instead of aborting the run."""
 
 # ================= UTILS =================
+
+_last_request = {}
+def throttle(source):
+    """Wait until MIN_INTERVAL[source] seconds have passed since the last request to that source."""
+    wait = MIN_INTERVAL.get(source, 0) - (time.monotonic() - _last_request.get(source, 0))
+    if wait > 0: time.sleep(wait + random.uniform(0, 0.5))
+    _last_request[source] = time.monotonic()
+
+def map_language(raw):
+    if not raw: return None
+    raw = str(raw).strip()
+    return LANGUAGE_MAP.get(raw.lower(), raw[:1].upper() + raw[1:])
 
 def setup_logging():
     os.makedirs(LOG_DIR, exist_ok=True)
@@ -253,6 +274,7 @@ def fetch_url(url, params=None, domain=None, source=None):
         if source == 'goodreads': raise SourceBlockedException(msg)
         raise RateLimitException(msg, hard)
 
+    throttle('goodreads' if source == 'goodreads' else 'audible_web')
     try:
         r = requests.get(url, headers=get_headers(domain), params=params, timeout=20)
     except requests.RequestException as e:
@@ -307,11 +329,89 @@ def scrape_search_result_fallback(domain, asin):
 
 # ================= CORE LOGIC =================
 
+def audible_domains(language):
+    if language and str(language).strip().lower() in GERMAN_LANG_CODES:
+        return ["www.audible.de", "www.audible.com"]
+    return ["www.audible.com", "www.audible.de"]
+
+def get_audible_api(asin, domain):
+    """Query the Audible catalog API for one marketplace.
+    Returns a result dict in the same shape as the web scraper, 'missing' if the product
+    is not available there, or None on errors (caller falls back to web scraping)."""
+    host = AUDIBLE_API_HOSTS.get(domain)
+    if not host: return None
+    throttle('audible_api')
+    url = f"https://{host}/1.0/catalog/products/{asin}"
+    try:
+        r = requests.get(url, params={"response_groups": AUDIBLE_API_GROUPS},
+                         headers={"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}, timeout=15)
+    except requests.RequestException as e:
+        logging.warning(f"        🌐 Audible API request failed ({host}): {type(e).__name__}: {e}")
+        return None
+    if r.status_code == 429: raise RateLimitException(f"HTTP 429 on {host} (API)", True)
+    if r.status_code == 404: return 'missing'
+    if r.status_code != 200:
+        logging.warning(f"        🌐 Audible API HTTP {r.status_code} on {host}")
+        return None
+    try: p = r.json().get('product') or {}
+    except ValueError:
+        logging.warning(f"        🌐 Audible API returned no JSON on {host}")
+        return None
+    if not p.get('title'): return 'missing'  # Product not sold in this marketplace
+
+    res = {'domain': domain, 'source': 'API', 'page_ok': True, 'title_raw': p.get('title')}
+    if p.get('subtitle'): res['subtitle_raw'] = p['subtitle']
+    rating = p.get('rating') or {}
+    def dist(name):
+        d = rating.get(name) or {}
+        return d.get('display_average_rating') or d.get('average_rating'), int(d.get('num_ratings') or 0)
+    overall, count = dist('overall_distribution')
+    performance, _ = dist('performance_distribution')
+    story, _ = dist('story_distribution')
+    res['count'] = count
+    if count and is_valid_rating(overall): res['overall'] = str(overall)
+    if count and is_valid_rating(performance): res['performance'] = str(performance)
+    if count and is_valid_rating(story): res['story'] = str(story)
+
+    # Convert to the 'meta_raw' shape the metadata sync already understands
+    categories = []
+    for ladder in p.get('category_ladders') or []:
+        for c in ladder.get('ladder') or []:
+            if c.get('name') and c['name'] not in categories: categories.append(c['name'])
+    res['meta_raw'] = {
+        'language': p.get('language'),
+        'publisher': {'name': p.get('publisher_name')} if p.get('publisher_name') else None,
+        'releaseDate': p.get('release_date') or p.get('issue_date'),
+        'format': p.get('format_type'),
+        'categories': [{'name': c} for c in categories],
+        'series': [{'name': s.get('title'), 'part': s.get('sequence')} for s in (p.get('series') or []) if s.get('title')],
+    }
+    return res
+
 def get_audible_data(asin, language):
+    """Audible ratings + metadata. Uses the catalog API first and only falls back to
+    scraping the product pages when the API can't answer for any marketplace."""
     if not asin: return None
-    domains = ["www.audible.com", "www.audible.de"]
-    if language and str(language).strip().lower() in ['de', 'deu', 'german', 'deutsch']:
-        domains = ["www.audible.de", "www.audible.com"]
+    if not USE_AUDIBLE_API: return get_audible_data_web(asin, language)
+    api_error = False
+    for domain in audible_domains(language):
+        logging.info(f"      -> Checking {domain} (API)...")
+        res = get_audible_api(asin, domain)
+        if res is None: api_error = True; continue
+        if res == 'missing':
+            logging.info(f"        ⚠️ Not available on {domain}")
+            continue
+        if res['count'] > 0 and res.get('overall'):
+            logging.info(f"        ✅ SUCCESS on {domain} (Count: {res['count']}, Rating: {round(safe_float(res['overall']), 2)})")
+        else:
+            logging.info(f"        ℹ️ Product exists on {domain}, but has no ratings yet.")
+        return res
+    logging.info(f"        ↪️ {'API error' if api_error else 'Not found via API'}, falling back to web scraping...")
+    return get_audible_data_web(asin, language)
+
+def get_audible_data_web(asin, language):
+    if not asin: return None
+    domains = audible_domains(language)
 
     best_result = None
 
@@ -324,6 +424,7 @@ def get_audible_data(asin, language):
         headers = get_headers(domain)
 
         try:
+            throttle('audible_web')
             r = requests.get(url, headers=headers, cookies=cookies, timeout=15)
             txt_lower = r.text.lower()
             soup = BeautifulSoup(r.text, 'lxml')
@@ -546,6 +647,44 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
         logging.warning(f"        🛑 Goodreads blocks requests: {e}. Skipping Goodreads for the rest of this run.")
         return None, 'blocked'
 
+def parse_gr_search_results(soup):
+    """Return [(title, absolute_url, author)] from a Goodreads search page.
+    Tries the classic table layout first, then a layout-independent fallback that pairs every
+    /book/show/ link with the nearest /author/show/ link."""
+    results, seen = [], set()
+    def add(link, author):
+        href = urllib.parse.urljoin("https://www.goodreads.com", link.get('href', '')).split('?')[0]
+        t = link.get_text(" ", strip=True)
+        if not t or href in seen: return
+        seen.add(href); results.append((t, href, author))
+
+    rows = soup.find_all('tr', itemtype=re.compile(r'schema\.org/Book'))
+    for row in rows:
+        link = row.find('a', class_='bookTitle') or row.find('a', href=re.compile(r'/book/show/'))
+        auth = row.find('a', class_='authorName') or row.find('a', href=re.compile(r'/author/show/'))
+        if link: add(link, auth.get_text(" ", strip=True) if auth else "")
+    if results: return results
+
+    for link in soup.find_all('a', href=re.compile(r'/book/show/\d+')):
+        node, auth = link, None
+        for _ in range(6):  # walk up to the result container
+            node = node.parent
+            if node is None: break
+            if auth := node.find('a', href=re.compile(r'/author/show/')): break
+        add(link, auth.get_text(" ", strip=True) if auth else "")
+    return results
+
+_gr_sample_saved = {'done': False}
+def save_gr_sample(html, q):
+    """Store the first unparseable search page per run so the layout can be inspected."""
+    if _gr_sample_saved['done']: return
+    _gr_sample_saved['done'] = True
+    try:
+        path = os.path.join(LOG_DIR, "goodreads_search_sample.html")
+        with open(path, 'w', encoding='utf-8') as f: f.write(html)
+        logging.info(f"        💾 Saved unparseable GR search page for '{q}' to {path}")
+    except OSError: pass
+
 def _search_goodreads(isbn, asin, title, authors, prim_auth):
     for q_id, src in [(isbn, 'ISBN Lookup'), (asin, 'ASIN Lookup')]:
         if q_id:
@@ -553,9 +692,11 @@ def _search_goodreads(isbn, asin, title, authors, prim_auth):
                 d['source'] = src
                 logging.info(f"        ✅ Found via {src} (Count: {d.get('count')}, Rating: {round(safe_float(d.get('val')), 2)})")
                 return d
-    searches = [f"{t} {prim_auth}" for t in [title, clean_title(title)] if t] + [title]
     base_title = clean_title(title)
-    if base_title and base_title != title: searches.append(base_title)
+    searches = []
+    for q in [f"{title} {prim_auth}", f"{base_title} {prim_auth}", title, base_title]:
+        q = q.strip()
+        if q and q not in searches: searches.append(q)  # No duplicate requests
     norm_target = normalize_title_text(title)
 
     for q in searches:
@@ -568,23 +709,20 @@ def _search_goodreads(isbn, asin, title, authors, prim_auth):
                 return d
         else:
             best_url, best_score = None, 0.0
-            rows = soup.find_all('tr', itemtype="http://schema.org/Book")
-            if not rows:
-                logging.info(f"        🔍 GR search '{q}': no result rows (title: '{page_title(soup)}', {len(r.text)} bytes)")
-            for row in rows:
-                link = row.find('a', class_='bookTitle')
-                if not link: continue
-                found_title = link.get_text(strip=True)
+            results = parse_gr_search_results(soup)
+            if not results:
+                logging.info(f"        🔍 GR search '{q}': no results parsed (title: '{page_title(soup)}', {len(r.text)} bytes)")
+                if len(r.text) > 50000: save_gr_sample(r.text, q)
+            for found_title, found_url, found_auth in results:
                 norm_found = normalize_title_text(found_title)
                 t_score = difflib.SequenceMatcher(None, norm_target, norm_found).ratio()
                 if (len(norm_target) > 3 and norm_target in norm_found) or (len(norm_found) > 3 and norm_found in norm_target): t_score += 0.15
                 f_nums, t_nums = extract_volume(found_title), extract_volume(title)
                 if (f_nums and t_nums and not f_nums & t_nums): 
                     if t_score < 0.9: continue
-                found_auth = row.find('a', class_='authorName').text if row.find('a', class_='authorName') else ""
                 if not match_author(authors, found_auth): continue
                 if t_score > 0.75 and t_score > best_score:
-                    best_score, best_url = t_score, "https://www.goodreads.com" + link['href']
+                    best_score, best_url = t_score, found_url
             if best_url:
                 if d := scrape_gr_details(best_url): 
                     d['source'] = 'Text Search (List Match)'
@@ -769,7 +907,7 @@ def process_library(lib_id, history, failed, recheck):
 
                 if aud_data and aud_data.get('meta_raw'):
                     raw_lang = aud_data['meta_raw'].get('language')
-                    if raw_lang: new_lang_detected = LANGUAGE_MAP.get(raw_lang.strip().lower(), raw_lang)
+                    if raw_lang: new_lang_detected = map_language(raw_lang)
                     else: new_lang_detected = None
                 else: new_lang_detected = None
                 
@@ -822,12 +960,11 @@ def process_library(lib_id, history, failed, recheck):
                             aud_data = get_audible_data(asin, lang)
                             if aud_data and aud_data.get('meta_raw'):
                                 raw_l = aud_data['meta_raw'].get('language')
-                                if raw_l: new_lang_detected = LANGUAGE_MAP.get(raw_l.strip().lower(), raw_l)
+                                if raw_l: new_lang_detected = map_language(raw_l)
                         else: logging.info(f"        ℹ️ Search returned same ASIN. Keeping fallback data.")
                     else: logging.info(f"        ℹ️ No replacement found. Keeping fallback data.")
 
-                time.sleep(1)
-                
+
                 if aud_data and aud_data.get('meta_raw') and not DRY_RUN:
                     md_raw = aud_data['meta_raw']
                     abs_updates = {}
