@@ -55,6 +55,9 @@ ALL_MARKETS = ['com', 'co.uk', 'ca', 'com.au', 'de', 'fr', 'it', 'es']
 AUDIBLE_MARKETS = [m.strip() for m in os.getenv('AUDIBLE_MARKETPLACES', ','.join(ALL_MARKETS)).split(',') if m.strip() in ALL_MARKETS]
 AUDIBLE_API_HOSTS = {f"www.audible.{m}": f"api.audible.{m}" for m in ALL_MARKETS}
 MARKET_BY_LANG = {'German': 'de', 'French': 'fr', 'Italian': 'it', 'Spanish': 'es', 'English': 'com'}
+# Preferred store per book language: an ASIN from another store is swapped for the edition of this store
+# if it can be matched unambiguously (title, author, runtime, narrator). Otherwise the existing ASIN stays.
+PREFERRED_STORE = {'English': 'www.audible.com', 'German': 'www.audible.de'}
 AUDIBLE_API_GROUPS = "rating,series,product_attrs,product_desc,category_ladders,contributors,media"
 DRY_RUN = os.getenv('DRY_RUN', 'False').lower() == 'true'
 ABS_TIMEOUT = int(os.getenv('ABS_TIMEOUT', 30))  # Seconds per ABS API request
@@ -804,7 +807,8 @@ def search_match_score(abs_title, found_title, found_sub):
         score = min(score, 0.75)  # 'Hell Mode' vs 'Hell Mode, Volume 3': could be any volume
     return score
 
-def search_audible_api(title, authors_list, duration, lang, raw_title=None, required_lang=None, strict=False):
+def search_audible_api(title, authors_list, duration, lang, raw_title=None, required_lang=None, strict=False,
+                       only_domain=None, narrators=None):
     """Find an ASIN via the Audible catalog search API. Every candidate is verified by loading
     the product (title, author, runtime). Returns the ASIN, None (no match) or False (API error)."""
     prim_auth = authors_list[0] if authors_list else ""
@@ -812,7 +816,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
     if prim_auth: queries.append({"title": title, "author": prim_auth})
     if raw_title and raw_title != title: queries.append({"keywords": raw_title})
     api_ok = False
-    for domain in search_domains(required_lang or lang):
+    for domain in ([only_domain] if only_domain else search_domains(required_lang or lang)):
         host, candidates = AUDIBLE_API_HOSTS[domain], []
         for q in queries:
             throttle('audible_api')
@@ -843,20 +847,28 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             auth_ok = match_author(authors_list, ", ".join(p.get('authors_raw') or []))
             dur_ok = bool(duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) < 600)
             dur_conflict = bool(duration and p.get('runtime_sec') and not dur_ok)
+            norm_n = lambda n: re.sub(r'[^a-z]', '', n.lower())
+            a_narr, c_narr = {norm_n(n) for n in (narrators or []) if n}, {norm_n(n) for n in (p.get('narrators_raw') or []) if n}
+            if strict and a_narr and c_narr and not a_narr & c_narr:  # other recording (e.g. UK vs US narrator)
+                logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (narrator {', '.join(p.get('narrators_raw') or [])} differs)")
+                continue
             if strict:  # replacing an existing ASIN: everything must match
-                accept = t_score >= 0.9 and auth_ok and dur_ok
+                accept = t_score >= 0.85 and auth_ok and dur_ok
             else:
                 accept = t_score >= 0.8 and auth_ok and not dur_conflict or t_score >= 0.85 and dur_ok
             if accept:
                 logging.info(f"        ✅ API match on {domain}: '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, runtime {'✓' if dur_ok else '?'})")
                 return cand
-            logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, runtime {'✗' if dur_conflict else '?'})")
+            logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, runtime {'✓' if dur_ok else '✗' if dur_conflict else '?'})")
     return None if api_ok else False
 
-def find_missing_asin(title, authors_list, duration, lang, raw_title=None, required_lang=None, strict=False):
-    logging.info(f"      -> 🔎 Searching Replacement ASIN for '{title}'{' (strict: title, author and runtime must match)' if strict else ''}...")
+def find_missing_asin(title, authors_list, duration, lang, raw_title=None, required_lang=None, strict=False,
+                      only_domain=None, narrators=None):
+    logging.info(f"      -> 🔎 Searching Replacement ASIN for '{title}'{f' on {only_domain}' if only_domain else ''}"
+                 f"{' (strict: title, author, runtime and narrator must match)' if strict else ''}...")
     if USE_AUDIBLE_API:
-        res = search_audible_api(title, authors_list, duration, lang, raw_title, required_lang, strict)
+        res = search_audible_api(title, authors_list, duration, lang, raw_title, required_lang, strict, only_domain, narrators)
+        if only_domain: return res or None  # preferred-store search: no web fallback, keep the existing ASIN
         if res is not False: return res
         logging.info("        ↪️ API search unavailable, falling back to web search...")
     return find_missing_asin_web(title, authors_list, duration, lang)
@@ -1325,7 +1337,7 @@ def process_queue(work_queue, history, failed, recheck):
                 check_lang = new_lang_detected if new_lang_detected else lang
 
                 # Language check: ABS and Audible disagree -> who is right?
-                lang_conflict, lang_target, strict_search = False, None, False
+                lang_conflict, lang_target, strict_search, search_only = False, None, False, None
                 abs_lang = map_language(lang) if lang else None
                 if aud_data and new_lang_detected and abs_lang and abs_lang != new_lang_detected:
                     verdict = language_verdict(search_title, meta.get('narrators') or [], aud_data, 'lock_language' in tags,
@@ -1361,12 +1373,10 @@ def process_queue(work_queue, history, failed, recheck):
                 elif int(aud_data.get('count', 0)) == 0:
                     logging.info("      -> ⚠️ Found 0 Ratings.")
                     should_search, strict_search = True, True
-                elif map_language(check_lang) == 'English' and aud_data.get('domain') == 'www.audible.de':
-                    logging.info("      -> ⚠️ English book only found on .de (possibly broken .com ASIN). Searching the English edition...")
-                    should_search, lang_target = True, 'English'
-                elif map_language(check_lang) == 'German' and aud_data.get('domain') == 'www.audible.com':
-                    logging.info("      -> ⚠️ German book only found on .com (possibly broken .de ASIN). Searching the German edition...")
-                    should_search, lang_target = True, 'German' 
+                elif (pref := PREFERRED_STORE.get(map_language(check_lang))) and aud_data.get('domain') != pref:
+                    logging.info(f"      -> ℹ️ ASIN is from {aud_data.get('domain')}, preferred store for {map_language(check_lang)} books is {pref}. "
+                                 f"Looking for the same edition there (the current ASIN is kept if there is no exact match)...")
+                    should_search, strict_search, lang_target, search_only = True, True, map_language(check_lang), pref
 
                 if should_search and asin and 'lock_asin' in tags:
                     logging.info(f"      -> 🔒 ASIN search skipped (lock_asin), keeping {asin}")
@@ -1387,7 +1397,8 @@ def process_queue(work_queue, history, failed, recheck):
                              logging.info(f"        🔗 Found ASIN via HTML Link (hreflang='en-us'): {found}")
 
                     if not found: found = find_missing_asin(search_title, authors, item['media'].get('duration'), lang, raw_title=title,
-                                                            required_lang=lang_target, strict=strict_search and bool(asin))
+                                                            required_lang=lang_target, strict=strict_search and bool(asin),
+                                                            only_domain=search_only, narrators=meta.get('narrators') or [])
                     
                     if found:
                         if found != asin:
@@ -1404,6 +1415,7 @@ def process_queue(work_queue, history, failed, recheck):
                                 raw_l = aud_data['meta_raw'].get('language')
                                 if raw_l: new_lang_detected = map_language(raw_l)
                         else: logging.info(f"        ℹ️ Search returned same ASIN. Keeping fallback data.")
+                    elif search_only: logging.info(f"        ℹ️ No exact match on {search_only}. Keeping {asin} from {aud_data.get('domain') if aud_data else '?'}.")
                     else: logging.info(f"        ℹ️ No replacement found. Keeping fallback data.")
 
                 if lang_conflict and aud_data and map_language((aud_data.get('meta_raw') or {}).get('language')) not in (None, lang_target):
