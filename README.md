@@ -67,11 +67,16 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 | `GOODREADS_INTERVAL` | Minimum seconds between two Goodreads requests. | `3` |
 | `GR_BLOCK_COOLDOWN` | Pause in seconds after Goodreads blocks, before one retry. | `120` |
 | `GR_MAX_COOLDOWNS` | Cool-downs per run before Goodreads is skipped for the rest of the run. | `1` |
+| `GOODREADS_MAX_PER_RUN` | Max Goodreads searches per run (cached books don't count, `0` = unlimited). The rest follows in the next runs. | `300` |
 | `SEARCH_PENALTY_SLEEP` | Optional extra pause after an ASIN search. | `0` |
 
 > **Pauses:** Every source is throttled on its own (see the `*_INTERVAL` variables), so `SLEEP_TIMER` can stay small. If you ever hit a rate limit, raise the interval of the affected source first.
 
 > **Note:** The script automatically creates `logs/` and `reports/` subdirectories in your script folder.
+
+### Large libraries
+
+Audible ratings and metadata come from the API and are fast (one request per book). Goodreads has no API and blocks bots after a while, so the **first** pass is spread over several runs: each run searches Goodreads for at most `GOODREADS_MAX_PER_RUN` books, the rest is re-checked the next day. Once a book is found, its Goodreads URL is cached, so later refreshes need one request per book.
 
 ### Re-checks instead of strikes
 

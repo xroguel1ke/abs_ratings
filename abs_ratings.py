@@ -42,6 +42,9 @@ GR_MISSING_RECHECK_DAYS = int(os.getenv('GR_MISSING_RECHECK_DAYS', 30))  # Audib
 GR_BLOCKED_RECHECK_DAYS = 1  # Goodreads blocked/unreachable during the run
 GR_BLOCK_COOLDOWN = int(os.getenv('GR_BLOCK_COOLDOWN', 120))  # Pause before retrying after a Goodreads block
 GR_MAX_COOLDOWNS = int(os.getenv('GR_MAX_COOLDOWNS', 1))  # Cool-downs per run before Goodreads is skipped
+# Max Goodreads searches per run (cached URLs don't count). Keeps the first full pass under Goodreads'
+# bot detection: the rest is deferred to the next run. 0 = unlimited.
+GOODREADS_MAX_PER_RUN = int(os.getenv('GOODREADS_MAX_PER_RUN', 300))
 
 # --- HEADERS & CONSTANTS ---
 FIXED_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
@@ -101,9 +104,9 @@ RE_RAW_PERFORMANCE = re.compile(r'performance-value="([0-9.]+)"')
 RE_RAW_OVERALL = re.compile(r'value="([0-9.]+)"') 
 RE_RAW_COUNT = re.compile(r'count="(\d+)"')
 
-stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck"]}
+stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred"]}
 stats['aborted_ratelimit'] = False
-GR_STATE = {'blocked': False, 'cooldowns': 0}
+GR_STATE = {'blocked': False, 'cooldowns': 0, 'searches': 0}
 GR_CACHE = {}  # Filled in main()  # Set once Goodreads blocks us; GR is then skipped for the rest of the run
 reports = {"audible": {}, "goodreads": {}}
 
@@ -163,6 +166,7 @@ def write_env_file(log_file, start_time):
     
     body = f"Proc: {stats['processed']} | New: {stats['success']} | ManUpd: {stats['manual_retrigger']} | MetaUpd: {stats['meta_updated']} | ASIN+: {stats['asin_found']} | Mig: {stats['asin_migrated']} | ISBN+: {stats['isbn_added']} | Fix: {stats['isbn_repaired']} | NoRatYet: {stats['no_ratings_yet']} | GR-: {stats['gr_missing']} | Err: {stats['failed']}"
     if GR_STATE['blocked']: body += " | ⚠️ Goodreads blocked"
+    if stats['gr_deferred']: body += f" | GR deferred: {stats['gr_deferred']}"
     if stats['aborted_ratelimit']: body += " | ⚠️ ABORTED (Rate Limit)"
     
     try:
@@ -749,11 +753,35 @@ def _goodreads_lookup(isbn, title, authors, prim_auth, cached_url):
             logging.info(f"        ✅ Found via cached URL (Count: {d.get('count')}, Rating: {round(safe_float(d.get('val')), 2)})")
             return d, 'found'
         logging.info("        ↪️ Cached Goodreads URL failed, searching again...")
+    if GOODREADS_MAX_PER_RUN and GR_STATE['searches'] >= GOODREADS_MAX_PER_RUN:
+        if GR_STATE['searches'] == GOODREADS_MAX_PER_RUN:
+            logging.info(f"        ⏭️ Goodreads search budget for this run reached ({GOODREADS_MAX_PER_RUN}). Remaining books follow in the next runs.")
+            GR_STATE['searches'] += 1  # Log only once
+        stats['gr_deferred'] += 1
+        return None, 'deferred'
+    GR_STATE['searches'] += 1
     d = _search_goodreads(isbn, title, authors, prim_auth)
     return d, ('found' if d else 'not_found')
 
+RE_GR_LIST_RATING = re.compile(r'(\d[.,]\d{1,2})\s*avg rating\s*[—–-]?\s*([\d,.]+)\s*ratings?', re.IGNORECASE)
+RE_GR_BOOK_ID = re.compile(r'/book/show/(\d+)')
+
+def list_rating(link):
+    """Read 'x.xx avg rating — n ratings' from the result container of a search hit.
+    Only containers that belong to exactly one book are used, so we never take a neighbour's rating."""
+    node = link
+    for _ in range(8):
+        node = node.parent
+        if node is None: return None
+        ids = {m.group(1) for a in node.find_all('a', href=RE_GR_BOOK_ID) if (m := RE_GR_BOOK_ID.search(a['href']))}
+        if len(ids) > 1: return None
+        if m := RE_GR_LIST_RATING.search(node.get_text(" ", strip=True)):
+            val, cnt = m.group(1).replace(',', '.'), int(re.sub(r'[^\d]', '', m.group(2)) or 0)
+            return (val, cnt) if is_valid_rating(val) and cnt > 0 else None
+    return None
+
 def parse_gr_search_results(soup):
-    """Return [(title, absolute_url, author)] from a Goodreads search page.
+    """Return [(title, absolute_url, author, (rating, count) or None)] from a Goodreads search page.
     Tries the classic table layout first, then a layout-independent fallback that pairs every
     /book/show/ link with the nearest /author/show/ link."""
     results, seen = [], set()
@@ -761,7 +789,7 @@ def parse_gr_search_results(soup):
         href = urllib.parse.urljoin("https://www.goodreads.com", link.get('href', '')).split('?')[0]
         t = link.get_text(" ", strip=True)
         if not t or href in seen: return
-        seen.add(href); results.append((t, href, author))
+        seen.add(href); results.append((t, href, author, list_rating(link)))
 
     rows = soup.find_all('tr', itemtype=re.compile(r'schema\.org/Book'))
     for row in rows:
@@ -794,7 +822,8 @@ def _search_goodreads(isbn, title, authors, prim_auth):
     # Audible ASINs practically never resolve on Goodreads, so only the ISBN is tried
     for q_id, src in [(normalize_isbn(isbn), 'ISBN Lookup')]:
         if q_id:
-            if d := scrape_gr_details(f"https://www.goodreads.com/search?q={urllib.parse.quote(str(q_id))}", require_book_page=True):
+            # /book/isbn/<isbn> redirects straight to the book page (1 request instead of search + page)
+            if d := scrape_gr_details(f"https://www.goodreads.com/book/isbn/{q_id}", require_book_page=True):
                 d['source'] = src
                 logging.info(f"        ✅ Found via {src} (Count: {d.get('count')}, Rating: {round(safe_float(d.get('val')), 2)})")
                 return d
@@ -814,12 +843,12 @@ def _search_goodreads(isbn, title, authors, prim_auth):
                 logging.info(f"        ✅ Found via Text Search (Direct) (Count: {d.get('count')}, Rating: {round(safe_float(d.get('val')), 2)})")
                 return d
         else:
-            best_url, best_score = None, 0.0
+            best_url, best_score, best_rating = None, 0.0, None
             results = parse_gr_search_results(soup)
             if not results:
                 logging.info(f"        🔍 GR search '{q}': no results parsed (title: '{page_title(soup)}', {len(r.text)} bytes)")
                 if len(r.text) > 50000: save_gr_sample(r.text, q)
-            for found_title, found_url, found_auth in results:
+            for found_title, found_url, found_auth, found_rating in results:
                 norm_found = normalize_title_text(found_title)
                 t_score = difflib.SequenceMatcher(None, norm_target, norm_found).ratio()
                 if (len(norm_target) > 3 and norm_target in norm_found) or (len(norm_found) > 3 and norm_found in norm_target): t_score += 0.15
@@ -828,7 +857,12 @@ def _search_goodreads(isbn, title, authors, prim_auth):
                     if t_score < 0.9: continue
                 if not match_author(authors, found_auth): continue
                 if t_score > 0.75 and t_score > best_score:
-                    best_score, best_url = t_score, found_url
+                    best_score, best_url, best_rating = t_score, found_url, found_rating
+            if best_url and best_rating:
+                # Rating is already in the result list: no need to load the book page
+                d = {'url': best_url, 'val': best_rating[0], 'count': best_rating[1], 'source': 'Text Search (List)'}
+                logging.info(f"        ✅ Found via Text Search (List, no page load) (Count: {d['count']}, Rating: {round(safe_float(d['val']), 2)})")
+                return d
             if best_url:
                 if d := scrape_gr_details(best_url): 
                     d['source'] = 'Text Search (List Match)'
@@ -1235,12 +1269,12 @@ def process_library(lib_id, history, failed, recheck):
                 elif has_aud:
                     # Audible worked. Missing Goodreads is no strike, just re-check earlier.
                     stats['gr_missing'] += 1
-                    days = GR_BLOCKED_RECHECK_DAYS if gr_status == 'blocked' else GR_MISSING_RECHECK_DAYS
+                    days = GR_BLOCKED_RECHECK_DAYS if gr_status in ('blocked', 'deferred') else GR_MISSING_RECHECK_DAYS
                     logging.info(f"      -> ℹ️ Audible OK, Goodreads {gr_status.replace('_', ' ')}.")
                     record_attempt(key, history, failed, recheck, recheck_days=days)
                 elif no_ratings_yet:
                     stats['no_ratings_yet'] += 1
-                    days = NO_RATINGS_RECHECK_DAYS if gr_status != 'blocked' else GR_BLOCKED_RECHECK_DAYS
+                    days = GR_BLOCKED_RECHECK_DAYS if gr_status in ('blocked', 'deferred') else NO_RATINGS_RECHECK_DAYS
                     record_attempt(key, history, failed, recheck, recheck_days=days)
                 else:
                     logging.warning(f"      -> ⚠️ No Audible data (Audible: {has_aud}, GR: {has_gr})")
