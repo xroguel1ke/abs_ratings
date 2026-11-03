@@ -15,6 +15,7 @@ LOG_DIR = os.path.join(SCRIPT_DIR, "logs")
 REPORT_DIR = os.path.join(SCRIPT_DIR, "reports")
 HISTORY_FILE = os.path.join(SCRIPT_DIR, "rating_history.json")
 FAILED_FILE = os.path.join(SCRIPT_DIR, "failed_history.json")
+RECHECK_FILE = os.path.join(SCRIPT_DIR, "recheck_history.json")  # key -> UTC time of an early re-check
 ENV_OUTPUT_FILE = os.path.join(SCRIPT_DIR, "last_run.env")
 
 REFRESH_DAYS = int(os.getenv('REFRESH_DAYS', 90))
@@ -26,6 +27,9 @@ BASE_SLEEP = int(os.getenv('SLEEP_TIMER', 6))
 SEARCH_PENALTY_SLEEP = 10  # Extra sleep after expensive search operations
 DRY_RUN = os.getenv('DRY_RUN', 'False').lower() == 'true'
 ABS_TIMEOUT = int(os.getenv('ABS_TIMEOUT', 30))  # Seconds per ABS API request
+NO_RATINGS_RECHECK_DAYS = int(os.getenv('NO_RATINGS_RECHECK_DAYS', 7))  # New releases without ratings yet
+GR_MISSING_RECHECK_DAYS = int(os.getenv('GR_MISSING_RECHECK_DAYS', 30))  # Audible OK, Goodreads not found
+GR_BLOCKED_RECHECK_DAYS = 1  # Goodreads blocked/unreachable during the run
 
 # --- HEADERS & CONSTANTS ---
 FIXED_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
@@ -85,12 +89,16 @@ RE_RAW_PERFORMANCE = re.compile(r'performance-value="([0-9.]+)"')
 RE_RAW_OVERALL = re.compile(r'value="([0-9.]+)"') 
 RE_RAW_COUNT = re.compile(r'count="(\d+)"')
 
-stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger"]}
+stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck"]}
 stats['aborted_ratelimit'] = False
+GR_STATE = {'blocked': False}  # Set once Goodreads blocks us; GR is then skipped for the rest of the run
 reports = {"audible": {}, "goodreads": {}}
 
 class RateLimitException(Exception):
     def __init__(self, msg, is_hard=False): super().__init__(msg); self.is_hard = is_hard
+
+class SourceBlockedException(Exception):
+    """A non-critical source (Goodreads) blocks us. Skip the source instead of aborting the run."""
 
 # ================= UTILS =================
 
@@ -128,7 +136,8 @@ def write_env_file(log_file, start_time):
     elif any(stats[k] > 0 for k in ['success', 'recycled', 'asin_found', 'asin_migrated', 'isbn_added', 'meta_updated']): sub, icon, head = "ABS Ratings: Success ✅", "normal", "Update complete"
     else: sub, icon, head = "ABS Ratings: Info ℹ️", "normal", "No changes"
     
-    body = f"Proc: {stats['processed']} | New: {stats['success']} | ManUpd: {stats['manual_retrigger']} | MetaUpd: {stats['meta_updated']} | ASIN+: {stats['asin_found']} | Mig: {stats['asin_migrated']} | ISBN+: {stats['isbn_added']} | Fix: {stats['isbn_repaired']} | Err: {stats['failed']}"
+    body = f"Proc: {stats['processed']} | New: {stats['success']} | ManUpd: {stats['manual_retrigger']} | MetaUpd: {stats['meta_updated']} | ASIN+: {stats['asin_found']} | Mig: {stats['asin_migrated']} | ISBN+: {stats['isbn_added']} | Fix: {stats['isbn_repaired']} | NoRatYet: {stats['no_ratings_yet']} | GR-: {stats['gr_missing']} | Err: {stats['failed']}"
+    if GR_STATE['blocked']: body += " | ⚠️ Goodreads blocked"
     if stats['aborted_ratelimit']: body += " | ⚠️ ABORTED (Rate Limit)"
     
     try:
@@ -233,18 +242,41 @@ def get_headers(domain=None):
         h["Accept-Language"] = "en-US,en;q=0.9"
     return h
 
-def fetch_url(url, params=None, domain=None):
+def page_title(soup):
+    return soup.title.get_text(strip=True)[:80] if soup and soup.title else ''
+
+def fetch_url(url, params=None, domain=None, source=None):
+    """GET a page and return (response, soup) or (None, None).
+    source='goodreads' turns blocks into SourceBlockedException (skip Goodreads, keep running);
+    for Audible blocks raise RateLimitException (pause / abort)."""
+    def blocked(msg, hard=False):
+        if source == 'goodreads': raise SourceBlockedException(msg)
+        raise RateLimitException(msg, hard)
+
     try:
-        headers = get_headers(domain)
-        cookies = {} 
-        r = requests.get(url, headers=headers, params=params, cookies=cookies, timeout=20)
-        if r.status_code == 429: raise RateLimitException("HTTP 429", True)
-        if r.status_code in [503, 403]: raise RateLimitException(f"HTTP {r.status_code}")
-        soup = BeautifulSoup(r.text, 'lxml')
-        if soup.title and "captcha" in (soup.title.text).lower(): raise RateLimitException("Captcha detected")
-        return r, soup
-    except RateLimitException: raise
-    except Exception as e: return None, None
+        r = requests.get(url, headers=get_headers(domain), params=params, timeout=20)
+    except requests.RequestException as e:
+        logging.warning(f"        🌐 Request failed: {url} ({type(e).__name__}: {e})")
+        return None, None
+
+    status, final_url = r.status_code, r.url
+    if status == 429: blocked(f"HTTP 429 on {final_url}", True)
+    if status in (403, 503): blocked(f"HTTP {status} on {final_url}")
+    # AWS WAF (Goodreads/Amazon) answers bot challenges with 202 + empty/JS body
+    if status == 202 or r.headers.get('x-amzn-waf-action'):
+        blocked(f"Bot challenge (HTTP {status}, waf={r.headers.get('x-amzn-waf-action')}) on {final_url}")
+    if any(m in final_url for m in ('/user/sign_in', '/ap/signin', '/sign_in')):
+        blocked(f"Redirected to login page: {final_url}")
+
+    soup = BeautifulSoup(r.text, 'lxml')
+    title = page_title(soup)
+    if 'captcha' in title.lower() or 'robot check' in title.lower(): blocked(f"Captcha detected on {final_url}")
+    if status != 200:
+        logging.warning(f"        🌐 HTTP {status} for {final_url} (title: '{title}')")
+        return None, None
+    if len(r.text) < 2000:
+        logging.warning(f"        🌐 Suspiciously small page ({len(r.text)} bytes) for {final_url} (title: '{title}')")
+    return r, soup
 
 def scrape_search_result_fallback(domain, asin):
     try:
@@ -398,7 +430,12 @@ def get_audible_data(asin, language):
                      fb['domain'] = domain
                      if ratings.get('meta_raw'): fb['meta_raw'] = ratings['meta_raw'] 
                      return fb
-                if best_result is None: best_result = {'count': 0, 'source': 'Empty', 'domain': domain}
+                # Product page exists (has a title) but nobody has rated it yet -> new release, not a broken ASIN
+                page_ok = bool(ratings.get('title_raw') or ratings.get('meta_raw'))
+                if best_result is None or (page_ok and not best_result.get('page_ok')):
+                    best_result = {'count': 0, 'source': 'Empty', 'domain': domain, 'page_ok': page_ok}
+                    for k in ('meta_raw', 'title_raw', 'subtitle_raw'):
+                        if ratings.get(k): best_result[k] = ratings[k]
 
         except Exception as e:
             logging.error(f"        ⚠️ Request failed: {e}")
@@ -456,7 +493,7 @@ def find_missing_asin(title, authors_list, duration, lang, force_domain=None):
     return None
 
 def scrape_gr_details(url, require_book_page=False):
-    r, soup = fetch_url(url)
+    r, soup = fetch_url(url, source='goodreads')
     if not soup: return None
     # An ID search without an exact hit returns a result list. Scraping that would pick up
     # the rating of an arbitrary first result, so only accept real book pages here.
@@ -490,10 +527,26 @@ def scrape_gr_details(url, require_book_page=False):
         if m := RE_ASIN_JSON.search(r.text) or RE_URL_ASIN.search(r.text): res['asin'] = m.group(1)
         if not res.get('asin'):
             if m := re.search(r'ASIN[:\s]*(B0\w+)', soup.get_text()): res['asin'] = m.group(1)
-    return res if 'val' in res else None
+    if 'val' not in res:
+        logging.info(f"        🔍 GR page loaded but no rating found (layout change?): {r.url} (title: '{page_title(soup)}')")
+        return None
+    return res
 
 def get_goodreads_data(isbn, asin, title, authors, prim_auth):
+    """Returns (data, status) with status in 'found', 'not_found', 'blocked'."""
+    if GR_STATE['blocked']:
+        logging.info("      -> ⏭️ Goodreads skipped (blocked earlier in this run)")
+        return None, 'blocked'
     logging.info("      -> Checking www.goodreads.com")
+    try:
+        d = _search_goodreads(isbn, asin, title, authors, prim_auth)
+        return d, ('found' if d else 'not_found')
+    except SourceBlockedException as e:
+        GR_STATE['blocked'] = True
+        logging.warning(f"        🛑 Goodreads blocks requests: {e}. Skipping Goodreads for the rest of this run.")
+        return None, 'blocked'
+
+def _search_goodreads(isbn, asin, title, authors, prim_auth):
     for q_id, src in [(isbn, 'ISBN Lookup'), (asin, 'ASIN Lookup')]:
         if q_id:
             if d := scrape_gr_details(f"https://www.goodreads.com/search?q={urllib.parse.quote(str(q_id))}", require_book_page=True):
@@ -506,7 +559,7 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
     norm_target = normalize_title_text(title)
 
     for q in searches:
-        r, soup = fetch_url(f"https://www.goodreads.com/search", params={"q": q})
+        r, soup = fetch_url(f"https://www.goodreads.com/search", params={"q": q}, source='goodreads')
         if not soup: continue
         if "/book/show/" in r.url:
             if d := scrape_gr_details(r.url): 
@@ -515,7 +568,10 @@ def get_goodreads_data(isbn, asin, title, authors, prim_auth):
                 return d
         else:
             best_url, best_score = None, 0.0
-            for row in soup.find_all('tr', itemtype="http://schema.org/Book"):
+            rows = soup.find_all('tr', itemtype="http://schema.org/Book")
+            if not rows:
+                logging.info(f"        🔍 GR search '{q}': no result rows (title: '{page_title(soup)}', {len(r.text)} bytes)")
+            for row in rows:
                 link = row.find('a', class_='bookTitle')
                 if not link: continue
                 found_title = link.get_text(strip=True)
@@ -558,24 +614,39 @@ def build_description(current_desc, aud, gr, old_aud, old_gr):
     clean_d = re.sub(r'(?s)\*\*Audible\*\*.*?---\s*\n*', '', clean_d)
     return "<br>".join(lines) + "<br>" + re.sub(r'^(?:\s|<br\s*/?>)+', '', clean_d, flags=re.I).strip()
 
-def record_attempt(key, complete, history, failed):
-    """Track the result of one item. Complete items (or items out of retries) go into history,
-    others get a strike in 'failed'. Nothing is persisted in DRY_RUN mode."""
+def record_attempt(key, history, failed, recheck, complete=False, recheck_days=None):
+    """Track the result of one item. Nothing is persisted in DRY_RUN mode.
+    - complete: done, next run after REFRESH_DAYS
+    - recheck_days: counts as processed (no strike), but re-check early after N days
+    - otherwise: strike in 'failed'; after MAX_FAIL_ATTEMPTS it is parked until REFRESH_DAYS"""
     if DRY_RUN:
         logging.info("      -> 🧪 DRY_RUN: history/failed not updated.")
         return
-    fails = failed.get(key, 0) + 1
-    now_iso = datetime.now(timezone.utc).isoformat(timespec='seconds')  # Always UTC
-    if complete:
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat(timespec='seconds')  # Always UTC
+    recheck.pop(key, None)
+    if complete or recheck_days:
         history[key] = now_iso; failed.pop(key, None)
-    elif fails >= MAX_FAIL_ATTEMPTS:
-        logging.info("      -> 🛑 Max attempts reached."); history[key] = now_iso; failed.pop(key, None)
+        if recheck_days:
+            recheck[key] = (now + timedelta(days=recheck_days)).isoformat(timespec='seconds')
+            logging.info(f"      -> 🔁 Re-check scheduled in {recheck_days} day(s).")
     else:
-        failed[key] = fails; logging.warning(f"      -> ❌ Incomplete. Strike {fails}/{MAX_FAIL_ATTEMPTS}")
+        fails = failed.get(key, 0) + 1
+        if fails >= MAX_FAIL_ATTEMPTS:
+            logging.info("      -> 🛑 Max attempts reached."); history[key] = now_iso; failed.pop(key, None)
+        else:
+            failed[key] = fails; logging.warning(f"      -> ❌ Incomplete. Strike {fails}/{MAX_FAIL_ATTEMPTS}")
     rw_json(HISTORY_FILE, history)
     rw_json(FAILED_FILE, failed)
+    rw_json(RECHECK_FILE, recheck)
 
-def process_library(lib_id, history, failed):
+def item_tags(item):
+    """Collect tags from all places ABS may put them (root, media, media.metadata)."""
+    media = item.get('media') or {}
+    raw = (item.get('tags') or []) + (media.get('tags') or []) + ((media.get('metadata') or {}).get('tags') or [])
+    return {t.strip() for t in raw if isinstance(t, str)}
+
+def process_library(lib_id, history, failed, recheck):
     logging.info(f"--- Processing Library: {lib_id} ---")
     try:
         r = abs_session.get(f"{ABS_URL}/api/libraries/{lib_id}/items")
@@ -584,11 +655,17 @@ def process_library(lib_id, history, failed):
 
     # --- NEW QUEUE LOGIC (UTC ONLY) ---
     work_queue = []
-    count_new, count_due, count_manual = 0, 0, 0
+    count_new, count_due, count_manual, count_recheck, count_locked = 0, 0, 0, 0, 0
     now = datetime.now()
+    now_utc = datetime.now(timezone.utc)
 
     for item in items:
         key = f"{lib_id}_{item['id']}"
+
+        # lock_all items never enter the queue (no batch slot, no sleep)
+        if 'lock_all' in item_tags(item):
+            count_locked += 1
+            continue
         
         if key not in history:
             work_queue.append(item); count_new += 1
@@ -627,15 +704,24 @@ def process_library(lib_id, history, failed):
             except: 
                 pass
 
+        recheck_due = False
+        if key in recheck:
+            try: recheck_due = now_utc >= datetime.fromisoformat(recheck[key])
+            except ValueError: recheck_due = True
+
         if is_manual_update:
             item['_manual_trigger'] = True
             work_queue.append(item); count_manual += 1
         elif (now - last_run_dt.replace(tzinfo=None)).days >= REFRESH_DAYS:
             work_queue.append(item); count_due += 1
+        elif recheck_due:
+            item['_recheck'] = True
+            work_queue.append(item); count_recheck += 1
 
     random.shuffle(work_queue)
     total = min(len(work_queue), MAX_BATCH_SIZE)
-    logging.info(f"Queue: {count_new} New, {count_manual} Manual Updates, {count_due} Due. Total: {total}")
+    logging.info(f"Queue: {count_new} New, {count_manual} Manual Updates, {count_due} Due, {count_recheck} Re-checks ({count_locked} locked via lock_all). Total: {total}")
+    stats['skipped'] += count_locked
     
     start = datetime.now()
     consecutive_rl = 0
@@ -650,18 +736,14 @@ def process_library(lib_id, history, failed):
         eta_seconds = avg_time * remaining_items
         eta_str = format_time(eta_seconds)
         
-        search_penalty = False 
+        search_penalty = False
+        needs_sleep = False  # Only pause after items that actually hit Audible/Goodreads
 
         while True: 
             try:
                 iid, key = item['id'], f"{lib_id}_{item['id']}"
                 item_data = abs_session.get(f"{ABS_URL}/api/items/{iid}").json()
-                tags_root = item_data.get('tags') or []
-                media_obj = item_data.get('media', {})
-                tags_media = media_obj.get('tags') or [] 
-                tags_meta = media_obj.get('metadata', {}).get('tags') or []
-                tags = list(set(tags_root + tags_media + tags_meta)) 
-                tags = [t.strip() for t in tags] 
+                tags = item_tags(item_data)
                 meta = item_data['media']['metadata']
                 title = meta.get('title')
 
@@ -674,8 +756,10 @@ def process_library(lib_id, history, failed):
                 authors = [a.get('name') if isinstance(a, dict) else a for a in meta.get('authors', [])]
                 
                 logging.info(f"-"*50)
+                needs_sleep = True
 
-                reason_str = " [Reason: 🛠️ Manual Update]" if item.get('_manual_trigger') else ""
+                reason_str = " [Reason: 🛠️ Manual Update]" if item.get('_manual_trigger') else (" [Reason: 🔁 Re-check]" if item.get('_recheck') else "")
+                if item.get('_recheck'): stats['recheck'] += 1
                 if item.get('_manual_trigger'): stats['manual_retrigger'] += 1
 
                 logging.info(f"({idx+1}/{total}) [ETA: {eta_str}] {title} [ASIN: {asin}]{reason_str} (Try {failed.get(key,0)+1}/{MAX_FAIL_ATTEMPTS})")
@@ -698,6 +782,8 @@ def process_library(lib_id, history, failed):
                 elif aud_data is None:
                     logging.info("      -> ⚠️ ASIN not found (All domains).")
                     should_search = True
+                elif int(aud_data.get('count', 0)) == 0 and aud_data.get('page_ok'):
+                    logging.info(f"      -> 🆕 Product page exists on {aud_data.get('domain')}, but no ratings yet. No replacement search, re-check in {NO_RATINGS_RECHECK_DAYS} days.")
                 elif int(aud_data.get('count', 0)) == 0:
                     logging.info("      -> ⚠️ Found 0 Ratings.")
                     should_search = True
@@ -829,7 +915,7 @@ def process_library(lib_id, history, failed):
                         stats['meta_updated'] += 1
                     else: logging.info("        ✅ No metadata updates necessary.")
 
-                gr_data = get_goodreads_data(meta.get('isbn'), asin, title, authors, authors[0] if authors else "")
+                gr_data, gr_status = get_goodreads_data(meta.get('isbn'), asin, title, authors, authors[0] if authors else "")
                 
                 if gr_data and not DRY_RUN:
                     if 'lock_isbn' not in tags:
@@ -870,9 +956,22 @@ def process_library(lib_id, history, failed):
                 update_report("audible", key, title, authors[0] if authors else "", asin, "Not found", has_aud)
                 update_report("goodreads", key, title, authors[0] if authors else "", meta.get('isbn'), "Not found", has_gr)
                 
-                if not (has_aud and has_gr):
-                    logging.warning(f"      -> ⚠️ Partial/No data (Audible: {has_aud}, GR: {has_gr})")
-                record_attempt(key, has_aud and has_gr, history, failed)
+                no_ratings_yet = bool(aud_data and aud_data.get('page_ok') and not has_aud)
+                if has_aud and has_gr:
+                    record_attempt(key, history, failed, recheck, complete=True)
+                elif has_aud:
+                    # Audible worked. Missing Goodreads is no strike, just re-check earlier.
+                    stats['gr_missing'] += 1
+                    days = GR_BLOCKED_RECHECK_DAYS if gr_status == 'blocked' else GR_MISSING_RECHECK_DAYS
+                    logging.info(f"      -> ℹ️ Audible OK, Goodreads {gr_status.replace('_', ' ')}.")
+                    record_attempt(key, history, failed, recheck, recheck_days=days)
+                elif no_ratings_yet:
+                    stats['no_ratings_yet'] += 1
+                    days = NO_RATINGS_RECHECK_DAYS if gr_status != 'blocked' else GR_BLOCKED_RECHECK_DAYS
+                    record_attempt(key, history, failed, recheck, recheck_days=days)
+                else:
+                    logging.warning(f"      -> ⚠️ No Audible data (Audible: {has_aud}, GR: {has_gr})")
+                    record_attempt(key, history, failed, recheck)
                 
                 consecutive_rl = 0
                 break 
@@ -886,10 +985,11 @@ def process_library(lib_id, history, failed):
             except Exception as e:
                 logging.exception(f"Item Error: {e}"); stats['failed'] += 1
                 # Count the crash as a strike so broken items don't block the batch forever
-                record_attempt(f"{lib_id}_{item['id']}", False, history, failed)
+                record_attempt(f"{lib_id}_{item['id']}", history, failed, recheck)
                 break
         
         if stats['aborted_ratelimit']: break
+        if not needs_sleep: continue
         sleep_dur = BASE_SLEEP + random.uniform(1, 3)
         if search_penalty: sleep_dur += SEARCH_PENALTY_SLEEP
         time.sleep(sleep_dur)
@@ -909,9 +1009,9 @@ def main():
     
     logging.info("--- Start ---")
     start_time = datetime.now()
-    history, failed = rw_json(HISTORY_FILE), rw_json(FAILED_FILE)
-    for lib in LIBRARY_IDS: process_library(lib, history, failed)
-    if not DRY_RUN: rw_json(HISTORY_FILE, history); rw_json(FAILED_FILE, failed)
+    history, failed, recheck = rw_json(HISTORY_FILE), rw_json(FAILED_FILE), rw_json(RECHECK_FILE)
+    for lib in LIBRARY_IDS: process_library(lib, history, failed, recheck)
+    if not DRY_RUN: rw_json(HISTORY_FILE, history); rw_json(FAILED_FILE, failed); rw_json(RECHECK_FILE, recheck)
     save_reports()
     write_env_file(log_file, start_time)
     logging.info(f"--- Done. Stats: {stats} ---")

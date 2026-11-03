@@ -50,7 +50,24 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 | `REFRESH_DAYS` | Update interval for existing ratings. | `90` |
 | `DRY_RUN` | If `true`, nothing is written to ABS and the run history is not updated. | `false` |
 
+**Optional** (add as `-e NAME=value` to the `docker run` call in `userscript.sh`):
+
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `ABS_TIMEOUT` | Timeout in seconds for each ABS API request. | `30` |
+| `NO_RATINGS_RECHECK_DAYS` | Re-check interval for new releases that have no Audible ratings yet. | `7` |
+| `GR_MISSING_RECHECK_DAYS` | Re-check interval when Audible worked but Goodreads found nothing. | `30` |
+
 > **Note:** The script automatically creates `logs/` and `reports/` subdirectories in your script folder.
+
+### Re-checks instead of strikes
+
+* **No ratings yet:** If the Audible product page exists but nobody has rated the book yet, the script does **not** search for a replacement ASIN. It re-checks the book after `NO_RATINGS_RECHECK_DAYS`.
+* **Only Goodreads missing:** If Audible worked, a missing Goodreads match does not count as a failed attempt. The book is re-checked after `GR_MISSING_RECHECK_DAYS`.
+* **Goodreads blocked:** If Goodreads blocks the script (HTTP 403/429/503, bot challenge, login wall), Goodreads is skipped for the rest of the run and the book is re-checked the next day. The notification shows `⚠️ Goodreads blocked`.
+* Only books without any Audible data get "strikes". After 5 strikes they wait for the normal `REFRESH_DAYS`.
+
+Scheduled re-checks are stored in `recheck_history.json`.
 
 ## 🔒 Lock Tags (Manual Control)
 
@@ -58,7 +75,7 @@ You can prevent the script from updating specific metadata fields by adding **Ta
 
 | Tag | Effect |
 | :--- | :--- |
-| `lock_all` | **Completely skips** this item. No updates, no API calls. |
+| `lock_all` | **Completely skips** this item. It never enters the queue: no updates, no API calls, no pause. |
 | `lock_series` | Prevents updates to **Series** name and sequence. |
 | `lock_language` | Prevents **Language** updates. |
 | `lock_publisher` | Prevents **Publisher** updates. |

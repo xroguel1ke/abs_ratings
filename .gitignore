@@ -8,5 +8,6 @@ debug_logs/
 reports/
 rating_history.json
 failed_history.json
+recheck_history.json
 *.json.tmp
 last_run.env
