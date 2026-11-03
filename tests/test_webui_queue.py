@@ -50,6 +50,14 @@ def test_status_page_coverage_and_api():
     assert '80.0' in html and '100.0' in html and '4321' in html and 'gesperrt' in html, html[-900:]
 
 
+def test_run_progress_parser():
+    log = os.path.join(cfg, 'logs', 'prog.log'); os.makedirs(os.path.dirname(log), exist_ok=True)
+    open(log, 'w').write('2026 - INFO - (3/10) [ETA: 1m 5s] Some Book [ASIN: B0X]\n  SUCCESS on www.audible.com\n  ✅ Hardcover via ISBN: x\n  NEW ASIN Found: B0Y\n  No Audible data\n')
+    p = core.run_progress(log)
+    assert (p['n'], p['total'], p['pct'], p['eta'], p['title']) == (3, 10, 30.0, '1m 5s', 'Some Book'), p
+    assert (p['audible_found'], p['hardcover'], p['new_asin'], p['no_audible']) == (1, 1, 1, 1), p
+
+
 if __name__ == '__main__':
     for n, f in sorted(globals().items()):
         if n.startswith('test_'): f(); print('ok', n)

@@ -443,6 +443,28 @@ def safe_path(kind, name):
     return p if p.startswith(os.path.realpath(base) + os.sep) and os.path.isfile(p) else None
 
 
+RE_PROG = re.compile(r'\((\d+)/(\d+)\) \[ETA: ([^\]]*)\] (.+?) \[ASIN: ([^\]]*)\]')
+_prog_cache = {}
+
+def run_progress(log_path):
+    """Live numbers parsed from the run log: position, ETA, current book and counters."""
+    try: st = os.stat(log_path)
+    except OSError: return {}
+    hit = _prog_cache.get(log_path)
+    if hit and hit[0] == (st.st_size, st.st_mtime): return hit[1]
+    try: txt = open(log_path, encoding='utf-8', errors='replace').read()
+    except OSError: return {}
+    pos = RE_PROG.findall(txt)
+    n, total, eta, title, asin = pos[-1] if pos else (0, 0, '', '', '')
+    n, total = int(n), int(total)
+    cnt = lambda pat: len(re.findall(pat, txt))
+    d = {'n': n, 'total': total, 'pct': round(100 * n / total, 1) if total else 0, 'eta': eta, 'title': title,
+         'audible_found': cnt(r'SUCCESS on'), 'no_audible': cnt(r'No Audible data'), 'hardcover': cnt(r'✅ Hardcover via'),
+         'goodreads': cnt(r'✅ Goodreads via|Found via cached URL'), 'new_asin': cnt(r'NEW ASIN'), 'reviews': cnt(r'added to the review list|review list\)'),
+         'errors': cnt(r' - (?:ERROR|WARNING) - .*(?:Error|Traceback)'), 'goodreads_blocked': bool(re.search(r'Goodreads still blocks|Bot challenge', txt))}
+    _prog_cache[log_path] = ((st.st_size, st.st_mtime), d)
+    return d
+
 def read_tail(path, offset=0, max_bytes=400_000):
     try:
         size = os.path.getsize(path)

@@ -5,6 +5,9 @@
 <span>Start: {{ run.start|dt }}</span><span>Ende: {{ run.end|dt }}</span>
 {% if run.status=='running' %}<form method="post" action="{{ url_for('runs') }}"><button class="danger" name="action" value="stop">■ Abbrechen</button></form>{% endif %}
 <a href="{{ url_for('log_download', kind='log', name=run.log) }}">Log herunterladen</a></div>
+{% if run.status=='running' %}<div class="card" id="prog"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><b id="pt">…</b><span class="muted" id="pe"></span></div>
+<div style="background:var(--line);border-radius:8px;height:12px;margin:8px 0"><div id="pb" style="height:12px;border-radius:8px;width:0;background:var(--ok);transition:width .6s"></div></div>
+<div class="row small" id="pc" style="gap:16px;flex-wrap:wrap"></div></div>{% endif %}
 {% if run.summary %}<div class="card small">{{ run.summary }}</div>{% endif %}
 {% if run.status != 'running' %}<div class="card tablewrap"><h2 style="margin-top:0">{{ 'Geplante' if run.dry_run else 'Durchgeführte' }} Änderungen ({{ changes|length }})</h2>
 <table class="diff"><tr><th>Buch</th><th>Feld</th><th>Vorher</th><th>Nachher</th></tr>
@@ -18,5 +21,10 @@ async function poll(){ const r=await fetch("{{ url_for('api_run_log', run_id=run
  const el=document.getElementById('log'); const atBottom=el.scrollTop+el.clientHeight>=el.scrollHeight-30;
  el.textContent+=j.text; off=j.offset; if(atBottom) el.scrollTop=el.scrollHeight;
  if(j.status!=='running'){ if(!done && "{{ run.status }}"==='running'){ done=true; location.reload(); } return; } setTimeout(poll,1500); }
+async function prog(){ if(done) return; try{ const r=await fetch("{{ url_for('api_run_progress', run_id=run.id) }}"); const j=await r.json(); if(j.status!=='running') return;
+ document.getElementById('pt').textContent=j.total? (j.n+" / "+j.total+" · "+(j.title||'')) : 'Startet …'; document.getElementById('pe').textContent=j.eta? ('Restzeit '+j.eta):''; document.getElementById('pb').style.width=(j.pct||0)+'%';
+ document.getElementById('pc').innerHTML=[['Audible gefunden',j.audible_found],['ohne Audible-Daten',j.no_audible],['Hardcover',j.hardcover],['Goodreads',j.goodreads+(j.goodreads_blocked?' (gesperrt)':'')],['neue ASIN',j.new_asin],['Prüfliste',j.reviews]].map(x=>'<span><b>'+x[1]+'</b> '+x[0]+'</span>').join('');
+ }catch(e){} setTimeout(prog,1500); }
+if(document.getElementById('prog')) prog();
 poll();
 </script>{% endblock %}

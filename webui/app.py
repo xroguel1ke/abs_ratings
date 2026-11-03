@@ -215,6 +215,14 @@ def run_view(run_id):
     return render_template('run.html', run=run, changes=changes, back=request.args.get('back'))
 
 
+@app.route('/api/run/<run_id>/progress')
+@login_required
+def api_run_progress(run_id):
+    run = core.RUNNER.get(run_id) or abort(404)
+    p = core.safe_path('log', run['log']) if run.get('log') else None
+    return jsonify(status=run['status'], **(core.run_progress(p) if p else {}))
+
+
 @app.route('/api/run/<run_id>/log')
 @login_required
 def api_run_log(run_id):
