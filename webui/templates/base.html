@@ -3,6 +3,7 @@
 {% if session.auth %}<header><div class="nav"><span class="brand">⭐ ABS Ratings</span>
 {% set ep = request.endpoint %}
 <a href="{{ url_for('dashboard') }}" class="{{ 'active' if ep in ('dashboard','problem') }}">Dashboard</a>
+<a href="{{ url_for('books') }}" class="{{ 'active' if ep=='books' }}">Bücher</a>
 <a href="{{ url_for('status') }}" class="{{ 'active' if ep=='status' }}">Status</a>
 <a href="{{ url_for('runs') }}" class="{{ 'active' if ep in ('runs','run_view') }}">Läufe</a>
 <a href="{{ url_for('logs') }}" class="{{ 'active' if ep in ('logs','log_view') }}">Logs</a>

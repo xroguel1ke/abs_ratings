@@ -1,6 +1,7 @@
 {% extends 'base.html' %}{% block body %}
 <p><a href="{{ url_for('dashboard') }}">← Dashboard</a></p>
 <h1>{{ r.title }}</h1>
+{% if r.get('certainty') is not none and r.get('certainty_parts') %}<div class="card small"><b>Sicherheit: {{ r.get('certainty') }} / 100</b> <span class="muted">– {% for k, v in r.get('certainty_parts').items() %}{{ k }} {{ ('%+d' % v) if v < 0 else v }}{% if not loop.last %} · {% endif %}{% endfor %}</span></div>{% endif %}
 <div class="card"><div class="row" style="gap:18px">
  <span><span class="badge {{ r.status }}">{{ status_label.get(r.status, r.status) }}</span></span>
  <span>Autor: {{ r.author or '–' }}</span><span>ASIN: {{ r.asin or '–' }}{% if r.domain %} ({{ r.domain }}){% endif %}</span>

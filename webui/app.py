@@ -275,6 +275,20 @@ def logs_zip():
                      mimetype='application/zip')
 
 
+@app.route('/books')
+@login_required
+def books():
+    """All processed books with their certainty score (sortable, filterable)."""
+    sort, direction, q = request.args.get('sort', 'certainty'), request.args.get('dir', 'asc'), (request.args.get('q') or '').lower()
+    mx = request.args.get('max', type=int)
+    rows = [dict(r, key=k) for k, r in core.results().items()
+            if (not q or q in (r.get('title') or '').lower() or q in (r.get('author') or '').lower()) and (mx is None or (r.get('certainty') is not None and r['certainty'] <= mx))]
+    keyf = {'certainty': lambda r: (r.get('certainty') is None, r.get('certainty') or 0), 'title': lambda r: (r.get('title') or '').lower(),
+            'status': lambda r: r.get('status') or '', 'author': lambda r: (r.get('author') or '').lower()}.get(sort, lambda r: 0)
+    rows.sort(key=keyf, reverse=(direction == 'desc'))
+    return render_template('books.html', rows=rows[:1000], total=len(rows), sort=sort, direction=direction, q=q, mx=mx)
+
+
 @app.route('/status')
 @login_required
 def status():

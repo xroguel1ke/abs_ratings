@@ -47,6 +47,16 @@ def test_initial_author_and_marketing_suffix():
     assert A.search_match_score('Dune: Messiah', 'Dune: Messiah', None) == 1.0
 
 
+def test_certainty_score_parts():
+    aud = {'title_raw': 'Dragon Heart', 'subtitle_raw': None, 'authors_raw': ['Ben Scott'], 'runtime_sec': 36000, 'narrators_raw': ['A Narrator'],
+           'meta_raw': {'publisher': {'name': 'Pub House'}, 'releaseDate': '2021-05-01', 'series': [{'name': 'Dragon Series', 'part': '3'}]}}
+    s, parts = A.certainty_score('Dragon Heart 3', ['Ben Scott'], ['A Narrator'], 36060, 'Pub House', 2021, [{'name': 'Dragon Series', 'sequence': '3'}], aud, {'source': 'ISBN'})
+    assert s == 100 and parts['runtime'] == 20 and parts['number'] == 10, (s, parts)
+    s2, _ = A.certainty_score('Dragon Heart 3', ['Ben Scott'], ['Other'], 40000, None, None, [], dict(aud, related_edition=True), None, True, True)
+    assert s2 < s - 30, s2
+    assert A.certainty_score('X', ['A'], [], 1, None, None, [], None)[0] == 0
+
+
 def test_isbn_checks():
     assert A.isbn_bad_reason('B0D2LJ6SJ2') == 'value is an ASIN, not an ISBN'
     assert A.isbn_bad_reason('9780553580334') is None            # real ISBN-13 (House Corrino)

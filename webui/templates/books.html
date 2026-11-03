@@ -1,0 +1,15 @@
+{% extends 'base.html' %}{% block title %}Bücher{% endblock %}{% block body %}
+<h2>Bücher ({{ total }})</h2>
+<form class="row" method="get" style="margin-bottom:10px;gap:8px;flex-wrap:wrap">
+ <input name="q" value="{{ q }}" placeholder="Titel oder Autor suchen">
+ <select name="sort"><option value="certainty" {{ 'selected' if sort=='certainty' }}>Sicherheit</option><option value="title" {{ 'selected' if sort=='title' }}>Titel</option><option value="author" {{ 'selected' if sort=='author' }}>Autor</option><option value="status" {{ 'selected' if sort=='status' }}>Status</option></select>
+ <select name="dir"><option value="asc" {{ 'selected' if direction=='asc' }}>aufsteigend</option><option value="desc" {{ 'selected' if direction=='desc' }}>absteigend</option></select>
+ <input name="max" type="number" min="0" max="100" value="{{ mx if mx is not none }}" placeholder="Sicherheit ≤" style="width:130px">
+ <button>Anzeigen</button></form>
+<p class="muted small">Die Sicherheit (0–100) sagt, wie sicher das Skript ist, dass das Audible-Produkt hinter der ASIN genau dieses Buch ist: Titel 25, Autor 20, Laufzeit 20, Sprecher 12, Reihen-/Bandnummer 10, Verlag+Jahr 8, Hardcover-Bestätigung 5; Abzüge für ASIN-Suche (−5), andere Ausgabe (−20), offenen Prüfeintrag (−15). Niedrige Werte zuerst prüfen.</p>
+<div class="card tablewrap"><table><tr><th>Sicherheit</th><th>Titel</th><th>Autor</th><th>Status</th><th>ASIN</th></tr>
+{% for r in rows %}<tr><td style="min-width:120px">{% if r.get('certainty') is not none %}<div style="background:var(--line);border-radius:6px;height:8px"><div style="width:{{ r.get('certainty') }}%;height:8px;border-radius:6px;background:{{ 'var(--ok)' if r.get('certainty') >= 85 else 'var(--warn)' if r.get('certainty') >= 60 else 'var(--err)' }}"></div></div><b>{{ r.get('certainty') }}</b>{% else %}<span class="muted">–</span>{% endif %}</td>
+<td><a href="{{ url_for('problem', key=r.key) }}">{{ r.title }}</a></td><td class="small">{{ r.author }}</td><td class="small">{{ r.status }}</td><td class="small"><code>{{ r.asin or '' }}</code></td></tr>
+{% else %}<tr><td colspan="5" class="muted">Noch keine Ergebnisse.</td></tr>{% endfor %}</table>
+{% if total > 1000 %}<p class="muted small">Erste 1000 von {{ total }} angezeigt – bitte filtern.</p>{% endif %}</div>
+{% endblock %}

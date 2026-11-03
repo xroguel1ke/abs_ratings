@@ -218,6 +218,31 @@ def canonical_series(lib, name, book_authors):
         return ent['name'], 'existing'
     return name, None
 
+def certainty_score(search_title, authors, narrators, abs_dur, publisher, year, abs_series, aud, hc=None, asin_from_search=False, review_open=False):
+    """0-100: how sure are we that the product behind the ASIN is THIS book. Parts are the independent pieces of evidence (weights see ROADMAP.md):
+    title 25, author 20, runtime 20 (±2 min) / 10 (inside tolerance), narrator 12, series/volume number 10, publisher+year 8, Hardcover ISBN/ASIN confirmation 5.
+    Deductions: ASIN found by search -5, ratings of another edition -20, open review entry -15. Returns (score, {part: points})."""
+    if not aud or not aud.get('title_raw'): return 0, {'no Audible product': 0}
+    parts = {}
+    t = max(search_match_score(search_title, aud['title_raw'], aud.get('subtitle_raw')), title_similarity(clean_title(search_title), clean_title(aud['title_raw'])))
+    parts['title'] = round(25 * min(1.0, t))
+    parts['author'] = 20 if match_author(authors, ', '.join(aud.get('authors_raw') or [])) else 0
+    rt = aud.get('runtime_sec')
+    parts['runtime'] = 0 if not (abs_dur and rt) else 20 if abs(abs_dur - rt) <= 120 else 10 if not runtime_mismatch(abs_dur, rt) else 0
+    n = lambda xs: {re.sub(r'[^a-z]', '', x.lower()) for x in (xs or []) if x}
+    parts['narrator'] = 12 if n(narrators) & n(aud.get('narrators_raw')) else 0
+    cand_series = (aud.get('meta_raw') or {}).get('series')
+    num = volume_of(aud['title_raw'], aud.get('subtitle_raw')) & extract_volume(search_title) if (volume_of(aud['title_raw'], aud.get('subtitle_raw')) and extract_volume(search_title)) else set()
+    parts['number'] = 10 if num or any(an is not None and cn is not None and an == cn for _, an in _series_pairs(abs_series) for _, cn in _series_pairs(cand_series)) else 0
+    cp, cy = ((aud.get('meta_raw') or {}).get('publisher') or {}).get('name'), str(parse_release_year((aud.get('meta_raw') or {}).get('releaseDate')) or '')
+    parts['publisher+year'] = 8 if cp and publisher and cy and year and re.sub(r'[^a-z0-9]', '', cp.lower()) == re.sub(r'[^a-z0-9]', '', publisher.lower()) and cy == str(year) else 0
+    parts['hardcover'] = 5 if hc and hc.get('source') in ('ISBN', 'ASIN') else 0
+    score = sum(parts.values())
+    if asin_from_search: score -= 5; parts['asin from search'] = -5
+    if aud.get('related_edition'): score -= 20; parts['other edition'] = -20
+    if review_open: score -= 15; parts['open review entry'] = -15
+    return max(0, min(100, score)), parts
+
 def asin_plausibility(abs_title, abs_authors, aud_title, aud_sub, aud_authors, abs_narrators=(), aud_narrators=(), abs_dur=None, aud_dur=None):
     """Deterministic check (no LLM): does the product behind the ASIN look like THIS book?
     Returns (verdict, reasons): 'wrong' = title AND author contradict (the ASIN belongs to another book), 'suspicious' = one of them is off, 'ok'."""
@@ -2442,8 +2467,11 @@ def process_queue(work_queue, history, failed, recheck):
                 if GOODREADS_ENABLED and not has_gr and gr_status != 'deferred': notes.append(f"Goodreads {gr_status.replace('_', ' ')}")
                 if HARDCOVER_ENABLED and not hc_data: notes.append(f"Hardcover {hc_status.replace('_', ' ')}")
                 if ov.get('ignore'): status = 'ignored'
+                cert, cert_parts = certainty_score(search_title, authors, meta.get('narrators') or [], abs_dur, meta.get('publisher'), meta.get('publishedYear'),
+                                                   meta.get('series') or [], aud_data, hc_data, asin_from_search,
+                                                   any(x.get('key') == key and x.get('status', 'open') == 'open' for x in (rw_json(REVIEW_FILE) or []) if isinstance(x, dict)))
                 set_result(key, lib_id, iid, title, authors, asin, status, reason,
-                           {'notes': notes, 'domain': (aud_data or {}).get('domain'), 'goodreads': (gr_data or {}).get('url'),
+                           {'notes': notes, 'certainty': cert, 'certainty_parts': cert_parts, 'domain': (aud_data or {}).get('domain'), 'goodreads': (gr_data or {}).get('url'),
                             'hardcover': (hc_data or {}).get('url')})
 
                 consecutive_rl = 0

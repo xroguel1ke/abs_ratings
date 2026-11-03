@@ -42,6 +42,16 @@ def test_accept_asin_stores_override_only_for_asin_kind():
     assert 'lib_2' not in core.overrides()
 
 
+def test_books_list_sorted_by_certainty():
+    json.dump({'a': {'title': 'Low', 'status': 'ok', 'author': 'X', 'certainty': 35, 'certainty_parts': {'title': 20}}, 'b': {'title': 'High', 'status': 'ok', 'author': 'Y', 'certainty': 95, 'certainty_parts': {'title': 25}},
+               'c': {'title': 'None', 'status': 'ok', 'author': 'Z'}}, open(os.path.join(cfg, 'results.json'), 'w'))
+    c = client(); h = c.get('/books?sort=certainty&dir=asc').get_data(as_text=True)
+    assert h.index('Low') < h.index('High') < h.index('None'), 'ascending: low first, books without score last'
+    h = c.get('/books?sort=certainty&dir=desc').get_data(as_text=True); assert h.index('High') < h.index('Low')
+    assert 'High' not in c.get('/books?max=50').get_data(as_text=True)
+    assert 'Sicherheit: 35' in c.get('/problem/a').get_data(as_text=True)
+
+
 def test_status_page_coverage_and_api():
     os.makedirs(os.path.join(cfg, 'reports'), exist_ok=True); os.makedirs(os.path.join(cfg, 'logs'), exist_ok=True)
     json.dump({'books': 10, 'generated': 'now', 'missing': {'asin': ['A', 'B'], 'cover': []}}, open(os.path.join(cfg, 'reports', 'library_report.json'), 'w'))
