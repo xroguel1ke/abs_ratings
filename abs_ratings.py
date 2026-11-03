@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 import re, json, random, difflib, logging, urllib.parse
 import html as html_lib
 from datetime import datetime, timezone, timedelta
+from collections import defaultdict
 
 # ================= CONFIGURATION =================
 def clean_env(value, allowed):
@@ -1557,6 +1558,65 @@ def fail_early(log_file, start_time, msg):
     logging.error(msg)
     stats['failed'] += 1
     write_env_file(log_file, start_time, error=msg)
+    logging.info(f"Debug bundle (send this one for troubleshooting): {os.path.join(LOG_DIR, 'debug_latest.log')}")
+    write_debug_bundle(log_file)
+
+DEBUG_ENV_KEYS = ['ABS_URL', 'LIBRARY_IDS', 'BATCH_SIZE', 'SLEEP_TIMER', 'REFRESH_DAYS', 'DRY_RUN', 'SERIES_ONLY', 'GOODREADS_MAX_PER_RUN',
+                  'LOG_LEVEL', 'TZ', 'CODE_VERSION', 'USE_AUDIBLE_API', 'AUDIBLE_API_INTERVAL', 'AUDIBLE_WEB_INTERVAL', 'GOODREADS_INTERVAL',
+                  'GR_BLOCK_COOLDOWN', 'GR_MAX_COOLDOWNS', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'FILL_COVERS', 'GENRE_LANGUAGE',
+                  'SERIES_MERGE', 'SERIES_LOCK_AFTER_MERGE', 'AUTHOR_NORMALIZE', 'LIBRARY_REPORT', 'NO_RATINGS_RECHECK_DAYS',
+                  'GR_MISSING_RECHECK_DAYS', 'SEARCH_PENALTY_SLEEP', 'ABS_TIMEOUT']  # never API_TOKEN
+
+def write_debug_bundle(log_file):
+    """One file with everything needed for troubleshooting: settings (no token), the run log, all changes
+    of this run, the library report summary and the state files. logs/debug_<run>.log + debug_latest.log."""
+    def short(v, n=300):
+        t = v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)
+        t = (t or '').replace('\n', ' ')
+        return t if len(t) <= n else t[:n] + f"... [{len(t)} chars]"
+    out = [f"=== ABS RATINGS DEBUG BUNDLE ===", f"Run: {RUN_ID} | Created: {datetime.now().isoformat(timespec='seconds')} | DRY_RUN: {DRY_RUN}", ""]
+    out.append("=== SETTINGS ===")
+    out += [f"{k}={os.getenv(k)}" for k in DEBUG_ENV_KEYS if os.getenv(k) is not None]
+    out.append(f"API_TOKEN set: {bool(API_TOKEN)} (length {len(API_TOKEN or '')})")
+    out.append("")
+    out.append("=== RUN LOG ===")
+    try:
+        for h in logging.getLogger().handlers: h.flush()
+        with open(log_file, encoding='utf-8') as f: out.append(f.read().rstrip())
+    except OSError as e: out.append(f"(log not readable: {e})")
+    out.append("")
+    jf = PLANNED_FILE if DRY_RUN else CHANGES_FILE
+    out.append(f"=== CHANGES OF THIS RUN ({'planned, DRY_RUN' if DRY_RUN else 'applied'}) ===")
+    try:
+        entries = [e for e in (json.loads(l) for l in open(jf, encoding='utf-8') if l.strip()) if e.get('run') == RUN_ID] if os.path.exists(jf) else []
+    except (OSError, ValueError) as e: entries = []; out.append(f"(journal not readable: {e})")
+    counts = defaultdict(int)
+    for e in entries: counts[f"{e['source']}/{e['field']}"] += 1
+    out.append("Counts: " + (", ".join(f"{k}: {v}" for k, v in sorted(counts.items())) or "none"))
+    for e in entries[:5000]:
+        n = 200 if e['field'] == 'description' else 300
+        out.append(f"[{e['source']}] {e['title']} | {e['field']}: {short(e['old'], n)} -> {short(e['new'], n)}")
+    if len(entries) > 5000: out.append(f"... {len(entries) - 5000} more changes in {jf}")
+    out.append("")
+    out.append("=== LIBRARY REPORT (summary) ===")
+    try:
+        rep_ = json.load(open(os.path.join(REPORT_DIR, 'library_report.json'), encoding='utf-8'))
+        rep_['missing'] = {k: f"{len(v)} books" + (f" (e.g. {', '.join(v[:5])})" if v else '') for k, v in rep_.get('missing', {}).items()}
+        out.append(json.dumps(rep_, indent=1, ensure_ascii=False))
+    except (OSError, ValueError): out.append("(no library report)")
+    out.append("")
+    out.append("=== STATE FILES ===")
+    for name, path in [('history', HISTORY_FILE), ('failed', FAILED_FILE), ('recheck', RECHECK_FILE), ('goodreads cache', GR_CACHE_FILE),
+                       ('series aliases', SERIES_ALIASES_FILE), ('series index', SERIES_INDEX_FILE)]:
+        d = rw_json(path)
+        size = sum(len(v) for v in d.values()) if name.startswith('series') and isinstance(d, dict) else len(d)
+        out.append(f"{name}: {size} entries")
+    if SERIES_ALIASES: out.append("series aliases: " + json.dumps(SERIES_ALIASES, ensure_ascii=False))
+    text = "\n".join(out) + "\n"
+    for path in (os.path.join(LOG_DIR, f"debug_{RUN_ID}.log"), os.path.join(LOG_DIR, "debug_latest.log")):
+        try:
+            with open(path, 'w', encoding='utf-8') as f: f.write(text)
+        except OSError as e: logging.error(f"Debug bundle not written: {e}")
 
 def main():
     start_time = datetime.now()
@@ -1611,5 +1671,7 @@ def main():
             logging.exception(f"Series task failed: {e}")
     write_env_file(log_file, start_time)
     log_run_summary(start_time, series_result)
+    logging.info(f"Debug bundle (send this one for troubleshooting): {os.path.join(LOG_DIR, 'debug_latest.log')}")
+    write_debug_bundle(log_file)
 
 if __name__ == "__main__": main()

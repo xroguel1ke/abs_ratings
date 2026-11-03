@@ -81,6 +81,8 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 
 > **Note:** The script automatically creates `logs/` and `reports/` subdirectories in your script folder.
 
+> **Troubleshooting:** after every run `logs/debug_latest.log` (and `logs/debug_<run>.log`) contains everything in one file: settings (without token), the full run log, all planned/applied changes of the run, the library report summary and the state of the data files. Send this single file when something needs to be checked.
+
 **Userscript extras:** `TIMEZONE` for log timestamps, `NOTIFY_SUCCESS` (errors are always notified), `UNDO_RUN` / `UNDO_APPLY` to undo a run directly from the User Scripts plugin (`UNDO_RUN="list"` shows all runs). The userscript refuses to start while a previous run is still active and checks that all three `.py` files are present.
 
 ### Large libraries
