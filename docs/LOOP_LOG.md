@@ -188,3 +188,7 @@ Relevant mainly for the final full-library run (~2h15) and later scheduled runs;
 - tests/test_asin.py added (6 tests incl. "must not fire" cases); regress.sh includes it.
 
 ## TODO noted: web UI design (see ROADMAP.md "Web UI design"): Material-style, light (pastel white + cream) / dark (two pastel greys), preview with 2-3 variants first.
+
+## Round 3 – first COUNTING round (code frozen at commit 367ca8c, 2026-11-03 21:02)
+100 fresh books (never in a round, golden list or ISBN/Goodreads test), live + record, Hardcover on, Goodreads OFF (IP blocked, see GOODREADS_FINDINGS.md), DRY_RUN, fake ABS.
+Counts as CLEAN only if every risky change is hand-verified correct AND nothing has to be fixed afterwards. Any fix -> counter back to 0 (clean rounds so far: 0 of 3).
