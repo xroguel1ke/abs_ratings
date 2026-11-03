@@ -48,7 +48,7 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 | `LIBRARY_IDS` | Comma-separated list of Library IDs to scan. | `lib-uuid-1,lib-uuid-2` |
 | `BATCH_SIZE` | Items to process per run (prevents bans). | `250` |
 | `REFRESH_DAYS` | Update interval for existing ratings. | `90` |
-| `DRY_RUN` | If `true`, no changes are saved to ABS. | `false` |
+| `DRY_RUN` | If `true`, nothing is written to ABS and the run history is not updated. | `false` |
 
 > **Note:** The script automatically creates `logs/` and `reports/` subdirectories in your script folder.
 
@@ -65,6 +65,7 @@ You can prevent the script from updating specific metadata fields by adding **Ta
 | `lock_year` | Prevents **Publish Year** updates. |
 | `lock_genres` | Prevents adding new **Genres**. |
 | `lock_isbn` | Prevents **ISBN** repairs/updates. |
+| `lock_abridged` | Prevents changes to the **Abridged** flag. |
 | `lock_description` | Prevents ratings from being written to the **Description**. |
 
 ## 🖼️ Preview
