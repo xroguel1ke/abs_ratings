@@ -1,0 +1,6745 @@
+{
+ "library": "114068f9-142d-4524-b0ef-a349354b5f88",
+ "items": {
+  "syn-10-en00": {
+   "id": "syn-10-en00",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Skandar and the Unicorn Thief",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "A.F. Steadman"
+      }
+     ],
+     "narrators": [
+      "David Dawson"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Skandar",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Simon & Schuster Audio",
+     "description": "",
+     "asin": "B09KYJSQD5",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 43020,
+    "tags": [],
+    "coverPath": null,
+    "size": 344160000
+   },
+   "tags": []
+  },
+  "syn-10-en01": {
+   "id": "syn-10-en01",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Rebel Rising",
+     "subtitle": "A Memoir of Singing, Sobbing, Laughing and Loving",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Rebel Wilson"
+      }
+     ],
+     "narrators": [
+      "Rebel Wilson"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Simon & Schuster Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 38880,
+    "tags": [],
+    "coverPath": null,
+    "size": 311040000
+   },
+   "tags": []
+  },
+  "syn-10-en02": {
+   "id": "syn-10-en02",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The World's Wimpiest Vampire",
+     "subtitle": "Supernatural Suckers, Book 2",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Silvana Falcon"
+      }
+     ],
+     "narrators": [
+      "John Solo"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Supernatural Suckers",
+       "sequence": "2"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Silvana Falcon",
+     "description": "",
+     "asin": "B0G2CA4EDY",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 32460,
+    "tags": [],
+    "coverPath": null,
+    "size": 259680000
+   },
+   "tags": []
+  },
+  "syn-10-en03": {
+   "id": "syn-10-en03",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "02 Vampire Bride: The Complete Series",
+     "subtitle": "Star Touched: Vampire Bride",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Michelle Madow"
+      }
+     ],
+     "narrators": [
+      "Patricia Santomasso",
+      "Sean Patrick Hopkins"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Star Touched: Vampire Bride",
+       "sequence": "1-4"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Dreamscape Publishing",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 102660,
+    "tags": [],
+    "coverPath": null,
+    "size": 821280000
+   },
+   "tags": []
+  },
+  "syn-10-en04": {
+   "id": "syn-10-en04",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Lost Kingdom of Daughters: The Lost Kingdom of Daughters",
+     "subtitle": "A Novel",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Weina Dai Randel"
+      }
+     ],
+     "narrators": [
+      "Erin Lin",
+      "Donna Xia"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Brilliance Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 39420,
+    "tags": [],
+    "coverPath": null,
+    "size": 315360000
+   },
+   "tags": []
+  },
+  "syn-10-en05": {
+   "id": "syn-10-en05",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Falcon Thief: A Gripping LitRPG Adventure",
+     "subtitle": "A True Tale of Adventure, Treachery, and the Hunt for the Perfect Bird",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Joshua Hammer"
+      }
+     ],
+     "narrators": [
+      "Matthew Lloyd Davies"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2020",
+     "publisher": "Simon & Schuster Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 30180,
+    "tags": [],
+    "coverPath": null,
+    "size": 241440000
+   },
+   "tags": []
+  },
+  "syn-10-en06": {
+   "id": "syn-10-en06",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Rogue Ascension",
+     "subtitle": "Rogue Ascension, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "H. Mythos"
+      }
+     ],
+     "narrators": [
+      "André Santana"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Rogue Ascension",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 47340,
+    "tags": [],
+    "coverPath": null,
+    "size": 378720000
+   },
+   "tags": []
+  },
+  "syn-10-en07": {
+   "id": "syn-10-en07",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Heist: Thieves of Clover",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Ruby Darling"
+      }
+     ],
+     "narrators": [
+      "Rachel Dane",
+      "Joe Arden",
+      "Silas Hart"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Blue Nose Publishing",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 61860,
+    "tags": [],
+    "coverPath": null,
+    "size": 494880000
+   },
+   "tags": []
+  },
+  "syn-10-en08": {
+   "id": "syn-10-en08",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Redeemable Prince",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Rachel Higginson"
+      }
+     ],
+     "narrators": [
+      "Bailey Carr",
+      "Josh Hurley"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Star-Crossed",
+       "sequence": "7"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2017",
+     "publisher": "Audible Studios",
+     "description": "",
+     "asin": "B071V88FFB",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 42638,
+    "tags": [],
+    "coverPath": null,
+    "size": 341104000
+   },
+   "tags": []
+  },
+  "syn-10-en09": {
+   "id": "syn-10-en09",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Know When to Run: Mission 1",
+     "subtitle": "Black Ocean: Mirth & Mayhem",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "J.S. Morin"
+      }
+     ],
+     "narrators": [
+      "Mikael Naramore"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Black Ocean: Mirth and Mayhem Series",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "Magical Scrivener Press",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 17700,
+    "tags": [],
+    "coverPath": null,
+    "size": 141600000
+   },
+   "tags": []
+  },
+  "syn-10-en10": {
+   "id": "syn-10-en10",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Sponsored System 01 Primal Forest",
+     "subtitle": "Sponsored System, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Tom Larcombe"
+      }
+     ],
+     "narrators": [
+      "Neill Thorne"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Sponsored System",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Tantor Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 54660,
+    "tags": [],
+    "coverPath": null,
+    "size": 437280000
+   },
+   "tags": []
+  },
+  "syn-10-en11": {
+   "id": "syn-10-en11",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Sounds of Nature with 432Hz Music to Relax, Fall asleep, Meditate, Heal",
+     "subtitle": "Ocean noise, rain, forest sounds, brook, bird calls, music for falling asleep, relaxation music",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Torsten Abrolat"
+      }
+     ],
+     "narrators": [
+      "Torsten Abrolat"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "Syncsouls. A division of alive media solutions",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 8400,
+    "tags": [],
+    "coverPath": null,
+    "size": 67200000
+   },
+   "tags": []
+  },
+  "syn-10-en12": {
+   "id": "syn-10-en12",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Crown of One Hundred Kings",
+     "subtitle": "Nine Kingdoms Trilogy, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Rachel Higginson"
+      }
+     ],
+     "narrators": [
+      "Devon Sorvari"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Nine Kingdoms Trilogy",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "Tantor Audio",
+     "description": "",
+     "asin": "1666108243",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 36660,
+    "tags": [],
+    "coverPath": null,
+    "size": 293280000
+   },
+   "tags": []
+  },
+  "syn-10-en13": {
+   "id": "syn-10-en13",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Vampire Royals 1",
+     "subtitle": "The Pageant",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Leigh Walker"
+      }
+     ],
+     "narrators": [
+      "Eva Kaminsky"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Vampire Royals",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2018",
+     "publisher": "Tantor Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 19920,
+    "tags": [],
+    "coverPath": null,
+    "size": 159360000
+   },
+   "tags": []
+  },
+  "syn-10-en14": {
+   "id": "syn-10-en14",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Dungeon Life 5: An Isekai LitRPG",
+     "subtitle": "Dungeon Life, Book 5",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Khenal"
+      }
+     ],
+     "narrators": [
+      "Michael Gallagher"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Dungeon Life",
+       "sequence": "5"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": "B0KG57J538",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 59220,
+    "tags": [],
+    "coverPath": null,
+    "size": 473760000
+   },
+   "tags": []
+  },
+  "syn-10-en15": {
+   "id": "syn-10-en15",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "08 Fourteenth Colony",
+     "subtitle": "The Forgotten Story of the Gulf South During America's Revolutionary Era",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Mike Bunn"
+      }
+     ],
+     "narrators": [
+      "Kyle Snyder"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Tantor Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 26760,
+    "tags": [],
+    "coverPath": null,
+    "size": 214080000
+   },
+   "tags": []
+  },
+  "syn-10-en16": {
+   "id": "syn-10-en16",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Orchid Throne: The Orchid Throne",
+     "subtitle": "Forgotten Empires, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Jeffe Kennedy"
+      }
+     ],
+     "narrators": [
+      "Elizabeth Brook"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Forgotten Empires",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2019",
+     "publisher": "Tantor Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 38340,
+    "tags": [],
+    "coverPath": null,
+    "size": 306720000
+   },
+   "tags": []
+  },
+  "syn-10-en17": {
+   "id": "syn-10-en17",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Last Woman in the Forest: A Gripping LitRPG Adventure",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Diane Les Becquets"
+      }
+     ],
+     "narrators": [
+      "Emily Rankin",
+      "Robert Fass",
+      "Rebecca Lowman",
+      "Alex McKenna",
+      "Monika Felice Smith",
+      "Erin Spencer"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2019",
+     "publisher": "Penguin Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 41340,
+    "tags": [],
+    "coverPath": null,
+    "size": 330720000
+   },
+   "tags": []
+  },
+  "syn-10-en18": {
+   "id": "syn-10-en18",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Star Nomad",
+     "subtitle": "Fallen Empire, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "L. Buroker"
+      }
+     ],
+     "narrators": [
+      "Kate Reading"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Fallen Empire",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2016",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 34080,
+    "tags": [],
+    "coverPath": null,
+    "size": 272640000
+   },
+   "tags": []
+  },
+  "syn-10-en19": {
+   "id": "syn-10-en19",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Colony",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Marie Lanza"
+      }
+     ],
+     "narrators": [
+      "Corrie Beard"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Colony",
+       "sequence": ""
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Nefairyous",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 24480,
+    "tags": [],
+    "coverPath": null,
+    "size": 195840000
+   },
+   "tags": []
+  },
+  "syn-10-en20": {
+   "id": "syn-10-en20",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Dragon's Kiss",
+     "subtitle": "Blood & Flame Saga, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "E.A. Winters"
+      }
+     ],
+     "narrators": [
+      "Kim Bretton"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Blood & Flame Saga",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": "B0DDMQBC9H",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 39463,
+    "tags": [],
+    "coverPath": null,
+    "size": 315704000
+   },
+   "tags": []
+  },
+  "syn-10-en21": {
+   "id": "syn-10-en21",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Vintage Vampire Stories",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Richard Dalby - editor"
+      },
+      {
+       "id": "a1",
+       "name": "Robert Eighteen-Bisang - editor"
+      }
+     ],
+     "narrators": [
+      "Gildart Jackson"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2013",
+     "publisher": "Audible Studios",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 42420,
+    "tags": [],
+    "coverPath": null,
+    "size": 339360000
+   },
+   "tags": []
+  },
+  "syn-10-en22": {
+   "id": "syn-10-en22",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Return to the Little Kingdom",
+     "subtitle": "Steve Jobs, The Creation of Apple and How it Changed the World",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Michael Moritz"
+      }
+     ],
+     "narrators": [
+      "Kevin Pariseau"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2010",
+     "publisher": "Audible Studios",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 56040,
+    "tags": [],
+    "coverPath": null,
+    "size": 448320000
+   },
+   "tags": []
+  },
+  "syn-10-en23": {
+   "id": "syn-10-en23",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "House of Beating Wings (Dramatized Adaptation)",
+     "subtitle": "The Kingdom of Crows, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Olivia Wildenstein"
+      }
+     ],
+     "narrators": [
+      "full cast",
+      "Thea Wolfe",
+      "Henry Kramer",
+      "Danny Gavigan",
+      "Matt Bassett",
+      "Rayner Gabriel",
+      "Anthony Palmini",
+      "Sandi Stock",
+      "Stephanie Németh-Parker",
+      "Jonathan Lee Taylor",
+      "Kimberly Gilbert",
+      "Andrew James Spooner"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Kingdom of Crows",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Graphic Audio LLC",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 47940,
+    "tags": [],
+    "coverPath": null,
+    "size": 383520000
+   },
+   "tags": []
+  },
+  "syn-10-en24": {
+   "id": "syn-10-en24",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Ocean",
+     "subtitle": "Damage Control, Book 5",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Jo Raven"
+      }
+     ],
+     "narrators": [
+      "Anna Riordan",
+      "Joe Arden"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Damage Control",
+       "sequence": "5"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2017",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": "B077RBPJFH",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 33300,
+    "tags": [],
+    "coverPath": null,
+    "size": 266400000
+   },
+   "tags": []
+  },
+  "syn-10-en25": {
+   "id": "syn-10-en25",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Rebel",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Beverly Jenkins"
+      }
+     ],
+     "narrators": [
+      "Kim Staunton"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Women Who Dare",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2019",
+     "publisher": "Avon",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 31080,
+    "tags": [],
+    "coverPath": null,
+    "size": 248640000
+   },
+   "tags": []
+  },
+  "syn-10-en26": {
+   "id": "syn-10-en26",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Void Drifter",
+     "subtitle": "Void Drifter, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Jason Anspach"
+      },
+      {
+       "id": "a1",
+       "name": "J.N. Chaney"
+      }
+     ],
+     "narrators": [
+      "Mark Boyett"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Void Drifter",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": "B0XS53X99K",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 51420,
+    "tags": [],
+    "coverPath": null,
+    "size": 411360000
+   },
+   "tags": []
+  },
+  "syn-10-en27": {
+   "id": "syn-10-en27",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "04 Kingdom of Devils",
+     "subtitle": "A Tale of Murder in the Shadow of the American Revolution",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Katherine Grandjean"
+      }
+     ],
+     "narrators": [
+      "Dawn Harvey"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Random House Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 34860,
+    "tags": [],
+    "coverPath": null,
+    "size": 278880000
+   },
+   "tags": []
+  },
+  "syn-10-en28": {
+   "id": "syn-10-en28",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Behind the Black Curtain: Behind the Black Curtain",
+     "subtitle": "Inside the Secret Space Program",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Logan J. Shields"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "No World Press",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 43500,
+    "tags": [],
+    "coverPath": null,
+    "size": 348000000
+   },
+   "tags": []
+  },
+  "syn-10-en29": {
+   "id": "syn-10-en29",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "A Prince Among Pirates: A Gripping LitRPG Adventure",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Katie Abdou"
+      }
+     ],
+     "narrators": [
+      "Joe Jameson"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Simon & Schuster Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 38880,
+    "tags": [],
+    "coverPath": null,
+    "size": 311040000
+   },
+   "tags": []
+  },
+  "syn-10-en30": {
+   "id": "syn-10-en30",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Princess Bride",
+     "subtitle": "S. Morgenstern's Classic Tale of True Love and High Adventure (The \"Good Parts\" Version)",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "W. Goldman"
+      }
+     ],
+     "narrators": [
+      "Rob Reiner"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "Phoenix Books, Inc.",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 9120,
+    "tags": [],
+    "coverPath": null,
+    "size": 72960000
+   },
+   "tags": []
+  },
+  "syn-10-en31": {
+   "id": "syn-10-en31",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Forest of Ire",
+     "subtitle": "13th Paladin, Volume IX",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Torsten Weitze"
+      },
+      {
+       "id": "a1",
+       "name": "Tim Casey - translator"
+      }
+     ],
+     "narrators": [
+      "Gildart Jackson"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The 13th Paladin",
+       "sequence": "9"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Tantor Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 82740,
+    "tags": [],
+    "coverPath": null,
+    "size": 661920000
+   },
+   "tags": []
+  },
+  "syn-10-en32": {
+   "id": "syn-10-en32",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Gifted Thief",
+     "subtitle": "Highland Magic Series, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Helen Harper"
+      }
+     ],
+     "narrators": [
+      "Saskia Maarleveld"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Highland Magic",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2016",
+     "publisher": "Tantor Audio",
+     "description": "",
+     "asin": "B01CYZBQ1A",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 32205,
+    "tags": [],
+    "coverPath": null,
+    "size": 257640000
+   },
+   "tags": []
+  },
+  "syn-10-en33": {
+   "id": "syn-10-en33",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Fire & Blood (HBO Tie-in Edition)",
+     "subtitle": "300 Years Before A Game of Thrones",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "George R. R. Martin"
+      }
+     ],
+     "narrators": [
+      "Simon Vance"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Targaryen Dynasty: The House of the Dragon Series",
+       "sequence": "2"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2018",
+     "publisher": "Random House Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 95040,
+    "tags": [],
+    "coverPath": null,
+    "size": 760320000
+   },
+   "tags": []
+  },
+  "syn-10-en34": {
+   "id": "syn-10-en34",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Vampire Agape 01 Blood of Anteros",
+     "subtitle": "The Vampire Agape Series, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Georgia Cates"
+      }
+     ],
+     "narrators": [
+      "Tad Branson"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Vampire Agape",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2013",
+     "publisher": "Audible Studios",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 23940,
+    "tags": [],
+    "coverPath": null,
+    "size": 191520000
+   },
+   "tags": []
+  },
+  "syn-10-en35": {
+   "id": "syn-10-en35",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Another World",
+     "subtitle": "Galena Chronicles, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Samuel Best"
+      }
+     ],
+     "narrators": [
+      "Jonathan Davis"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Galena Chronicles",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 40980,
+    "tags": [],
+    "coverPath": null,
+    "size": 327840000
+   },
+   "tags": []
+  },
+  "syn-10-en36": {
+   "id": "syn-10-en36",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Road Map: Escaping the Maze of Madness",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "David Icke"
+      }
+     ],
+     "narrators": [
+      "David Icke"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Ickonic Publishing",
+     "description": "",
+     "asin": "B0GH2K4B4W",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 114000,
+    "tags": [],
+    "coverPath": null,
+    "size": 912000000
+   },
+   "tags": []
+  },
+  "syn-10-en37": {
+   "id": "syn-10-en37",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Rebel",
+     "subtitle": "Operation Justice Force, Book 4",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Reese Knightley"
+      }
+     ],
+     "narrators": [
+      "Declan Winters"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Operation Justice Force",
+       "sequence": "4"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Tantor Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 19320,
+    "tags": [],
+    "coverPath": null,
+    "size": 154560000
+   },
+   "tags": []
+  },
+  "syn-10-en38": {
+   "id": "syn-10-en38",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Rebel",
+     "subtitle": "My Life Outside the Lines",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Nick Nolte"
+      }
+     ],
+     "narrators": [
+      "Nick Nolte",
+      "Christian Baskous"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2018",
+     "publisher": "William Morrow",
+     "description": "",
+     "asin": "B0WCN6BHU3",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 28020,
+    "tags": [],
+    "coverPath": null,
+    "size": 224160000
+   },
+   "tags": []
+  },
+  "syn-10-en39": {
+   "id": "syn-10-en39",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "04 Storm",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "George R. Stewart"
+      }
+     ],
+     "narrators": [
+      "Patrick Lawlor"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2018",
+     "publisher": "Brilliance Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 40680,
+    "tags": [],
+    "coverPath": null,
+    "size": 325440000
+   },
+   "tags": []
+  },
+  "syn-10-en40": {
+   "id": "syn-10-en40",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Steal the Moon: Steal the Moon",
+     "subtitle": "Thieves, Book 3",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Lexi Blake"
+      }
+     ],
+     "narrators": [
+      "Kitty Bang"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Thieves",
+       "sequence": "3"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2018",
+     "publisher": "DLZ Entertainment, LLC",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 56580,
+    "tags": [],
+    "coverPath": null,
+    "size": 452640000
+   },
+   "tags": []
+  },
+  "syn-10-en41": {
+   "id": "syn-10-en41",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Prince of Control: A Gripping LitRPG Adventure",
+     "subtitle": "A Russian Mafia Dark Academia Romance (Bratva Heirs, Book 1)",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Renee Rose"
+      }
+     ],
+     "narrators": [
+      "Benjamin Sands",
+      "Kingsley Rose"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Bratva Heirs",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Renee Rose Romance",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 27300,
+    "tags": [],
+    "coverPath": null,
+    "size": 218400000
+   },
+   "tags": []
+  },
+  "syn-10-en42": {
+   "id": "syn-10-en42",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Ocean House",
+     "subtitle": "Tortuga Cove Series Book One",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "A. Beck"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Independently Published",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 17460,
+    "tags": [],
+    "coverPath": null,
+    "size": 139680000
+   },
+   "tags": []
+  },
+  "syn-10-en43": {
+   "id": "syn-10-en43",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Dragon King's Thief",
+     "subtitle": "An MM Fantasy Romance",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Amy Sumida"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Independently Published",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 27060,
+    "tags": [],
+    "coverPath": null,
+    "size": 216480000
+   },
+   "tags": []
+  },
+  "syn-10-en44": {
+   "id": "syn-10-en44",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Out Of Time",
+     "subtitle": "Launch Point",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Kenneth Bandoly"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Independently Published",
+     "description": "",
+     "asin": "B0FWS1MZL9",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 51516,
+    "tags": [],
+    "coverPath": null,
+    "size": 412128000
+   },
+   "tags": []
+  },
+  "syn-10-en45": {
+   "id": "syn-10-en45",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Eat Like a Fish",
+     "subtitle": "My Adventures as a Fisherman Turned Restorative Ocean Farmer",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Bren Smith"
+      }
+     ],
+     "narrators": [
+      "Bren Smith"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2019",
+     "publisher": "Random House Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 27780,
+    "tags": [],
+    "coverPath": null,
+    "size": 222240000
+   },
+   "tags": []
+  },
+  "syn-10-en46": {
+   "id": "syn-10-en46",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Dark Space 01 Dark Space",
+     "subtitle": "Dark Space Series, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Lisa Henry"
+      }
+     ],
+     "narrators": [
+      "Chris Chambers"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Dark Space",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2020",
+     "publisher": "Tantor Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 33000,
+    "tags": [],
+    "coverPath": null,
+    "size": 264000000
+   },
+   "tags": []
+  },
+  "syn-10-en47": {
+   "id": "syn-10-en47",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The King of Diamonds",
+     "subtitle": "The Search for the Elusive Texas Jewel Thief",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Rena Pederson"
+      }
+     ],
+     "narrators": [
+      "Erin Dion"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Dreamscape Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 49320,
+    "tags": [],
+    "coverPath": null,
+    "size": 394560000
+   },
+   "tags": []
+  },
+  "syn-10-en48": {
+   "id": "syn-10-en48",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Worst Ship in the Fleet",
+     "subtitle": "Humor, Space Battles, and High Crimes Await!",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Skyler Ramirez"
+      }
+     ],
+     "narrators": [
+      "Michael Murphy"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Dumb Luck and Dead Heroes",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Persephone Entertainment Inc.",
+     "description": "",
+     "asin": "B0CLPXT1M8",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 10260,
+    "tags": [],
+    "coverPath": null,
+    "size": 82080000
+   },
+   "tags": []
+  },
+  "syn-10-en49": {
+   "id": "syn-10-en49",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Caged Dragon",
+     "subtitle": "Cycle of Dragons Series, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Dan Michaelson"
+      },
+      {
+       "id": "a1",
+       "name": "D.K. Holmberg"
+      }
+     ],
+     "narrators": [
+      "Brian Holden"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Cycle of Dragons",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "Tantor Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 26340,
+    "tags": [],
+    "coverPath": null,
+    "size": 210720000
+   },
+   "tags": []
+  },
+  "syn-10-en50": {
+   "id": "syn-10-en50",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Astrophysics for Young People in a Hurry",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Gregory Mone"
+      },
+      {
+       "id": "a1",
+       "name": "Gabrielle de Cuir"
+      }
+     ],
+     "narrators": [
+      "LeVar Burton"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2019",
+     "publisher": "Blackstone Audio, Inc.",
+     "description": "",
+     "asin": "B0UFCGUL6K",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 12720,
+    "tags": [],
+    "coverPath": null,
+    "size": 101760000
+   },
+   "tags": []
+  },
+  "syn-10-en51": {
+   "id": "syn-10-en51",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "06 Black Talon",
+     "subtitle": "Dragonblood Assassin, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Jaime Castle"
+      },
+      {
+       "id": "a1",
+       "name": "Andy Peloquin"
+      }
+     ],
+     "narrators": [
+      "Michael Kramer",
+      "Kate Reading"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Dragonblood Assassin",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Audible Studios",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 67980,
+    "tags": [],
+    "coverPath": null,
+    "size": 543840000
+   },
+   "tags": []
+  },
+  "syn-10-en52": {
+   "id": "syn-10-en52",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Rebellion: Rebellion",
+     "subtitle": "The Reverence Trilogy, Book 2",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Raena Rood"
+      }
+     ],
+     "narrators": [
+      "Brittany Goodwin"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Reverence",
+       "sequence": "2"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "One Foundation Publishing",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 31860,
+    "tags": [],
+    "coverPath": null,
+    "size": 254880000
+   },
+   "tags": []
+  },
+  "syn-10-en53": {
+   "id": "syn-10-en53",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Onyx Storm (Part 2 of 2) (Dramatized Adaptation): A Gripping LitRPG Adventure",
+     "subtitle": "The Empyrean, Book 3",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Rebecca Yarros"
+      }
+     ],
+     "narrators": [
+      "Megan Poppy",
+      "Laura C. Harris",
+      "Su Ling Chan",
+      "Torian Brackett",
+      "full cast",
+      "Khaya Fraites",
+      "Gabriel Michael",
+      "Taylor Coan",
+      "Jessica Schly",
+      "LaMont Ridgell",
+      "Robb Moreira",
+      "Danny Gavigan"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Empyrean",
+       "sequence": "3"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Graphic Audio LLC",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 37020,
+    "tags": [],
+    "coverPath": null,
+    "size": 296160000
+   },
+   "tags": []
+  },
+  "syn-10-en54": {
+   "id": "syn-10-en54",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Rise of Prince: 1958-1988",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "A. Hahn"
+      },
+      {
+       "id": "a1",
+       "name": "L. Tiebert"
+      }
+     ],
+     "narrators": [
+      "Rob Saladino"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2017",
+     "publisher": "Alex Hahn",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 37440,
+    "tags": [],
+    "coverPath": null,
+    "size": 299520000
+   },
+   "tags": []
+  },
+  "syn-10-en55": {
+   "id": "syn-10-en55",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Onyx Storm (Part 1 of 2) (Dramatized Adaptation)",
+     "subtitle": "The Empyrean, Book 3",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Rebecca Yarros"
+      }
+     ],
+     "narrators": [
+      "Robb Moreira",
+      "Torian Brackett",
+      "k'Lai Rivera",
+      "Gabriel Michael",
+      "Megan Poppy",
+      "LaMont Ridgell",
+      "Rayner Gabriel",
+      "Troy Allan",
+      "Laura C. Harris",
+      "Khaya Fraites",
+      "Taylor Coan"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Empyrean",
+       "sequence": "3"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Graphic Audio LLC",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 34860,
+    "tags": [],
+    "coverPath": null,
+    "size": 278880000
+   },
+   "tags": []
+  },
+  "syn-10-en56": {
+   "id": "syn-10-en56",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Colony",
+     "subtitle": "P-23, Book 2",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Anthony McNally"
+      }
+     ],
+     "narrators": [
+      "Jason Rivers"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "P-23",
+       "sequence": "2"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "A A McNALLY",
+     "description": "",
+     "asin": "B0HH17B8P6",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 33242,
+    "tags": [],
+    "coverPath": null,
+    "size": 265936000
+   },
+   "tags": []
+  },
+  "syn-10-en57": {
+   "id": "syn-10-en57",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Storm Sister",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Lucinda Riley"
+      }
+     ],
+     "narrators": [
+      "Hattie Morahan"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Seven Sisters Series",
+       "sequence": "2"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Macmillan",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 72180,
+    "tags": [],
+    "coverPath": null,
+    "size": 577440000
+   },
+   "tags": []
+  },
+  "syn-10-en58": {
+   "id": "syn-10-en58",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Oceans of Kansas",
+     "subtitle": "A Natural History of the Western Interior Sea",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Michael J. Everhart"
+      }
+     ],
+     "narrators": [
+      "Tom Perkins"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Tantor Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 53400,
+    "tags": [],
+    "coverPath": null,
+    "size": 427200000
+   },
+   "tags": []
+  },
+  "syn-10-en59": {
+   "id": "syn-10-en59",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "A Dragon Called Bob",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Milc"
+      }
+     ],
+     "narrators": [
+      "Rhys David",
+      "Jude Erin"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "A Dragon Called Bob",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Royal Guard Publishing LLC",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 64800,
+    "tags": [],
+    "coverPath": null,
+    "size": 518400000
+   },
+   "tags": []
+  },
+  "syn-10-de60": {
+   "id": "syn-10-de60",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Der Ehrenkodex des Jägers",
+     "subtitle": "Der Ehrenkodex des Jägers 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Oleg Sapphire"
+      },
+      {
+       "id": "a1",
+       "name": "Yuri Vinokuroff"
+      }
+     ],
+     "narrators": [
+      "Benjamin Brunken"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Der Ehrenkodex des Jägers",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Magic Dome Books",
+     "description": "",
+     "asin": "B0D929ZRZB",
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 34620,
+    "tags": [],
+    "coverPath": null,
+    "size": 276960000
+   },
+   "tags": []
+  },
+  "syn-10-de61": {
+   "id": "syn-10-de61",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Sonnenblüte",
+     "subtitle": "Der Zauber der grünen Insel 3",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Nora Roberts"
+      },
+      {
+       "id": "a1",
+       "name": "Uta Hege - Übersetzer"
+      }
+     ],
+     "narrators": [
+      "Elena Wilms"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Der Zauber der grünen Insel",
+       "sequence": "3"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Random House Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 66000,
+    "tags": [],
+    "coverPath": null,
+    "size": 528000000
+   },
+   "tags": []
+  },
+  "syn-10-de62": {
+   "id": "syn-10-de62",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Stay Away from Gretchen - Eine unmögliche Liebe",
+     "subtitle": "Die Gretchen-Reihe 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Susanne Abel"
+      }
+     ],
+     "narrators": [
+      "Vera Teltz"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Die Gretchen-Reihe",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "HörbucHHamburg HHV GmbH ",
+     "description": "",
+     "asin": "B01NYMFN3P",
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 50640,
+    "tags": [],
+    "coverPath": null,
+    "size": 405120000
+   },
+   "tags": []
+  },
+  "syn-10-de63": {
+   "id": "syn-10-de63",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "02 Im Zeichen des Drachen",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Tom Clancy"
+      }
+     ],
+     "narrators": [
+      "Frank Arnold"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Jack Ryan (in chronologischer Reihenfolge)",
+       "sequence": "11"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2013",
+     "publisher": "Random House Audio, Deutschland",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 166380,
+    "tags": [],
+    "coverPath": null,
+    "size": 1331040000
+   },
+   "tags": []
+  },
+  "syn-10-de64": {
+   "id": "syn-10-de64",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Lukkas Erbe: Lukkas Erbe",
+     "subtitle": "A Novel",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Petra Hammesfahr"
+      }
+     ],
+     "narrators": [
+      "Christina Puciata"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "AUDIOBUCH",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 48960,
+    "tags": [],
+    "coverPath": null,
+    "size": 391680000
+   },
+   "tags": []
+  },
+  "syn-10-de65": {
+   "id": "syn-10-de65",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Nacht der Ruinen",
+     "subtitle": "Kriminalroman | Nominiert für den GLAUSER-Preis 2026",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Cay Rademacher"
+      }
+     ],
+     "narrators": [
+      "Oliver Siebeck"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "DUMONT Buchverlag",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 49080,
+    "tags": [],
+    "coverPath": null,
+    "size": 392640000
+   },
+   "tags": []
+  },
+  "syn-10-de66": {
+   "id": "syn-10-de66",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Moonlight Sword 1: Klingenherz",
+     "subtitle": "Epische High Romantasy um ein magisches Schwert und eine unmögliche Liebe",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Asuka Lionera"
+      }
+     ],
+     "narrators": [
+      "Alexander Pensel",
+      "Viola Müller",
+      "Asuka Lionera",
+      "Sven Macht"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Moonlight Sword",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Silberfisch",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 48900,
+    "tags": [],
+    "coverPath": null,
+    "size": 391200000
+   },
+   "tags": []
+  },
+  "syn-10-de67": {
+   "id": "syn-10-de67",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Der Ehrenkodex des Jägers (Buch 10)",
+     "subtitle": "Eine fortlaufende Fantasy-Buchreihe",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Yuri Vinokuroff"
+      },
+      {
+       "id": "a1",
+       "name": "Oleg Sapphire"
+      }
+     ],
+     "narrators": [
+      "Benjamin Brunken"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Der Ehrenkodex des Jägers",
+       "sequence": "10"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "MDB US INC.",
+     "description": "",
+     "asin": "B0HBFSYBZ4",
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 34992,
+    "tags": [],
+    "coverPath": null,
+    "size": 279936000
+   },
+   "tags": []
+  },
+  "syn-10-de68": {
+   "id": "syn-10-de68",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Lost Moon - Mondfinsternis",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Brandon Q. Morris"
+      }
+     ],
+     "narrators": [
+      "Mark Bremer"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Rubikon Audioverlag",
+     "description": "",
+     "asin": "B0V5934PTZ",
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 29220,
+    "tags": [],
+    "coverPath": null,
+    "size": 233760000
+   },
+   "tags": []
+  },
+  "syn-10-de69": {
+   "id": "syn-10-de69",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Der Schattenkrieg",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Tom Clancy"
+      }
+     ],
+     "narrators": [
+      "Frank Arnold"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Jack Ryan (in chronologischer Reihenfolge)",
+       "sequence": "6"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2012",
+     "publisher": "Random House Audio, Deutschland",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 87060,
+    "tags": [],
+    "coverPath": null,
+    "size": 696480000
+   },
+   "tags": []
+  },
+  "syn-10-de70": {
+   "id": "syn-10-de70",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Auf der Spur des Jägers",
+     "subtitle": "Jan Tommen 9",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Alexander Hartung"
+      }
+     ],
+     "narrators": [
+      "Oliver Schmitz"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Jan Tommen",
+       "sequence": "9"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Amazon EU S.à r.l",
+     "description": "",
+     "asin": "B0BDMSLDLT",
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 28860,
+    "tags": [],
+    "coverPath": null,
+    "size": 230880000
+   },
+   "tags": []
+  },
+  "syn-10-de71": {
+   "id": "syn-10-de71",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Die verfluchte Stadt",
+     "subtitle": "Warhammer Age of Sigmar",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "C L Werner"
+      }
+     ],
+     "narrators": [
+      "Robert Oschatz"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Eins A Medien GmbH",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 43320,
+    "tags": [],
+    "coverPath": null,
+    "size": 346560000
+   },
+   "tags": []
+  },
+  "syn-10-de72": {
+   "id": "syn-10-de72",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Nachtengel - Gemini",
+     "subtitle": "Nightangel 2",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Brent Weeks"
+      },
+      {
+       "id": "a1",
+       "name": "Clemens Brunn - Übersetzer"
+      }
+     ],
+     "narrators": [
+      "Oliver Siebeck"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Nachtengel",
+       "sequence": "2"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Random House Audio, Deutschland",
+     "description": "",
+     "asin": "B0HAP320NE",
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 77340,
+    "tags": [],
+    "coverPath": null,
+    "size": 618720000
+   },
+   "tags": []
+  },
+  "syn-10-de73": {
+   "id": "syn-10-de73",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "07 Das Geheimnis",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Ellen Sandberg"
+      }
+     ],
+     "narrators": [
+      "Vera Teltz"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "Der Audio Verlag",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 42420,
+    "tags": [],
+    "coverPath": null,
+    "size": 339360000
+   },
+   "tags": []
+  },
+  "syn-10-de74": {
+   "id": "syn-10-de74",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Wo Schnee nach Liebe riecht: Wo Schnee nach Liebe riecht",
+     "subtitle": "Neufundland-Love 2",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Lisa Torberg"
+      }
+     ],
+     "narrators": [
+      "Giovanna Meyrat",
+      "This Wachter"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Neufundland-Love",
+       "sequence": "2"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Speech Studio Schweiz",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 28980,
+    "tags": [],
+    "coverPath": null,
+    "size": 231840000
+   },
+   "tags": []
+  },
+  "syn-10-de75": {
+   "id": "syn-10-de75",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Assassin's Creed Valhalla - Das Schwert des weißen Pferdes",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Elsa Sjunneson"
+      }
+     ],
+     "narrators": [
+      "Marylu Poolman"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Audible Studios",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 36480,
+    "tags": [],
+    "coverPath": null,
+    "size": 291840000
+   },
+   "tags": []
+  },
+  "syn-10-de76": {
+   "id": "syn-10-de76",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Star Wars™ Erben des Imperiums",
+     "subtitle": "Jubiläumsausgabe mit Bonusmaterial",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Timothy Zahn"
+      },
+      {
+       "id": "a1",
+       "name": "Thomas Ziegler - translator"
+      }
+     ],
+     "narrators": [
+      "Hans Henrik Wöhler"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Großadmiral Thrawn – die Legende",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Random House Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 65940,
+    "tags": [],
+    "coverPath": null,
+    "size": 527520000
+   },
+   "tags": []
+  },
+  "syn-10-de77": {
+   "id": "syn-10-de77",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Die Schlacht der Schatten",
+     "subtitle": "Das Rad der Zeit 36",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Robert Jordan"
+      },
+      {
+       "id": "a1",
+       "name": "Brandon Sanderson"
+      }
+     ],
+     "narrators": [
+      "Helmut Krauss"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Das Rad der Zeit",
+       "sequence": "36"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2013",
+     "publisher": "Audible Studios",
+     "description": "",
+     "asin": "B00D16H986",
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 95450,
+    "tags": [],
+    "coverPath": null,
+    "size": 763600000
+   },
+   "tags": []
+  },
+  "syn-10-de78": {
+   "id": "syn-10-de78",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Magisches Blut",
+     "subtitle": "Stadt der Finsternis 4",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Ilona Andrews"
+      },
+      {
+       "id": "a1",
+       "name": "Bernhard Kempen - Übersetzer"
+      }
+     ],
+     "narrators": [
+      "Mala Sommer"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Stadt der Finsternis",
+       "sequence": "4"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "LYX.audio",
+     "description": "",
+     "asin": "B0FDYSZ53N",
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 52440,
+    "tags": [],
+    "coverPath": null,
+    "size": 419520000
+   },
+   "tags": []
+  },
+  "syn-10-de79": {
+   "id": "syn-10-de79",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Witches & Hunters - Verbranntes Vertrauen",
+     "subtitle": "Witches 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Janina Schneider-Tidigk"
+      }
+     ],
+     "narrators": [
+      "Constanze Buttmann",
+      "Dirk Jacobs"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Witches",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Wunderkind Audiobooks",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 43440,
+    "tags": [],
+    "coverPath": null,
+    "size": 347520000
+   },
+   "tags": []
+  }
+ },
+ "list": [
+  {
+   "id": "syn-10-en00",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Skandar and the Unicorn Thief",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "A.F. Steadman"
+      }
+     ],
+     "narrators": [
+      "David Dawson"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Skandar",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Simon & Schuster Audio",
+     "description": "",
+     "asin": "B09KYJSQD5",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 43020,
+    "tags": [],
+    "coverPath": null,
+    "size": 344160000
+   }
+  },
+  {
+   "id": "syn-10-en01",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Rebel Rising",
+     "subtitle": "A Memoir of Singing, Sobbing, Laughing and Loving",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Rebel Wilson"
+      }
+     ],
+     "narrators": [
+      "Rebel Wilson"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Simon & Schuster Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 38880,
+    "tags": [],
+    "coverPath": null,
+    "size": 311040000
+   }
+  },
+  {
+   "id": "syn-10-en02",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The World's Wimpiest Vampire",
+     "subtitle": "Supernatural Suckers, Book 2",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Silvana Falcon"
+      }
+     ],
+     "narrators": [
+      "John Solo"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Supernatural Suckers",
+       "sequence": "2"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Silvana Falcon",
+     "description": "",
+     "asin": "B0G2CA4EDY",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 32460,
+    "tags": [],
+    "coverPath": null,
+    "size": 259680000
+   }
+  },
+  {
+   "id": "syn-10-en03",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "02 Vampire Bride: The Complete Series",
+     "subtitle": "Star Touched: Vampire Bride",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Michelle Madow"
+      }
+     ],
+     "narrators": [
+      "Patricia Santomasso",
+      "Sean Patrick Hopkins"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Star Touched: Vampire Bride",
+       "sequence": "1-4"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Dreamscape Publishing",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 102660,
+    "tags": [],
+    "coverPath": null,
+    "size": 821280000
+   }
+  },
+  {
+   "id": "syn-10-en04",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Lost Kingdom of Daughters: The Lost Kingdom of Daughters",
+     "subtitle": "A Novel",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Weina Dai Randel"
+      }
+     ],
+     "narrators": [
+      "Erin Lin",
+      "Donna Xia"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Brilliance Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 39420,
+    "tags": [],
+    "coverPath": null,
+    "size": 315360000
+   }
+  },
+  {
+   "id": "syn-10-en05",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Falcon Thief: A Gripping LitRPG Adventure",
+     "subtitle": "A True Tale of Adventure, Treachery, and the Hunt for the Perfect Bird",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Joshua Hammer"
+      }
+     ],
+     "narrators": [
+      "Matthew Lloyd Davies"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2020",
+     "publisher": "Simon & Schuster Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 30180,
+    "tags": [],
+    "coverPath": null,
+    "size": 241440000
+   }
+  },
+  {
+   "id": "syn-10-en06",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Rogue Ascension",
+     "subtitle": "Rogue Ascension, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "H. Mythos"
+      }
+     ],
+     "narrators": [
+      "André Santana"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Rogue Ascension",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 47340,
+    "tags": [],
+    "coverPath": null,
+    "size": 378720000
+   }
+  },
+  {
+   "id": "syn-10-en07",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Heist: Thieves of Clover",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Ruby Darling"
+      }
+     ],
+     "narrators": [
+      "Rachel Dane",
+      "Joe Arden",
+      "Silas Hart"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Blue Nose Publishing",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 61860,
+    "tags": [],
+    "coverPath": null,
+    "size": 494880000
+   }
+  },
+  {
+   "id": "syn-10-en08",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Redeemable Prince",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Rachel Higginson"
+      }
+     ],
+     "narrators": [
+      "Bailey Carr",
+      "Josh Hurley"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Star-Crossed",
+       "sequence": "7"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2017",
+     "publisher": "Audible Studios",
+     "description": "",
+     "asin": "B071V88FFB",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 42638,
+    "tags": [],
+    "coverPath": null,
+    "size": 341104000
+   }
+  },
+  {
+   "id": "syn-10-en09",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Know When to Run: Mission 1",
+     "subtitle": "Black Ocean: Mirth & Mayhem",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "J.S. Morin"
+      }
+     ],
+     "narrators": [
+      "Mikael Naramore"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Black Ocean: Mirth and Mayhem Series",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "Magical Scrivener Press",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 17700,
+    "tags": [],
+    "coverPath": null,
+    "size": 141600000
+   }
+  },
+  {
+   "id": "syn-10-en10",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Sponsored System 01 Primal Forest",
+     "subtitle": "Sponsored System, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Tom Larcombe"
+      }
+     ],
+     "narrators": [
+      "Neill Thorne"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Sponsored System",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Tantor Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 54660,
+    "tags": [],
+    "coverPath": null,
+    "size": 437280000
+   }
+  },
+  {
+   "id": "syn-10-en11",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Sounds of Nature with 432Hz Music to Relax, Fall asleep, Meditate, Heal",
+     "subtitle": "Ocean noise, rain, forest sounds, brook, bird calls, music for falling asleep, relaxation music",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Torsten Abrolat"
+      }
+     ],
+     "narrators": [
+      "Torsten Abrolat"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "Syncsouls. A division of alive media solutions",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 8400,
+    "tags": [],
+    "coverPath": null,
+    "size": 67200000
+   }
+  },
+  {
+   "id": "syn-10-en12",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Crown of One Hundred Kings",
+     "subtitle": "Nine Kingdoms Trilogy, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Rachel Higginson"
+      }
+     ],
+     "narrators": [
+      "Devon Sorvari"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Nine Kingdoms Trilogy",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "Tantor Audio",
+     "description": "",
+     "asin": "1666108243",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 36660,
+    "tags": [],
+    "coverPath": null,
+    "size": 293280000
+   }
+  },
+  {
+   "id": "syn-10-en13",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Vampire Royals 1",
+     "subtitle": "The Pageant",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Leigh Walker"
+      }
+     ],
+     "narrators": [
+      "Eva Kaminsky"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Vampire Royals",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2018",
+     "publisher": "Tantor Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 19920,
+    "tags": [],
+    "coverPath": null,
+    "size": 159360000
+   }
+  },
+  {
+   "id": "syn-10-en14",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Dungeon Life 5: An Isekai LitRPG",
+     "subtitle": "Dungeon Life, Book 5",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Khenal"
+      }
+     ],
+     "narrators": [
+      "Michael Gallagher"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Dungeon Life",
+       "sequence": "5"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": "B0KG57J538",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 59220,
+    "tags": [],
+    "coverPath": null,
+    "size": 473760000
+   }
+  },
+  {
+   "id": "syn-10-en15",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "08 Fourteenth Colony",
+     "subtitle": "The Forgotten Story of the Gulf South During America's Revolutionary Era",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Mike Bunn"
+      }
+     ],
+     "narrators": [
+      "Kyle Snyder"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Tantor Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 26760,
+    "tags": [],
+    "coverPath": null,
+    "size": 214080000
+   }
+  },
+  {
+   "id": "syn-10-en16",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Orchid Throne: The Orchid Throne",
+     "subtitle": "Forgotten Empires, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Jeffe Kennedy"
+      }
+     ],
+     "narrators": [
+      "Elizabeth Brook"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Forgotten Empires",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2019",
+     "publisher": "Tantor Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 38340,
+    "tags": [],
+    "coverPath": null,
+    "size": 306720000
+   }
+  },
+  {
+   "id": "syn-10-en17",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Last Woman in the Forest: A Gripping LitRPG Adventure",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Diane Les Becquets"
+      }
+     ],
+     "narrators": [
+      "Emily Rankin",
+      "Robert Fass",
+      "Rebecca Lowman",
+      "Alex McKenna",
+      "Monika Felice Smith",
+      "Erin Spencer"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2019",
+     "publisher": "Penguin Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 41340,
+    "tags": [],
+    "coverPath": null,
+    "size": 330720000
+   }
+  },
+  {
+   "id": "syn-10-en18",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Star Nomad",
+     "subtitle": "Fallen Empire, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "L. Buroker"
+      }
+     ],
+     "narrators": [
+      "Kate Reading"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Fallen Empire",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2016",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 34080,
+    "tags": [],
+    "coverPath": null,
+    "size": 272640000
+   }
+  },
+  {
+   "id": "syn-10-en19",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Colony",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Marie Lanza"
+      }
+     ],
+     "narrators": [
+      "Corrie Beard"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Colony",
+       "sequence": ""
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Nefairyous",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 24480,
+    "tags": [],
+    "coverPath": null,
+    "size": 195840000
+   }
+  },
+  {
+   "id": "syn-10-en20",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Dragon's Kiss",
+     "subtitle": "Blood & Flame Saga, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "E.A. Winters"
+      }
+     ],
+     "narrators": [
+      "Kim Bretton"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Blood & Flame Saga",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": "B0DDMQBC9H",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 39463,
+    "tags": [],
+    "coverPath": null,
+    "size": 315704000
+   }
+  },
+  {
+   "id": "syn-10-en21",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Vintage Vampire Stories",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Richard Dalby - editor"
+      },
+      {
+       "id": "a1",
+       "name": "Robert Eighteen-Bisang - editor"
+      }
+     ],
+     "narrators": [
+      "Gildart Jackson"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2013",
+     "publisher": "Audible Studios",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 42420,
+    "tags": [],
+    "coverPath": null,
+    "size": 339360000
+   }
+  },
+  {
+   "id": "syn-10-en22",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Return to the Little Kingdom",
+     "subtitle": "Steve Jobs, The Creation of Apple and How it Changed the World",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Michael Moritz"
+      }
+     ],
+     "narrators": [
+      "Kevin Pariseau"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2010",
+     "publisher": "Audible Studios",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 56040,
+    "tags": [],
+    "coverPath": null,
+    "size": 448320000
+   }
+  },
+  {
+   "id": "syn-10-en23",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "House of Beating Wings (Dramatized Adaptation)",
+     "subtitle": "The Kingdom of Crows, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Olivia Wildenstein"
+      }
+     ],
+     "narrators": [
+      "full cast",
+      "Thea Wolfe",
+      "Henry Kramer",
+      "Danny Gavigan",
+      "Matt Bassett",
+      "Rayner Gabriel",
+      "Anthony Palmini",
+      "Sandi Stock",
+      "Stephanie Németh-Parker",
+      "Jonathan Lee Taylor",
+      "Kimberly Gilbert",
+      "Andrew James Spooner"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Kingdom of Crows",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Graphic Audio LLC",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 47940,
+    "tags": [],
+    "coverPath": null,
+    "size": 383520000
+   }
+  },
+  {
+   "id": "syn-10-en24",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Ocean",
+     "subtitle": "Damage Control, Book 5",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Jo Raven"
+      }
+     ],
+     "narrators": [
+      "Anna Riordan",
+      "Joe Arden"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Damage Control",
+       "sequence": "5"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2017",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": "B077RBPJFH",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 33300,
+    "tags": [],
+    "coverPath": null,
+    "size": 266400000
+   }
+  },
+  {
+   "id": "syn-10-en25",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Rebel",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Beverly Jenkins"
+      }
+     ],
+     "narrators": [
+      "Kim Staunton"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Women Who Dare",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2019",
+     "publisher": "Avon",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 31080,
+    "tags": [],
+    "coverPath": null,
+    "size": 248640000
+   }
+  },
+  {
+   "id": "syn-10-en26",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Void Drifter",
+     "subtitle": "Void Drifter, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Jason Anspach"
+      },
+      {
+       "id": "a1",
+       "name": "J.N. Chaney"
+      }
+     ],
+     "narrators": [
+      "Mark Boyett"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Void Drifter",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": "B0XS53X99K",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 51420,
+    "tags": [],
+    "coverPath": null,
+    "size": 411360000
+   }
+  },
+  {
+   "id": "syn-10-en27",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "04 Kingdom of Devils",
+     "subtitle": "A Tale of Murder in the Shadow of the American Revolution",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Katherine Grandjean"
+      }
+     ],
+     "narrators": [
+      "Dawn Harvey"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Random House Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 34860,
+    "tags": [],
+    "coverPath": null,
+    "size": 278880000
+   }
+  },
+  {
+   "id": "syn-10-en28",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Behind the Black Curtain: Behind the Black Curtain",
+     "subtitle": "Inside the Secret Space Program",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Logan J. Shields"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "No World Press",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 43500,
+    "tags": [],
+    "coverPath": null,
+    "size": 348000000
+   }
+  },
+  {
+   "id": "syn-10-en29",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "A Prince Among Pirates: A Gripping LitRPG Adventure",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Katie Abdou"
+      }
+     ],
+     "narrators": [
+      "Joe Jameson"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Simon & Schuster Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 38880,
+    "tags": [],
+    "coverPath": null,
+    "size": 311040000
+   }
+  },
+  {
+   "id": "syn-10-en30",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Princess Bride",
+     "subtitle": "S. Morgenstern's Classic Tale of True Love and High Adventure (The \"Good Parts\" Version)",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "W. Goldman"
+      }
+     ],
+     "narrators": [
+      "Rob Reiner"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "Phoenix Books, Inc.",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 9120,
+    "tags": [],
+    "coverPath": null,
+    "size": 72960000
+   }
+  },
+  {
+   "id": "syn-10-en31",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Forest of Ire",
+     "subtitle": "13th Paladin, Volume IX",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Torsten Weitze"
+      },
+      {
+       "id": "a1",
+       "name": "Tim Casey - translator"
+      }
+     ],
+     "narrators": [
+      "Gildart Jackson"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The 13th Paladin",
+       "sequence": "9"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Tantor Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 82740,
+    "tags": [],
+    "coverPath": null,
+    "size": 661920000
+   }
+  },
+  {
+   "id": "syn-10-en32",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Gifted Thief",
+     "subtitle": "Highland Magic Series, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Helen Harper"
+      }
+     ],
+     "narrators": [
+      "Saskia Maarleveld"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Highland Magic",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2016",
+     "publisher": "Tantor Audio",
+     "description": "",
+     "asin": "B01CYZBQ1A",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 32205,
+    "tags": [],
+    "coverPath": null,
+    "size": 257640000
+   }
+  },
+  {
+   "id": "syn-10-en33",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Fire & Blood (HBO Tie-in Edition)",
+     "subtitle": "300 Years Before A Game of Thrones",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "George R. R. Martin"
+      }
+     ],
+     "narrators": [
+      "Simon Vance"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Targaryen Dynasty: The House of the Dragon Series",
+       "sequence": "2"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2018",
+     "publisher": "Random House Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 95040,
+    "tags": [],
+    "coverPath": null,
+    "size": 760320000
+   }
+  },
+  {
+   "id": "syn-10-en34",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Vampire Agape 01 Blood of Anteros",
+     "subtitle": "The Vampire Agape Series, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Georgia Cates"
+      }
+     ],
+     "narrators": [
+      "Tad Branson"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Vampire Agape",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2013",
+     "publisher": "Audible Studios",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 23940,
+    "tags": [],
+    "coverPath": null,
+    "size": 191520000
+   }
+  },
+  {
+   "id": "syn-10-en35",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Another World",
+     "subtitle": "Galena Chronicles, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Samuel Best"
+      }
+     ],
+     "narrators": [
+      "Jonathan Davis"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Galena Chronicles",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Podium Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 40980,
+    "tags": [],
+    "coverPath": null,
+    "size": 327840000
+   }
+  },
+  {
+   "id": "syn-10-en36",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Road Map: Escaping the Maze of Madness",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "David Icke"
+      }
+     ],
+     "narrators": [
+      "David Icke"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Ickonic Publishing",
+     "description": "",
+     "asin": "B0GH2K4B4W",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 114000,
+    "tags": [],
+    "coverPath": null,
+    "size": 912000000
+   }
+  },
+  {
+   "id": "syn-10-en37",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Rebel",
+     "subtitle": "Operation Justice Force, Book 4",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Reese Knightley"
+      }
+     ],
+     "narrators": [
+      "Declan Winters"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Operation Justice Force",
+       "sequence": "4"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Tantor Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 19320,
+    "tags": [],
+    "coverPath": null,
+    "size": 154560000
+   }
+  },
+  {
+   "id": "syn-10-en38",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Rebel",
+     "subtitle": "My Life Outside the Lines",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Nick Nolte"
+      }
+     ],
+     "narrators": [
+      "Nick Nolte",
+      "Christian Baskous"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2018",
+     "publisher": "William Morrow",
+     "description": "",
+     "asin": "B0WCN6BHU3",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 28020,
+    "tags": [],
+    "coverPath": null,
+    "size": 224160000
+   }
+  },
+  {
+   "id": "syn-10-en39",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "04 Storm",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "George R. Stewart"
+      }
+     ],
+     "narrators": [
+      "Patrick Lawlor"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2018",
+     "publisher": "Brilliance Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 40680,
+    "tags": [],
+    "coverPath": null,
+    "size": 325440000
+   }
+  },
+  {
+   "id": "syn-10-en40",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Steal the Moon: Steal the Moon",
+     "subtitle": "Thieves, Book 3",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Lexi Blake"
+      }
+     ],
+     "narrators": [
+      "Kitty Bang"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Thieves",
+       "sequence": "3"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2018",
+     "publisher": "DLZ Entertainment, LLC",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 56580,
+    "tags": [],
+    "coverPath": null,
+    "size": 452640000
+   }
+  },
+  {
+   "id": "syn-10-en41",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Prince of Control: A Gripping LitRPG Adventure",
+     "subtitle": "A Russian Mafia Dark Academia Romance (Bratva Heirs, Book 1)",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Renee Rose"
+      }
+     ],
+     "narrators": [
+      "Benjamin Sands",
+      "Kingsley Rose"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Bratva Heirs",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Renee Rose Romance",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 27300,
+    "tags": [],
+    "coverPath": null,
+    "size": 218400000
+   }
+  },
+  {
+   "id": "syn-10-en42",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Ocean House",
+     "subtitle": "Tortuga Cove Series Book One",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "A. Beck"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Independently Published",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 17460,
+    "tags": [],
+    "coverPath": null,
+    "size": 139680000
+   }
+  },
+  {
+   "id": "syn-10-en43",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Dragon King's Thief",
+     "subtitle": "An MM Fantasy Romance",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Amy Sumida"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Independently Published",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 27060,
+    "tags": [],
+    "coverPath": null,
+    "size": 216480000
+   }
+  },
+  {
+   "id": "syn-10-en44",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Out Of Time",
+     "subtitle": "Launch Point",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Kenneth Bandoly"
+      }
+     ],
+     "narrators": [
+      "Virtual Voice"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Independently Published",
+     "description": "",
+     "asin": "B0FWS1MZL9",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 51516,
+    "tags": [],
+    "coverPath": null,
+    "size": 412128000
+   }
+  },
+  {
+   "id": "syn-10-en45",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Eat Like a Fish",
+     "subtitle": "My Adventures as a Fisherman Turned Restorative Ocean Farmer",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Bren Smith"
+      }
+     ],
+     "narrators": [
+      "Bren Smith"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2019",
+     "publisher": "Random House Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 27780,
+    "tags": [],
+    "coverPath": null,
+    "size": 222240000
+   }
+  },
+  {
+   "id": "syn-10-en46",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Dark Space 01 Dark Space",
+     "subtitle": "Dark Space Series, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Lisa Henry"
+      }
+     ],
+     "narrators": [
+      "Chris Chambers"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Dark Space",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2020",
+     "publisher": "Tantor Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 33000,
+    "tags": [],
+    "coverPath": null,
+    "size": 264000000
+   }
+  },
+  {
+   "id": "syn-10-en47",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The King of Diamonds",
+     "subtitle": "The Search for the Elusive Texas Jewel Thief",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Rena Pederson"
+      }
+     ],
+     "narrators": [
+      "Erin Dion"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Dreamscape Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 49320,
+    "tags": [],
+    "coverPath": null,
+    "size": 394560000
+   }
+  },
+  {
+   "id": "syn-10-en48",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Worst Ship in the Fleet",
+     "subtitle": "Humor, Space Battles, and High Crimes Await!",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Skyler Ramirez"
+      }
+     ],
+     "narrators": [
+      "Michael Murphy"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Dumb Luck and Dead Heroes",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Persephone Entertainment Inc.",
+     "description": "",
+     "asin": "B0CLPXT1M8",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 10260,
+    "tags": [],
+    "coverPath": null,
+    "size": 82080000
+   }
+  },
+  {
+   "id": "syn-10-en49",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Caged Dragon",
+     "subtitle": "Cycle of Dragons Series, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Dan Michaelson"
+      },
+      {
+       "id": "a1",
+       "name": "D.K. Holmberg"
+      }
+     ],
+     "narrators": [
+      "Brian Holden"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Cycle of Dragons",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "Tantor Media",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 26340,
+    "tags": [],
+    "coverPath": null,
+    "size": 210720000
+   }
+  },
+  {
+   "id": "syn-10-en50",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Astrophysics for Young People in a Hurry",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Gregory Mone"
+      },
+      {
+       "id": "a1",
+       "name": "Gabrielle de Cuir"
+      }
+     ],
+     "narrators": [
+      "LeVar Burton"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2019",
+     "publisher": "Blackstone Audio, Inc.",
+     "description": "",
+     "asin": "B0UFCGUL6K",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 12720,
+    "tags": [],
+    "coverPath": null,
+    "size": 101760000
+   }
+  },
+  {
+   "id": "syn-10-en51",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "06 Black Talon",
+     "subtitle": "Dragonblood Assassin, Book 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Jaime Castle"
+      },
+      {
+       "id": "a1",
+       "name": "Andy Peloquin"
+      }
+     ],
+     "narrators": [
+      "Michael Kramer",
+      "Kate Reading"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Dragonblood Assassin",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Audible Studios",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 67980,
+    "tags": [],
+    "coverPath": null,
+    "size": 543840000
+   }
+  },
+  {
+   "id": "syn-10-en52",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Rebellion: Rebellion",
+     "subtitle": "The Reverence Trilogy, Book 2",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Raena Rood"
+      }
+     ],
+     "narrators": [
+      "Brittany Goodwin"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Reverence",
+       "sequence": "2"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "One Foundation Publishing",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 31860,
+    "tags": [],
+    "coverPath": null,
+    "size": 254880000
+   }
+  },
+  {
+   "id": "syn-10-en53",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Onyx Storm (Part 2 of 2) (Dramatized Adaptation): A Gripping LitRPG Adventure",
+     "subtitle": "The Empyrean, Book 3",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Rebecca Yarros"
+      }
+     ],
+     "narrators": [
+      "Megan Poppy",
+      "Laura C. Harris",
+      "Su Ling Chan",
+      "Torian Brackett",
+      "full cast",
+      "Khaya Fraites",
+      "Gabriel Michael",
+      "Taylor Coan",
+      "Jessica Schly",
+      "LaMont Ridgell",
+      "Robb Moreira",
+      "Danny Gavigan"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Empyrean",
+       "sequence": "3"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Graphic Audio LLC",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 37020,
+    "tags": [],
+    "coverPath": null,
+    "size": 296160000
+   }
+  },
+  {
+   "id": "syn-10-en54",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Rise of Prince: 1958-1988",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "A. Hahn"
+      },
+      {
+       "id": "a1",
+       "name": "L. Tiebert"
+      }
+     ],
+     "narrators": [
+      "Rob Saladino"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2017",
+     "publisher": "Alex Hahn",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 37440,
+    "tags": [],
+    "coverPath": null,
+    "size": 299520000
+   }
+  },
+  {
+   "id": "syn-10-en55",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Onyx Storm (Part 1 of 2) (Dramatized Adaptation)",
+     "subtitle": "The Empyrean, Book 3",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Rebecca Yarros"
+      }
+     ],
+     "narrators": [
+      "Robb Moreira",
+      "Torian Brackett",
+      "k'Lai Rivera",
+      "Gabriel Michael",
+      "Megan Poppy",
+      "LaMont Ridgell",
+      "Rayner Gabriel",
+      "Troy Allan",
+      "Laura C. Harris",
+      "Khaya Fraites",
+      "Taylor Coan"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Empyrean",
+       "sequence": "3"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Graphic Audio LLC",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 34860,
+    "tags": [],
+    "coverPath": null,
+    "size": 278880000
+   }
+  },
+  {
+   "id": "syn-10-en56",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Colony",
+     "subtitle": "P-23, Book 2",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Anthony McNally"
+      }
+     ],
+     "narrators": [
+      "Jason Rivers"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "P-23",
+       "sequence": "2"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "A A McNALLY",
+     "description": "",
+     "asin": "B0HH17B8P6",
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 33242,
+    "tags": [],
+    "coverPath": null,
+    "size": 265936000
+   }
+  },
+  {
+   "id": "syn-10-en57",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "The Storm Sister",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Lucinda Riley"
+      }
+     ],
+     "narrators": [
+      "Hattie Morahan"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "The Seven Sisters Series",
+       "sequence": "2"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Macmillan",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 72180,
+    "tags": [],
+    "coverPath": null,
+    "size": 577440000
+   }
+  },
+  {
+   "id": "syn-10-en58",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Oceans of Kansas",
+     "subtitle": "A Natural History of the Western Interior Sea",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Michael J. Everhart"
+      }
+     ],
+     "narrators": [
+      "Tom Perkins"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Tantor Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 53400,
+    "tags": [],
+    "coverPath": null,
+    "size": 427200000
+   }
+  },
+  {
+   "id": "syn-10-en59",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "A Dragon Called Bob",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Milc"
+      }
+     ],
+     "narrators": [
+      "Rhys David",
+      "Jude Erin"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "A Dragon Called Bob",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "Royal Guard Publishing LLC",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "English",
+     "tags": []
+    },
+    "duration": 64800,
+    "tags": [],
+    "coverPath": null,
+    "size": 518400000
+   }
+  },
+  {
+   "id": "syn-10-de60",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Der Ehrenkodex des Jägers",
+     "subtitle": "Der Ehrenkodex des Jägers 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Oleg Sapphire"
+      },
+      {
+       "id": "a1",
+       "name": "Yuri Vinokuroff"
+      }
+     ],
+     "narrators": [
+      "Benjamin Brunken"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Der Ehrenkodex des Jägers",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Magic Dome Books",
+     "description": "",
+     "asin": "B0D929ZRZB",
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 34620,
+    "tags": [],
+    "coverPath": null,
+    "size": 276960000
+   }
+  },
+  {
+   "id": "syn-10-de61",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Sonnenblüte",
+     "subtitle": "Der Zauber der grünen Insel 3",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Nora Roberts"
+      },
+      {
+       "id": "a1",
+       "name": "Uta Hege - Übersetzer"
+      }
+     ],
+     "narrators": [
+      "Elena Wilms"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Der Zauber der grünen Insel",
+       "sequence": "3"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Random House Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 66000,
+    "tags": [],
+    "coverPath": null,
+    "size": 528000000
+   }
+  },
+  {
+   "id": "syn-10-de62",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Stay Away from Gretchen - Eine unmögliche Liebe",
+     "subtitle": "Die Gretchen-Reihe 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Susanne Abel"
+      }
+     ],
+     "narrators": [
+      "Vera Teltz"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Die Gretchen-Reihe",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "HörbucHHamburg HHV GmbH ",
+     "description": "",
+     "asin": "B01NYMFN3P",
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 50640,
+    "tags": [],
+    "coverPath": null,
+    "size": 405120000
+   }
+  },
+  {
+   "id": "syn-10-de63",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "02 Im Zeichen des Drachen",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Tom Clancy"
+      }
+     ],
+     "narrators": [
+      "Frank Arnold"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Jack Ryan (in chronologischer Reihenfolge)",
+       "sequence": "11"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2013",
+     "publisher": "Random House Audio, Deutschland",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 166380,
+    "tags": [],
+    "coverPath": null,
+    "size": 1331040000
+   }
+  },
+  {
+   "id": "syn-10-de64",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Lukkas Erbe: Lukkas Erbe",
+     "subtitle": "A Novel",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Petra Hammesfahr"
+      }
+     ],
+     "narrators": [
+      "Christina Puciata"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "AUDIOBUCH",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 48960,
+    "tags": [],
+    "coverPath": null,
+    "size": 391680000
+   }
+  },
+  {
+   "id": "syn-10-de65",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Nacht der Ruinen",
+     "subtitle": "Kriminalroman | Nominiert für den GLAUSER-Preis 2026",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Cay Rademacher"
+      }
+     ],
+     "narrators": [
+      "Oliver Siebeck"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "DUMONT Buchverlag",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 49080,
+    "tags": [],
+    "coverPath": null,
+    "size": 392640000
+   }
+  },
+  {
+   "id": "syn-10-de66",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Moonlight Sword 1: Klingenherz",
+     "subtitle": "Epische High Romantasy um ein magisches Schwert und eine unmögliche Liebe",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Asuka Lionera"
+      }
+     ],
+     "narrators": [
+      "Alexander Pensel",
+      "Viola Müller",
+      "Asuka Lionera",
+      "Sven Macht"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Moonlight Sword",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Silberfisch",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 48900,
+    "tags": [],
+    "coverPath": null,
+    "size": 391200000
+   }
+  },
+  {
+   "id": "syn-10-de67",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Der Ehrenkodex des Jägers (Buch 10)",
+     "subtitle": "Eine fortlaufende Fantasy-Buchreihe",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Yuri Vinokuroff"
+      },
+      {
+       "id": "a1",
+       "name": "Oleg Sapphire"
+      }
+     ],
+     "narrators": [
+      "Benjamin Brunken"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Der Ehrenkodex des Jägers",
+       "sequence": "10"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2026",
+     "publisher": "MDB US INC.",
+     "description": "",
+     "asin": "B0HBFSYBZ4",
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 34992,
+    "tags": [],
+    "coverPath": null,
+    "size": 279936000
+   }
+  },
+  {
+   "id": "syn-10-de68",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Lost Moon - Mondfinsternis",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Brandon Q. Morris"
+      }
+     ],
+     "narrators": [
+      "Mark Bremer"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Rubikon Audioverlag",
+     "description": "",
+     "asin": "B0V5934PTZ",
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 29220,
+    "tags": [],
+    "coverPath": null,
+    "size": 233760000
+   }
+  },
+  {
+   "id": "syn-10-de69",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Der Schattenkrieg",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Tom Clancy"
+      }
+     ],
+     "narrators": [
+      "Frank Arnold"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Jack Ryan (in chronologischer Reihenfolge)",
+       "sequence": "6"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2012",
+     "publisher": "Random House Audio, Deutschland",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 87060,
+    "tags": [],
+    "coverPath": null,
+    "size": 696480000
+   }
+  },
+  {
+   "id": "syn-10-de70",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Auf der Spur des Jägers",
+     "subtitle": "Jan Tommen 9",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Alexander Hartung"
+      }
+     ],
+     "narrators": [
+      "Oliver Schmitz"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Jan Tommen",
+       "sequence": "9"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Amazon EU S.à r.l",
+     "description": "",
+     "asin": "B0BDMSLDLT",
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 28860,
+    "tags": [],
+    "coverPath": null,
+    "size": 230880000
+   }
+  },
+  {
+   "id": "syn-10-de71",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Die verfluchte Stadt",
+     "subtitle": "Warhammer Age of Sigmar",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "C L Werner"
+      }
+     ],
+     "narrators": [
+      "Robert Oschatz"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Eins A Medien GmbH",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 43320,
+    "tags": [],
+    "coverPath": null,
+    "size": 346560000
+   }
+  },
+  {
+   "id": "syn-10-de72",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Nachtengel - Gemini",
+     "subtitle": "Nightangel 2",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Brent Weeks"
+      },
+      {
+       "id": "a1",
+       "name": "Clemens Brunn - Übersetzer"
+      }
+     ],
+     "narrators": [
+      "Oliver Siebeck"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Nachtengel",
+       "sequence": "2"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "Random House Audio, Deutschland",
+     "description": "",
+     "asin": "B0HAP320NE",
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 77340,
+    "tags": [],
+    "coverPath": null,
+    "size": 618720000
+   }
+  },
+  {
+   "id": "syn-10-de73",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "07 Das Geheimnis",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Ellen Sandberg"
+      }
+     ],
+     "narrators": [
+      "Vera Teltz"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2021",
+     "publisher": "Der Audio Verlag",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 42420,
+    "tags": [],
+    "coverPath": null,
+    "size": 339360000
+   }
+  },
+  {
+   "id": "syn-10-de74",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Wo Schnee nach Liebe riecht: Wo Schnee nach Liebe riecht",
+     "subtitle": "Neufundland-Love 2",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Lisa Torberg"
+      }
+     ],
+     "narrators": [
+      "Giovanna Meyrat",
+      "This Wachter"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Neufundland-Love",
+       "sequence": "2"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2023",
+     "publisher": "Speech Studio Schweiz",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 28980,
+    "tags": [],
+    "coverPath": null,
+    "size": 231840000
+   }
+  },
+  {
+   "id": "syn-10-de75",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Assassin's Creed Valhalla - Das Schwert des weißen Pferdes",
+     "subtitle": null,
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Elsa Sjunneson"
+      }
+     ],
+     "narrators": [
+      "Marylu Poolman"
+     ],
+     "series": [],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Audible Studios",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 36480,
+    "tags": [],
+    "coverPath": null,
+    "size": 291840000
+   }
+  },
+  {
+   "id": "syn-10-de76",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Star Wars™ Erben des Imperiums",
+     "subtitle": "Jubiläumsausgabe mit Bonusmaterial",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Timothy Zahn"
+      },
+      {
+       "id": "a1",
+       "name": "Thomas Ziegler - translator"
+      }
+     ],
+     "narrators": [
+      "Hans Henrik Wöhler"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Großadmiral Thrawn – die Legende",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2025",
+     "publisher": "Random House Audio",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 65940,
+    "tags": [],
+    "coverPath": null,
+    "size": 527520000
+   }
+  },
+  {
+   "id": "syn-10-de77",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Die Schlacht der Schatten",
+     "subtitle": "Das Rad der Zeit 36",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Robert Jordan"
+      },
+      {
+       "id": "a1",
+       "name": "Brandon Sanderson"
+      }
+     ],
+     "narrators": [
+      "Helmut Krauss"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Das Rad der Zeit",
+       "sequence": "36"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2013",
+     "publisher": "Audible Studios",
+     "description": "",
+     "asin": "B00D16H986",
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 95450,
+    "tags": [],
+    "coverPath": null,
+    "size": 763600000
+   }
+  },
+  {
+   "id": "syn-10-de78",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Magisches Blut",
+     "subtitle": "Stadt der Finsternis 4",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Ilona Andrews"
+      },
+      {
+       "id": "a1",
+       "name": "Bernhard Kempen - Übersetzer"
+      }
+     ],
+     "narrators": [
+      "Mala Sommer"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Stadt der Finsternis",
+       "sequence": "4"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2024",
+     "publisher": "LYX.audio",
+     "description": "",
+     "asin": "B0FDYSZ53N",
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 52440,
+    "tags": [],
+    "coverPath": null,
+    "size": 419520000
+   }
+  },
+  {
+   "id": "syn-10-de79",
+   "libraryId": "114068f9-142d-4524-b0ef-a349354b5f88",
+   "mediaType": "book",
+   "media": {
+    "metadata": {
+     "title": "Witches & Hunters - Verbranntes Vertrauen",
+     "subtitle": "Witches 1",
+     "authors": [
+      {
+       "id": "a0",
+       "name": "Janina Schneider-Tidigk"
+      }
+     ],
+     "narrators": [
+      "Constanze Buttmann",
+      "Dirk Jacobs"
+     ],
+     "series": [
+      {
+       "id": "s0",
+       "name": "Witches",
+       "sequence": "1"
+      }
+     ],
+     "genres": [],
+     "publishedYear": "2022",
+     "publisher": "Wunderkind Audiobooks",
+     "description": "",
+     "asin": null,
+     "isbn": null,
+     "language": "German",
+     "tags": []
+    },
+    "duration": 43440,
+    "tags": [],
+    "coverPath": null,
+    "size": 347520000
+   }
+  }
+ ],
+ "expected": {
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en00": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "Skandar and the Unicorn Thief",
+   "note": "synthetic case clean_ok; true product B09KYJSQD5",
+   "case": "clean_ok"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en01": {
+   "asin": "B0CFYR5Q8G",
+   "status": "confirmed",
+   "title": "Rebel Rising",
+   "note": "synthetic case no_asin; true product B0CFYR5Q8G",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en02": {
+   "asin": "B0GD8RRNTP",
+   "status": "confirmed",
+   "title": "The World's Wimpiest Vampire",
+   "note": "synthetic case dead_asin; true product B0GD8RRNTP",
+   "case": "dead_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en03": {
+   "asin": "B0FWS3VS85",
+   "status": "confirmed",
+   "title": "Vampire Bride: The Complete Series",
+   "note": "synthetic case messy_number_prefix; true product B0FWS3VS85",
+   "case": "messy_number_prefix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en04": {
+   "asin": "B0GTWS6GW4",
+   "status": "confirmed",
+   "title": "The Lost Kingdom of Daughters",
+   "note": "synthetic case duplicate_title; true product B0GTWS6GW4",
+   "case": "duplicate_title"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en05": {
+   "asin": "179710344X",
+   "status": "confirmed",
+   "title": "The Falcon Thief",
+   "note": "synthetic case marketing_suffix; true product 179710344X",
+   "case": "marketing_suffix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en06": {
+   "asin": "B0CPKNRSL5",
+   "status": "confirmed",
+   "title": "Rogue Ascension",
+   "note": "synthetic case initials_author; true product B0CPKNRSL5",
+   "case": "initials_author"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en07": {
+   "asin": "B0HLQ6NNJQ",
+   "status": "confirmed",
+   "title": "Heist: Thieves of Clover",
+   "note": "synthetic case accent_free_author; true product B0HLQ6NNJQ",
+   "case": "accent_free_author"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en08": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "The Redeemable Prince",
+   "note": "synthetic case runtime_8pct_off; true product B071V88FFB",
+   "case": "runtime_8pct_off"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en09": {
+   "asin": "B099SGZNKJ",
+   "status": "confirmed",
+   "title": "Know When to Run: Mission 1",
+   "note": "synthetic case series_name_variant; true product B099SGZNKJ",
+   "case": "series_name_variant"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en10": {
+   "asin": "B0FC937WN4",
+   "status": "confirmed",
+   "title": "Primal Forest",
+   "note": "synthetic case messy_series_prefix; true product B0FC937WN4",
+   "case": "messy_series_prefix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en11": {
+   "asin": "B09KNLQ9VJ",
+   "status": "confirmed",
+   "title": "Sounds of Nature with 432Hz Music to Relax, Fall asleep, Meditate, Heal",
+   "note": "synthetic case no_asin; true product B09KNLQ9VJ",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en12": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "Crown of One Hundred Kings",
+   "note": "synthetic case clean_ok; true product 1666108243",
+   "case": "clean_ok"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en13": {
+   "asin": "1541446518",
+   "status": "confirmed",
+   "title": "Vampire Royals 1",
+   "note": "synthetic case no_asin; true product 1541446518",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en14": {
+   "asin": "B0HJZVDZVW",
+   "status": "confirmed",
+   "title": "Dungeon Life 5: An Isekai LitRPG",
+   "note": "synthetic case dead_asin; true product B0HJZVDZVW",
+   "case": "dead_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en15": {
+   "asin": "B0C6RCCXX1",
+   "status": "confirmed",
+   "title": "Fourteenth Colony",
+   "note": "synthetic case messy_number_prefix; true product B0C6RCCXX1",
+   "case": "messy_number_prefix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en16": {
+   "asin": "1977319386",
+   "status": "confirmed",
+   "title": "The Orchid Throne",
+   "note": "synthetic case duplicate_title; true product 1977319386",
+   "case": "duplicate_title"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en17": {
+   "asin": "1984846884",
+   "status": "confirmed",
+   "title": "The Last Woman in the Forest",
+   "note": "synthetic case marketing_suffix; true product 1984846884",
+   "case": "marketing_suffix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en18": {
+   "asin": "B01LZP7T40",
+   "status": "confirmed",
+   "title": "Star Nomad",
+   "note": "synthetic case initials_author; true product B01LZP7T40",
+   "case": "initials_author"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en19": {
+   "asin": "B0DPY2HGHG",
+   "status": "confirmed",
+   "title": "The Colony",
+   "note": "synthetic case accent_free_author; true product B0DPY2HGHG",
+   "case": "accent_free_author"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en20": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "Dragon's Kiss",
+   "note": "synthetic case runtime_8pct_off; true product B0DDMQBC9H",
+   "case": "runtime_8pct_off"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en21": {
+   "asin": "B00CX9DSH8",
+   "status": "confirmed",
+   "title": "Vintage Vampire Stories",
+   "note": "synthetic case no_asin; true product B00CX9DSH8",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en22": {
+   "asin": "B004CN1Y1A",
+   "status": "confirmed",
+   "title": "The Return to the Little Kingdom",
+   "note": "synthetic case no_asin; true product B004CN1Y1A",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en23": {
+   "asin": "B0FZDSPD3J",
+   "status": "confirmed",
+   "title": "House of Beating Wings (Dramatized Adaptation)",
+   "note": "synthetic case no_asin; true product B0FZDSPD3J",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en24": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "Ocean",
+   "note": "synthetic case clean_ok; true product B077RBPJFH",
+   "case": "clean_ok"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en25": {
+   "asin": "B07L49W11R",
+   "status": "confirmed",
+   "title": "Rebel",
+   "note": "synthetic case no_asin; true product B07L49W11R",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en26": {
+   "asin": "B0D1GTFP5Q",
+   "status": "confirmed",
+   "title": "Void Drifter",
+   "note": "synthetic case dead_asin; true product B0D1GTFP5Q",
+   "case": "dead_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en27": {
+   "asin": "B0FSTB6CF4",
+   "status": "confirmed",
+   "title": "Kingdom of Devils",
+   "note": "synthetic case messy_number_prefix; true product B0FSTB6CF4",
+   "case": "messy_number_prefix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en28": {
+   "asin": "B0FHG5LMTC",
+   "status": "confirmed",
+   "title": "Behind the Black Curtain",
+   "note": "synthetic case duplicate_title; true product B0FHG5LMTC",
+   "case": "duplicate_title"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en29": {
+   "asin": "B0G2KXMG8H",
+   "status": "confirmed",
+   "title": "A Prince Among Pirates",
+   "note": "synthetic case marketing_suffix; true product B0G2KXMG8H",
+   "case": "marketing_suffix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en30": {
+   "asin": "B09NLG87J7",
+   "status": "confirmed",
+   "title": "The Princess Bride",
+   "note": "synthetic case initials_author; true product B09NLG87J7",
+   "case": "initials_author"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en31": {
+   "asin": "B0BLFWBB71",
+   "status": "confirmed",
+   "title": "The Forest of Ire",
+   "note": "synthetic case accent_free_author; true product B0BLFWBB71",
+   "case": "accent_free_author"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en32": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "Gifted Thief",
+   "note": "synthetic case runtime_8pct_off; true product B01CYZBQ1A",
+   "case": "runtime_8pct_off"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en33": {
+   "asin": "B07CL3F5H2",
+   "status": "confirmed",
+   "title": "Fire & Blood (HBO Tie-in Edition)",
+   "note": "synthetic case series_name_variant; true product B07CL3F5H2",
+   "case": "series_name_variant"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en34": {
+   "asin": "B00FYWM9FI",
+   "status": "confirmed",
+   "title": "Blood of Anteros",
+   "note": "synthetic case messy_series_prefix; true product B00FYWM9FI",
+   "case": "messy_series_prefix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en35": {
+   "asin": "B0BDP7JHPP",
+   "status": "confirmed",
+   "title": "Another World",
+   "note": "synthetic case no_asin; true product B0BDP7JHPP",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en36": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "The Road Map: Escaping the Maze of Madness",
+   "note": "synthetic case clean_ok; true product B0GH2K4B4W",
+   "case": "clean_ok"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en37": {
+   "asin": "B0C6VLWHD7",
+   "status": "confirmed",
+   "title": "Rebel",
+   "note": "synthetic case no_asin; true product B0C6VLWHD7",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en38": {
+   "asin": "B0773VMSMH",
+   "status": "confirmed",
+   "title": "Rebel",
+   "note": "synthetic case dead_asin; true product B0773VMSMH",
+   "case": "dead_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en39": {
+   "asin": "B07C2HPLKP",
+   "status": "confirmed",
+   "title": "Storm",
+   "note": "synthetic case messy_number_prefix; true product B07C2HPLKP",
+   "case": "messy_number_prefix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en40": {
+   "asin": "B07C7HRR57",
+   "status": "confirmed",
+   "title": "Steal the Moon",
+   "note": "synthetic case duplicate_title; true product B07C7HRR57",
+   "case": "duplicate_title"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en41": {
+   "asin": "B0H38532M2",
+   "status": "confirmed",
+   "title": "Prince of Control",
+   "note": "synthetic case marketing_suffix; true product B0H38532M2",
+   "case": "marketing_suffix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en42": {
+   "asin": "B0CZB14K7B",
+   "status": "confirmed",
+   "title": "The Ocean House",
+   "note": "synthetic case initials_author; true product B0CZB14K7B",
+   "case": "initials_author"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en43": {
+   "asin": "B0CPNVCYFS",
+   "status": "confirmed",
+   "title": "The Dragon King's Thief",
+   "note": "synthetic case accent_free_author; true product B0CPNVCYFS",
+   "case": "accent_free_author"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en44": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "Out Of Time",
+   "note": "synthetic case runtime_8pct_off; true product B0FWS1MZL9",
+   "case": "runtime_8pct_off"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en45": {
+   "asin": "0593103882",
+   "status": "confirmed",
+   "title": "Eat Like a Fish",
+   "note": "synthetic case no_asin; true product 0593103882",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en46": {
+   "asin": "1705222668",
+   "status": "confirmed",
+   "title": "Dark Space",
+   "note": "synthetic case messy_series_prefix; true product 1705222668",
+   "case": "messy_series_prefix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en47": {
+   "asin": "B0CRJ4LQPD",
+   "status": "confirmed",
+   "title": "The King of Diamonds",
+   "note": "synthetic case no_asin; true product B0CRJ4LQPD",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en48": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "The Worst Ship in the Fleet",
+   "note": "synthetic case clean_ok; true product B0CLPXT1M8",
+   "case": "clean_ok"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en49": {
+   "asin": "B09MGDMQB3",
+   "status": "confirmed",
+   "title": "The Caged Dragon",
+   "note": "synthetic case no_asin; true product B09MGDMQB3",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en50": {
+   "asin": "198259151X",
+   "status": "confirmed",
+   "title": "Astrophysics for Young People in a Hurry",
+   "note": "synthetic case dead_asin; true product 198259151X",
+   "case": "dead_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en51": {
+   "asin": "B0B5B6XDMS",
+   "status": "confirmed",
+   "title": "Black Talon",
+   "note": "synthetic case messy_number_prefix; true product B0B5B6XDMS",
+   "case": "messy_number_prefix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en52": {
+   "asin": "B0G675BWH8",
+   "status": "confirmed",
+   "title": "Rebellion",
+   "note": "synthetic case duplicate_title; true product B0G675BWH8",
+   "case": "duplicate_title"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en53": {
+   "asin": "B0F6G83NST",
+   "status": "confirmed",
+   "title": "Onyx Storm (Part 2 of 2) (Dramatized Adaptation)",
+   "note": "synthetic case marketing_suffix; true product B0F6G83NST",
+   "case": "marketing_suffix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en54": {
+   "asin": "B073XWFJCG",
+   "status": "confirmed",
+   "title": "The Rise of Prince: 1958-1988",
+   "note": "synthetic case initials_author; true product B073XWFJCG",
+   "case": "initials_author"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en55": {
+   "asin": "B0DWZBBV2W",
+   "status": "confirmed",
+   "title": "Onyx Storm (Part 1 of 2) (Dramatized Adaptation)",
+   "note": "synthetic case accent_free_author; true product B0DWZBBV2W",
+   "case": "accent_free_author"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en56": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "The Colony",
+   "note": "synthetic case runtime_8pct_off; true product B0HH17B8P6",
+   "case": "runtime_8pct_off"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en57": {
+   "asin": "B09M7DP7RK",
+   "status": "confirmed",
+   "title": "The Storm Sister",
+   "note": "synthetic case series_name_variant; true product B09M7DP7RK",
+   "case": "series_name_variant"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en58": {
+   "asin": "B0BK57L2NZ",
+   "status": "confirmed",
+   "title": "Oceans of Kansas",
+   "note": "synthetic case no_asin; true product B0BK57L2NZ",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-en59": {
+   "asin": "B0H87YHS3F",
+   "status": "confirmed",
+   "title": "A Dragon Called Bob",
+   "note": "synthetic case no_asin; true product B0H87YHS3F",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de60": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "Der Ehrenkodex des Jägers",
+   "note": "synthetic case clean_ok; true product B0D929ZRZB",
+   "case": "clean_ok"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de61": {
+   "asin": "B0CDHKND4Z",
+   "status": "confirmed",
+   "title": "Sonnenblüte",
+   "note": "synthetic case no_asin; true product B0CDHKND4Z",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de62": {
+   "asin": "3844926364",
+   "status": "confirmed",
+   "title": "Stay Away from Gretchen - Eine unmögliche Liebe",
+   "note": "synthetic case dead_asin; true product 3844926364",
+   "case": "dead_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de63": {
+   "asin": "B00DQDSHN0",
+   "status": "confirmed",
+   "title": "Im Zeichen des Drachen",
+   "note": "synthetic case messy_number_prefix; true product B00DQDSHN0",
+   "case": "messy_number_prefix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de64": {
+   "asin": "B0CCP4C8JP",
+   "status": "confirmed",
+   "title": "Lukkas Erbe",
+   "note": "synthetic case duplicate_title; true product B0CCP4C8JP",
+   "case": "duplicate_title"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de65": {
+   "asin": "B0DW4GXCQP",
+   "status": "confirmed",
+   "title": "Nacht der Ruinen",
+   "note": "synthetic case accent_free_author; true product B0DW4GXCQP",
+   "case": "accent_free_author"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de66": {
+   "asin": "B0BX9NRS45",
+   "status": "confirmed",
+   "title": "Moonlight Sword 1: Klingenherz",
+   "note": "synthetic case no_asin; true product B0BX9NRS45",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de67": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "Der Ehrenkodex des Jägers (Buch 10)",
+   "note": "synthetic case runtime_8pct_off; true product B0HBFSYBZ4",
+   "case": "runtime_8pct_off"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de68": {
+   "asin": "B0B63KZB4C",
+   "status": "confirmed",
+   "title": "Lost Moon - Mondfinsternis",
+   "note": "synthetic case dead_asin; true product B0B63KZB4C",
+   "case": "dead_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de69": {
+   "asin": "B007RKNUN0",
+   "status": "confirmed",
+   "title": "Der Schattenkrieg",
+   "note": "synthetic case no_asin; true product B007RKNUN0",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de70": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "Auf der Spur des Jägers",
+   "note": "synthetic case clean_ok; true product B0BDMSLDLT",
+   "case": "clean_ok"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de71": {
+   "asin": "B0CPM2WN1S",
+   "status": "confirmed",
+   "title": "Die verfluchte Stadt",
+   "note": "synthetic case no_asin; true product B0CPM2WN1S",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de72": {
+   "asin": "B0D239J68K",
+   "status": "confirmed",
+   "title": "Nachtengel - Gemini",
+   "note": "synthetic case dead_asin; true product B0D239J68K",
+   "case": "dead_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de73": {
+   "asin": "B09GGCSS1J",
+   "status": "confirmed",
+   "title": "Das Geheimnis",
+   "note": "synthetic case messy_number_prefix; true product B09GGCSS1J",
+   "case": "messy_number_prefix"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de74": {
+   "asin": "B0CP2JGLZ2",
+   "status": "confirmed",
+   "title": "Wo Schnee nach Liebe riecht",
+   "note": "synthetic case duplicate_title; true product B0CP2JGLZ2",
+   "case": "duplicate_title"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de75": {
+   "asin": "B0B1DF46R4",
+   "status": "confirmed",
+   "title": "Assassin's Creed Valhalla - Das Schwert des weißen Pferdes",
+   "note": "synthetic case accent_free_author; true product B0B1DF46R4",
+   "case": "accent_free_author"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de76": {
+   "asin": "B0F2TDL8D6",
+   "status": "confirmed",
+   "title": "Star Wars™ Erben des Imperiums",
+   "note": "synthetic case no_asin; true product B0F2TDL8D6",
+   "case": "no_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de77": {
+   "asin": null,
+   "status": "confirmed",
+   "title": "Die Schlacht der Schatten",
+   "note": "synthetic case runtime_8pct_off; true product B00D16H986",
+   "case": "runtime_8pct_off"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de78": {
+   "asin": "B0CSKBKDVH",
+   "status": "confirmed",
+   "title": "Magisches Blut",
+   "note": "synthetic case dead_asin; true product B0CSKBKDVH",
+   "case": "dead_asin"
+  },
+  "114068f9-142d-4524-b0ef-a349354b5f88_syn-10-de79": {
+   "asin": "B0BQ3L8MDB",
+   "status": "confirmed",
+   "title": "Witches & Hunters - Verbranntes Vertrauen",
+   "note": "synthetic case no_asin; true product B0BQ3L8MDB",
+   "case": "no_asin"
+  }
+ }
+}

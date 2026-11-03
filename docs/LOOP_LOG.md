@@ -298,3 +298,7 @@ Library: 2 ASIN changes hand-verified (Neverwinter, Gauntlgrym: title, author, n
 ## Quota incident + protection (2026-11-04 00:05)
 Hardcover reported r=0 (daily limit 5000 used incl. the 25 reserve; reset 01:00). Cause: my parallel regression runs sent LIVE requests for queries without a recording (and recorded 9 HTTP 429 answers as "truth"). Fixes: (1) regress.sh now runs with RECORD_NO_LIVE=audible,hardcover,goodreads = pure offline replay; missing recordings are counted and reported ("blocked"), never sent; (2) the recorder never stores HTTP 429/5xx; (3) the 9 poisoned recordings were deleted. Live rounds stay sequential.
 Rule: Hardcover/Goodreads live requests only from deliberately started sequential rounds, never from regress.
+
+## Batch A8 (counting #8: 100 library + 80 synthetic, Audible-only, 6:41 min, 0 errors) – CLEAN (counter 3 of 4)
+Library: 4 ASIN changes hand-verified (A Tangled Road to Justice, Blood Moon, Rise of the King, Unbound; 4-6 independent evidences each); ISHURA 04 = Spanish edition by Norma Editorial (narrator == author data error), no Audible candidate -> correct "not found". Synthetic 80/80. Review list empty. Nothing to correct.
+Qualification plan: 4 clean Audible batches (A6, A7, A8 done; A9 next) + 3 clean Hardcover-path batches (H1-H3: Hardcover ID/ASIN/ISBN paths, ISBN repair, every Hardcover hit cross-checked against Audible; quota resets 01:00) + Goodreads sample verified.
