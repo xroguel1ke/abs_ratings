@@ -200,3 +200,8 @@ Not on Audible (documented in golden): Allanon's Quest (66 min short story; no h
 Mockingjay -> 1338589040 (title, author, narrator, series number; runtime within tolerance).
 ISBN repair: 26 planned in this batch, 15 without verified replacement -> review list (kind isbn).
 Series seed cache now built from the whole-library audit (395 series titles). lib_check baseline: "The Empyrean" (2 books) now keeps its name because BOTH names exist as Audible series titles (then the larger group wins) – judged correct, accepted.
+
+## Standing rule: never idle (user, 2026-11-03)
+While a process waits (Goodreads pause, long runs), start the next independent task in parallel: next batch + its evaluation, web UI pieces, tests, docs. There must always be work in progress.
+
+## Round 4 – counting round (code frozen at commit 07e63f3, 21:17), clean rounds so far 0 of 3
