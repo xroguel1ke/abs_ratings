@@ -969,14 +969,19 @@ def series_candidates(abs_series, authors_list, duration, domain):
     listing does not. Children are prefiltered with ONE bulk request: runtime within 10 min and matching author."""
     from abs_series import series_key
     keys = [series_key(x.get('name') or '') for x in (abs_series or []) if x.get('name')]
-    wanted = set()
+    wanted, ranked = set(), []
+    words = lambda s: {w for w in s.split() if len(w) >= 4}
     for title, asins in SERIES_ASINS.items():
         sk = series_key(title)
-        if any(k and (sk == k or sk.startswith(k + ' ')) for k in keys): wanted |= asins
+        if any(k and (sk == k or sk.startswith(k + ' ')) for k in keys): wanted |= asins; continue
+        # looser: ABS 'Dune Universe' vs Audible 'DUNE: Prelude to Dune' share a significant word (candidates are filtered hard afterwards)
+        shared = max((len(words(sk) & words(k)) for k in keys if k), default=0)
+        if shared: ranked.append((-shared, len(sk), sorted(asins)))
+    for _, _, asins in sorted(ranked)[:10]: wanted |= set(asins)
     if not wanted or not duration: return []
     host, hdr = AUDIBLE_API_HOSTS[domain], {"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}
     children = []
-    for sa in sorted(wanted)[:6]:
+    for sa in sorted(wanted)[:14]:
         if sa not in _SERIES_CHILDREN:
             throttle('audible_api')
             try:
@@ -1109,7 +1114,12 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                                  and not match_author(authors_list, SEARCH_CTX.get('old_authors') or ''))  # current ASIN is a different book
                 if old_wrong: evidence.append('old-asin-is-another-book')
                 if dup_resolved: evidence.append('duplicate-asin-resolved-by-exact-runtime')
-                extra = sum([narr_hit, vol_hit, ser_hit, exact_long, old_wrong, dup_resolved])
+                cand_pub = ((p.get('meta_raw') or {}).get('publisher') or {}).get('name')
+                cand_year = str(parse_release_year((p.get('meta_raw') or {}).get('releaseDate')) or '')
+                pub_year = bool(cand_pub and SEARCH_CTX.get('pub') and cand_year and SEARCH_CTX.get('year')
+                                and re.sub(r'[^a-z0-9]', '', cand_pub.lower()) == re.sub(r'[^a-z0-9]', '', SEARCH_CTX['pub'].lower()) and cand_year == str(SEARCH_CTX['year']))
+                if pub_year: evidence.append('publisher+year')
+                extra = sum([narr_hit, vol_hit, ser_hit, exact_long, old_wrong, dup_resolved, pub_year])
                 ser_loose = (not ser_hit) and any(an is not None and cn is not None and an == cn and an >= 2  # same number, series named differently
                                                   for _, an in _series_pairs(abs_series) for _, cn in _series_pairs((p.get('meta_raw') or {}).get('series')))
                 if ser_loose and not dur_ok: evidence.append('series-number(other name)')
@@ -2040,6 +2050,7 @@ def process_queue(work_queue, history, failed, recheck):
                     SEARCH_CTX.clear()
                     search_narr = [] if plaus == "wrong" else (meta.get("narrators") or [])
                     SEARCH_CTX['dup_claim'] = bool(asin and (ASIN_OWNERS.get(asin, set()) - {key}))  # another ABS book has the same ASIN
+                    SEARCH_CTX['pub'], SEARCH_CTX['year'] = meta.get('publisher'), meta.get('publishedYear')
                     if asin and aud_data and aud_data.get('title_raw'):
                         SEARCH_CTX.update({'old_title': aud_data['title_raw'], 'old_authors': ', '.join(aud_data.get('authors_raw') or [])})
                     if not found: found = find_missing_asin(search_title, authors, abs_dur, lang, raw_title=title,

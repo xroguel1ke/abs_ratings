@@ -192,3 +192,11 @@ Relevant mainly for the final full-library run (~2h15) and later scheduled runs;
 ## Round 3 – first COUNTING round (code frozen at commit 367ca8c, 2026-11-03 21:02)
 100 fresh books (never in a round, golden list or ISBN/Goodreads test), live + record, Hardcover on, Goodreads OFF (IP blocked, see GOODREADS_FINDINGS.md), DRY_RUN, fake ABS.
 Counts as CLEAN only if every risky change is hand-verified correct AND nothing has to be fixed afterwards. Any fix -> counter back to 0 (clean rounds so far: 0 of 3).
+
+## Round 3 result (counting round, NOT clean -> counter stays 0 of 3)
+100 fresh books, 4:47 min, 0 errors, Hardcover 95/100 (302 daily requests left afterwards).
+Needed fixes (so not clean): (1) weak-evidence cases The Companions + The Goblin Emperor (same narrator, runtime 7-9 % off, old ASIN dead): new evidence `publisher+year` (identical publisher AND release year as ABS) -> confirmed; (2) House Harkonnen (Audible catalog search never returns it, like House Corrino): series listing path now also matches series sharing a significant word ("Dune Universe" ~ "DUNE: Prelude to Dune"), up to 10 series, candidates still filtered by runtime ±10 min + author + full evidence gate -> 1004027915.
+Not on Audible (documented in golden): Allanon's Quest (66 min short story; no hit via API, author listing, series listings, web search), The Book of Lost Tales x2 (narrator "Library of Congress recording" = non-commercial).
+Mockingjay -> 1338589040 (title, author, narrator, series number; runtime within tolerance).
+ISBN repair: 26 planned in this batch, 15 without verified replacement -> review list (kind isbn).
+Series seed cache now built from the whole-library audit (395 series titles). lib_check baseline: "The Empyrean" (2 books) now keeps its name because BOTH names exist as Audible series titles (then the larger group wins) – judged correct, accepted.
