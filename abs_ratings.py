@@ -1241,6 +1241,11 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             if duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120 and a_narr and c_narr and a_narr & c_narr and not LAST_SEARCH.get('weak'):
                 LAST_SEARCH['weak'] = {'asin': cand, 'title': found_title, 'title_score': round(t_score, 2), 'author_ok': bool(auth_ok)}  # runtime to the minute + narrator agree, title/author do not: a human decides
             logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, runtime {'✓' if dur_ok else '✗' if dur_conflict else '?'})")
+        if domain == domains[0] and (nq or nq2) and not best_pick and not near_pick and not only_queries and not only_extra:  # preferred store first: author+narrator filter there before another store wins
+            rel_b = LAST_SEARCH['related']
+            res = search_audible_api(title, authors_list, duration, lang, raw_title, required_lang, strict, domain, narrators, abs_series, only_queries=[q_ for q_ in (nq, nq2) if q_])
+            if res: return res
+            if rel_b and not LAST_SEARCH['related']: LAST_SEARCH['related'] = rel_b
         if best_pick: break  # do not search further stores when this store already has an acceptable hit
     if best_pick:
         LAST_MATCH.clear(); LAST_MATCH.update(best_pick[2])

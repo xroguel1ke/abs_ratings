@@ -279,3 +279,10 @@ Library part: 3 ASIN changes correct (The World of Ice & Fire, Moreta, Empire of
 Synthetic: 79/80 -> "The Island" (very generic title, author "S. Brody", AI narrator "Virtual Voice" who narrates thousands of books): last-resort queries fetch 20 results and prefilter them by runtime (±10 %) before loading products -> 80/80.
 Fix count: library 0 + synthetic 1. Trend per counting batch: A1 6, A2 5, A3 3, A4 1.
 Report: duplicate recordings (same author+narrator, duration within 2 s) added to the library report (found: Throne == Throne Hunters 5).
+
+## Batch A5 (counting #5: 100 library + 80 synthetic, Audible-only, 6:40 min, 0 errors) – NOT clean (1 fix), counter 0 of 4
+Library: 2 ASIN changes correct (The Last Hero, The Book That Wouldn't Burn; 6 evidences each), 0 library fixes. Not on Audible: Nerilkas Story (checked: search, author+narrator filter, 3 Pern series listings).
+Synthetic: 79/80 -> "The Soldier": a valid .co.uk listing won before the .com one; the author+narrator last-resort now runs in the PREFERRED store first (English -> .com). 80/80.
+Side effect found by regress.sh (documented as improvement): 4 older golden ASINs were .co.uk variants of the same products (All the Skills, Reincarnated vol 3, SAO 5, Primal Hunter 7) -> now the .com variant (preferred store, verified: same title/runtime/date); "86—EIGHTY-SIX, Vol. 6" is a library DUPLICATE (the .com ASIN belongs to "…Vol. 6: Darkest Before the Dawn") -> no ASIN assigned twice.
+Fix trend per counting batch: A1 6, A2 5, A3 3, A4 1, A5 1.
+## Batch A6 started
