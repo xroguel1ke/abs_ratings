@@ -165,3 +165,7 @@ Relaxes the hard rule "ISBN only filled when empty". Overwrite an existing ISBN 
 (2) the book itself is verified (verified ASIN or verified Hardcover hit); (3) the new ISBN comes from a verified source (Hardcover edition of that book / Goodreads page) – if none: no change, review list with reason, never delete;
 (4) lock_isbn respected, journaled old -> new (undo). ASIN-looking value in the ISBN field: if the ASIN field is empty and the value is a plausible ASIN -> move it to ASIN (verified through the Audible product), ISBN gets a verified real ISBN or stays as is.
 Implementation after the audit, with tests: "must NOT overwrite" cases (print ISBN of same work, locked, no verified replacement).
+
+## Opinion on the lock feature (user question 2026-11-03)
+Library: 30/1920 books locked (lock_series 23, lock_all 7). Keep lock tags (cheap, ABS-native, protects manual decisions), do not extend them.
+Plan: (1) review-list decisions are stored in decision files (like merge_decisions.json) so no tag is needed; (2) later a web UI "lock report": locked books + what the script would do if unlocked (offline run with locks ignored) so obsolete locks can be released; (3) check the 23 lock_series books against the new rules after the audit.
