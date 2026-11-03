@@ -157,3 +157,5 @@ TODO (after the audit finishes): implement both, offline-test with recorded Hard
 Hardcover's public API has only the mapping to Goodreads (book_mappings platform 1), NOT Goodreads ratings (`external_data` not exposed).
 Order for Goodreads ratings: (1) Hardcover Goodreads ID -> direct page, verified title+author; (2) existing ISBN link / text search as fallback (kept unchanged, now last).
 Open Library (ISBN lookup, identifiers.goodreads): adopted only if it covers the ~4 % Hardcover misses (measurement pending).
+Open Library: 0/15 found by ISBN (also for well-known titles) -> not adopted. Hardcover stays option 1, existing Goodreads search option 2.
+Data finding: some ABS ISBN fields contain an ASIN (e.g. B0D2LJ6SJ2) -> treat as ASIN, not ISBN (plausibility/hygiene item).
