@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+
+# Runtime data written next to the script
+logs/
+debug_logs/
+reports/
+rating_history.json
+failed_history.json
+*.json.tmp
+last_run.env
