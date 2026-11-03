@@ -169,3 +169,11 @@ Implementation after the audit, with tests: "must NOT overwrite" cases (print IS
 ## Opinion on the lock feature (user question 2026-11-03)
 Library: 30/1920 books locked (lock_series 23, lock_all 7). Keep lock tags (cheap, ABS-native, protects manual decisions), do not extend them.
 Plan: (1) review-list decisions are stored in decision files (like merge_decisions.json) so no tag is needed; (2) later a web UI "lock report": locked books + what the script would do if unlocked (offline run with locks ignored) so obsolete locks can be released; (3) check the 23 lock_series books against the new rules after the audit.
+
+## Experiment backlog: safe parallelism (user question 2026-11-03)
+Bottleneck = polite request intervals of Audible/Hardcover/Goodreads, not CPU. Never more than 1 concurrent request per host; Goodreads never parallel.
+Candidates (measure before/after, ≤30 min each, adopt only if regress.sh stays green and results are identical):
+1. Pipeline Audible/Hardcover (separate limiters; book N+1 on Audible while Hardcover handles book N) – expected up to 1.5-2x on live runs.
+2. Dead-ASIN lookup across the 8 Audible stores concurrently (different hosts, 1 request each, abort on first 429) – expected ~8 s -> ~2 s per such book.
+3. ABS item prefetch (local server) – small.
+Relevant mainly for the final full-library run (~2h15) and later scheduled runs; scheduled after the matching items.
