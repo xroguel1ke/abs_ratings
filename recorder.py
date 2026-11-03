@@ -36,6 +36,12 @@ def install():
         k = _key(method, url, kw.get('params'), kw.get('json') if kw.get('json') is not None else kw.get('data'))
         path = os.path.join(folder, k + '.json')
         reuse = RECORD_DIR and os.environ.get("RECORD_REUSE") == "1" and os.path.exists(path)  # hybrid: known answers offline, new ones live
+        no_live = [h for h in os.environ.get("RECORD_NO_LIVE", "").split(",") if h]  # hosts that must NEVER be asked live in this run (quota protection)
+        if RECORD_DIR and not REPLAY_DIR and not reuse and any(h in url for h in no_live):
+            with open(os.path.join(folder, "_misses.jsonl"), "a", encoding="utf-8") as f:
+                f.write(json.dumps({"method": method, "url": url, "params": kw.get("params"), "blocked": "no live requests to this host"}, default=str) + "\n")
+            r = requests.Response(); r.status_code, r._content, r.url = 599, b"", url
+            return r
         if REPLAY_DIR or reuse:
             if os.path.exists(path):
                 rec = json.load(open(path, encoding='utf-8'))
@@ -53,6 +59,7 @@ def install():
         if wait > 0: time.sleep(wait)
         _LAST_LIVE[host] = time.monotonic()
         resp = orig(self, method, url, **kw)
+        if resp.status_code == 429 or resp.status_code >= 500: return resp  # transient errors are never recorded (they would be replayed as truth)
         try:
             with open(path, 'w', encoding='utf-8') as f:
                 json.dump({'method': method, 'url': resp.url, 'params': kw.get('params'), 'status': resp.status_code,

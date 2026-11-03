@@ -294,3 +294,7 @@ Counter: 1 of 4. Frozen code for A7: commit 4290841 + that search improvement (r
 
 ## Batch A7 (counting #7: 100 library + 80 synthetic, Audible-only, 6:30 min, 0 errors) – CLEAN (counter 2 of 4)
 Library: 2 ASIN changes hand-verified (Neverwinter, Gauntlgrym: title, author, narrator Victor Bevine, Audible Studios 2013; runtime 4 % off), no case without data, review list empty. Synthetic 80/80. Nothing to correct. Code frozen (same as A6 incl. the title-equals-author search rule).
+
+## Quota incident + protection (2026-11-04 00:05)
+Hardcover reported r=0 (daily limit 5000 used incl. the 25 reserve; reset 01:00). Cause: my parallel regression runs sent LIVE requests for queries without a recording (and recorded 9 HTTP 429 answers as "truth"). Fixes: (1) regress.sh now runs with RECORD_NO_LIVE=audible,hardcover,goodreads = pure offline replay; missing recordings are counted and reported ("blocked"), never sent; (2) the recorder never stores HTTP 429/5xx; (3) the 9 poisoned recordings were deleted. Live rounds stay sequential.
+Rule: Hardcover/Goodreads live requests only from deliberately started sequential rounds, never from regress.

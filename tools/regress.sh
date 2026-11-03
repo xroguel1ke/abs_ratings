@@ -15,14 +15,14 @@ i=0
 for k in tests/private/round*_keys.txt; do
   i=$((i+1)); r=reg_$(basename $k _keys.txt)
   rm -rf /mnt/user/appdata/abs_scripts_test/$r
-  ( REUSE=1 FAKE_PORT=$((18950+i)) tools/run_round.sh $r $k record > /tmp/claude-0/regress_$r.out 2>&1 ) &
+  ( RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com REUSE=1 FAKE_PORT=$((18950+i)) tools/run_round.sh $r $k record > /tmp/claude-0/regress_$r.out 2>&1 ) &
 done
 # synthetic batches (books NOT in the library, EN + DE): replayed from recordings, expected ASIN known
 for sf in tests/synthetic/batch_*.json; do
   n=$(basename $sf .json | sed 's/batch_//'); i=$((i+1)); r=reg_syn_$n
   jq '{books: (.expected|map_values(del(.case)))}' $sf > /tmp/claude-0/syn_golden_$n.json; jq -r '.expected|keys[]' $sf > /tmp/claude-0/syn_keys_$n.txt
   rm -rf /mnt/user/appdata/abs_scripts_test/$r
-  ( SYNTH=$n HARDCOVER_OFF=1 REUSE=1 FAKE_PORT=$((18950+i)) tools/run_round.sh $r tests/private/none_keys.txt record > /tmp/claude-0/regress_$r.out 2>&1 ) &
+  ( RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com SYNTH=$n HARDCOVER_OFF=1 REUSE=1 FAKE_PORT=$((18950+i)) tools/run_round.sh $r tests/private/none_keys.txt record > /tmp/claude-0/regress_$r.out 2>&1 ) &
 done
 wait
 for k in tests/private/round*_keys.txt; do
@@ -33,5 +33,6 @@ for sf in tests/synthetic/batch_*.json; do
   n=$(basename $sf .json | sed 's/batch_//'); r=reg_syn_$n; echo "-- $r (synthetic books, not in the library)"; grep -cE "Traceback|ERROR" /tmp/claude-0/regress_$r.out | sed 's/^/errors: /'
   docker run --rm --name abs_ratings_test_evalsyn -e PYTHONDONTWRITEBYTECODE=1 -v $DEV:/src:ro -v /mnt/user/appdata/abs_scripts_test:/t:ro -v /tmp/claude-0:/tmp/claude-0:ro -w /src $IMG python -I tools/evaluate.py $(ls /mnt/user/appdata/abs_scripts_test/$r/reports/planned_changes_*.jsonl | head -1 | sed 's#.*/abs_scripts_test#/t#') /tmp/claude-0/syn_golden_$n.json /tmp/claude-0/syn_keys_$n.txt || fail=1
 done
+echo "-- requests that had no recording (blocked, never sent): $(cat tests/private/recordings/_misses.jsonl 2>/dev/null | grep -c blocked)"
 [ $fail = 0 ] && echo "REGRESSION: all green" || echo "REGRESSION: DEVIATIONS - judge by hand"
 exit $fail
