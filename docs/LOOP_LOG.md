@@ -87,3 +87,10 @@ Note: ABS narrators/metadata of such books were polluted by wrong ASINs in earli
 Every case that ends in "not found" or in the review list is analysed first: does the book exist on Audible/Hardcover, what is the
 evidence, which verification path is missing? Improve the matching logic (offline-tested against the golden list) before accepting a
 review entry. A case may stay in the review list only with a written reason why it cannot be verified safely.
+
+## Planned: ASIN plausibility check without LLM (user question 2026-11-03)
+Production has no LLM, so the checks must be deterministic rules in the script:
+1. Every run, every book: load the product behind the current ASIN, compare title, author, runtime, narrator, volume with ABS -> verdict ok / suspicious / wrong ("wrong" = title score < 0.5 and no shared author).
+2. Verdict wrong: take NO ratings/narrators/publisher/series/genres from that ASIN; search a replacement through the multi-evidence gate; else review list ("ASIN belongs to another book").
+3. Report "metadata filled from a wrong ASIN" (narrators/publisher not matching the ASIN's product) with undo via the journal.
+4. Validation: record the product behind the ASIN of all ~1920 books once (~16 min), replay the rule offline against the whole library, review every "wrong" verdict by hand, then adopt.
