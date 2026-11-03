@@ -25,6 +25,8 @@ VARIANT_MARKERS = {
 GENERIC_WORDS = {'series', 'saga', 'reihe', 'serie', 'trilogy', 'trilogie', 'cycle', 'zyklus', 'sequence',
                  'novels', 'novel', 'books', 'book', 'romane', 'roman', 'collection', 'edition', 'editions'}
 LEADING_ARTICLES = {'the', 'a', 'an', 'der', 'die', 'das', 'le', 'la'}
+# Format labels that don't make a different series ('Hell Mode' = 'Hell Mode Light Novel')
+FORMAT_PHRASES = [r'light\s*novels?', r'\bunabridged\b', r'\bungek(ü|ue)rzt\b', r'\baudiobooks?\b', r'\bh(ö|oe)rbuch\b']
 FUZZY_NAME_RATIO = 0.9
 
 
@@ -38,6 +40,7 @@ def series_key(name):
     n = name.lower()
     for pats in VARIANT_MARKERS.values():
         for p in pats: n = re.sub(p, ' ', n)
+    for p in FORMAT_PHRASES: n = re.sub(p, ' ', n)
     n = re.sub(r'[\(\)\[\]]', ' ', n)
     n = re.sub(r'[^\w\s]', ' ', n)
     words = n.split()
@@ -97,15 +100,15 @@ class Series:
 
 
 def name_relation(a, b):
-    """How strongly two series names match: 'exact', 'contained', 'similar' or None."""
+    """How strongly two series names match: 'exact' (same after removing articles, generic words like
+    'Series'/'Saga' and format labels like 'Light Novel') or 'similar' (spelling variant, e.g.
+    'Realm'/'Realms'). A name that merely contains the other ('Dune' / 'Dune, les origines',
+    'Discworld' / 'Discworld: Witches') is a sub-series and never matches."""
     if not a.key or not b.key: return None
     if a.key == b.key: return 'exact'
-    short, long_ = sorted((a.key, b.key), key=len)
-    # Contained only counts if the longer name adds at most 2 words
-    # ('Osten Ard' / 'Osten Ard Chronicles' yes, 'Mistborn' / 'Mistborn Wax and Wayne' no)
-    if len(short) >= 4 and re.search(r'(^|\s)' + re.escape(short) + r'(\s|$)', long_) \
-            and len(long_.split()) - len(short.split()) <= 2: return 'contained'
-    if difflib.SequenceMatcher(None, a.key, b.key).ratio() >= FUZZY_NAME_RATIO: return 'similar'
+    # Similar: only spelling differences, same number of words (no extra word = no sub-series)
+    if len(a.key.split()) == len(b.key.split()) and \
+            difflib.SequenceMatcher(None, a.key, b.key).ratio() >= FUZZY_NAME_RATIO: return 'similar'
     return None
 
 

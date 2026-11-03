@@ -345,6 +345,8 @@ def normalize_isbn(v):
 RE_DUP_TITLE = re.compile(r'^\s*(.+?)\s*:\s*\1\s*(?::\s*(.+))?$', re.IGNORECASE)
 RE_SERIES_PREFIX = re.compile(r'^\s*(.{4,}?)\s+(?:#|Book\s+|Vol\.?\s*|Band\s+|Teil\s+)?(\d{1,3}(?:\.\d)?)\s*[-:–.]?\s+(.{3,})$', re.IGNORECASE)
 
+RE_LEADING_NUM = re.compile(r'^\s*(0\d{1,2})\s*[-.:]?\s+(.{3,})$')  # '01 Nightside the Long Sun' (zero-padded only)
+
 def parse_messy_title(t):
     """Detect broken (file name style) titles.
     'Series 05 Title' -> title='Title', series='Series', sequence='5'
@@ -358,6 +360,9 @@ def parse_messy_title(t):
         # Guard against normal titles with numbers ("Catch 22 ..."): the series part needs at least 2 words
         if len(series.split()) >= 2 and len(rest.split()) >= 2:
             return {'title': rest, 'series': series, 'sequence': str(float(seq)).rstrip('0').rstrip('.'), 'kind': 'series_prefix'}
+    if m := RE_LEADING_NUM.match(t):
+        if len(m.group(2).split()) >= 2:
+            return {'title': m.group(2).strip(), 'sequence': str(int(m.group(1))), 'kind': 'number_prefix'}
     return None
 
 def title_similarity(a, b):

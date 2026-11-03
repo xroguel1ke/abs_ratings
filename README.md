@@ -115,7 +115,7 @@ Everything is decided automatically. If a match is not certain, nothing is chang
 At the end of every run a second task runs **only against ABS** (no Audible/Goodreads requests):
 
 **Series merge.** Audible often uses different series names within one series. Two series are merged when **all** of these are true:
-* the names are the same after normalization (`The Osten Ard Saga` = `Osten Ard`), or one contains the other with at most 2 extra words, or they are very similar,
+* the names are the same after normalization (`The Osten Ard Saga` = `Osten Ard`, `Hell Mode Light Novel` = `Hell Mode`) or only differ in spelling with the same number of words (`Realm`/`Realms of the Elderlings`). A name that contains the other plus extra words is treated as a sub-series and never merged (`Dune, les origines`, `Discworld: Witches`),
 * they are the same edition: *Full Cast*, *Dramatized*, *GraphicAudio*, *Abridged* and *Manga* versions are never merged with the plain series,
 * every book of the smaller series shares an author with the larger one,
 * no book number exists in both series,
