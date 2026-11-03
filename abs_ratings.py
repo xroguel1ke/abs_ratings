@@ -870,6 +870,17 @@ def search_match_score(abs_title, found_title, found_sub):
     return score
 
 LAST_SEARCH = {'related': None}  # best same-title/same-author candidate of the last search (other edition)
+LAST_MATCH = {}  # evidence of the last accepted search hit: {asin, confirmed, evidence[]}
+REVIEW_FILE = os.path.join(SCRIPT_DIR, 'review_queue.json')
+
+def add_review(key, title, kind, candidate, reason, evidence=None):
+    """Uncertain automatic decision: nothing is written, the user decides in the review list (review_queue.json)."""
+    q = rw_json(REVIEW_FILE) or []
+    if not isinstance(q, list): q = []
+    if any(x.get('key') == key and x.get('kind') == kind and x.get('candidate') == candidate for x in q): return
+    q.append({'key': key, 'title': title, 'kind': kind, 'candidate': candidate, 'reason': reason, 'evidence': evidence or [],
+              'run': RUN_ID, 'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'status': 'open'})
+    rw_json(REVIEW_FILE, q)
 
 def search_audible_api(title, authors_list, duration, lang, raw_title=None, required_lang=None, strict=False,
                        only_domain=None, narrators=None, abs_series=None):
@@ -938,7 +949,18 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             else:
                 accept = t_score >= 0.8 and auth_ok and not dur_conflict or t_score >= 0.85 and dur_ok
             if accept:
-                logging.info(f"        ✅ API match on {domain}: '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, runtime {'✓' if dur_ok else '?'})")
+                narr_hit = bool(a_narr and c_narr and a_narr & c_narr)
+                vol_hit = bool(f_nums and t_nums and f_nums & t_nums)
+                ser_hit = any(an is not None and cn is not None and an == cn and (ak == ck or difflib.SequenceMatcher(None, ak, ck).ratio() >= 0.9)
+                              for ak, an in _series_pairs(abs_series) for ck, cn in _series_pairs((p.get('meta_raw') or {}).get('series')))
+                exact_long = len(normalize_title_text(title).split()) >= 4  # long, distinctive title (a short generic one such as 'Alice im Wunderland' is not enough)
+                evidence = [n for n, v in (('title', t_score >= 0.85), ('author', auth_ok), ('runtime', dur_ok), ('narrator', narr_hit),
+                                           ('volume-number', vol_hit), ('series-number', ser_hit), ('distinctive-title', exact_long)) if v]
+                extra = sum([narr_hit, vol_hit, ser_hit, exact_long])
+                confirmed = auth_ok and t_score >= 0.85 and ((dur_ok and extra >= 1) or extra >= 2)
+                ev_txt = ", ".join(evidence)
+                LAST_MATCH.clear(); LAST_MATCH.update({'asin': cand, 'confirmed': confirmed, 'evidence': evidence, 'title': found_title})
+                logging.info(f"        ✅ API match on {domain}: '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, runtime {'✓' if dur_ok else '?'}) evidence: {ev_txt}")
                 return cand
             logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, runtime {'✓' if dur_ok else '✗' if dur_conflict else '?'})")
     return None if api_ok else False
@@ -1742,12 +1764,20 @@ def process_queue(work_queue, history, failed, recheck):
                              found = aud_data['variant_asin_us']
                              logging.info(f"        🔗 Found ASIN via HTML Link (hreflang='en-us'): {found}")
 
+                    LAST_MATCH.clear()
                     if not found: found = find_missing_asin(search_title, authors, abs_dur, lang, raw_title=title,
                                                             required_lang=lang_target, strict=strict_search and bool(asin),
                                                             only_domain=search_only, narrators=meta.get('narrators') or [], abs_series=meta.get("series") or [])
                     
                     if found and found != asin and (ASIN_OWNERS.get(found, set()) - {key}):
                         logging.info(f"        ⛔ ASIN {found} already belongs to another book in the library/run: not assigned (needs a manual look)")
+                        add_review(key, title, 'asin', found, 'ASIN already belongs to another book')
+                        found = None
+                    if found and found != asin and LAST_MATCH.get('asin') == found and not LAST_MATCH.get('confirmed'):
+                        logging.info(f"        🧐 ASIN {found} ('{LAST_MATCH.get('title')}') has only weak evidence ({', '.join(LAST_MATCH.get('evidence') or [])}): "
+                                     f"not written, added to the review list")
+                        add_review(key, title, 'asin', found, 'weak evidence for an ASIN change', LAST_MATCH.get('evidence'))
+                        stats['review'] = stats.get('review', 0) + 1
                         found = None
                     if found:
                         if found != asin:

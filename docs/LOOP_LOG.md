@@ -67,3 +67,10 @@ Bugs found with this round (also in the web UI single-book test run): runtime of
 ### Experiment log
 - RECORD_REUSE (serve known answers from disk): 26 min vs 30 min before -> small gain only, because `throttle()` still waits 0.5 s per call although the answer comes from disk. Adopted (harmless); real gain needs throttling only for live requests.
 - Replay mode: throttle() skipped (no network) -> adopted, replay of 100 books should take well under a minute.
+
+## Round 1 – closed (offline replay r04 vs golden: 100/100)
+- Multi-evidence rule for ASIN changes found by search: `confirmed = author ✓ and title ≥ 0.85 and ((runtime ✓ and ≥1 extra) or ≥2 extra)`, extra = narrator, volume number, series number, distinctive title (≥4 words). Otherwise nothing is written and the case goes to `review_queue.json` (new). Review list so far: Paranormal Payback, Mother of Learning (author mismatch), Alice im Wunderland.
+- Series-number checks: `series_seq_conflict` (reject) and `series_seq_unconfirmed` (other-edition fallback needs a matching number when ABS has #>1; fixes "Hell Mode" #3 getting volume-1 ratings).
+- tools/evaluate.py + tests/private/golden.json (100 books; private because the repo is public and the golden list contains the user's library titles).
+- Offline replay of 100 books: 10 s (throttle() skipped in replay).
+- Open: web UI page for review_queue.json; synthetic fake-ABS books; remaining Opus fixes (dead-ASIN over all 8 stores, .com-first on replacement, merge name choice, silent "ABS #x vs Audible #y" cases into the review list).
