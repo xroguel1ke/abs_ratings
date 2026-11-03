@@ -1,6 +1,6 @@
 # Status (live)
 
-Updated: 2026-11-03 – Phase A, round 0 – overall estimate: ~62 %
+Updated: 2026-11-03 17:20 – Phase A, round 1 running – overall progress: ~3 % (0 % = before the task, 100 % = stop criterion of phase C met; measured against the 20-30 h plan)
 Next step: golden list + recorded fixtures + offline replay + tools/evaluate.py, then remaining Opus fixes.
 
 | Area | % | Note |
