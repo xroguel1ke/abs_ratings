@@ -205,3 +205,4 @@ Series seed cache now built from the whole-library audit (395 series titles). li
 While a process waits (Goodreads pause, long runs), start the next independent task in parallel: next batch + its evaluation, web UI pieces, tests, docs. There must always be work in progress.
 
 ## Round 4 – counting round (code frozen at commit 07e63f3, 21:17), clean rounds so far 0 of 3
+TODO noted: web UI onboarding tour (first visit, restartable from settings, Material style) – see ROADMAP.md "Web UI onboarding".

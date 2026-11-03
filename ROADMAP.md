@@ -79,3 +79,9 @@ Status: ✅ done (branch `claude/web-ui`) · 🔜 next · ⏳ later
 - Light: pastel white surfaces with a creamy contrast colour. Dark: two pastel greys (background + raised surfaces = tonal elevation, no heavy shadows).
 - Claude's additions: one muted accent colour for actions/active states; clear but muted status colours (found / warning / error / review); contrast ≥ WCAG AA, especially light mode; no pure black/white.
 - Before the rebuild: small preview page with 2-3 colour variants for the user to choose from.
+
+## Web UI onboarding (user wish, 2026-11-03) – TODO, after the functional web UI points
+- Short guided tour that starts on the FIRST visit (after the forced password change) and walks through the pages and their functions
+  (dashboard/problems, review list, merges, runs, logs, settings, start dialog).
+- Re-startable any time from the settings page ("Einführung erneut starten").
+- Same design language as the rest of the UI (Material style, light/dark, see "Web UI design"); skippable, progress dots, remembers "completed" in settings.json.
