@@ -82,3 +82,8 @@ All 3 exist on Audible and were fixable:
 - Alice im Wunderland: current ASIN is "That Time I Got Reincarnated as a Slime, Vol. 5" (explains wrong narrator); candidate matches title/author/runtime.
 New evidence type `old-asin-is-another-book` (title score < 0.5 AND author mismatch for the product behind the current ASIN). Replay of the 100 round-1 books: golden 100/100, review list empty.
 Note: ABS narrators/metadata of such books were polluted by wrong ASINs in earlier runs -> consider a later report "metadata filled from a wrong ASIN".
+
+## Standing rule: review list is the LAST resort (user, 2026-11-03)
+Every case that ends in "not found" or in the review list is analysed first: does the book exist on Audible/Hardcover, what is the
+evidence, which verification path is missing? Improve the matching logic (offline-tested against the golden list) before accepting a
+review entry. A case may stay in the review list only with a written reason why it cannot be verified safely.
