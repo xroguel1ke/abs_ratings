@@ -1001,10 +1001,12 @@ def build_description(current_desc, aud, gr, old_aud, old_gr):
     elif old_gr:
         stats['recycled'] += 1; lines.append(old_gr)
         
-    lines.append("⭐")
     clean_d = RE_RATING_BLOCK.sub('', current_desc)
     clean_d = re.sub(r'(?s)\*\*Audible\*\*.*?---\s*\n*', '', clean_d)
-    return "<br>".join(lines) + "<br>" + re.sub(r'^(?:\s|<br\s*/?>)+', '', clean_d, flags=re.I).strip()
+    clean_d = re.sub(r'^(?:\s|<br\s*/?>)+', '', clean_d, flags=re.I).strip()
+    if len(lines) == 1: return clean_d  # No ratings at all: don't write an empty rating block
+    lines.append("⭐")
+    return "<br>".join(lines) + "<br>" + clean_d
 
 def record_attempt(key, history, failed, recheck, complete=False, recheck_days=None):
     """Track the result of one item. Nothing is persisted in DRY_RUN mode.
