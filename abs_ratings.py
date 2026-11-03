@@ -188,6 +188,19 @@ def canonical_series(lib, name, book_authors):
         return ent['name'], 'existing'
     return name, None
 
+def language_verdict(abs_title, abs_narrators, aud, lang_locked):
+    """ABS and Audible language differ. 'asin_wrong' if the ASIN belongs to another language edition
+    (language locked, title doesn't match, or no common narrator), else 'abs_wrong'."""
+    if lang_locked: return 'asin_wrong'
+    aud_t, aud_s = aud.get('title_raw') or '', aud.get('subtitle_raw') or ''
+    sim = max(title_similarity(abs_title, aud_t), title_similarity(abs_title, f"{aud_t} {aud_s}"))
+    if sim < 0.6: return 'asin_wrong'
+    # Same title in both languages ('Dune'): the narrator decides
+    norm = lambda n: re.sub(r'[^a-z]', '', n.lower())
+    a_narr, b_narr = {norm(n) for n in abs_narrators if n}, {norm(n) for n in (aud.get('narrators_raw') or []) if n}
+    if a_narr and b_narr and not a_narr & b_narr: return 'asin_wrong'
+    return 'abs_wrong'
+
 def volume_conflict(abs_title, aud_title, aud_sub):
     """True if ABS and Audible name different volume numbers ('Vol. 9' vs 'Vol. 18') -> wrong ASIN."""
     a = extract_volume(abs_title or '')
@@ -745,7 +758,7 @@ def get_audible_data_web(asin, language):
     if best_result: return best_result
     return None
 
-def search_audible_api(title, authors_list, duration, lang, raw_title=None):
+def search_audible_api(title, authors_list, duration, lang, raw_title=None, required_lang=None):
     """Find an ASIN via the Audible catalog search API. Every candidate is verified by loading
     the product (title, author, runtime). Returns the ASIN, None (no match) or False (API error)."""
     prim_auth = authors_list[0] if authors_list else ""
@@ -771,6 +784,10 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None):
         for cand in candidates[:5]:
             p = get_audible_api(cand, domain)
             if not isinstance(p, dict): continue
+            cand_lang = map_language((p.get('meta_raw') or {}).get('language'))
+            if required_lang and cand_lang and cand_lang != required_lang:
+                logging.info(f"        ↪️ Rejected '{p.get('title_raw')}' [{cand}] (language {cand_lang}, need {required_lang})")
+                continue
             found_title = p.get('title_raw') or ''
             t_score = max(title_similarity(title, found_title), title_similarity(title, f"{found_title} {p.get('subtitle_raw') or ''}"))
             f_nums, t_nums = extract_volume(found_title + ' ' + (p.get('subtitle_raw') or '')), extract_volume(title)
@@ -784,10 +801,10 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None):
             logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, runtime {'✗' if dur_conflict else '?'})")
     return None if api_ok else False
 
-def find_missing_asin(title, authors_list, duration, lang, raw_title=None):
+def find_missing_asin(title, authors_list, duration, lang, raw_title=None, required_lang=None):
     logging.info(f"      -> 🔎 Searching Replacement ASIN for '{title}'...")
     if USE_AUDIBLE_API:
-        res = search_audible_api(title, authors_list, duration, lang, raw_title)
+        res = search_audible_api(title, authors_list, duration, lang, raw_title, required_lang)
         if res is not False: return res
         logging.info("        ↪️ API search unavailable, falling back to web search...")
     return find_missing_asin_web(title, authors_list, duration, lang)
@@ -1229,11 +1246,26 @@ def process_library(lib_id, history, failed, recheck):
                 should_search = False
                 check_lang = new_lang_detected if new_lang_detected else lang
 
+                # Language check: ABS and Audible disagree -> who is right?
+                lang_conflict, lang_target = False, None
+                abs_lang = map_language(lang) if lang else None
+                if aud_data and new_lang_detected and abs_lang and abs_lang != new_lang_detected:
+                    verdict = language_verdict(search_title, meta.get('narrators') or [], aud_data, 'lock_language' in tags)
+                    if verdict == 'asin_wrong':
+                        lang_conflict, lang_target = True, abs_lang
+                        check_lang = abs_lang
+                        logging.info(f"      -> ⚠️ Language mismatch: ABS {abs_lang} vs Audible {new_lang_detected} for '{aud_data.get('title_raw')}'. "
+                                     f"{'Language is locked' if 'lock_language' in tags else 'Title/narrator point to another edition'}: searching the {abs_lang} edition...")
+                    else:
+                        logging.info(f"      -> ℹ️ Language mismatch: ABS {abs_lang} vs Audible {new_lang_detected}. Title and narrator match Audible: ABS language is corrected.")
+
                 if not asin:
                     logging.info("      -> ⚠️ No ASIN in ABS.")
                     should_search = True
                 elif aud_data is None:
                     logging.info("      -> ⚠️ ASIN not found (All domains).")
+                    should_search = True
+                elif lang_conflict:
                     should_search = True
                 elif aud_data.get('title_raw') and volume_conflict(title, aud_data.get('title_raw'), aud_data.get('subtitle_raw')):
                     logging.info(f"      -> ⚠️ Volume mismatch: ABS '{title}' vs Audible '{aud_data.get('title_raw')}'. ASIN probably belongs to another volume, searching...")
@@ -1267,7 +1299,8 @@ def process_library(lib_id, history, failed, recheck):
                              found = aud_data['variant_asin_us']
                              logging.info(f"        🔗 Found ASIN via HTML Link (hreflang='en-us'): {found}")
 
-                    if not found: found = find_missing_asin(search_title, authors, item['media'].get('duration'), lang, raw_title=title)
+                    if not found: found = find_missing_asin(search_title, authors, item['media'].get('duration'), lang, raw_title=title,
+                                                            required_lang=lang_target)
                     
                     if found:
                         if found != asin:
@@ -1277,7 +1310,8 @@ def process_library(lib_id, history, failed, recheck):
                             asin, stats['asin_found'] = found, stats['asin_found'] + 1
                             stats['asin_migrated'] += 1
                             asin_from_search = True
-                            if not target_is_german: lang = "English" 
+                            if lang_target: lang = lang_target
+                            elif not target_is_german: lang = "English" 
                             aud_data = get_audible_data(asin, lang)
                             if aud_data and aud_data.get('meta_raw'):
                                 raw_l = aud_data['meta_raw'].get('language')
@@ -1285,7 +1319,10 @@ def process_library(lib_id, history, failed, recheck):
                         else: logging.info(f"        ℹ️ Search returned same ASIN. Keeping fallback data.")
                     else: logging.info(f"        ℹ️ No replacement found. Keeping fallback data.")
 
-                if aud_data and aud_data.get('title_raw') and volume_conflict(title, aud_data.get('title_raw'), aud_data.get('subtitle_raw')) \
+                if lang_conflict and aud_data and map_language((aud_data.get('meta_raw') or {}).get('language')) not in (None, lang_target):
+                    skip_meta = True
+                    logging.info(f"      -> ⏭️ Metadata sync skipped: no {lang_target} edition found, ASIN stays as it is. Only ratings are used.")
+                elif aud_data and aud_data.get('title_raw') and volume_conflict(title, aud_data.get('title_raw'), aud_data.get('subtitle_raw')) \
                         and not asin_from_search:
                     skip_meta = True
                     logging.info(f"      -> ⏭️ Metadata sync skipped: volume number still differs from Audible ('{aud_data.get('title_raw')}'). Only ratings are used.")
