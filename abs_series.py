@@ -200,8 +200,10 @@ def collect_records(ctx):
     return records
 
 
-def find_merges(records, decisions=None):
-    """Returns (merges, rejected). merges: list of dicts {lib, target, members:[Series], evidence}."""
+def find_merges(records, decisions=None, preferred_names=None):
+    """Returns (merges, rejected). merges: list of dicts {lib, target, members:[Series], evidence}.
+    preferred_names: exact series titles used by Audible; if exactly one name of a merge group is one of them, it becomes the target
+    (instead of simply the largest group's name)."""
     merges, rejected = [], []
     by_lib = defaultdict(dict)
     for r in records:
@@ -234,6 +236,9 @@ def find_merges(records, decisions=None):
                 groups.append([ser])
         for g in groups:
             if len(g) > 1:
+                hits = [s for s in g if s.name in (preferred_names or ())]
+                if len(hits) == 1 and hits[0] is not g[0]:  # Audible's own name wins
+                    g.remove(hits[0]); g.insert(0, hits[0])
                 merges.append({'lib': lib, 'target': g[0], 'members': g[1:]})
     return merges, rejected
 
@@ -536,7 +541,7 @@ def run(ctx):
     logging.info(f"   {len(records)} books loaded.")
     ctx['decisions'] = _load(ctx.get('decisions_file'))
     ctx['merge_history'] = _load(ctx.get('merges_file'))
-    merges, rejected = find_merges(records, ctx['decisions'])
+    merges, rejected = find_merges(records, ctx['decisions'], ctx.get('audible_series_names'))
     changed = authors_changed = 0
     if ctx['merge']:
         logging.info(f"   Series merges found: {len(merges)}")

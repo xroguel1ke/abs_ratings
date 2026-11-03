@@ -132,3 +132,10 @@ Rules in `abs_series.find_author_fixes` (all offline-tested in tests/test_author
 4. Everything else (e.g. "J. Smith" vs "John Smith") stays in the review list; different people with similar names are never merged.
 Checked: Audible and Hardcover both keep the Japanese and Latin Mushoku author as separate records (no alternate names) -> no database proof, hence rule 3.
 Library result (snapshot): 5 fixes (Kurmaic/Kurmaić, Tolkien, Salvatore, Schwab, 理不尽な孫の手 -> Rifujin na Magonote), Chakraborty needs rule 2 data (review until then).
+
+## Standing rule: every new matching/merge method is re-checked against everything (user, 2026-11-03)
+`tools/regress.sh` (≈12 s) is the gate for EVERY change to matching, series merge or author merge, before it is kept or committed:
+1. syntax, 2. synthetic unit tests (tests/test_authors.py, tests/test_series.py: e.g. "Dune" vs "Dune, les origines" never, different authors never, overlapping numbers never),
+3. `tools/lib_check.py`: series merges + author fixes over the WHOLE library vs hand-verified baseline (every difference printed, judged by hand, then `--accept`),
+4. all golden rounds replayed from the recordings vs `tests/private/golden.json` (every book ever verified, "no wrong hit on other books").
+New rules also get a synthetic test for the case they must NOT fire on. Series name choice: Audible's own series title wins when exactly one group name matches it (4 flips judged correct: Realm of the Elderlings, The Empyrean Series, Have Sword Will Travel Series, Reborn ... Squire).
