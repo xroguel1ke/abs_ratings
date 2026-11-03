@@ -219,3 +219,8 @@ Audible-clean and Hardcover-clean rounds are tracked separately; production-read
 Fix trend per round: R3 2, R4 3 (Hardcover), R5 1.
 ## Round 6 (Audible-only) started
 TODO noted: run mode "build up, then maintain (≈30 random books/day)" and change monitoring (last_written fingerprints + journal old values; manual changes respected) – see ROADMAP.md.
+
+## Round 6 (Audible-only, 2:21 min, 0 errors) – NOT clean
+3 ASIN changes hand-verified correct (Queen of Shadows: narrator, series #4, Audible Studios 2015; City of Stairs via series listing: runtime, narrator, series, Recorded Books 2014; Dogs of War: all 3 narrators, series #1; Head of Zeus 2025 re-listing, runtime 5 % off).
+Fix needed: The Renegades of Pern (Dick Hill, Brilliance 2008, ABS 720 min vs Audible 807 min = 12 %): series-listing prefilter used ±10 min; now library tolerance (15 %/20 min), all listed candidates evaluated (closest runtime first). 38 ISBN review entries are only because Hardcover was off in this round.
+Fix trend: R3 2, R4 3, R5 1, R6 1. Counter stays 0.

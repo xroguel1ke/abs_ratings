@@ -1000,9 +1000,9 @@ def series_candidates(abs_series, authors_list, duration, domain):
         except (requests.RequestException, ValueError): prods = []
         for p in prods:
             rt = int(p.get('runtime_length_min') or 0) * 60
-            if rt and abs(rt - duration) <= 600 and match_author(authors_list, ', '.join(a.get('name') or '' for a in (p.get('authors') or []))):
-                out.append(p['asin'])
-    return out
+            if rt and (abs(rt - duration) <= 600 or not runtime_mismatch(duration, rt)) and match_author(authors_list, ', '.join(a.get('name') or '' for a in (p.get('authors') or []))):
+                out.append((abs(rt - duration), p["asin"]))
+    return [a for _, a in sorted(out)]  # closest runtime first
 
 
 LAST_MATCH = {}  # evidence of the last accepted search hit: {asin, confirmed, evidence[]}
@@ -1055,7 +1055,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 logging.warning(f"        🌐 Audible API search failed ({host}): {type(e).__name__}")
             if len(candidates) >= 4: break
         if not candidates and not only_extra: logging.info(f"        ↪️ No search results on {domain} ({len(queries)} queries)")
-        for cand in candidates[:6]:
+        for cand in candidates[:max(6, len(extra_candidates or []))]:  # series-listing candidates are all checked (closest runtime first)
             p = get_audible_api(cand, domain)
             if not isinstance(p, dict): continue
             cand_lang = map_language((p.get('meta_raw') or {}).get('language'))
