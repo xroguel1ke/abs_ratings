@@ -29,3 +29,7 @@ Next probe: tomorrow morning, ONE request. No further Goodreads traffic until th
 
 ## Probe 3 (2026-11-03 23:03): ONE plain request to /book/show/213285211 -> HTTP 200, full page (310 KB), no challenge.
 The block that started ~20:40 (test 1) was lifted within <= 2 h 23 min (probe 2 at 21:28 was still blocked). Next: 6 books via Hardcover IDs at 60 s interval (stop at the first block).
+
+## Test 3 result (2026-11-03 23:05-23:15): 6 books via Hardcover IDs, 60 s interval, NO block; 5 pages read, all correct
+Promise of Blood 4.13 (66,533), Rise of the Living Forge 5 4.67 (970), The Shadow of the Gods 4.17 (121,428), In the Labyrinth of Drakes 4.39 (10,020), Death's End 4.40 (190,322). Title/author verification passed every time (title score ≥ 0.81).
+Next steps (carefully): 15 books at 45-60 s, later one small sample per run (≈25/night was fine for 13 days). The block of 20:40 lifted within ≤ 2 h 23 min.
