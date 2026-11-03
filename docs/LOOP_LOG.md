@@ -264,3 +264,12 @@ Side effect found by regress.sh: veto broke Hell Mode / Overlord 12 because ABS 
 Fixes: library 2 + synthetic 2 (+1 side effect). Counter stays 0 of 4. Fix trend per counting batch: A1 6, A2 5.
 ## Batch A3 started (SYNTH=5)
 TODO noted: description update from Audible when ABS text is a truncated/very short version (ROADMAP.md).
+
+## Batch A3 (counting #3: 100 library + 80 synthetic, Audible-only, 7:16 min, 0 errors) – NOT clean (counter 0 of 4)
+Library: 3 ASIN changes correct (Beware of Chicken 3, The Masterharper of Pern, Dragon Harper: ABS title "…, Book 19" vs Audible "Dragon Harper" -> tail with a volume marker whose number equals the candidate's series number counts as the same title).
+Library finding (DUPLICATE): "Throne" (ASIN B0066IFMYO dead) and "Throne Hunters 5" are the same recording twice in the library (65834 s each, same author/narrator, different folders). The duplicate-ASIN guard refused to give the same ASIN twice. -> TODO "duplicate books" report (same author+narrator, duration within 2 s, different titles/folders) in the library report + web UI.
+Not on Audible as a standalone: "Shadows for Silence in the Forests of Hell" (Sanderson novella, 136 min; only inside "Arcanum Unbounded", 1351 min).
+Synthetic: 79/80 -> "Twisted" (generic title, authors with initials): second last-resort query keywords+narrator filter. Now 80/80.
+Rule added: 4 independent signals (author ✓ + runtime to the minute + narrator + all ABS title words contained in the Audible title) are enough without series number.
+Fix count: library 2 + synthetic 1. Trend: A1 6, A2 5, A3 3. Counter stays 0 of 4.
+## Batch A4 started
