@@ -16,6 +16,7 @@ REPORT_DIR = os.path.join(SCRIPT_DIR, "reports")
 HISTORY_FILE = os.path.join(SCRIPT_DIR, "rating_history.json")
 FAILED_FILE = os.path.join(SCRIPT_DIR, "failed_history.json")
 RECHECK_FILE = os.path.join(SCRIPT_DIR, "recheck_history.json")  # key -> UTC time of an early re-check
+GR_CACHE_FILE = os.path.join(SCRIPT_DIR, "goodreads_cache.json")  # key -> Goodreads book URL
 ENV_OUTPUT_FILE = os.path.join(SCRIPT_DIR, "last_run.env")
 
 REFRESH_DAYS = int(os.getenv('REFRESH_DAYS', 90))
@@ -24,12 +25,12 @@ MAX_FAIL_ATTEMPTS = 5
 MAX_CONSECUTIVE_RL = 3
 RECOVERY_PAUSE = 60
 BASE_SLEEP = float(os.getenv('SLEEP_TIMER', 3))  # Pause between items (sources are additionally throttled below)
-SEARCH_PENALTY_SLEEP = 10  # Extra sleep after expensive search operations
+SEARCH_PENALTY_SLEEP = float(os.getenv('SEARCH_PENALTY_SLEEP', 0))  # Optional extra pause after ASIN searches
 # Minimum seconds between two requests to the same source
 MIN_INTERVAL = {
     'audible_api': float(os.getenv('AUDIBLE_API_INTERVAL', 1)),
     'audible_web': float(os.getenv('AUDIBLE_WEB_INTERVAL', 3)),
-    'goodreads': float(os.getenv('GOODREADS_INTERVAL', 3)),
+    'goodreads': float(os.getenv('GOODREADS_INTERVAL', 2)),
 }
 USE_AUDIBLE_API = os.getenv('USE_AUDIBLE_API', 'true').lower() == 'true'
 AUDIBLE_API_HOSTS = {"www.audible.com": "api.audible.com", "www.audible.de": "api.audible.de"}
@@ -100,7 +101,8 @@ RE_RAW_COUNT = re.compile(r'count="(\d+)"')
 
 stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck"]}
 stats['aborted_ratelimit'] = False
-GR_STATE = {'blocked': False}  # Set once Goodreads blocks us; GR is then skipped for the rest of the run
+GR_STATE = {'blocked': False}
+GR_CACHE = {}  # Filled in main()  # Set once Goodreads blocks us; GR is then skipped for the rest of the run
 reports = {"audible": {}, "goodreads": {}}
 
 class RateLimitException(Exception):
@@ -220,6 +222,31 @@ def normalize_isbn(v):
     if re.fullmatch(r'\d{9}[\dX]', c): return c
     return None
 
+RE_DUP_TITLE = re.compile(r'^\s*(.+?)\s*:\s*\1\s*(?::\s*(.+))?$', re.IGNORECASE)
+RE_SERIES_PREFIX = re.compile(r'^\s*(.{4,}?)\s+(?:#|Book\s+|Vol\.?\s*|Band\s+|Teil\s+)?(\d{1,3}(?:\.\d)?)\s*[-:–.]?\s+(.{3,})$', re.IGNORECASE)
+
+def parse_messy_title(t):
+    """Detect broken (file name style) titles.
+    'Series 05 Title' -> title='Title', series='Series', sequence='5'
+    'X: X: Subtitle'  -> title='X', subtitle='Subtitle'
+    Returns None if the title looks normal."""
+    if not t: return None
+    if m := RE_DUP_TITLE.match(t):
+        return {'title': m.group(1).strip(), 'subtitle': (m.group(2) or '').strip() or None, 'kind': 'duplicate'}
+    if m := RE_SERIES_PREFIX.match(t):
+        series, seq, rest = m.group(1).strip(' -:,'), m.group(2), m.group(3).strip()
+        # Guard against normal titles with numbers ("Catch 22 ..."): the series part needs at least 2 words
+        if len(series.split()) >= 2 and len(rest.split()) >= 2:
+            return {'title': rest, 'series': series, 'sequence': str(float(seq)).rstrip('0').rstrip('.'), 'kind': 'series_prefix'}
+    return None
+
+def title_similarity(a, b):
+    na, nb = normalize_title_text(a), normalize_title_text(b)
+    if not na or not nb: return 0.0
+    score = difflib.SequenceMatcher(None, na, nb).ratio()
+    if (len(na) > 3 and na in nb) or (len(nb) > 3 and nb in na): score += 0.15
+    return score
+
 def extract_volume(text): return set(RE_VOL.findall(text)) | ({m.group(1)} if (m := re.search(r'\b(\d+)$', text.strip())) else set())
 
 def format_time(seconds):
@@ -274,12 +301,19 @@ def fetch_url(url, params=None, domain=None, source=None):
         if source == 'goodreads': raise SourceBlockedException(msg)
         raise RateLimitException(msg, hard)
 
-    throttle('goodreads' if source == 'goodreads' else 'audible_web')
-    try:
-        r = requests.get(url, headers=get_headers(domain), params=params, timeout=20)
-    except requests.RequestException as e:
-        logging.warning(f"        🌐 Request failed: {url} ({type(e).__name__}: {e})")
-        return None, None
+    r = None
+    for attempt in (1, 2):  # One retry for transient network errors
+        throttle('goodreads' if source == 'goodreads' else 'audible_web')
+        try:
+            r = requests.get(url, headers=get_headers(domain), params=params, timeout=20)
+            break
+        except (requests.ConnectionError, requests.Timeout) as e:
+            logging.warning(f"        🌐 Request failed (try {attempt}/2): {url} ({type(e).__name__})")
+            if attempt == 1: time.sleep(3)
+        except requests.RequestException as e:
+            logging.warning(f"        🌐 Request failed: {url} ({type(e).__name__}: {e})")
+            break
+    if r is None: return None, None
 
     status, final_url = r.status_code, r.url
     if status == 429: blocked(f"HTTP 429 on {final_url}", True)
@@ -359,7 +393,9 @@ def get_audible_api(asin, domain):
         return None
     if not p.get('title'): return 'missing'  # Product not sold in this marketplace
 
-    res = {'domain': domain, 'source': 'API', 'page_ok': True, 'title_raw': p.get('title')}
+    res = {'domain': domain, 'source': 'API', 'page_ok': True, 'title_raw': p.get('title'), 'asin': p.get('asin') or asin,
+           'authors_raw': [a.get('name') for a in (p.get('authors') or []) if a.get('name')],
+           'runtime_sec': int(p.get('runtime_length_min') or 0) * 60}
     if p.get('subtitle'): res['subtitle_raw'] = p['subtitle']
     rating = p.get('rating') or {}
     def dist(name):
@@ -545,8 +581,54 @@ def get_audible_data_web(asin, language):
     if best_result: return best_result
     return None
 
-def find_missing_asin(title, authors_list, duration, lang, force_domain=None):
+def search_audible_api(title, authors_list, duration, lang, raw_title=None):
+    """Find an ASIN via the Audible catalog search API. Every candidate is verified by loading
+    the product (title, author, runtime). Returns the ASIN, None (no match) or False (API error)."""
+    prim_auth = authors_list[0] if authors_list else ""
+    queries = [{"keywords": f"{title} {prim_auth}".strip()}]
+    if prim_auth: queries.append({"title": title, "author": prim_auth})
+    if raw_title and raw_title != title: queries.append({"keywords": raw_title})
+    api_ok = False
+    for domain in audible_domains(lang):
+        host, candidates = AUDIBLE_API_HOSTS[domain], []
+        for q in queries:
+            throttle('audible_api')
+            try:
+                r = requests.get(f"https://{host}/1.0/catalog/products", params={**q, "num_results": 5, "response_groups": "product_attrs"},
+                                 headers={"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}, timeout=15)
+                if r.status_code == 429: raise RateLimitException(f"HTTP 429 on {host} (API search)", True)
+                if r.status_code != 200: continue
+                api_ok = True
+                for prod in r.json().get('products') or []:
+                    if prod.get('asin') and prod['asin'] not in candidates: candidates.append(prod['asin'])
+            except (requests.RequestException, ValueError) as e:
+                logging.warning(f"        🌐 Audible API search failed ({host}): {type(e).__name__}")
+            if len(candidates) >= 3: break
+        for cand in candidates[:5]:
+            p = get_audible_api(cand, domain)
+            if not isinstance(p, dict): continue
+            found_title = p.get('title_raw') or ''
+            t_score = max(title_similarity(title, found_title), title_similarity(title, f"{found_title} {p.get('subtitle_raw') or ''}"))
+            f_nums, t_nums = extract_volume(found_title + ' ' + (p.get('subtitle_raw') or '')), extract_volume(title)
+            if f_nums and t_nums and not f_nums & t_nums and t_score < 0.9: continue
+            auth_ok = match_author(authors_list, ", ".join(p.get('authors_raw') or []))
+            dur_ok = bool(duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) < 600)
+            dur_conflict = bool(duration and p.get('runtime_sec') and not dur_ok)
+            if t_score >= 0.8 and auth_ok and not dur_conflict or t_score >= 0.85 and dur_ok:
+                logging.info(f"        ✅ API match on {domain}: '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, runtime {'✓' if dur_ok else '?'})")
+                return cand
+            logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, runtime {'✗' if dur_conflict else '?'})")
+    return None if api_ok else False
+
+def find_missing_asin(title, authors_list, duration, lang, raw_title=None):
     logging.info(f"      -> 🔎 Searching Replacement ASIN for '{title}'...")
+    if USE_AUDIBLE_API:
+        res = search_audible_api(title, authors_list, duration, lang, raw_title)
+        if res is not False: return res
+        logging.info("        ↪️ API search unavailable, falling back to web search...")
+    return find_missing_asin_web(title, authors_list, duration, lang)
+
+def find_missing_asin_web(title, authors_list, duration, lang):
     doms = ["www.audible.com", "www.audible.de"]
     if lang and str(lang).strip().lower() in GERMAN_LANG_CODES: doms = ["www.audible.de", "www.audible.com"]
     prim_auth = authors_list[0] if authors_list else ""
@@ -633,14 +715,21 @@ def scrape_gr_details(url, require_book_page=False):
         return None
     return res
 
-def get_goodreads_data(isbn, asin, title, authors, prim_auth):
-    """Returns (data, status) with status in 'found', 'not_found', 'blocked'."""
+def get_goodreads_data(isbn, title, authors, prim_auth, cached_url=None):
+    """Returns (data, status) with status in 'found', 'not_found', 'blocked'.
+    cached_url: Goodreads book page found in an earlier run (1 request instead of a search)."""
     if GR_STATE['blocked']:
         logging.info("      -> ⏭️ Goodreads skipped (blocked earlier in this run)")
         return None, 'blocked'
     logging.info("      -> Checking www.goodreads.com")
     try:
-        d = _search_goodreads(isbn, asin, title, authors, prim_auth)
+        if cached_url:
+            if d := scrape_gr_details(cached_url, require_book_page=True):
+                d['source'] = 'Cache'
+                logging.info(f"        ✅ Found via cached URL (Count: {d.get('count')}, Rating: {round(safe_float(d.get('val')), 2)})")
+                return d, 'found'
+            logging.info("        ↪️ Cached Goodreads URL failed, searching again...")
+        d = _search_goodreads(isbn, title, authors, prim_auth)
         return d, ('found' if d else 'not_found')
     except SourceBlockedException as e:
         GR_STATE['blocked'] = True
@@ -685,8 +774,9 @@ def save_gr_sample(html, q):
         logging.info(f"        💾 Saved unparseable GR search page for '{q}' to {path}")
     except OSError: pass
 
-def _search_goodreads(isbn, asin, title, authors, prim_auth):
-    for q_id, src in [(isbn, 'ISBN Lookup'), (asin, 'ASIN Lookup')]:
+def _search_goodreads(isbn, title, authors, prim_auth):
+    # Audible ASINs practically never resolve on Goodreads, so only the ISBN is tried
+    for q_id, src in [(normalize_isbn(isbn), 'ISBN Lookup')]:
         if q_id:
             if d := scrape_gr_details(f"https://www.goodreads.com/search?q={urllib.parse.quote(str(q_id))}", require_book_page=True):
                 d['source'] = src
@@ -777,6 +867,7 @@ def record_attempt(key, history, failed, recheck, complete=False, recheck_days=N
     rw_json(HISTORY_FILE, history)
     rw_json(FAILED_FILE, failed)
     rw_json(RECHECK_FILE, recheck)
+    rw_json(GR_CACHE_FILE, GR_CACHE)
 
 def item_tags(item):
     """Collect tags from all places ABS may put them (root, media, media.metadata)."""
@@ -901,7 +992,11 @@ def process_library(lib_id, history, failed, recheck):
                 if item.get('_manual_trigger'): stats['manual_retrigger'] += 1
 
                 logging.info(f"({idx+1}/{total}) [ETA: {eta_str}] {title} [ASIN: {asin}]{reason_str} (Try {failed.get(key,0)+1}/{MAX_FAIL_ATTEMPTS})")
-                stats['processed'] += 1 
+                stats['processed'] += 1
+                messy = parse_messy_title(title)
+                search_title = messy['title'] if messy else title
+                if messy: logging.info(f"      -> 🧹 Messy title detected ({messy['kind']}), searching as '{search_title}'")
+                asin_from_search = False
 
                 aud_data = get_audible_data(asin, lang)
 
@@ -946,7 +1041,7 @@ def process_library(lib_id, history, failed, recheck):
                              found = aud_data['variant_asin_us']
                              logging.info(f"        🔗 Found ASIN via HTML Link (hreflang='en-us'): {found}")
 
-                    if not found: found = find_missing_asin(title, authors, item['media'].get('duration'), lang)
+                    if not found: found = find_missing_asin(search_title, authors, item['media'].get('duration'), lang, raw_title=title)
                     
                     if found:
                         if found != asin:
@@ -956,6 +1051,7 @@ def process_library(lib_id, history, failed, recheck):
                                 logging.info(f"        💾 ASIN updated in ABS.")
                             asin, stats['asin_found'] = found, stats['asin_found'] + 1
                             stats['asin_migrated'] += 1
+                            asin_from_search = True
                             if not target_is_german: lang = "English" 
                             aud_data = get_audible_data(asin, lang)
                             if aud_data and aud_data.get('meta_raw'):
@@ -965,10 +1061,23 @@ def process_library(lib_id, history, failed, recheck):
                     else: logging.info(f"        ℹ️ No replacement found. Keeping fallback data.")
 
 
-                if aud_data and aud_data.get('meta_raw') and not DRY_RUN:
+                if aud_data and aud_data.get('meta_raw'):
                     md_raw = aud_data['meta_raw']
                     abs_updates = {}
                     log_updates = []
+
+                    # Title fix: only for broken titles (messy pattern or ASIN found by search),
+                    # and only if Audible's title confirms it is the same book.
+                    aud_title, aud_sub = aud_data.get('title_raw'), aud_data.get('subtitle_raw')
+                    if aud_title and aud_title != title and (messy or asin_from_search):
+                        confirmed = asin_from_search or title_similarity(search_title, aud_title) >= 0.8
+                        if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{aud_title}'")
+                        elif confirmed:
+                            abs_updates['title'] = aud_title
+                            log_updates.append(f"Title: '{title}' -> '{aud_title}'")
+                            if aud_sub and not meta.get('subtitle'):
+                                abs_updates['subtitle'] = aud_sub
+                                log_updates.append(f"Subtitle: -> '{aud_sub}'")
 
                     new_pub = (md_raw.get('publisher') or {}).get('name')
                     if 'lock_publisher' not in tags:
@@ -1046,13 +1155,16 @@ def process_library(lib_id, history, failed, recheck):
                     else: logging.info("        🔒 Series Update Skipped (Locked)")
 
                     if abs_updates:
-                        logging.info(f"        🛠️ Meta Updates:")
+                        logging.info(f"        🛠️ Meta Updates{' (DRY_RUN, not saved)' if DRY_RUN else ''}:")
                         for upd in log_updates: logging.info(f"          -> {upd}")
-                        abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": abs_updates})
+                        if not DRY_RUN: abs_session.patch(f"{ABS_URL}/api/items/{iid}/media", json={"metadata": abs_updates})
                         stats['meta_updated'] += 1
                     else: logging.info("        ✅ No metadata updates necessary.")
 
-                gr_data, gr_status = get_goodreads_data(meta.get('isbn'), asin, title, authors, authors[0] if authors else "")
+                gr_title = (aud_data or {}).get('title_raw') or search_title  # Audible's clean title searches best
+                cached_url = None if item.get('_manual_trigger') else GR_CACHE.get(key)
+                gr_data, gr_status = get_goodreads_data(meta.get('isbn'), gr_title, authors, authors[0] if authors else "", cached_url)
+                if gr_data and gr_data.get('url') and not DRY_RUN: GR_CACHE[key] = gr_data['url']
                 
                 if gr_data and not DRY_RUN:
                     if 'lock_isbn' not in tags:
@@ -1147,6 +1259,7 @@ def main():
     logging.info("--- Start ---")
     start_time = datetime.now()
     history, failed, recheck = rw_json(HISTORY_FILE), rw_json(FAILED_FILE), rw_json(RECHECK_FILE)
+    GR_CACHE.update(rw_json(GR_CACHE_FILE))
     for lib in LIBRARY_IDS: process_library(lib, history, failed, recheck)
     if not DRY_RUN: rw_json(HISTORY_FILE, history); rw_json(FAILED_FILE, failed); rw_json(RECHECK_FILE, recheck)
     save_reports()

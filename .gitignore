@@ -9,5 +9,6 @@ reports/
 rating_history.json
 failed_history.json
 recheck_history.json
+goodreads_cache.json
 *.json.tmp
 last_run.env

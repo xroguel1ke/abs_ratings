@@ -11,7 +11,9 @@ A fully automated script designed for **Audiobookshelf (ABS)** on **Unraid**. It
 * **Dockerized Execution:** Runs via a temporary `python:3.11-slim` container using a wrapper script. No dependency hell on your host.
 * **Audible Catalog API:** Ratings (overall/performance/story) and metadata come from Audible's JSON API (`.com` & `.de`). Scraping the product pages is only used as a fallback.
 * **Goodreads:** Ratings via ISBN/ASIN lookup or text search with title/author/volume matching.
-* **Auto-Repair & Fallback:** Automatically searches for missing ASINs/ISBNs and updates them in ABS. If a direct ID match fails, it attempts a text-based search to find the correct book.
+* **Auto-Repair & Fallback:** Automatically searches for missing ASINs (Audible search API, verified by title, author and runtime) and updates them in ABS.
+* **Title Repair:** Broken, file-name style titles such as `The Book of the New Sun 05 The Urth of the New Sun` or `High Spirits: High Spirits: A Cultural History…` are detected, searched with the clean title and corrected to Audible's title (and subtitle, if empty). Normal titles are never touched.
+* **Goodreads Cache:** Once a Goodreads book page was found, its URL is remembered (`goodreads_cache.json`), so refreshes need a single request.
 * **Multi-Series Support:** Correctly handles books that belong to multiple series (e.g., "Cosmere" & "Stormlight Archive").
 * **Manual Control (Locks):** Use tags in ABS to prevent specific fields (like Series or Language) from being overwritten.
 * **Visual Ratings:** Adds "Moon" emojis (e.g., 🌕🌕🌗🌑🌑) for a quick visual overview in your library.
@@ -62,7 +64,8 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 | `USE_AUDIBLE_API` | Use the Audible catalog API (`false` = scrape product pages only). | `true` |
 | `AUDIBLE_API_INTERVAL` | Minimum seconds between two Audible API requests. | `1` |
 | `AUDIBLE_WEB_INTERVAL` | Minimum seconds between two Audible web page requests (searches, fallback). | `3` |
-| `GOODREADS_INTERVAL` | Minimum seconds between two Goodreads requests. | `3` |
+| `GOODREADS_INTERVAL` | Minimum seconds between two Goodreads requests. | `2` |
+| `SEARCH_PENALTY_SLEEP` | Optional extra pause after an ASIN search. | `0` |
 
 > **Pauses:** Every source is throttled on its own (see the `*_INTERVAL` variables), so `SLEEP_TIMER` can stay small. If you ever hit a rate limit, raise the interval of the affected source first.
 
@@ -91,6 +94,7 @@ You can prevent the script from updating specific metadata fields by adding **Ta
 | `lock_genres` | Prevents adding new **Genres**. |
 | `lock_isbn` | Prevents **ISBN** repairs/updates. |
 | `lock_abridged` | Prevents changes to the **Abridged** flag. |
+| `lock_title` | Prevents **Title**/**Subtitle** corrections. |
 | `lock_description` | Prevents ratings from being written to the **Description**. |
 
 ## 🖼️ Preview
