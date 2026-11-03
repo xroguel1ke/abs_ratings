@@ -598,8 +598,10 @@ def process_library(lib_id, history, failed):
         try:
             if "T" in last_run_str: 
                  last_run_dt = datetime.fromisoformat(last_run_str)
-            else: 
-                 last_run_dt = datetime.strptime(last_run_str, "%Y-%m-%d")
+            else:
+                 # Legacy entries (old script) only store the date. Treat them as end of day,
+                 # otherwise the script's own edits later that day look like manual updates.
+                 last_run_dt = datetime.strptime(last_run_str, "%Y-%m-%d") + timedelta(days=1) - timedelta(seconds=61)
             
             # Ensure last_run_dt is UTC-aware for comparison
             if last_run_dt.tzinfo is None:
