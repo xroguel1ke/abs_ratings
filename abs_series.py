@@ -125,10 +125,18 @@ def name_relation(a, b):
     return None
 
 
-def merge_check(group, cand):
-    """Can 'cand' be merged into 'group' (list of Series, first = target)? Returns (ok, relation, reason)."""
+UNCERTAIN = ('not enough numbered books', "numbers don't complement", 'matches more than one series')
+
+def merge_id(kind, lib, member, target): return f"{kind}|{lib}|{member}->{target}"
+
+def merge_check(group, cand, decisions=None):
+    """Can 'cand' be merged into 'group' (list of Series, first = target)? Returns (ok, relation, reason).
+    Your decisions from the web UI (merge / keep separate / undone) win over the rules."""
     target = group[0]
     rel = name_relation(target, cand)
+    dec = (decisions or {}).get(merge_id('series', getattr(cand, 'lib', ''), cand.name, target.name), {}).get('action')
+    if dec in ('keep', 'undone'): return False, rel or 'manual', 'kept separate (your decision)'
+    if dec == 'merge': return True, 'your decision', 'ok'
     if not rel: return False, None, 'names not similar'
     if target.variant != cand.variant:
         return False, rel, f"different edition ({', '.join(sorted(target.variant)) or 'plain'} vs {', '.join(sorted(cand.variant)) or 'plain'})"
@@ -184,13 +192,14 @@ def collect_records(ctx):
     return records
 
 
-def find_merges(records):
+def find_merges(records, decisions=None):
     """Returns (merges, rejected). merges: list of dicts {lib, target, members:[Series], evidence}."""
     merges, rejected = [], []
     by_lib = defaultdict(dict)
     for r in records:
         for s in r['series']:
             ser = by_lib[r['lib']].setdefault(s['name'], Series(s['name']))
+            ser.lib = r['lib']
             ser.entries.append((r, s.get('sequence')))
     for lib, series_map in by_lib.items():
         # Largest series first: they become merge targets ("the series that had more entries")
@@ -199,16 +208,19 @@ def find_merges(records):
         for ser in ordered:
             fits, related = [], []
             for g in groups:
-                ok, rel, reason = merge_check(g, ser)
+                ok, rel, reason = merge_check(g, ser, decisions)
                 if ok: fits.append((g, rel))
                 elif rel: related.append((g[0], reason))
+            if len(fits) > 1 and any(r == 'your decision' for _, r in fits):  # your choice resolves ambiguity
+                fits = [f for f in fits if f[1] == 'your decision'][:1]
             if len(fits) == 1:
                 fits[0][0].append(ser)
                 ser.relation = fits[0][1]
             else:
                 if len(fits) > 1:
-                    rejected.append({'lib': lib, 'series': ser.name, 'other': ', '.join(g[0].name for g, _ in fits),
-                                     'reason': 'matches more than one series (ambiguous)'})
+                    for g, _ in fits:  # one review entry per possible target
+                        rejected.append({'lib': lib, 'series': ser.name, 'other': g[0].name,
+                                         'reason': 'matches more than one series (ambiguous)'})
                 for tgt, reason in related:
                     rejected.append({'lib': lib, 'series': ser.name, 'other': tgt.name, 'reason': reason})
                 groups.append([ser])
@@ -232,6 +244,9 @@ def apply_merges(ctx, merges):
         logging.info(f"        => '{tgt.name}' afterwards: #{fmt_seqs(all_seqs)}"
                      f"{' (alias saved)' if not dry else ''}")
         member_names = {s.name for s in m['members']}
+        mid_of = {s.name: merge_id('series', m['lib'], s.name, tgt.name) for s in m['members']}
+        record_merge(ctx, 'series', m['lib'], tgt.name, [(s.name, fmt_seqs(s.seqs), len(s.entries), s.relation) for s in m['members']],
+                     fmt_seqs(tgt.seqs))
         if not dry:
             for n in member_names: aliases.setdefault(m['lib'], {})[n] = tgt.name
         group_records = {r['id']: r for s in [tgt] + m['members'] for r, _ in s.entries}
@@ -258,17 +273,35 @@ def apply_merges(ctx, merges):
             if updates: what.append(f"series: {', '.join(x['name'] + (' #' + str(x['sequence']) if x['sequence'] else '') for x in new_series)}")
             if new_tags is not None: what.append("+tag lock_series")
             logging.info(f"        ✏️ '{r['title']}': {' | '.join(what)}")
+            mid = next((mid_of[x['name']] for x in r['series'] if x['name'] in mid_of), None)
             if abs_update(r['id'], key, r['title'], updates, {'series': r['series']}, 'series_merge',
-                          tags=new_tags, old_tags=r['media_tags'] if new_tags is not None else None):
+                          tags=new_tags, old_tags=r['media_tags'] if new_tags is not None else None,
+                          extra={'merge_id': mid} if mid else None):
                 changed += 1
     return changed
 
 
+def record_merge(ctx, kind, lib, target, members, target_books):
+    """merges.json: every automatic or decided merge (shown in the web UI 'Merged' tab)."""
+    hist, dec, now = ctx.setdefault('merge_history', {}), ctx.setdefault('decisions', {}), datetime.now().strftime('%Y-%m-%d %H:%M')
+    for name, books, count, relation in members:
+        mid = merge_id(kind, lib, name, target)
+        old = hist.get(mid)
+        if old and old.get('member_books') != books and dec.get(mid, {}).get('action') == 'confirmed' and not ctx['dry_run']:
+            dec.pop(mid, None)  # new books were merged: show it again
+        hist[mid] = {'id': mid, 'kind': kind, 'lib': lib, 'target': target, 'member': name, 'member_books': books,
+                     'member_count': count, 'target_books': target_books, 'relation': relation,
+                     'status': 'planned' if ctx['dry_run'] and (not old or old.get('status') == 'planned') else 'applied',
+                     'first_seen': (old or {}).get('first_seen', now), 'last_seen': now}
+
+
 # ================= AUTHORS =================
 
-def find_author_fixes(records):
+def find_author_fixes(records, decisions=None):
     """Spelling variants of the same author ('R. A. Salvatore' / 'R.A. Salvatore'): the spelling used
-    by more books wins (tie: alphabetical). Returns {variant: canonical}."""
+    by more books wins (tie: alphabetical). Returns ({variant: canonical}, counts, review list).
+    Uncertain pairs ('J. Smith' / 'John Smith') go to the review list; your decisions win."""
+    decisions = decisions or {}
     count = defaultdict(lambda: defaultdict(int))
     for r in records:
         for a in r['authors']: count[author_key(a)][a] += 1
@@ -277,8 +310,31 @@ def find_author_fixes(records):
         if len(spellings) < 2: continue
         canon = sorted(spellings.items(), key=lambda x: (-x[1], x[0]))[0][0]
         for sp in spellings:
-            if sp != canon: fixes[sp] = canon
-    return fixes, count
+            if sp != canon and decisions.get(merge_id('author', '', sp, canon), {}).get('action') not in ('keep', 'undone'):
+                fixes[sp] = canon
+    # Review: same last name, first name written out vs. initial ('J. Smith' / 'John Smith')
+    total = {k: sum(v.values()) for k, v in count.items()}
+    by_last = defaultdict(list)
+    for k in count:
+        parts = k.split()
+        if len(parts) >= 2: by_last[parts[-1]].append(k)
+    review = []
+    for last, keys in by_last.items():
+        for i, a in enumerate(keys):
+            for b in keys[i + 1:]:
+                fa, fb = a.split()[0], b.split()[0]
+                if len(fa) == len(fb) or not (fa[0] == fb[0] and (len(fa) <= 2 or len(fb) <= 2)): continue
+                if len(a.split()) != len(b.split()): continue
+                big, small = (a, b) if total[a] >= total[b] else (b, a)
+                canon = max(count[big], key=count[big].get); variant = max(count[small], key=count[small].get)
+                mid = merge_id('author', '', variant, canon)
+                act = decisions.get(mid, {}).get('action')
+                if act == 'merge':
+                    for sp in count[small]: fixes[sp] = canon
+                elif act not in ('keep', 'undone'):
+                    review.append({'id': mid, 'kind': 'author', 'lib': '', 'series': variant, 'other': canon,
+                                   'reason': 'first name vs. initial', 'series_books': total[small], 'other_books': total[big]})
+    return fixes, count, review
 
 
 def apply_author_fixes(ctx, records, fixes, count):
@@ -286,6 +342,7 @@ def apply_author_fixes(ctx, records, fixes, count):
     changed = 0
     for variant, canon in sorted(fixes.items()):
         logging.info(f"   ✍️ AUTHOR{' (DRY_RUN)' if dry else ''}: '{variant}' ({count[author_key(variant)][variant]} books) -> '{canon}' ({count[author_key(canon)][canon]} books)")
+        record_merge(ctx, 'author', '', canon, [(variant, '', count[author_key(variant)][variant], 'spelling')], '')
     for r in records:
         if not any(a in fixes for a in r['authors']): continue
         if 'lock_authors' in r['tags']:
@@ -295,8 +352,9 @@ def apply_author_fixes(ctx, records, fixes, count):
             a = fixes.get(a, a)
             if a not in new_auth: new_auth.append(a)
         logging.info(f"        ✏️ '{r['title']}': authors {r['authors']} -> {new_auth}")
+        mid = next((merge_id('author', '', a, fixes[a]) for a in r['authors'] if a in fixes), None)
         if abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'authors': [{'name': a} for a in new_auth]},
-                      {'authors': [{'name': a} for a in r['authors']]}, 'author_normalize'):
+                      {'authors': [{'name': a} for a in r['authors']]}, 'author_normalize', extra={'merge_id': mid}):
             changed += 1
     return changed
 
@@ -417,13 +475,28 @@ table{{border-collapse:collapse;width:100%;display:block;overflow-x:auto}} td,th
 </body></html>"""
 
 
+def _load(path):
+    try:
+        with open(path, encoding='utf-8') as f: return json.load(f)
+    except (OSError, ValueError, TypeError): return {}
+
+def _save(path, data):
+    if not path: return
+    try:
+        with open(path + '.tmp', 'w', encoding='utf-8') as f: json.dump(data, f, indent=1, ensure_ascii=False)
+        os.replace(path + '.tmp', path)
+    except OSError as e: logging.error(f"   Could not write {path}: {e}")
+
+
 def run(ctx):
     """Entry point. ctx: session, abs_url, library_ids, dry_run, abs_update, report_dir, merge, report, extra."""
     logging.info("=" * 60)
     logging.info(f"📚 SERIES & LIBRARY TASK (ABS only, no Audible/Goodreads requests){' - DRY_RUN' if ctx['dry_run'] else ''}")
     records = collect_records(ctx)
     logging.info(f"   {len(records)} books loaded.")
-    merges, rejected = find_merges(records)
+    ctx['decisions'] = _load(ctx.get('decisions_file'))
+    ctx['merge_history'] = _load(ctx.get('merges_file'))
+    merges, rejected = find_merges(records, ctx['decisions'])
     changed = authors_changed = 0
     if ctx['merge']:
         logging.info(f"   Series merges found: {len(merges)}")
@@ -435,11 +508,22 @@ def run(ctx):
                 with open(ctx['aliases_file'], 'w', encoding='utf-8') as f: json.dump(ctx['aliases'], f, indent=2, ensure_ascii=False)
             except OSError as e: logging.error(f"   Could not write series aliases: {e}")
     write_series_index(ctx, records, merges if ctx['merge'] else [])
-    fixes = {}
+    fixes, author_review = {}, []
     if ctx.get('author_normalize'):
-        fixes, count = find_author_fixes(records)
-        logging.info(f"   Author spelling variants: {len(fixes)}")
+        fixes, count, author_review = find_author_fixes(records, ctx['decisions'])
+        logging.info(f"   Author spelling variants: {len(fixes)} (review: {len(author_review)})")
         authors_changed = apply_author_fixes(ctx, records, fixes, count)
+    # Web UI files: merge history, uncertain cases, decisions (a confirmed merge may have been reopened)
+    series_review = []
+    for r in rejected:
+        if r['reason'].startswith(UNCERTAIN):
+            mid = merge_id('series', r['lib'], r['series'], r['other'])
+            if ctx['decisions'].get(mid, {}).get('action') in ('keep', 'undone'): continue
+            series_review.append(dict(r, id=mid, kind='series'))
+    _save(ctx.get('merges_file'), ctx['merge_history'])
+    _save(ctx.get('review_file'), {'series': series_review, 'authors': author_review,
+                                   'generated': datetime.now().strftime('%Y-%m-%d %H:%M')})
+    if not ctx['dry_run']: _save(ctx.get('decisions_file'), ctx['decisions'])
     if ctx['report']:
         extra = dict(ctx.get('extra', {}), author_fixes=fixes)
         rep = build_report(ctx, records, merges if ctx['merge'] else [], rejected, extra)

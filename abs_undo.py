@@ -15,7 +15,7 @@ import os, re, sys, json, argparse
 from collections import Counter
 import requests
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = os.getenv('DATA_DIR') or os.path.dirname(os.path.abspath(__file__))
 CHANGES_FILE = os.path.join(SCRIPT_DIR, "changes.jsonl")
 UNDONE_FILE = os.path.join(SCRIPT_DIR, "undone.jsonl")
 
@@ -35,12 +35,13 @@ def main():
     ap.add_argument('--run', help="run id to undo")
     ap.add_argument('--item', help="ABS item id to undo")
     ap.add_argument('--field', help="only undo this field")
+    ap.add_argument('--merge-id', help="undo one series/author merge (web UI)")
     ap.add_argument('--apply', action='store_true', help="really write to ABS (default: only show)")
     a = ap.parse_args()
 
     changes = load(CHANGES_FILE)
     done = {x['id'] for x in load(UNDONE_FILE)}
-    if a.list or not (a.run or a.item):
+    if a.list or not (a.run or a.item or a.merge_id):
         runs = Counter(e['run'] for e in changes if entry_id(e) not in done)
         if not runs: print("No changes recorded (or everything was undone already)."); return
         print("Run id            Changes")
@@ -49,7 +50,7 @@ def main():
 
     sel = [e for e in changes if entry_id(e) not in done
            and (not a.run or e['run'] == a.run) and (not a.item or e['item'] == a.item)
-           and (not a.field or e['field'] == a.field)]
+           and (not a.field or e['field'] == a.field) and (not a.merge_id or e.get('merge_id') == a.merge_id)]
     if not sel: print("Nothing to undo for this selection."); return
 
     url = re.sub(r'[^A-Za-z0-9:/._\-\[\]%]', '', os.getenv('ABS_URL', '')).rstrip('/')

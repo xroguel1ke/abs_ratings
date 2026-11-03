@@ -16,3 +16,10 @@ changes.jsonl
 undone.jsonl
 series_aliases.json
 series_index.json
+results.json
+overrides.json
+merges.json
+merge_review.json
+merge_decisions.json
+settings.json
+webui_runs.json

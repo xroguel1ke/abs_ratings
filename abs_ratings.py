@@ -20,14 +20,19 @@ ABS_URL = ABS_URL.rstrip('/')
 API_TOKEN, _TOKEN_REMOVED = clean_env('API_TOKEN', r'A-Za-z0-9._\-')  # JWT: only these characters
 LIBRARY_IDS = [l.strip() for l in os.getenv('LIBRARY_IDS', '').split(',') if l.strip()]
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# DATA_DIR: where history, caches, logs and reports live (the container sets it to /config).
+SCRIPT_DIR = os.getenv('DATA_DIR') or os.path.dirname(os.path.abspath(__file__))
 LOG_DIR = os.path.join(SCRIPT_DIR, "logs")
 REPORT_DIR = os.path.join(SCRIPT_DIR, "reports")
 HISTORY_FILE = os.path.join(SCRIPT_DIR, "rating_history.json")
 FAILED_FILE = os.path.join(SCRIPT_DIR, "failed_history.json")
 RECHECK_FILE = os.path.join(SCRIPT_DIR, "recheck_history.json")  # key -> UTC time of an early re-check
 GR_CACHE_FILE = os.path.join(SCRIPT_DIR, "goodreads_cache.json")  # key -> Goodreads book URL
-RUN_ID = datetime.now().strftime('%Y%m%d-%H%M%S')
+RUN_ID = os.getenv('RUN_ID') or datetime.now().strftime('%Y%m%d-%H%M%S')  # the web UI passes its own id
+RESULTS_FILE = os.path.join(SCRIPT_DIR, "results.json")      # last result per book (status, reason, log excerpt)
+OVERRIDES_FILE = os.path.join(SCRIPT_DIR, "overrides.json")  # manual fixes from the web UI: asin, goodreads, ignore
+ONLY_ITEMS = [x.strip() for x in os.getenv('ONLY_ITEMS', '').split(',') if x.strip()]  # 'libid_itemid' -> single-book mode
+ABS_BACKUP = os.getenv('ABS_BACKUP', 'false').lower() == 'true'  # create an ABS backup before a real run
 SERIES_ALIASES_FILE = os.path.join(SCRIPT_DIR, "series_aliases.json")  # {library: {"alias name": "series name"}} (editable)
 SERIES_INDEX_FILE = os.path.join(SCRIPT_DIR, "series_index.json")      # Series that exist in ABS (written by the series task)
 CHANGES_FILE = os.path.join(SCRIPT_DIR, "changes.jsonl")  # Every applied change (old -> new), used by abs_undo.py
@@ -245,7 +250,7 @@ def map_language(raw):
 
 def setup_logging():
     os.makedirs(LOG_DIR, exist_ok=True)
-    f = os.path.join(LOG_DIR, f"run_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
+    f = os.path.join(LOG_DIR, f"run_{RUN_ID}.log" if os.getenv('RUN_ID') else f"run_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
     logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO), format='%(asctime)s - %(levelname)s - %(message)s',
                         handlers=[logging.FileHandler(f, encoding='utf-8'), logging.StreamHandler()])
     logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -259,17 +264,18 @@ def _plain(v):
         return [{k: x.get(k) for k in ('name', 'sequence') if k in x} if isinstance(x, dict) else x for x in v]
     return v
 
-def journal_change(iid, key, title, field, old, new, source):
+def journal_change(iid, key, title, field, old, new, source, extra=None):
     """Append one change to changes.jsonl (or the planned-changes file in DRY_RUN)."""
     entry = {'run': RUN_ID, 'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'item': iid, 'key': key,
              'title': title, 'field': field, 'old': _plain(old), 'new': _plain(new), 'source': source, 'dry_run': DRY_RUN}
+    if extra: entry.update(extra)
     path = PLANNED_FILE if DRY_RUN else CHANGES_FILE
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'a', encoding='utf-8') as f: f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except OSError as e: logging.error(f"Journal write failed: {e}")
 
-def abs_update(iid, key, title, updates, old_meta, source, tags=None, old_tags=None):
+def abs_update(iid, key, title, updates, old_meta, source, tags=None, old_tags=None, extra=None):
     """The only way this script writes metadata/tags to ABS. Journals every field (old -> new).
     In DRY_RUN nothing is sent, the change is only written to the planned-changes file."""
     if not updates and tags is None: return True
@@ -282,8 +288,8 @@ def abs_update(iid, key, title, updates, old_meta, source, tags=None, old_tags=N
             logging.error(f"        ❌ ABS update failed for '{title}' (HTTP {r.status_code}): {r.text[:200]}")
             return False
     for field, new in (updates or {}).items():
-        journal_change(iid, key, title, field, (old_meta or {}).get(field), new, source)
-    if tags is not None: journal_change(iid, key, title, 'tags', old_tags, tags, source)
+        journal_change(iid, key, title, field, (old_meta or {}).get(field), new, source, extra)
+    if tags is not None: journal_change(iid, key, title, 'tags', old_tags, tags, source, extra)
     return True
 
 def abs_set_cover(iid, key, title, url, source):
@@ -1166,6 +1172,20 @@ def build_description(current_desc, aud, gr, old_aud, old_gr):
     lines.append("⭐")
     return "<br>".join(lines) + "<br>" + clean_d
 
+RESULTS, OVERRIDES = {}, {}  # loaded in main()
+
+class ItemCapture(logging.Handler):
+    """Collects the log lines of the book that is being processed (shown in the web UI problem view)."""
+    def __init__(self): super().__init__(); self.lines = []
+    def emit(self, record):
+        if len(self.lines) < 80: self.lines.append(record.getMessage().strip())
+ITEM_LOG = ItemCapture()
+
+def set_result(key, lib_id, iid, title, authors, asin, status, reason, extra=None):
+    RESULTS[key] = {'lib': lib_id, 'id': iid, 'title': title, 'author': ', '.join(authors or []), 'asin': asin,
+                    'status': status, 'reason': reason, 'run': RUN_ID, 'dry_run': DRY_RUN,
+                    'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'log': list(ITEM_LOG.lines), **(extra or {})}
+
 def record_attempt(key, history, failed, recheck, complete=False, recheck_days=None):
     """Track the result of one item. Nothing is persisted in DRY_RUN mode.
     - complete: done, next run after REFRESH_DAYS
@@ -1207,6 +1227,13 @@ def process_library(lib_id, history, failed, recheck):
 
 def run_libraries(history, failed, recheck):
     """Collect the due books of ALL libraries into one pool, shuffle it and process BATCH_SIZE random books."""
+    if ONLY_ITEMS:  # single-book mode (web UI fix / single book): exactly these books, due or not
+        batch = []
+        for k in ONLY_ITEMS:
+            lib, _, iid = k.partition('_')
+            batch.append({'id': iid, '_lib': lib, 'media': {}})
+        logging.info(f"Single-book mode: {', '.join(ONLY_ITEMS)}")
+        return process_queue(batch, history, failed, recheck)
     pool = []
     for lib in LIBRARY_IDS: pool += build_queue(lib, history, recheck)
     random.shuffle(pool)
@@ -1316,6 +1343,7 @@ def process_queue(work_queue, history, failed, recheck):
         
         search_penalty = False
         needs_sleep = False  # Only pause after items that actually hit Audible/Goodreads
+        ITEM_LOG.lines = []
 
         while True: 
             try:
@@ -1333,6 +1361,13 @@ def process_queue(work_queue, history, failed, recheck):
 
                 asin, lang = meta.get('asin'), meta.get('language')
                 authors = [a.get('name') if isinstance(a, dict) else a for a in meta.get('authors', [])]
+                ov = OVERRIDES.get(key) or {}
+                if ov.get('asin') and ov['asin'] != asin:
+                    # Manual ASIN from the web UI: written to ABS and protected like lock_asin
+                    logging.info(f"      -> ✋ Manual ASIN {ov['asin']} (was {asin})")
+                    abs_update(iid, key, title, {'asin': ov['asin']}, {'asin': asin}, 'manual')
+                    asin = ov['asin']
+                if ov.get('asin'): tags = tags | {'lock_asin'}
                 
                 logging.info(f"-"*50)
                 needs_sleep = True
@@ -1617,7 +1652,7 @@ def process_queue(work_queue, history, failed, recheck):
                             logging.info(f"        🖼️ Cover {'would be set (DRY_RUN)' if DRY_RUN else 'set'} from Audible: {aud_data['cover_url']}")
 
                 gr_title = (aud_data or {}).get('title_raw') or search_title  # Audible's clean title searches best
-                cached_url = None if item.get('_manual_trigger') else GR_CACHE.get(key)
+                cached_url = ov.get('goodreads') or (None if item.get('_manual_trigger') else GR_CACHE.get(key))
                 gr_data, gr_status = get_goodreads_data(meta.get('isbn'), gr_title, authors, authors[0] if authors else "", cached_url)
                 if gr_data and gr_data.get('url') and not DRY_RUN: GR_CACHE[key] = gr_data['url']
                 
@@ -1680,7 +1715,22 @@ def process_queue(work_queue, history, failed, recheck):
                 else:
                     logging.warning(f"      -> ⚠️ No Audible data (Audible: {has_aud}, GR: {has_gr})")
                     record_attempt(key, history, failed, recheck)
-                
+
+                # Result for the web UI dashboard / problem list
+                if aud_data and aud_data.get('related_edition'):
+                    status, reason = 'other_edition', f"Ratings of another edition ({aud_data.get('asin')}), ASIN not available anymore"
+                elif has_aud: status, reason = 'ok', ''
+                elif no_ratings_yet: status, reason = 'no_ratings_yet', 'On Audible, but no ratings yet'
+                elif not asin: status, reason = 'not_found', 'No ASIN and no match found on Audible'
+                elif aud_data is None: status, reason = 'not_found', 'ASIN not available in any Audible store, no replacement found'
+                else: status, reason = 'not_found', 'No ratings found on Audible'
+                notes = []
+                if skip_meta: notes.append('metadata skipped (Audible data does not fit this book)')
+                if GOODREADS_ENABLED and not has_gr and gr_status != 'deferred': notes.append(f"Goodreads {gr_status.replace('_', ' ')}")
+                if ov.get('ignore'): status = 'ignored'
+                set_result(key, lib_id, iid, title, authors, asin, status, reason,
+                           {'notes': notes, 'domain': (aud_data or {}).get('domain'), 'goodreads': (gr_data or {}).get('url')})
+
                 consecutive_rl = 0
                 break 
 
@@ -1694,6 +1744,8 @@ def process_queue(work_queue, history, failed, recheck):
                 logging.exception(f"Item Error: {e}"); stats['failed'] += 1
                 # Count the crash as a strike so broken items don't block the batch forever
                 record_attempt(f"{lib_id}_{item['id']}", history, failed, recheck)
+                set_result(f"{lib_id}_{item['id']}", lib_id, item['id'], (item.get('media') or {}).get('metadata', {}).get('title') or item['id'],
+                           [], None, 'error', f"{type(e).__name__}: {e}")
                 break
         
         if stats['aborted_ratelimit']: break
@@ -1732,6 +1784,15 @@ def log_run_summary(start_time, series_result):
     else: logging.info(f"  Undo this run: python3 abs_undo.py --run {RUN_ID} --apply")
     logging.info("=" * 60)
     logging.debug(f"Raw stats: {stats}")
+
+def create_abs_backup():
+    """Ask ABS to create a backup before a real run (ABS: Settings -> Backups). Failure is logged, the run continues."""
+    try:
+        r = abs_session.post(f"{ABS_URL}/api/backups", timeout=600)
+        if r.status_code == 200: logging.info("💾 ABS backup created before this run.")
+        else: logging.warning(f"💾 ABS backup failed (HTTP {r.status_code}): {r.text[:150]}")
+    except requests.RequestException as e:
+        logging.warning(f"💾 ABS backup failed: {e}")
 
 def fail_early(log_file, start_time, msg):
     """Log a fatal start-up error and hand it to the Unraid notification."""
@@ -1827,14 +1888,18 @@ def main():
     SERIES_INDEX.update(rw_json(SERIES_INDEX_FILE))
     if SERIES_ALIASES or SERIES_INDEX:
         logging.info(f"Series aliases: {sum(len(v) for v in SERIES_ALIASES.values())} | Known series: {sum(len(v) for v in SERIES_INDEX.values())}")
+    RESULTS.update(rw_json(RESULTS_FILE)); OVERRIDES.update(rw_json(OVERRIDES_FILE))
+    logging.getLogger().addHandler(ITEM_LOG)
+    if ABS_BACKUP and not DRY_RUN: create_abs_backup()
     if not SERIES_ONLY:
         run_libraries(history, failed, recheck)
         if not DRY_RUN: rw_json(HISTORY_FILE, history); rw_json(FAILED_FILE, failed); rw_json(RECHECK_FILE, recheck)
         save_reports()
         if AUTHOR_NOTES: rw_json(os.path.join(REPORT_DIR, "author_variants.json"), AUTHOR_NOTES)
+        rw_json(RESULTS_FILE, RESULTS)  # also in DRY_RUN: it is the web UI's view of the last check
 
     series_result = {}
-    if SERIES_MERGE or LIBRARY_REPORT:
+    if (SERIES_MERGE or LIBRARY_REPORT) and not ONLY_ITEMS:
         try:
             import abs_series
             series_result = abs_series.run({
@@ -1842,6 +1907,8 @@ def main():
                 'abs_update': abs_update, 'report_dir': REPORT_DIR, 'merge': SERIES_MERGE, 'report': LIBRARY_REPORT,
                 'lock_after_merge': SERIES_LOCK_AFTER_MERGE, 'author_normalize': AUTHOR_NORMALIZE,
                 'aliases': SERIES_ALIASES, 'aliases_file': SERIES_ALIASES_FILE, 'index_file': SERIES_INDEX_FILE,
+                'decisions_file': os.path.join(SCRIPT_DIR, 'merge_decisions.json'), 'merges_file': os.path.join(SCRIPT_DIR, 'merges.json'),
+                'review_file': os.path.join(SCRIPT_DIR, 'merge_review.json'),
                 'extra': {'author_notes': AUTHOR_NOTES, 'unmapped_genres': UNMAPPED_GENRES},
             })
             stats['series_merged'] = series_result.get('merges', 0)
