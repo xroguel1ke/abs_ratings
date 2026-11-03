@@ -286,3 +286,8 @@ Synthetic: 79/80 -> "The Soldier": a valid .co.uk listing won before the .com on
 Side effect found by regress.sh (documented as improvement): 4 older golden ASINs were .co.uk variants of the same products (All the Skills, Reincarnated vol 3, SAO 5, Primal Hunter 7) -> now the .com variant (preferred store, verified: same title/runtime/date); "86—EIGHTY-SIX, Vol. 6" is a library DUPLICATE (the .com ASIN belongs to "…Vol. 6: Darkest Before the Dawn") -> no ASIN assigned twice.
 Fix trend per counting batch: A1 6, A2 5, A3 3, A4 1, A5 1.
 ## Batch A6 started
+
+## Batch A6 (counting #6: 100 library + 80 synthetic, Audible-only, 7:08 min, 0 errors) – FIRST CLEAN BATCH (counter 1 of 4)
+Library: 4 ASIN changes hand-verified correct (Dragonseye, The Magician's Guild, City of Blades, The Baron; 4-6 independent evidences each), review list empty, nothing wrong or missing to correct. Synthetic: 80/80 first time. One case without Audible data: "Jules Verne" (ABS title = author name, real title in the series field "20.000 Meilen unter dem Meer", German; Audible.de has the Kluckert recording at 1022 min vs the ABS file 1907 min -> different cut, no safe match = correct "not on Audible"). After the batch I added an optional search improvement (title equal to author name -> series name is searched); it does not change this outcome. Rule: a batch is clean if no wrong/missing RESULT had to be corrected.
+Counter: 1 of 4. Frozen code for A7: commit 4290841 + that search improvement (regress green).
+## Batch A7 started (SYNTH=9)

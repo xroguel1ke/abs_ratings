@@ -2087,6 +2087,10 @@ def process_queue(work_queue, history, failed, recheck):
                 messy = parse_messy_title(title)
                 search_title = messy['title'] if messy else title
                 if messy: logging.info(f"      -> 🧹 Messy title detected ({messy['kind']}), searching as '{search_title}'")
+                if not messy and authors and meta.get('series') and normalize_title_text(search_title) in {normalize_title_text(a_) for a_ in authors}:
+                    # ABS title = author name (folder name): the real title is in the series field ('Jules Verne' / series '20.000 Meilen unter dem Meer')
+                    logging.info(f"      -> 🧹 Title '{search_title}' is the author's name; searching with the series name '{meta['series'][0].get('name')}' instead")
+                    search_title = meta['series'][0].get('name') or search_title
                 asin_from_search = False
                 skip_meta = False
                 abs_dur = (item_data.get('media') or {}).get('duration') or (item.get('media') or {}).get('duration')
