@@ -57,6 +57,11 @@ def test_certainty_score_parts():
     assert A.certainty_score('X', ['A'], [], 1, None, None, [], None)[0] == 0
 
 
+def test_messy_number_prefix_single_word():
+    assert (A.parse_messy_title('03 Blutmale') or {}).get('title') == 'Blutmale'
+    assert A.parse_messy_title('007 Skyfall') is None and A.parse_messy_title('1984') is None and A.parse_messy_title('Dune') is None
+
+
 def test_isbn_checks():
     assert A.isbn_bad_reason('B0D2LJ6SJ2') == 'value is an ASIN, not an ISBN'
     assert A.isbn_bad_reason('9780553580334') is None            # real ISBN-13 (House Corrino)

@@ -314,6 +314,15 @@ def series_seq_conflict(abs_series, cand_series):
                 return True
     return False
 
+def series_number_hit(abs_series, cand_series):
+    """ABS and the candidate list the same series (name equal after normalisation) with the SAME number."""
+    return any(an is not None and cn is not None and an == cn and (ak == ck or difflib.SequenceMatcher(None, ak, ck).ratio() >= 0.9)
+               for ak, an in _series_pairs(abs_series) for ck, cn in _series_pairs(cand_series))
+
+def series_number_loose(abs_series, cand_series):
+    """Same NUMBER in some series of ABS and of the candidate (series named differently: 'The Original Shannara Trilogy' vs 'The Sword of Shannara (Unabridged)')."""
+    return any(an is not None and cn is not None and an == cn for _, an in _series_pairs(abs_series) for _, cn in _series_pairs(cand_series))
+
 def series_seq_unconfirmed(abs_series, cand_series):
     """True if ABS says 'volume 2 or higher' of a series but the candidate shows no matching number
     (e.g. ABS 'Hell Mode #3' vs Audible 'Hell Mode' without number -> probably volume 1)."""
@@ -538,8 +547,9 @@ def parse_messy_title(t):
         if len(series.split()) >= 2 and len(rest.split()) >= 2:
             return {'title': rest, 'series': series, 'sequence': str(float(seq)).rstrip('0').rstrip('.'), 'kind': 'series_prefix'}
     if m := RE_LEADING_NUM.match(t):
-        if len(m.group(2).split()) >= 2:
-            return {'title': m.group(2).strip(), 'sequence': str(int(m.group(1))), 'kind': 'number_prefix'}
+        rest_ = m.group(2).strip()
+        if len(rest_.split()) >= 2 or (re.fullmatch(r'0[1-9]', m.group(1)) and len(rest_) >= 5):  # '03 Blutmale' yes, '007 Skyfall' no
+            return {'title': rest_, 'sequence': str(int(m.group(1))), 'kind': 'number_prefix'}
     return None
 
 def title_similarity(a, b):
@@ -1073,7 +1083,7 @@ def series_prefixed_title(abs_title, found_title, abs_series):
     return False
 
 def search_audible_api(title, authors_list, duration, lang, raw_title=None, required_lang=None, strict=False,
-                       only_domain=None, narrators=None, abs_series=None, extra_candidates=None, only_extra=False):
+                       only_domain=None, narrators=None, abs_series=None, extra_candidates=None, only_extra=False, only_queries=None):
     """Find an ASIN via the Audible catalog search API. Every candidate is verified by loading
     the product (title, author, runtime). Returns the ASIN, None (no match) or False (API error)."""
     prim_auth = authors_list[0] if authors_list else ""
@@ -1084,9 +1094,13 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
         queries.append({"title": short, "author": prim_auth} if prim_auth else {"keywords": short})
     if raw_title and raw_title != title: queries.append({"keywords": raw_title})
     queries.append({"keywords": title})
+    if narrators and narrators[0]: queries.append({"keywords": f"{title} {prim_auth} {narrators[0]}".strip()})  # generic titles ('The Prince'): the narrator surfaces the right recording
+    nq = {"author": prim_auth, "narrator": narrators[0]} if (narrators and narrators[0] and prim_auth) else None  # last resort only (see end of function)
+    if only_queries: queries = list(only_queries)
     LAST_SEARCH['related'] = None
     api_ok = False
     near_pick = None  # accepted only via 'same narrator, runtime inside tolerance'; used if no candidate with exact runtime follows
+    best_pick = None  # accepted with an INEXACT title: keep looking, a later candidate may match the title exactly ('The Wild Robot' vs '...: Booktrack Edition')
     if only_extra: queries = []  # series-listing path: no search queries, only the given candidates
     domains = [only_domain] if only_domain else search_domains(required_lang or lang)
     if only_extra: domains = domains[:1]
@@ -1121,8 +1135,14 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 rest = nf[len(na):].strip() if nf.startswith(na + ' ') else ''
                 if rest and rest in {normalize_title_text(re.sub(r'(?i)\s+series$', '', s.get('name') or '')) for s in abs_series}: t_score = 0.85
             if t_score < 0.85 and abs_series and series_prefixed_title(title, found_title, abs_series): t_score = 0.9
+            if t_score < 0.85 and abs_series:
+                na_, nf_ = normalize_title_text(title), normalize_title_text(found_title)
+                if na_ and nf_.startswith(na_ + ' ') and series_number_hit(abs_series, (p.get('meta_raw') or {}).get('series')): t_score = 0.85  # ABS title = start of the Audible title + same series number
             f_nums, t_nums = volume_of(found_title, p.get('subtitle_raw')), extract_volume(title)
-            if f_nums and t_nums and not f_nums & t_nums:  # different volume: never the same book
+            seq_nums = {str(int(float(s.get('sequence')))) for s in (abs_series or []) if re.fullmatch(r'\d+(\.0)?', str(s.get('sequence') or ''))}
+            self_inconsistent = bool(seq_nums & f_nums and duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120
+                                     and {re.sub(r'[^a-z]', '', n.lower()) for n in (narrators or []) if n} & {re.sub(r'[^a-z]', '', n.lower()) for n in (p.get('narrators_raw') or []) if n})
+            if f_nums and t_nums and not f_nums & t_nums and not self_inconsistent:  # different volume: never the same book (unless ABS contradicts itself and runtime + narrator agree)
                 logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (volume {','.join(sorted(f_nums))} vs {','.join(sorted(t_nums))})")
                 continue
             dup_resolved = False
@@ -1162,6 +1182,11 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 continue
             # same narrator + runtime inside the library tolerance (15 % / 20 min): same recording, ABS file just differs a little
             dur_near_n = bool(duration and p.get("runtime_sec") and not runtime_mismatch(duration, p["runtime_sec"]) and a_narr and c_narr and a_narr & c_narr)
+            na_w, nf_w = set(normalize_title_text(title).split()), set(normalize_title_text(found_title).split())
+            exact_rt = bool(duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120)
+            if (t_score < 0.85 and auth_ok and exact_rt and a_narr and c_narr and a_narr & c_narr and na_w and na_w <= nf_w
+                    and (series_number_hit(abs_series, (p.get("meta_raw") or {}).get("series")) or series_number_loose(abs_series, (p.get("meta_raw") or {}).get("series")))):
+                t_score = 0.85  # 'Shannara' vs 'The Sword of Shannara': title words contained, but runtime to the minute + narrator + author + series number agree
             if strict:  # replacing an existing ASIN: everything must match
                 accept = t_score >= 0.85 and auth_ok and (dur_ok or dur_near_n)
             else:
@@ -1195,13 +1220,26 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 if strict and not dur_ok and dur_near_n:  # keep looking: a candidate with exact runtime beats an approximate one
                     if near_pick is None: near_pick = (cand, dict(LAST_MATCH), msg)
                     continue
+                if t_score < 0.99:
+                    if best_pick is None or (round(t_score, 2), dur_ok) > best_pick[0]: best_pick = ((round(t_score, 2), dur_ok), cand, dict(LAST_MATCH), msg)
+                    continue
                 logging.info(msg)
                 return cand
             logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, runtime {'✓' if dur_ok else '✗' if dur_conflict else '?'})")
+        if best_pick: break  # do not search further stores when this store already has an acceptable hit
+    if best_pick:
+        LAST_MATCH.clear(); LAST_MATCH.update(best_pick[2])
+        logging.info(best_pick[3])
+        return best_pick[1]
     if near_pick:
         LAST_MATCH.clear(); LAST_MATCH.update(near_pick[1])
         logging.info(near_pick[2])
         return near_pick[0]
+    if nq and not only_queries and not only_extra:  # nothing found: author + narrator filter (generic titles like 'The Prince' hide the right recording)
+        rel_before = LAST_SEARCH['related']
+        res = search_audible_api(title, authors_list, duration, lang, raw_title, required_lang, strict, only_domain, narrators, abs_series, only_queries=[nq])
+        if res: return res
+        if rel_before and not LAST_SEARCH['related']: LAST_SEARCH['related'] = rel_before
     return None if api_ok else False
 
 def find_missing_asin(title, authors_list, duration, lang, raw_title=None, required_lang=None, strict=False,

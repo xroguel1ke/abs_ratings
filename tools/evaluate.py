@@ -18,7 +18,7 @@ bad, ok = [], 0
 for key, g in golden.items():
     got = by_key.get(key, {}).get('asin')
     new = got[-1]['new'] if got else None
-    if new == g.get('asin'): ok += 1
+    if new == g.get('asin') or (new and new in (g.get('alt') or [])): ok += 1  # 'alt' = same product, ASIN of another store
     else: bad.append((g.get('title') or key, g.get('asin'), new, g.get('note') or g.get('status')))
 print(f"golden: {ok}/{len(golden)} ok, {len(bad)} deviations")
 for t, exp, got, why in bad: print(f"  DEVIATION {t[:50]!r}: expected asin {exp}, got {got}  ({why})")
