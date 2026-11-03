@@ -49,7 +49,12 @@ MIN_INTERVAL = {
 }
 USE_AUDIBLE_API = os.getenv('USE_AUDIBLE_API', 'true').lower() == 'true'
 GOODREADS_ENABLED = os.getenv('GOODREADS_ENABLED', 'true').lower() == 'true'  # false = no Goodreads requests at all
-AUDIBLE_API_HOSTS = {"www.audible.com": "api.audible.com", "www.audible.de": "api.audible.de"}
+# Audible marketplaces. ABS may have matched a book in any of them (e.g. audible.co.uk), so all are checked
+# before an ASIN counts as broken. AUDIBLE_MARKETPLACES limits/orders them.
+ALL_MARKETS = ['com', 'co.uk', 'ca', 'com.au', 'de', 'fr', 'it', 'es']
+AUDIBLE_MARKETS = [m.strip() for m in os.getenv('AUDIBLE_MARKETPLACES', ','.join(ALL_MARKETS)).split(',') if m.strip() in ALL_MARKETS]
+AUDIBLE_API_HOSTS = {f"www.audible.{m}": f"api.audible.{m}" for m in ALL_MARKETS}
+MARKET_BY_LANG = {'German': 'de', 'French': 'fr', 'Italian': 'it', 'Spanish': 'es', 'English': 'com'}
 AUDIBLE_API_GROUPS = "rating,series,product_attrs,product_desc,category_ladders,contributors,media"
 DRY_RUN = os.getenv('DRY_RUN', 'False').lower() == 'true'
 ABS_TIMEOUT = int(os.getenv('ABS_TIMEOUT', 30))  # Seconds per ABS API request
@@ -392,7 +397,7 @@ def normalize_isbn(v):
 RE_DUP_TITLE = re.compile(r'^\s*(.+?)\s*:\s*\1\s*(?::\s*(.+))?$', re.IGNORECASE)
 # 'The Book of the New Sun 05 The Urth of the New Sun': number directly between two names, separated by spaces only.
 # 'Casual Farming 3: A Slow Living LitRPG' / 'ANIMA, Vol. 4: Light Novel' (colon after the number) are normal titles.
-RE_SERIES_PREFIX = re.compile(r'^\s*([^:]{4,}?)\s+(\d{1,3})\s+([^:].{2,})$')
+RE_SERIES_PREFIX = re.compile(r'^\s*([^:]{4,}?)\s+(0\d{1,2})\s+([^:].{2,})$')  # zero-padded like file names ('05')
 
 RE_LEADING_NUM = re.compile(r'^\s*(0\d{1,2})\s*[-.:]?\s+(.{3,})$')  # '01 Nightside the Long Sun' (zero-padded only)
 
@@ -543,9 +548,21 @@ def scrape_search_result_fallback(domain, asin):
 # ================= CORE LOGIC =================
 
 def audible_domains(language):
-    if language and str(language).strip().lower() in GERMAN_LANG_CODES:
-        return ["www.audible.de", "www.audible.com"]
-    return ["www.audible.com", "www.audible.de"]
+    """All marketplaces for a product lookup, the one matching the book language first."""
+    first = MARKET_BY_LANG.get(map_language(language) if language else None, 'com')
+    order = [first] + [m for m in AUDIBLE_MARKETS if m != first]
+    return [f"www.audible.{m}" for m in order if m in AUDIBLE_MARKETS or m == first]
+
+def search_domains(language):
+    """Marketplaces used for an ASIN search (fewer, searches are expensive)."""
+    lang = map_language(language) if language else None
+    first = MARKET_BY_LANG.get(lang, 'com')
+    second = 'co.uk' if first == 'com' else 'com'
+    return [f"www.audible.{m}" for m in dict.fromkeys([first, second])]
+
+def web_domains(language):
+    """The web scraper fallback only knows audible.com and audible.de."""
+    return ["www.audible.de", "www.audible.com"] if map_language(language) == 'German' else ["www.audible.com", "www.audible.de"]
 
 def get_audible_api(asin, domain):
     """Query the Audible catalog API for one marketplace.
@@ -617,25 +634,25 @@ def get_audible_data(asin, language):
     scraping the product pages when the API can't answer for any marketplace."""
     if not asin: return None
     if not USE_AUDIBLE_API: return get_audible_data_web(asin, language)
-    api_error = False
+    api_error, missing = False, []
     for domain in audible_domains(language):
-        logging.info(f"      -> Checking {domain} (API)...")
         res = get_audible_api(asin, domain)
         if res is None: api_error = True; continue
         if res == 'missing':
-            logging.info(f"        ⚠️ Not available on {domain}")
+            missing.append(domain.replace('www.audible.', '.'))
             continue
+        logging.info(f"      -> Audible API: found on {domain}" + (f" (not on {', '.join(missing)})" if missing else ""))
         if res['count'] > 0 and res.get('overall'):
             logging.info(f"        ✅ SUCCESS on {domain} (Count: {res['count']}, Rating: {round(safe_float(res['overall']), 2)})")
         else:
             logging.info(f"        ℹ️ Product exists on {domain}, but has no ratings yet.")
         return res
-    logging.info(f"        ↪️ {'API error' if api_error else 'Not found via API'}, falling back to web scraping...")
+    logging.info(f"      -> Audible API: ASIN not available on {', '.join(missing) or '-'}{' (API errors)' if api_error else ''}, falling back to web scraping...")
     return get_audible_data_web(asin, language)
 
 def get_audible_data_web(asin, language):
     if not asin: return None
-    domains = audible_domains(language)
+    domains = web_domains(language)
 
     best_result = None
 
@@ -769,7 +786,25 @@ def get_audible_data_web(asin, language):
     if best_result: return best_result
     return None
 
-def search_audible_api(title, authors_list, duration, lang, raw_title=None, required_lang=None):
+def search_match_score(abs_title, found_title, found_sub):
+    """Title score for search candidates. Unlike title_similarity():
+    - a subtitle never adds containment points ('The Hunger Games' vs 'Mockingjay' + 'The Hunger Games, Book 3')
+    - a LONGER Audible title only counts if the ABS title has a volume number that matches
+      ('A Thousand Li' vs 'A Thousand Li: The Fourth Wall' = other book; 'Beware of Chicken 4' vs
+      'Beware of Chicken 4: A Xianxia Cultivation Novel' = same book)."""
+    na, nf = normalize_title_text(abs_title), normalize_title_text(found_title)
+    if not na or not nf: return 0.0
+    score = max(difflib.SequenceMatcher(None, na, nf).ratio(),
+                difflib.SequenceMatcher(None, na, normalize_title_text(f"{found_title} {found_sub or ''}")).ratio())
+    if na == nf: return 1.0
+    if len(nf.split()) >= 3 and f" {nf} " in f" {na} ": score = max(score, 0.85)          # Audible title inside ABS title
+    if nf.startswith(na + " ") and re.search(r'\d', na):                                    # ABS title + subtitle on Audible
+        score = max(score, 0.85)  # the number in the ABS title is part of the match, so it is the same volume
+    if extract_volume(found_title) and not extract_volume(abs_title):
+        score = min(score, 0.75)  # 'Hell Mode' vs 'Hell Mode, Volume 3': could be any volume
+    return score
+
+def search_audible_api(title, authors_list, duration, lang, raw_title=None, required_lang=None, strict=False):
     """Find an ASIN via the Audible catalog search API. Every candidate is verified by loading
     the product (title, author, runtime). Returns the ASIN, None (no match) or False (API error)."""
     prim_auth = authors_list[0] if authors_list else ""
@@ -777,7 +812,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
     if prim_auth: queries.append({"title": title, "author": prim_auth})
     if raw_title and raw_title != title: queries.append({"keywords": raw_title})
     api_ok = False
-    for domain in audible_domains(lang):
+    for domain in search_domains(required_lang or lang):
         host, candidates = AUDIBLE_API_HOSTS[domain], []
         for q in queries:
             throttle('audible_api')
@@ -800,22 +835,28 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 logging.info(f"        ↪️ Rejected '{p.get('title_raw')}' [{cand}] (language {cand_lang}, need {required_lang})")
                 continue
             found_title = p.get('title_raw') or ''
-            t_score = max(title_similarity(title, found_title), title_similarity(title, f"{found_title} {p.get('subtitle_raw') or ''}"))
+            t_score = search_match_score(title, found_title, p.get('subtitle_raw'))
             f_nums, t_nums = extract_volume(found_title + ' ' + (p.get('subtitle_raw') or '')), extract_volume(title)
-            if f_nums and t_nums and not f_nums & t_nums and t_score < 0.9: continue
+            if f_nums and t_nums and not f_nums & t_nums:  # different volume: never the same book
+                logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (volume {','.join(sorted(f_nums))} vs {','.join(sorted(t_nums))})")
+                continue
             auth_ok = match_author(authors_list, ", ".join(p.get('authors_raw') or []))
             dur_ok = bool(duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) < 600)
             dur_conflict = bool(duration and p.get('runtime_sec') and not dur_ok)
-            if t_score >= 0.8 and auth_ok and not dur_conflict or t_score >= 0.85 and dur_ok:
+            if strict:  # replacing an existing ASIN: everything must match
+                accept = t_score >= 0.9 and auth_ok and dur_ok
+            else:
+                accept = t_score >= 0.8 and auth_ok and not dur_conflict or t_score >= 0.85 and dur_ok
+            if accept:
                 logging.info(f"        ✅ API match on {domain}: '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, runtime {'✓' if dur_ok else '?'})")
                 return cand
             logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, runtime {'✗' if dur_conflict else '?'})")
     return None if api_ok else False
 
-def find_missing_asin(title, authors_list, duration, lang, raw_title=None, required_lang=None):
-    logging.info(f"      -> 🔎 Searching Replacement ASIN for '{title}'...")
+def find_missing_asin(title, authors_list, duration, lang, raw_title=None, required_lang=None, strict=False):
+    logging.info(f"      -> 🔎 Searching Replacement ASIN for '{title}'{' (strict: title, author and runtime must match)' if strict else ''}...")
     if USE_AUDIBLE_API:
-        res = search_audible_api(title, authors_list, duration, lang, raw_title, required_lang)
+        res = search_audible_api(title, authors_list, duration, lang, raw_title, required_lang, strict)
         if res is not False: return res
         logging.info("        ↪️ API search unavailable, falling back to web search...")
     return find_missing_asin_web(title, authors_list, duration, lang)
@@ -1284,7 +1325,7 @@ def process_queue(work_queue, history, failed, recheck):
                 check_lang = new_lang_detected if new_lang_detected else lang
 
                 # Language check: ABS and Audible disagree -> who is right?
-                lang_conflict, lang_target = False, None
+                lang_conflict, lang_target, strict_search = False, None, False
                 abs_lang = map_language(lang) if lang else None
                 if aud_data and new_lang_detected and abs_lang and abs_lang != new_lang_detected:
                     verdict = language_verdict(search_title, meta.get('narrators') or [], aud_data, 'lock_language' in tags,
@@ -1305,8 +1346,8 @@ def process_queue(work_queue, history, failed, recheck):
                     logging.info("      -> ⚠️ No ASIN in ABS.")
                     should_search = True
                 elif aud_data is None:
-                    logging.info("      -> ⚠️ ASIN not found (All domains).")
-                    should_search = True
+                    logging.info("      -> ⚠️ ASIN not found in any marketplace.")
+                    should_search, strict_search = True, True
                 elif lang_conflict:
                     should_search = True
                 elif aud_data.get('title_raw') and volume_conflict(title, aud_data.get('title_raw'), aud_data.get('subtitle_raw')):
@@ -1319,7 +1360,7 @@ def process_queue(work_queue, history, failed, recheck):
                     logging.info(f"      -> 🆕 Product page exists on {aud_data.get('domain')}, but no ratings yet. No replacement search, re-check in {NO_RATINGS_RECHECK_DAYS} days.")
                 elif int(aud_data.get('count', 0)) == 0:
                     logging.info("      -> ⚠️ Found 0 Ratings.")
-                    should_search = True
+                    should_search, strict_search = True, True
                 elif map_language(check_lang) == 'English' and aud_data.get('domain') == 'www.audible.de':
                     logging.info("      -> ⚠️ English book only found on .de (possibly broken .com ASIN). Searching the English edition...")
                     should_search, lang_target = True, 'English'
@@ -1346,7 +1387,7 @@ def process_queue(work_queue, history, failed, recheck):
                              logging.info(f"        🔗 Found ASIN via HTML Link (hreflang='en-us'): {found}")
 
                     if not found: found = find_missing_asin(search_title, authors, item['media'].get('duration'), lang, raw_title=title,
-                                                            required_lang=lang_target)
+                                                            required_lang=lang_target, strict=strict_search and bool(asin))
                     
                     if found:
                         if found != asin:
@@ -1388,7 +1429,7 @@ def process_queue(work_queue, history, failed, recheck):
                     if aud_title and (m := re.match(r'^(.+?)\s*\(([^()]+)\)\s*$', aud_title)):
                         aud_series_names = {(x.get('name') or '').strip().lower() for x in (md_raw.get('series') or [])}
                         if m.group(2).strip().lower() in aud_series_names: aud_title = m.group(1).strip()
-                    if aud_title and aud_title != title and (messy or asin_from_search):
+                    if aud_title and aud_title != title and messy:  # only broken titles are replaced
                         candidates = [search_title]
                         if messy and messy.get('subtitle'): candidates.append(f"{messy['title']}: {messy['subtitle']}")
                         confirmed = asin_from_search or any(title_similarity(c, aud_title) >= 0.8 for c in candidates)
@@ -1451,33 +1492,42 @@ def process_queue(work_queue, history, failed, recheck):
 
                     if 'lock_series' not in tags:
                         if series_list := md_raw.get('series'):
-                            # Additive: existing ABS series are never removed and existing numbers never blanked
+                            # ABS series are curated: Audible's series are only taken when the book has none in ABS.
+                            # Otherwise only missing numbers of the same series are filled (Audible often lists reading
+                            # orders, universes and translations as extra series).
                             cur_list = [{"name": x.get('name'), "sequence": x.get('sequence')} for x in (meta.get('series') or []) if x.get('name')]
                             new_list = [dict(x) for x in cur_list]
                             from abs_series import series_key as _skey, series_variant as _svar
                             same = lambda a, b: a == b or (_skey(a) == _skey(b) and _svar(a) == _svar(b))
+                            book_variant = _svar(f"{title} {aud_data.get('title_raw', '')} {aud_data.get('subtitle_raw', '')}")
+                            ignored = []
                             for s_obj in series_list:
                                 s_name = (s_obj.get('name') or '').strip()
                                 if not s_name: continue
+                                if _svar(s_name) - book_variant:  # 'The Witcher (Full-Cast Editions)' on a normal edition
+                                    ignored.append(f"{s_name} (other edition)"); continue
                                 s_seq = None
                                 if part_txt := s_obj.get('part'):
                                     if m := re.search(r'(\d+(?:\.\d+)?)', str(part_txt)): s_seq = m.group(1)
                                 if s_seq is None:
-                                    search_texts = []
                                     aud_t, aud_s = aud_data.get('title_raw', ''), aud_data.get('subtitle_raw', '')
-                                    if aud_t or aud_s: search_texts.append(f"{aud_t} {aud_s}".strip())
-                                    for search_text in search_texts:
-                                        pattern = re.escape(s_name) + r'[\s:,-]+(?:Book\s+|Band\s+|Teil\s+|Vol\.?\s*)?(\d+(?:\.\d+)?)'
-                                        if m := re.search(pattern, search_text, re.IGNORECASE): s_seq = m.group(1); break
+                                    text = f"{aud_t} {aud_s}".strip()
+                                    pattern = re.escape(s_name) + r'[\s:,-]+(?:Book\s+|Band\s+|Teil\s+|Vol\.?\s*)?(\d+(?:\.\d+)?)'
+                                    if text and (m := re.search(pattern, text, re.IGNORECASE)): s_seq = m.group(1)
                                 canon, why = canonical_series(lib_id, s_name, authors)
-                                if why: logging.info(f"        🔗 Series '{s_name}' -> '{canon}' ({'alias list' if why == 'alias' else 'existing ABS series'})")
                                 existing = next((x for x in new_list if same(x['name'], canon)), None)
                                 if existing:
+                                    if why: logging.info(f"        🔗 Series '{s_name}' -> '{canon}' ({'alias list' if why == 'alias' else 'existing ABS series'})")
                                     if not existing.get('sequence') and s_seq: existing['sequence'] = s_seq
                                     elif s_seq and existing.get('sequence') and str(existing['sequence']) != str(s_seq):
                                         logging.info(f"        ℹ️ Series '{canon}': ABS #{existing['sequence']} vs Audible #{s_seq} (ABS kept)")
-                                else:
+                                elif not cur_list:
+                                    if why: logging.info(f"        🔗 Series '{s_name}' -> '{canon}' ({'alias list' if why == 'alias' else 'existing ABS series'})")
                                     new_list.append({"name": canon, "sequence": s_seq})
+                                else:
+                                    ignored.append(f"{canon}" + (f" #{s_seq}" if s_seq else ""))
+                            if ignored:
+                                logging.info(f"        ℹ️ Audible series not added (ABS already has series, or other edition): {', '.join(ignored)}")
                             if new_list != cur_list:
                                 abs_updates['series'] = new_list
                                 log_updates.append("Series: " + ", ".join(f"'{x['name']}' #{x['sequence']}" for x in new_list))

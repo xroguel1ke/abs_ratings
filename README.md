@@ -110,9 +110,11 @@ Everything is decided automatically. If a match is not certain, nothing is chang
 * **Genres from audible.de** are translated to the English Audible names (`GENRE_LANGUAGE=en`); untranslated names are listed in the library report.
 * **Publisher / Year:** only filled when empty in ABS (Audible has the audiobook edition's data).
 * **Genres:** only the most specific Audible category of each branch is added (e.g. `Space Opera`, not `Science Fiction & Fantasy`); bare top-level categories (`Literature & Fiction`) only when Audible has nothing more specific. Existing genres are kept.
-* **Series:** Audible's series are **added**; existing ABS series are never removed and existing numbers never blanked or overwritten. Series names go through `series_aliases.json` and the existing ABS series first.
+* **Series:** taken from Audible only when the book has **no series in ABS**. Otherwise only missing numbers of the same series are filled (Audible often lists reading orders, universes and translations as extra series; those are logged, not added). Full-cast/dramatized series are never added to a normal edition. Series names go through `series_aliases.json` and the existing ABS series first.
+* **Marketplaces:** an ASIN is looked up in all Audible marketplaces (`com, co.uk, ca, com.au, de, fr, it, es`, configurable with `AUDIBLE_MARKETPLACES`) before it counts as broken.
+* **Replacing an existing ASIN** requires title, author **and** runtime to match; a different volume number is always rejected.
 * **Wrong ASIN detection:** different volume numbers in ABS and Audible title (`Vol. 9` vs `Vol. 18`) or a large runtime difference trigger a search for the right ASIN; if none is found, metadata is left alone.
-* **Title:** only corrected for broken titles (see Title Repair).
+* **Title:** only corrected for broken, file-name style titles (see Title Repair). A new ASIN alone never changes the title.
 
 ## 📚 Series Merge & Library Report (ABS only)
 
