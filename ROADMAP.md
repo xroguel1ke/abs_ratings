@@ -73,3 +73,9 @@ Status: ✅ done (branch `claude/web-ui`) · 🔜 next · ⏳ later
 ## Script findings still open
 - Books with no search results at all (e.g. some Pern titles): check search queries with `LOG_LEVEL=DEBUG` on the real server.
 - Verify `POST /api/backups` and cover upload (`POST /api/items/<id>/cover`) against the real ABS version.
+
+## Web UI design (user wish, 2026-11-03) – TODO, after the functional web UI points
+- Orientation: Google Material Design (Material 3 principles), light + dark mode (system preference + manual switch).
+- Light: pastel white surfaces with a creamy contrast colour. Dark: two pastel greys (background + raised surfaces = tonal elevation, no heavy shadows).
+- Claude's additions: one muted accent colour for actions/active states; clear but muted status colours (found / warning / error / review); contrast ≥ WCAG AA, especially light mode; no pure black/white.
+- Before the rebuild: small preview page with 2-3 colour variants for the user to choose from.

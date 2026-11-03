@@ -186,3 +186,5 @@ Relevant mainly for the final full-library run (~2h15) and later scheduled runs;
 - Runtime mismatches >15 %/20 min: 13 (other recordings/collections; go through the existing search route, to be analysed in rounds): Sherlock Holmes Definitive Collection, Dune, The Butlerian Jihad, Legends & Lattes #1 (729 vs 438), The God-Stone War, The Archmage Unbound, Tom Sawyer, Casual Farming 3, Edgedancer, By the Grace of the Gods vol 3, Lies Weeping (fixed), + the two wrong ones.
 - Integration in process_queue: verdict `wrong` -> search for the right ASIN (non-strict, ABS narrators ignored because polluted by the wrong product); nothing taken from the wrong product; review entry if no safe replacement. regress.sh caught a first version that lost Alice/Paranormal (strict narrator veto) -> fixed.
 - tests/test_asin.py added (6 tests incl. "must not fire" cases); regress.sh includes it.
+
+## TODO noted: web UI design (see ROADMAP.md "Web UI design"): Material-style, light (pastel white + cream) / dark (two pastel greys), preview with 2-3 variants first.
