@@ -267,6 +267,13 @@ def logs_zip():
                      mimetype='application/zip')
 
 
+@app.route('/status')
+@login_required
+def status():
+    rows, generated = core.coverage()
+    return render_template('status.html', rows=rows, generated=generated, api=core.api_status())
+
+
 @app.route('/report')
 @login_required
 def report():

@@ -332,6 +332,41 @@ def overrides(): return _load_json(os.path.join(CONFIG_DIR, 'overrides.json'), {
 def merges(): return _load_json(os.path.join(CONFIG_DIR, 'merges.json'), {})
 def review(): return _load_json(os.path.join(CONFIG_DIR, 'merge_review.json'), {'series': [], 'authors': []})
 def decisions(): return _load_json(os.path.join(CONFIG_DIR, 'merge_decisions.json'), {})
+FIELD_LABELS = {'asin': 'ASIN', 'cover': 'Cover', 'series': 'Reihe', 'narrators': 'Sprecher', 'description': 'Beschreibung', 'authors': 'Autor',
+                'genres': 'Genres', 'publisher': 'Verlag', 'year': 'Jahr', 'isbn': 'ISBN', 'language': 'Sprache', 'ratings': 'Bewertungen'}
+
+def coverage():
+    """Share of books that HAVE each field, from library_report.json (written by the series/report task). [(label, have, total, percent, missing titles)]"""
+    rep = _load_json(os.path.join(REPORT_DIR, 'library_report.json'), {})
+    total = rep.get('books')
+    if isinstance(total, (list, dict)): total = len(total)
+    total = int(total or 0); rows = []
+    for k, titles in (rep.get('missing') or {}).items():
+        have = max(total - len(titles), 0)
+        rows.append((FIELD_LABELS.get(k, k), have, total, round(100 * have / total, 1) if total else 0, sorted(titles)[:40]))
+    rows.sort(key=lambda r: r[3])
+    return rows, rep.get('generated', '')
+
+def api_status():
+    """Hardcover daily limit / Goodreads state from the newest run logs, cache sizes, open review items."""
+    st = {'hc_left': None, 'hc_when': '', 'gr': 'unbekannt', 'caches': {}, 'queue': len(open_queue())}
+    try:
+        logs = sorted((f for f in os.listdir(LOG_DIR) if f.startswith('run_') and f.endswith('.log')), reverse=True)
+    except OSError: logs = []
+    for f in logs[:8]:
+        try: txt = open(os.path.join(LOG_DIR, f), encoding='utf-8', errors='replace').read()
+        except OSError: continue
+        if st['hc_left'] is None and (m := re.findall(r'daily limit left: (\d+)', txt)):
+            st['hc_left'], st['hc_when'] = int(m[-1]), f[4:23].replace('_', ' ')
+        if st['gr'] == 'unbekannt' and 'Goodreads' in txt:
+            st['gr'] = 'gesperrt (im letzten Lauf)' if re.search(r'Bot challenge|still blocks|blocks requests', txt) else 'ok (im letzten Lauf)'
+        if st['hc_left'] is not None and st['gr'] != 'unbekannt': break
+    for name, label in (('hardcover_cache.json', 'Hardcover-IDs'), ('goodreads_cache.json', 'Goodreads-Seiten'), ('audible_series.json', 'Audible-Reihen'),
+                        ('audible_authors.json', 'Audible-Autoren'), ('rating_history.json', 'Bewertungs-Verlauf')):
+        d = _load_json(os.path.join(CONFIG_DIR, name), {})
+        st['caches'][label] = len(d)
+    return st
+
 def review_queue():
     q = _load_json(os.path.join(CONFIG_DIR, 'review_queue.json'), [])
     return q if isinstance(q, list) else []

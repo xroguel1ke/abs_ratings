@@ -42,6 +42,14 @@ def test_accept_asin_stores_override_only_for_asin_kind():
     assert 'lib_2' not in core.overrides()
 
 
+def test_status_page_coverage_and_api():
+    os.makedirs(os.path.join(cfg, 'reports'), exist_ok=True); os.makedirs(os.path.join(cfg, 'logs'), exist_ok=True)
+    json.dump({'books': 10, 'generated': 'now', 'missing': {'asin': ['A', 'B'], 'cover': []}}, open(os.path.join(cfg, 'reports', 'library_report.json'), 'w'))
+    open(os.path.join(cfg, 'logs', 'run_2026-01-01_00-00-00.log'), 'w').write('Hardcover: found 5 (daily limit left: 4321)\nGoodreads blocks requests: Bot challenge')
+    html = client().get('/status').get_data(as_text=True)
+    assert '80.0' in html and '100.0' in html and '4321' in html and 'gesperrt' in html, html[-900:]
+
+
 if __name__ == '__main__':
     for n, f in sorted(globals().items()):
         if n.startswith('test_'): f(); print('ok', n)
