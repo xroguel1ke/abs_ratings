@@ -240,3 +240,8 @@ Not on Audible (documented): The New World (Mark Lawrence, Amazon Digital Servic
 Every batch/round also runs 30 English + 10 German books that are NOT in the user's library and exist on Audible (`tools/synth_make.py`, seed per batch, `SYNTH=<seed> tools/run_round.sh ...`; public Audible data -> `tests/synthetic/batch_<seed>.json` is committed). Each gets a typical ABS defect (no ASIN, dead ASIN, messy number prefix, "Title: Title", marketing suffix, initials author, accent-free author, runtime 8 % off, series-name variant, messy series prefix); the expected ASIN is known.
 Books that pass are added to the golden list (tests/private/syn_golden_<seed>.json, replayed by regress.sh); the next batch draws 40 NEW ones. Until now (rounds 1-7) this was NOT done – that was a gap.
 Batch 1 (EN only, 30): 28/30 ok. Found two gaps that never occur in the user's library: author written with initial ("R. Rowe" vs "Rob Rowe") and short title + marketing suffix ("Robot Swarms: A Gripping LitRPG Adventure") -> fixed (tests added incl. "Dune: Messiah" must never equal "Dune").
+
+## Counting rule v2 (user, 2026-11-03)
+One COUNTING BATCH = 100 fresh library books + 60 English + 20 German synthetic books (not in the library, on Audible; the synthetic part was never run in rounds 1-7, hence more of it). Production-ready needs FOUR clean batches in a row (instead of three). Clean = nothing to fix afterwards + every risky change hand-verified. Counter now: 0 of 4.
+Synthetic batches 1 (30 EN: 30/30 after 2 fixes) and 2 (30 EN + 10 DE: 40/40 first time) are in `tools/regress.sh` (tests/synthetic/batch_N.json). Golden library list: 700 books.
+## Batch A1 (counting) started: 100 library + SYNTH=3 (60 EN + 20 DE), Audible-only (Hardcover quota used up)

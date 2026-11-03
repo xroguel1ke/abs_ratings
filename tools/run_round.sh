@@ -13,7 +13,7 @@ mkdir -p "$DATA/logs" "$DEV/tests/private/recordings"
 ONLY=$(paste -sd, "$KEYS")
 if [ -n "$SYNTH" ]; then  # SYNTH=<seed>: add 30 synthetic books that are not in the library (generated once per seed, public data)
   SF="$DEV/tests/synthetic/batch_${SYNTH}.json"
-  [ -f "$SF" ] || docker run --rm --name "abs_ratings_test_synth_${R}" -e PYTHONDONTWRITEBYTECODE=1 -v "$DEV":/src -w /src ghcr.io/xroguel1ke/abs_ratings:web-ui python -I tools/synth_make.py --seed "$SYNTH" --n 30 --n-de "${SYNTH_DE:-10}" --out "/src/tests/synthetic/batch_${SYNTH}.json"
+  [ -f "$SF" ] || docker run --rm --name "abs_ratings_test_synth_${R}" -e PYTHONDONTWRITEBYTECODE=1 -v "$DEV":/src -w /src ghcr.io/xroguel1ke/abs_ratings:web-ui python -I tools/synth_make.py --seed "$SYNTH" --n "${SYNTH_EN:-60}" --n-de "${SYNTH_DE:-20}" --out "/src/tests/synthetic/batch_${SYNTH}.json"
   ONLY="$(printf '%s\n' $(echo "$ONLY,$(jq -r '.expected|keys|join(",")' "$SF")" | tr ',' ' ') | sort -u | paste -sd,)"
   SYNTH_ENV=(-e SYNTH_FILE=/src/tests/synthetic/batch_${SYNTH}.json)
 fi
