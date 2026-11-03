@@ -291,3 +291,6 @@ Fix trend per counting batch: A1 6, A2 5, A3 3, A4 1, A5 1.
 Library: 4 ASIN changes hand-verified correct (Dragonseye, The Magician's Guild, City of Blades, The Baron; 4-6 independent evidences each), review list empty, nothing wrong or missing to correct. Synthetic: 80/80 first time. One case without Audible data: "Jules Verne" (ABS title = author name, real title in the series field "20.000 Meilen unter dem Meer", German; Audible.de has the Kluckert recording at 1022 min vs the ABS file 1907 min -> different cut, no safe match = correct "not on Audible"). After the batch I added an optional search improvement (title equal to author name -> series name is searched); it does not change this outcome. Rule: a batch is clean if no wrong/missing RESULT had to be corrected.
 Counter: 1 of 4. Frozen code for A7: commit 4290841 + that search improvement (regress green).
 ## Batch A7 started (SYNTH=9)
+
+## Batch A7 (counting #7: 100 library + 80 synthetic, Audible-only, 6:30 min, 0 errors) – CLEAN (counter 2 of 4)
+Library: 2 ASIN changes hand-verified (Neverwinter, Gauntlgrym: title, author, narrator Victor Bevine, Audible Studios 2013; runtime 4 % off), no case without data, review list empty. Synthetic 80/80. Nothing to correct. Code frozen (same as A6 incl. the title-equals-author search rule).
