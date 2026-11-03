@@ -152,3 +152,8 @@ Very long runs (full-library audits / full dry runs) only when several reasons h
 - platform 32 (Audible): 16/70 have ASINs per store (us/uk/ca/au/fr/de/it/jp, format `ASIN:store`) -> extra ASIN source, store-correct (English -> :us), always verified with the Audible product (title/author/runtime/narrator).
 - platform 19 (Amazon): 0/70 – not usable.
 TODO (after the audit finishes): implement both, offline-test with recorded Hardcover answers, regress.sh, then a small live Goodreads sample.
+
+## Decision: Goodreads source order (user asked, 2026-11-03)
+Hardcover's public API has only the mapping to Goodreads (book_mappings platform 1), NOT Goodreads ratings (`external_data` not exposed).
+Order for Goodreads ratings: (1) Hardcover Goodreads ID -> direct page, verified title+author; (2) existing ISBN link / text search as fallback (kept unchanged, now last).
+Open Library (ISBN lookup, identifiers.goodreads): adopted only if it covers the ~4 % Hardcover misses (measurement pending).
