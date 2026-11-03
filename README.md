@@ -21,7 +21,29 @@ A fully automated script designed for **Audiobookshelf (ABS)** on **Unraid**. It
 * **Unraid Notifications:** Sends a status summary (Success/Failures/Duration) directly to the Unraid WebGUI.
 * **Rate Limit Protection:** Per-source request throttling, cool-downs and batching to keep your IP safe.
 
-## 🚀 Installation (Unraid)
+## 🐳 Docker container with web UI (recommended)
+
+A permanent container with a web UI on port **47823**: settings, schedule (weekdays + time or cron), dashboard with
+problem list and manual fixes (paste an ASIN / Audible / Goodreads / Hardcover link), merged & merge-review tabs,
+live logs with download, notifications via Apprise. Image: `ghcr.io/xroguel1ke/abs_ratings` (`:web-ui` test branch,
+`:latest` = main), built automatically by GitHub Actions.
+
+**Unraid:** Docker → Add Container → Template URL / or fill in manually:
+* Repository: `ghcr.io/xroguel1ke/abs_ratings:web-ui`
+* Port: `47823` → `47823`
+* Path: `/config` → `/mnt/user/appdata/audiobookshelf/abs_scripts` (your existing folder: history, caches and logs are kept)
+
+Template: [`unraid/abs-ratings.xml`](unraid/abs-ratings.xml). First login: password `admin`, you are asked to change it.
+Then enter ABS URL + token under *Einstellungen*, pick the libraries and save.
+
+Plain Docker:
+```bash
+docker run -d --name abs-ratings -p 47823:47823 -v /path/to/data:/config ghcr.io/xroguel1ke/abs_ratings:web-ui
+```
+
+Planned features and status: [`ROADMAP.md`](ROADMAP.md).
+
+## 🚀 Installation (Unraid) (User Scripts, without web UI)
 
 This script is optimized for the **User Scripts** plugin on Unraid.
 

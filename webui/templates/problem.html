@@ -1,0 +1,27 @@
+{% extends 'base.html' %}{% block body %}
+<p><a href="{{ url_for('dashboard') }}">← Dashboard</a></p>
+<h1>{{ r.title }}</h1>
+<div class="card"><div class="row" style="gap:18px">
+ <span><span class="badge {{ r.status }}">{{ status_label.get(r.status, r.status) }}</span></span>
+ <span>Autor: {{ r.author or '–' }}</span><span>ASIN: {{ r.asin or '–' }}{% if r.domain %} ({{ r.domain }}){% endif %}</span>
+ {% if abs_base %}<a href="{{ abs_base }}/item/{{ r.id }}" target="_blank">In ABS öffnen ↗</a>{% endif %}
+ <span class="muted small">geprüft: {{ r.ts|dt }}{{ ' (Testlauf)' if r.dry_run }}</span></div>
+ {% if r.reason %}<p><b>Grund:</b> {{ r.reason|de }}</p>{% endif %}{% for n in r.notes or [] %}<p class="muted">{{ n|de }}</p>{% endfor %}
+ {% if ov %}<p class="small">Manuelle Vorgaben: {% for k, v in ov.items() %}<span class="badge">{{ k }}: {{ v }}</span> {% endfor %}</p>{% endif %}
+</div>
+<div class="card"><h2 style="margin-top:0">Manuell reparieren</h2>
+<form method="post">
+ <label class="f"><span>ASIN oder Link</span><input type="text" name="smart" placeholder="ASIN, Audible-, Goodreads- oder Hardcover-Link (wird automatisch erkannt)" autofocus></label>
+ <details><summary class="small muted">oder getrennte Felder</summary>
+  <label class="f"><span>Audible ASIN / Link</span><input type="text" name="asin"></label>
+  <label class="f"><span>Goodreads-Link</span><input type="text" name="goodreads"></label>
+  <label class="f"><span>Hardcover-Link</span><input type="text" name="hardcover"><span class="h">Wird gespeichert; Hardcover-Bewertungen folgen in einem späteren Schritt.</span></label>
+ </details>
+ <p class="row" style="margin-top:12px"><button class="primary" name="action" value="apply">Übernehmen & bearbeiten</button>
+ <button name="action" value="test">Erst als Testlauf</button>
+ <button name="action" value="retry">Ohne Vorgabe neu prüfen</button>
+ {% if ov.ignore %}<button name="action" value="unignore">Nicht mehr ignorieren</button>{% else %}<button name="action" value="ignore">Ignorieren</button>{% endif %}</p>
+ <p class="muted small">Eine manuelle ASIN wird in ABS geschrieben und danach nie automatisch ersetzt. Ein Goodreads-Link wird fest für dieses Buch verwendet.</p>
+</form></div>
+<div class="card"><h2 style="margin-top:0">Was das Skript zuletzt versucht hat</h2><pre class="log">{{ (r.log or ['(kein Log)'])|join('\n') }}</pre></div>
+{% endblock %}

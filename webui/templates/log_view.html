@@ -1,0 +1,15 @@
+{% extends 'base.html' %}{% block body %}
+<p><a href="{{ url_for('logs') }}">← Logs</a></p><h1>{{ name }}</h1>
+<div class="card row"><input type="text" id="flt" placeholder="Filter (z.B. WARNING, Rejected, Titel)" style="max-width:340px">
+<label class="small"><input type="checkbox" id="follow" checked> live mitlaufen</label>
+<a class="btn" href="{{ url_for('log_download', kind=kind, name=name) }}">⬇ Herunterladen</a><span class="muted small">{{ size|size }}{{ ', es werden die letzten 400 KB angezeigt' if size > 400000 }}</span></div>
+<pre class="log" id="log"></pre>
+<script>
+let off=0, all='';
+function render(){ const f=document.getElementById('flt').value.toLowerCase(); const el=document.getElementById('log');
+ el.textContent = f ? all.split('\n').filter(l=>l.toLowerCase().includes(f)).join('\n') : all; if(document.getElementById('follow').checked) el.scrollTop=el.scrollHeight; }
+async function poll(){ const r=await fetch("{{ url_for('api_log', kind=kind, name=name) }}?offset="+off); const j=await r.json();
+ if(j.text){ all+=j.text; off=j.offset; render(); } if(document.getElementById('follow').checked) setTimeout(poll,2000); }
+document.getElementById('flt').addEventListener('input', render); document.getElementById('follow').addEventListener('change', e=>{ if(e.target.checked) poll(); });
+poll();
+</script>{% endblock %}

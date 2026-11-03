@@ -1,0 +1,8 @@
+{% extends 'base.html' %}{% block body %}
+<h1>Logs</h1>
+<div class="card row"><a class="btn" href="{{ url_for('logs_zip') }}">⬇ Alle als ZIP</a>
+{% for f in files if f.name=='debug_latest.log' %}<a class="btn" href="{{ url_for('log_download', kind='log', name=f.name) }}">⬇ debug_latest.log (für Fehlersuche)</a>{% endfor %}</div>
+<div class="card tablewrap"><table><tr><th>Datei</th><th>Geändert</th><th>Größe</th><th></th></tr>
+{% for f in files %}<tr><td><a href="{{ url_for('log_view', kind=f.dir, name=f.name) }}">{{ f.name }}</a><div class="muted small">{{ 'Report' if f.dir=='report' else 'Log' }}</div></td>
+<td>{{ f.mtime|dt }}</td><td>{{ f.size|size }}</td><td><a href="{{ url_for('log_download', kind=f.dir, name=f.name) }}">⬇</a></td></tr>
+{% else %}<tr><td colspan="4" class="muted">Noch keine Logs.</td></tr>{% endfor %}</table></div>{% endblock %}

@@ -1,0 +1,58 @@
+{% extends 'base.html' %}{% block body %}
+<h1>Dashboard</h1>
+{% if not settings.ABS_URL or not settings.API_TOKEN %}<div class="flash error">Noch nicht eingerichtet: bitte zuerst unter <a href="{{ url_for('settings') }}">Einstellungen</a> ABS-URL, Token und Bibliotheken eintragen.</div>{% endif %}
+<div class="tiles">
+ <div class="tile"><div class="v">{{ tiles.books }}</div><div class="l">Bücher geprüft</div></div>
+ <div class="tile"><div class="v" style="color:var(--ok)">{{ tiles.ok }}</div><div class="l">mit Bewertungen</div></div>
+ <div class="tile"><div class="v" style="color:var(--err)">{{ tiles.not_found }}</div><div class="l">nicht gefunden</div></div>
+ <div class="tile"><div class="v" style="color:var(--warn)">{{ tiles.other_edition }}</div><div class="l">andere Ausgabe</div></div>
+ <div class="tile"><div class="v">{{ tiles.no_ratings_yet }}</div><div class="l">noch keine Bewertungen</div></div>
+ <div class="tile"><div class="v">{{ tiles.ignored }}</div><div class="l">ignoriert</div></div>
+</div>
+<div class="card small"><div class="row" style="justify-content:space-between">
+ <span>Letzter Lauf: {% if last %}<a href="{{ url_for('run_view', run_id=last.id) }}">{{ last.start|dt }}</a> · <span class="badge {{ 'ok' if last.status=='ok' else 'err' }}">{{ last.status }}</span>{% if last.dry_run %} <span class="badge">Testlauf</span>{% endif %}{% else %}–{% endif %}</span>
+ <span>Nächster Lauf: {{ next_run|dt if next_run else 'kein Zeitplan' }}</span>
+ <span>Goodreads: {{ gr_note or ('aus' if not settings.GOODREADS_ENABLED else 'ok') }}</span>
+ <span>Bücher in History: {{ tiles.history }}</span>
+</div>{% if last and last.summary %}<div class="muted" style="margin-top:6px">{{ last.summary }}</div>{% endif %}</div>
+
+<div class="tabs">
+ <a href="?tab=problems" class="{{ 'active' if tab=='problems' }}">Probleme ({{ tiles.problems }})</a>
+ <a href="?tab=merged" class="{{ 'active' if tab=='merged' }}">Merged ({{ tiles.merged }})</a>
+ <a href="?tab=review" class="{{ 'active' if tab=='review' }}">Merge-Review ({{ tiles.review }})</a>
+ <a href="{{ url_for('report') }}" target="_blank">Bibliotheks-Report ↗</a>
+</div>
+
+{% if tab=='problems' %}
+<form class="row" method="get" style="margin-bottom:10px"><input type="hidden" name="tab" value="problems">
+ <select name="status" style="max-width:240px"><option value="">Alle Probleme</option>
+ {% for k in ['not_found','other_edition','no_ratings_yet','error'] %}<option value="{{ k }}" {{ 'selected' if status_filter==k }}>{{ status_label[k] }} ({{ counts.get(k,0) }})</option>{% endfor %}</select>
+ <input type="text" name="q" value="{{ q }}" placeholder="Titel oder Autor" style="max-width:280px"><button>Filtern</button></form>
+<div class="card tablewrap"><table><tr><th>Buch</th><th>Status</th><th>Grund</th><th>ASIN</th></tr>
+{% for r in problems %}<tr><td><a href="{{ url_for('problem', key=r.key) }}">{{ r.title }}</a><div class="muted small">{{ r.author }}</div></td>
+<td><span class="badge {{ r.status }}">{{ status_label[r.status] }}</span>{% if r.dry_run %}<div class="muted small">aus Testlauf</div>{% endif %}</td>
+<td class="small">{{ r.reason|de }}{% for n in r.notes or [] %}<div class="muted">{{ n|de }}</div>{% endfor %}</td><td class="small">{{ r.asin or '–' }}</td></tr>
+{% else %}<tr><td colspan="4" class="muted">Keine Probleme{{ ' für diesen Filter' if status_filter or q }}. Die Liste füllt sich nach dem ersten Lauf.</td></tr>{% endfor %}</table></div>
+
+{% elif tab=='merged' %}
+<p class="muted small">Automatisch (sicher) zusammengeführte Reihen und Autoren. „Passt“ blendet einen Eintrag aus; er erscheint wieder, wenn später neue Bücher dazukommen. „Rückgängig“ stellt die alten Namen wieder her und merkt sich, dass hier nicht zusammengeführt werden soll.</p>
+<div class="card tablewrap"><table><tr><th>Art</th><th>Zusammengeführt</th><th>Ziel</th><th>Status</th><th></th></tr>
+{% for m in merged %}<tr><td>{{ 'Reihe' if m.kind=='series' else 'Autor' }}</td>
+<td>{{ m.member }}{% if m.member_books %}<div class="muted small">#{{ m.member_books }} · {{ m.member_count }} Bücher · {{ m.relation }}</div>{% else %}<div class="muted small">{{ m.member_count }} Bücher</div>{% endif %}</td>
+<td>→ {{ m.target }}{% if m.target_books %}<div class="muted small">#{{ m.target_books }}</div>{% endif %}</td>
+<td><span class="badge {{ 'ok' if m.status=='applied' else 'warn' }}">{{ 'übernommen' if m.status=='applied' else 'geplant (Testlauf)' }}</span><div class="muted small">{{ m.last_seen }}</div></td>
+<td class="row"><form method="post" action="{{ url_for('merged_action', mid=m.id, action='confirm') }}"><button>✓ Passt</button></form>
+<form method="post" action="{{ url_for('merged_action', mid=m.id, action='undo') }}" onsubmit="return confirm('Zusammenführung rückgängig machen?')"><button class="danger">↶ Rückgängig</button></form></td></tr>
+{% else %}<tr><td colspan="5" class="muted">Nichts offen.</td></tr>{% endfor %}</table></div>
+
+{% elif tab=='review' %}
+<p class="muted small">Unsichere Fälle: Namen passen, aber die Belege reichen nicht für eine automatische Entscheidung. Deine Entscheidung wird beim nächsten Lauf (oder „Nur Reihen & Report“) angewendet.</p>
+<div class="card tablewrap"><table><tr><th>Art</th><th>Kandidat</th><th>Ziel</th><th>Grund</th><th></th></tr>
+{% for x in (review.series or []) + (review.authors or []) %}<tr><td>{{ 'Reihe' if x.kind=='series' else 'Autor' }}</td><td>{{ x.series }}{% if x.series_books %}<div class="muted small">{{ x.series_books }} Bücher</div>{% endif %}</td>
+<td>{{ x.other }}{% if x.other_books %}<div class="muted small">{{ x.other_books }} Bücher</div>{% endif %}</td><td class="small">{{ x.reason }}</td>
+<td class="row"><form method="post" action="{{ url_for('review_action', mid=x.id, action='merge') }}"><button class="primary">Zusammenführen</button></form>
+<form method="post" action="{{ url_for('review_action', mid=x.id, action='keep') }}"><button>Getrennt lassen</button></form></td></tr>
+{% else %}<tr><td colspan="5" class="muted">Keine offenen Fälle.</td></tr>{% endfor %}</table>
+{% if review.generated %}<p class="muted small">Stand: {{ review.generated }}</p>{% endif %}</div>
+{% endif %}
+{% endblock %}

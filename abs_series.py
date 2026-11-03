@@ -91,7 +91,8 @@ def author_key(name):
     if ',' in n:
         last, first = [x.strip() for x in n.split(',', 1)]
         n = f"{first} {last}"
-    n = re.sub(r'\b([a-z])\.\s*', r'\1', n)  # J. M. -> jm
+    n = re.sub(r'\b([a-z])\.\s*(?=[a-z]\b)', r'\1', n)  # J. R. R. / J.R.R. -> jrr (initials joined)
+    n = re.sub(r'\b([a-z])\.\s*', r'\1 ', n)              # ... but kept apart from the last name
     return ' '.join(re.sub(r'[^\w\s]', ' ', n).split())
 
 

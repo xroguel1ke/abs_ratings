@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>abs-ratings</Name>
+  <Repository>ghcr.io/xroguel1ke/abs_ratings:web-ui</Repository>
+  <Registry>https://github.com/xroguel1ke/abs_ratings/pkgs/container/abs_ratings</Registry>
+  <Network>bridge</Network>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/xroguel1ke/abs_ratings</Support>
+  <Project>https://github.com/xroguel1ke/abs_ratings</Project>
+  <Overview>Adds Audible/Goodreads ratings to Audiobookshelf, keeps metadata clean and merges split series. Web UI with settings, schedule, dashboard, problem fixing and logs. First login: admin (you have to change it).</Overview>
+  <Category>MediaApp:Books Tools:</Category>
+  <WebUI>http://[IP]:[PORT:47823]/</WebUI>
+  <Icon>https://raw.githubusercontent.com/advplyr/audiobookshelf/master/client/static/icon.svg</Icon>
+  <Config Name="Web UI" Target="47823" Default="47823" Mode="tcp" Description="Port of the web UI" Type="Port" Display="always" Required="true" Mask="false">47823</Config>
+  <Config Name="Data" Target="/config" Default="/mnt/user/appdata/audiobookshelf/abs_scripts" Mode="rw" Description="Settings, history, caches, logs and reports (use your existing abs_scripts folder to keep everything)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/audiobookshelf/abs_scripts</Config>
+  <Config Name="Timezone" Target="TZ" Default="Europe/Berlin" Mode="" Description="Timezone for schedule and logs" Type="Variable" Display="always" Required="false" Mask="false">Europe/Berlin</Config>
+</Container>

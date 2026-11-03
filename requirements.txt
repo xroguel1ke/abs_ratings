@@ -1,0 +1,7 @@
+requests==2.32.3
+beautifulsoup4==4.12.3
+lxml==5.3.0
+flask==3.0.3
+waitress==3.0.0
+croniter==2.0.5
+apprise==1.8.1

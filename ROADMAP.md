@@ -1,0 +1,72 @@
+# Roadmap – Docker / Web UI
+
+Status: ✅ done (branch `claude/web-ui`) · 🔜 next · ⏳ later
+
+## 1. Container & updates
+- ✅ Dockerfile (python 3.11-slim, pinned deps), healthcheck (`/health` → ABS `/ping`)
+- ✅ GitHub Action → `ghcr.io/xroguel1ke/abs_ratings:web-ui` / `:latest` (main) + `:<tag>-<sha>`
+- ✅ Unraid template `unraid/abs-ratings.xml` (port 47823, `/config` = existing abs_scripts folder)
+- ⏳ Version display + "newer image available" hint (`APP_VERSION` env is already set)
+
+## 2. Login
+- ✅ Password `admin`, forced change on first login, hash only
+
+## 3. Settings
+- ✅ All script options with help texts, ABS connection test, library picker from ABS, Hardcover token + test
+- ⏳ Settings export/import (without tokens)
+
+## 4. Ratings
+- 🔜 Sources Audible / Goodreads / Hardcover on/off + drag & drop order
+- 🔜 Hardcover module (GraphQL: ISBN/ASIN, then title+author, same strict rules; cache URL). Needs a real API response first.
+- 🔜 Format: moons/stars, counts, DE/EN labels, block top/bottom, live preview; minimum rating count; optional `rating:4.5+` tag
+
+## 5. Schedule
+- ✅ Simple (weekdays + time) or cron toggle with "next run" check, never two runs at once
+- ⏳ Quick mode: poll ABS every X minutes and process new books immediately
+
+## 6. Runs
+- ✅ Start / dry run / series & report only / stop, run history, live log, changes table per run
+- ✅ ABS backup before real runs (`ABS_BACKUP`, setting on by default) – verify on the real server
+- 🔜 Apply a dry run: review planned changes grouped/filterable, then write exactly those (no new Audible requests)
+
+## 7–8. Dashboard & problems
+- ✅ Tiles (checked, ok, not found, other edition, no ratings yet, ignored), last/next run, Goodreads state
+- ✅ Problem list with reason + filter/search, detail page with log excerpt of the last check
+- ✅ Manual fix: one smart field (ASIN / Audible link any store / Goodreads / Hardcover link) or separate fields,
+  apply or test first, live log + old→new table, manual values are permanent (`overrides.json`), ignore/unignore
+- ⏳ Goodreads/Hardcover status tiles with numbers (budget used, cache size), queue of books waiting for re-check
+
+## 9–10. Merged & merge review
+- ✅ Merged tab (series + authors) with evidence, "✓ passt" (hides until new books are merged), "↶ rückgängig"
+  (undo via journal `merge_id`, removes alias, remembered as "undone")
+- ✅ Review tab: uncertain series (not enough numbers, ambiguous target, numbers don't complement) and authors
+  (first name vs initial) → merge / keep separate; decisions honored by the series task
+- ⏳ Choose the target name in the review (currently: the series with more books, as agreed)
+
+## 11. Single book
+- 🔜 Search any book (not only problems) and run test/real for it (backend: `ONLY_ITEMS` exists)
+
+## 12. Logs
+- ✅ List, view with live follow + filter, download single file, debug_latest.log button, ZIP of everything
+
+## 13. Report & history
+- ✅ Library report opens from the dashboard
+- 🔜 Report inside the UI with links to ABS items and "process again" buttons
+- 🔜 Change history per book / per run with undo per change or whole run (backend: `abs_undo.py`)
+
+## 14. Rules
+- ⏳ Genre rules (rename / block, e.g. "Movie, TV & Video Game Tie-Ins"), editable DE→EN genre map
+- ⏳ Author exceptions (similar names that are different people) – partly covered by review "keep separate"
+- ⏳ Duplicates page (same ASIN twice), show only
+
+## 15. Statistics
+- ⏳ CSV export of the library with ratings, rating distribution, coverage per source, history
+
+## 16. Notifications & UI
+- ✅ Apprise URL (ntfy, Discord, Telegram, mail …), test button, errors only / every run
+- ✅ Light/dark, mobile friendly
+- ⏳ English UI (currently German)
+
+## Script findings still open
+- Books with no search results at all (e.g. some Pern titles): check search queries with `LOG_LEVEL=DEBUG` on the real server.
+- Verify `POST /api/backups` and cover upload (`POST /api/items/<id>/cover`) against the real ABS version.

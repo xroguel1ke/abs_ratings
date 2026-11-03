@@ -1,0 +1,22 @@
+{% extends 'base.html' %}{% block body %}
+<p>{% if back %}<a href="{{ url_for('problem', key=back) }}">← zurück zum Buch</a>{% else %}<a href="{{ url_for('runs') }}">← Läufe</a>{% endif %}</p>
+<h1>{{ run.label }} {% if run.dry_run %}<span class="badge">Testlauf</span>{% endif %}</h1>
+<div class="card row" style="gap:18px"><span>Status: <span id="st" class="badge {{ 'ok' if run.status=='ok' else ('running' if run.status=='running' else 'err') }}">{{ run.status }}</span></span>
+<span>Start: {{ run.start|dt }}</span><span>Ende: {{ run.end|dt }}</span>
+{% if run.status=='running' %}<form method="post" action="{{ url_for('runs') }}"><button class="danger" name="action" value="stop">■ Abbrechen</button></form>{% endif %}
+<a href="{{ url_for('log_download', kind='log', name=run.log) }}">Log herunterladen</a></div>
+{% if run.summary %}<div class="card small">{{ run.summary }}</div>{% endif %}
+{% if run.status != 'running' %}<div class="card tablewrap"><h2 style="margin-top:0">{{ 'Geplante' if run.dry_run else 'Durchgeführte' }} Änderungen ({{ changes|length }})</h2>
+<table class="diff"><tr><th>Buch</th><th>Feld</th><th>Vorher</th><th>Nachher</th></tr>
+{% for c in changes[:500] %}<tr><td>{{ c.title }}<div class="muted small">{{ c.source }}</div></td><td>{{ c.field }}</td>
+<td class="small">{{ (c.old|string)[:220] if c.field!='description' else '…' }}</td><td class="small">{{ (c.new|string)[:220] if c.field!='description' else (c.new|striptags)[:220] }}</td></tr>
+{% else %}<tr><td colspan="4" class="muted">Keine Änderungen.</td></tr>{% endfor %}</table>{% if changes|length > 500 %}<p class="muted small">… {{ changes|length - 500 }} weitere im Log / planned_changes.</p>{% endif %}</div>{% endif %}
+<h2>Log</h2><pre class="log" id="log"></pre>
+<script>
+let off=0, done=false;
+async function poll(){ const r=await fetch("{{ url_for('api_run_log', run_id=run.id) }}?offset="+off); const j=await r.json();
+ const el=document.getElementById('log'); const atBottom=el.scrollTop+el.clientHeight>=el.scrollHeight-30;
+ el.textContent+=j.text; off=j.offset; if(atBottom) el.scrollTop=el.scrollHeight;
+ if(j.status!=='running'){ if(!done && "{{ run.status }}"==='running'){ done=true; location.reload(); } return; } setTimeout(poll,1500); }
+poll();
+</script>{% endblock %}

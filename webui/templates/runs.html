@@ -1,0 +1,15 @@
+{% extends 'base.html' %}{% block body %}
+<h1>Läufe</h1>
+<div class="card"><form method="post" class="row">
+ <button class="primary" name="action" value="dry" {{ 'disabled' if running }}>▶ Testlauf (DRY_RUN)</button>
+ <button name="action" value="run" {{ 'disabled' if running }} onclick="return confirm('Echter Lauf: Änderungen werden in ABS geschrieben. Fortfahren?')">▶ Echter Lauf</button>
+ <button name="action" value="series" {{ 'disabled' if running }}>Nur Reihen & Report</button>
+ {% if running %}<button class="danger" name="action" value="stop">■ Abbrechen</button>{% endif %}
+</form><p class="muted small">Geplante Läufe nutzen die Einstellung „Testlauf“ aus den Einstellungen. Nächster geplanter Lauf: {{ next_run|dt if next_run else 'kein Zeitplan' }}.</p></div>
+<div class="card tablewrap"><table><tr><th>Start</th><th>Art</th><th>Status</th><th>Ergebnis</th><th></th></tr>
+{% for r in runs %}<tr><td>{{ r.start|dt }}<div class="muted small">{{ 'geplant' if r.trigger=='schedule' else 'manuell' }}</div></td>
+<td>{{ r.label }}{% if r.dry_run %} <span class="badge">Testlauf</span>{% endif %}</td>
+<td><span class="badge {{ 'ok' if r.status=='ok' else ('running' if r.status=='running' else 'err') }}">{{ r.status }}</span></td>
+<td class="small">{{ r.summary }}</td><td><a href="{{ url_for('run_view', run_id=r.id) }}">Details</a></td></tr>
+{% else %}<tr><td colspan="5" class="muted">Noch keine Läufe.</td></tr>{% endfor %}</table></div>
+{% endblock %}
