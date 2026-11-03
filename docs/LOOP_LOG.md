@@ -308,3 +308,9 @@ Library: 4 ASIN changes correct (Skies of Pern, Tower of the Swallow [title 0.89
 Synthetic 79/80: "The Prince" (Machiavelli, Douglass Scott): the 2023 re-release B0CR6P9671 (178 min) was taken instead of the 2020 listing B085Y4MLC6 (177 min) that matches ABS publisher AND year. Fix: an exact-title hit WITHOUT publisher+year evidence (while ABS knows both) is kept pending and the remaining candidates are checked; a candidate with publisher+year wins. 80/80.
 Counter: 3 of 4 (A6, A7, A8 clean). A10 runs with this frozen code.
 ## Batch A10 started
+
+## CORRECTION of the streak count (honest)
+After A9 I wrote "counter stays 3 of 4". WRONG: four clean batches IN A ROW are required; A9 needed a fix, so the streak A6-A7-A8 was BROKEN (counter 0 after A9).
+## Batch A10 (100 library + 80 synthetic, Audible-only, 6:40 min, 0 errors) – CLEAN -> streak 1 of 4
+Library: 2 ASIN changes hand-verified: Dragonsdawn (title, author, narrator, volume, publisher+year) and The Archmage Unbound (ABS file = Todd McLaren 1012 min, Tantor 2013; the old ASIN was the Podium 2022 recording by Alex Wyndham, 813 min -> ABS publisher/year had been polluted by the wrong ASIN; B00BEMKJD6 matches runtime EXACTLY + narrator). Review list: only the known class "Realms of War" title proposal. Synthetic 80/80. Nothing to correct.
+Streak history: A1 x, A2 x, A3 x, A4 x, A5 x, A6 ok, A7 ok, A8 ok, A9 x, A10 ok -> current streak 1 of 4.
