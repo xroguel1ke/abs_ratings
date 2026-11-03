@@ -139,3 +139,7 @@ Library result (snapshot): 5 fixes (Kurmaic/Kurmaić, Tolkien, Salvatore, Schwab
 3. `tools/lib_check.py`: series merges + author fixes over the WHOLE library vs hand-verified baseline (every difference printed, judged by hand, then `--accept`),
 4. all golden rounds replayed from the recordings vs `tests/private/golden.json` (every book ever verified, "no wrong hit on other books").
 New rules also get a synthetic test for the case they must NOT fire on. Series name choice: Audible's own series title wins when exactly one group name matches it (4 flips judged correct: Realm of the Elderlings, The Empyrean Series, Have Sword Will Travel Series, Reborn ... Squire).
+
+## ASIN audit (started 2026-11-03 ~20:20)
+`tools/asin_audit_fetch.py`: read-only fetch of the Audible product behind every ASIN in the snapshot (1864 ASINs, .com first, other stores for misses) -> tests/private/asin_products.json.
+Purpose: find all books whose ASIN belongs to another book (like Paranormal Payback / Alice) and validate the deterministic plausibility rule offline against the whole library.
