@@ -216,6 +216,16 @@ def canonical_series(lib, name, book_authors):
         return ent['name'], 'existing'
     return name, None
 
+def asin_plausibility(abs_title, abs_authors, aud_title, aud_sub, aud_authors, abs_narrators=(), aud_narrators=()):
+    """Deterministic check (no LLM): does the product behind the ASIN look like THIS book?
+    Returns (verdict, reasons): 'wrong' = title AND author contradict (the ASIN belongs to another book), 'suspicious' = one of them is off, 'ok'."""
+    t = max(search_match_score(abs_title, aud_title, aud_sub), title_similarity(clean_title(abs_title), clean_title(aud_title or "")))
+    auth = match_author(abs_authors, ", ".join(aud_authors or [])) if (abs_authors and aud_authors) else None  # None = cannot tell
+    reasons = [f"title {t:.2f}", "author " + {True: "✓", False: "✗", None: "?"}[auth]]
+    if t < 0.5 and auth is False: return "wrong", reasons
+    if (t < 0.5 and auth is not True) or (auth is False and t < 0.85): return "suspicious", reasons
+    return "ok", reasons
+
 def language_verdict(abs_title, abs_narrators, aud, lang_locked, abs_series_names=()):
     """ABS and Audible language differ. 'asin_wrong' if the ASIN belongs to another language edition
     (language locked, title doesn't match, or no common narrator), else 'abs_wrong'."""

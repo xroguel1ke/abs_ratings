@@ -143,3 +143,6 @@ New rules also get a synthetic test for the case they must NOT fire on. Series n
 ## ASIN audit (started 2026-11-03 ~20:20)
 `tools/asin_audit_fetch.py`: read-only fetch of the Audible product behind every ASIN in the snapshot (1864 ASINs, .com first, other stores for misses) -> tests/private/asin_products.json.
 Purpose: find all books whose ASIN belongs to another book (like Paranormal Payback / Alice) and validate the deterministic plausibility rule offline against the whole library.
+
+## Standing rule: bundle long runs (user, 2026-11-03)
+Very long runs (full-library audits / full dry runs) only when several reasons have accumulated; no status polling while they run (background waiter only).
