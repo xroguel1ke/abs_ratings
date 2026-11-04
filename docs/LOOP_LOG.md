@@ -347,3 +347,8 @@ Found 97/100, cross-check ok 97 / dropped 0, ASIN results = golden 100/100, no r
 
 ## Hardcover batch H5 (100 other verified library books, Hardcover ON, ~2.5 min, 0 errors) – CLEAN -> Hardcover streak 2 of 3
 Found 96/100, ASIN results = golden 100/100, no cross-check drops, no rule change. (Loop was idle ~4 h afterwards: background start returned at once and I did not continue; watchdog notification was correct.)
+## Hardcover batch H6 started
+
+## Hardcover batch H6 (100 other verified library books, Hardcover ON, 0 errors) – CLEAN -> Hardcover streak 3 of 3 (H4, H5, H6)
+Found 96/100, ASIN results = golden 100/100, no cross-check drops, no rule change. Hardcover streak goal reached; Hardcover paths remain covered by the regress gate.
+## Batch A14 started (SYNTH=16, 140 EN + 60 DE, Audible-only): code frozen, Audible streak 0 of 4
