@@ -1798,8 +1798,43 @@ def parse_gr_next_results(html):
         m_auth = re.search(r'"primaryContributorEdge":\{.*?"name":"((?:[^"\\]|\\.)*)"', chunk)
         m_st = re.search(r'"averageRating":([\d.]+),"ratingsCount":(\d+)', chunk)
         rating = (m_st.group(1), int(m_st.group(2))) if m_st and int(m_st.group(2)) > 0 and is_valid_rating(m_st.group(1)) else None
+        ser = [(_unjs(m.group(2)), m.group(1), m.group(3)) for m in re.finditer(
+            r'"seriesPlacement":"([^"]*)","series":\{"__typename":"Series","id":"[^"]*","title":"((?:[^"\\]|\\.)*)","webUrl":"(https://www\.goodreads\.com/series/[^"]+)"', chunk.split('"primaryContributorEdge"')[0])]
+        GR_ROW_SERIES[url] = ser
         out.append((_unjs(m_title.group(1)), url, _unjs(m_auth.group(1)) if m_auth else '', rating))
     return out
+
+GR_ROW_SERIES = _TLDict('gr_row_series')  # result url -> [(series name, placement, series page url)] of the last parsed page (per thread)
+GR_CTX = _TLDict('gr_ctx')                # {'series': [(name, number)]} of the book being looked up (set by the caller, per thread)
+
+def _num_eq(a, b):
+    try: return float(str(a).strip()) == float(str(b).strip())
+    except (TypeError, ValueError): return False
+
+def gr_series_match(name, placement, ours):
+    """Same series (name nearly equal after cleaning) AND exactly the same volume number."""
+    clean = lambda x: re.sub(r'\s*\([^)]*\)\s*$', '', x or '').strip()
+    return any(n and title_similarity(clean(n), clean(name)) >= 0.9 and _num_eq(num, placement) for n, num in ours)
+
+def gr_series_page(url, number, authors):
+    """Goodreads series page (one request): the volume with exactly this number, if its author matches. Returns (title, url, (val, count)) or None."""
+    r, soup = fetch_url(url, source='goodreads')
+    if not soup: return None
+    hits = []
+    for m in re.finditer(r'data-react-class="ReactComponents.SeriesList" data-react-props="([^"]*)"', r.text):
+        try: d = json.loads(html_lib.unescape(m.group(1)))
+        except ValueError: continue
+        heads = d.get('seriesHeaders') or []
+        for i, e in enumerate(d.get('series') or []):
+            b = e.get('book') or {}
+            head = heads[i] if i < len(heads) and isinstance(heads[i], str) else ''
+            num = (re.search(r'(\d+(?:\.\d+)?)', head) or re.search(r'#(\d+(?:\.\d+)?)\)', b.get('title') or '') or [None, None])[1]
+            if not _num_eq(num, number): continue
+            if not match_author(authors, (b.get('author') or {}).get('name') or ''): continue
+            if b.get('ratingsCount') and is_valid_rating(b.get('avgRating')):
+                hits.append((b.get('title'), urllib.parse.urljoin('https://www.goodreads.com', b.get('bookUrl') or ''), (str(b['avgRating']), int(b['ratingsCount']))))
+    hits = list({h[1]: h for h in hits}.values())
+    return hits[0] if len(hits) == 1 else None  # two books with the same number (e.g. 1 and 1.0 editions): ambiguous -> nothing
 
 _gr_sample_saved = {'done': False}
 def save_gr_sample(html, q):
@@ -1831,6 +1866,7 @@ def _search_goodreads(isbn, title, authors, prim_auth, known_ids=None, list_only
         q = q.strip()
         if q and q not in searches: searches.append(q)  # No duplicate requests
     norm_target = normalize_title_text(title)
+    series_pages = {}  # our series seen in the results, but with other volume numbers -> series page as the last step
 
     for q in searches:
         r, soup = fetch_url(f"https://www.goodreads.com/search", params={"q": q}, source='goodreads')
@@ -1851,7 +1887,16 @@ def _search_goodreads(isbn, title, authors, prim_auth, known_ids=None, list_only
             if not results:
                 logging.info(f"        🔍 GR search '{q}': no results parsed (title: '{page_title(soup)}', {len(r.text)} bytes)")
                 if len(r.text) > 50000: save_gr_sample(r.text, q)
+            ours = GR_CTX.get('series') or []
             for found_title, found_url, found_auth, found_rating in results:
+                if ours and match_author(authors, found_auth):
+                    for sname, splace, surl in GR_ROW_SERIES.get(found_url) or []:
+                        if gr_series_match(sname, splace, ours):
+                            if found_rating:
+                                d = {'url': found_url, 'val': found_rating[0], 'count': found_rating[1], 'source': 'Text Search (series + number)'}
+                                logging.info(f"        ✅ Found via Text Search (same series '{sname}' #{splace}, author ✓, no page load) (Count: {d['count']}, Rating: {round(safe_float(d['val']), 2)})")
+                                return d
+                        elif any(title_similarity(n, sname) >= 0.9 for n, _ in ours): series_pages.setdefault(surl, sname)
                 norm_found = normalize_title_text(found_title)
                 t_score = difflib.SequenceMatcher(None, norm_target, norm_found).ratio()
                 if (len(norm_target) > 3 and norm_target in norm_found) or (len(norm_found) > 3 and norm_found in norm_target): t_score += 0.15
@@ -1876,6 +1921,14 @@ def _search_goodreads(isbn, title, authors, prim_auth, known_ids=None, list_only
                     d['source'] = 'Text Search (List Match)'
                     logging.info(f"        ✅ Found via Text Search (List) (Count: {d.get('count')}, Rating: {round(safe_float(d.get('val')), 2)})")
                     return d
+    for surl, sname in list(series_pages.items())[:1]:  # one series page at most
+        num = next((n for nm, n in (GR_CTX.get('series') or []) if title_similarity(nm, sname) >= 0.9 and n), None)
+        if num is None: break
+        if h := gr_series_page(surl, num, authors):
+            d = {'url': h[1], 'val': h[2][0], 'count': h[2][1], 'source': 'Series page'}
+            logging.info(f"        ✅ Found via series page '{sname}' #{num}: '{h[0]}' (Count: {d['count']}, Rating: {round(safe_float(d['val']), 2)})")
+            return d
+        logging.info(f"        🔍 GR series page '{sname}': no single volume #{num} by this author")
     logging.info("        ❌ Not found via ID or Text.")
     return None
 
@@ -1927,6 +1980,7 @@ def hc_query(query, variables=None):
     if left.isdigit(): HC_STATE['daily_left'] = int(left)
     rst = next((v for k, v in r.headers.items() if 'reset' in k.lower() and 'ratelimit' in k.lower()), None)  # when the daily limit renews (if Hardcover tells)
     if rst: HC_STATE['reset'] = rst
+    _TL.hc_last_status = r.status_code  # per thread (test-mode fallback)
     if r.status_code == 429: raise SourceBlockedException('HTTP 429')
     if r.status_code in (401, 403):
         HC_STATE['disabled'] = f"token rejected (HTTP {r.status_code})"
@@ -2127,12 +2181,29 @@ def _hardcover_lookup(key, targets, authors, asin, isbn, manual_url, use_cache, 
         if book: return hc_result(book, 'cache')
         logging.info("        ↪️ Cached Hardcover book not found anymore, searching again...")
 
-    # 1 request for all identifiers. An ID hit still has to fit (ISBNs in ABS are sometimes wrong).
+    # An ID hit still has to fit (ISBNs in ABS are sometimes wrong).
     conds = []
     if asin and re.fullmatch(r'[A-Z0-9]{10}', asin): conds.append({'asin': {'_eq': asin}})
     if i := normalize_isbn(isbn): conds.append({'isbn_13' if len(i) == 13 else 'isbn_10': {'_eq': i}})
+    prim = authors[0] if authors else ''
+    queries = []
+    # Title + author first; title alone finds books whose author spelling or extra contributors confuse the search
+    for q in ([f"{targets[0]} {prim}", f"{clean_title(targets[0])} {prim}", targets[0]] if targets else []):
+        q = q.strip()
+        if q and q not in queries: queries.append(q)
+    queries = queries[:3]
+    eds = list(dict.fromkeys(clean_title(t) for t in targets[:3] if t and clean_title(t)))[:3]
+    # ONE request for every step (GraphQL aliases); the steps are evaluated in the same order as single requests were
+    combined = hc_combined(conds, queries, eds)
+    single = combined is None and bool(recorder.RECORD_DIR or recorder.REPLAY_DIR) and getattr(_TL, 'hc_last_status', None) == 599  # test mode, no recording
+    if combined is None and not single:
+        LOOKUP_HITS['hardcover'] = None
+        return None
+    def step(alias, q_single, vars_single, field):
+        if not single: return {field: combined.get(alias)} if alias in combined else None
+        return hc_query(q_single, vars_single)
     if conds:
-        data = hc_query(f"query($w:editions_bool_exp!){{ editions(where:$w, limit:5){{ title asin isbn_13 isbn_10 book{{ {HC_BOOK_FIELDS} }} }} }}", {'w': {'_or': conds}})
+        data = step('ids', f"query($w:editions_bool_exp!){{ editions(where:$w, limit:5){{ title asin isbn_13 isbn_10 book{{ {HC_BOOK_FIELDS} }} }} }}", {'w': {'_or': conds}}, 'editions')
         best = None
         if data is None: LOOKUP_HITS['hardcover'] = None
         elif LOOKUP_HITS['hardcover'] is not None: LOOKUP_HITS['hardcover'] += len(data.get('editions') or [])
@@ -2144,14 +2215,8 @@ def _hardcover_lookup(key, targets, authors, asin, isbn, manual_url, use_cache, 
             if not best or (book.get('ratings_count') or 0) > (best[0].get('ratings_count') or 0): best = (book, via)
         if best: return hc_result(best[0], best[1])
 
-    prim = authors[0] if authors else ''
-    queries = []
-    # Title + author first; title alone finds books whose author spelling or extra contributors confuse the search
-    for q in ([f"{targets[0]} {prim}", f"{clean_title(targets[0])} {prim}", targets[0]] if targets else []):
-        q = q.strip()
-        if q and q not in queries: queries.append(q)
-    for q in queries[:3]:
-        data = hc_query("query($q:String!){ search(query:$q, query_type:\"Book\", per_page:8, page:1){ results } }", {'q': q})
+    for qi, q in enumerate(queries):
+        data = step(f's{qi}', "query($q:String!){ search(query:$q, query_type:\"Book\", per_page:8, page:1){ results } }", {'q': q}, 'search')
         hits = (((data or {}).get('search') or {}).get('results') or {}).get('hits') or []
         if data is None: LOOKUP_HITS['hardcover'] = None
         elif LOOKUP_HITS['hardcover'] is not None: LOOKUP_HITS['hardcover'] += len(hits)
@@ -2170,9 +2235,8 @@ def _hardcover_lookup(key, targets, authors, asin, isbn, manual_url, use_cache, 
             logging.info(f"        🔍 Hardcover search '{q}': '{doc.get('title')}' accepted (score {score:.2f}, {len(hits)} hits)")
             return hc_result(doc, 'search')
         logging.info(f"        🔍 Hardcover search '{q}': no matching hit ({len(hits)} hits)")
-    eds = list(dict.fromkeys(clean_title(t) for t in targets[:3] if t and clean_title(t)))[:3]
     if eds:
-        data = hc_query(f"query($t:[String!]){{ editions(where:{{title:{{_in:$t}}}}, limit:10){{ title book{{ {HC_BOOK_FIELDS} }} }} }}", {'t': eds})
+        data = step('ted', f"query($t:[String!]){{ editions(where:{{title:{{_in:$t}}}}, limit:10){{ title book{{ {HC_BOOK_FIELDS} }} }} }}", {'t': eds}, 'editions')
         if data is None: LOOKUP_HITS['hardcover'] = None
         elif LOOKUP_HITS['hardcover'] is not None: LOOKUP_HITS['hardcover'] += len(data.get('editions') or [])
         best = None
@@ -2188,6 +2252,21 @@ def _hardcover_lookup(key, targets, authors, asin, isbn, manual_url, use_cache, 
             logging.info(f"        🔍 Hardcover edition '{best[1]}' -> book '{best[0].get('title')}' accepted")
             return d
     return None
+
+def hc_combined(conds, queries, eds):
+    """All lookup steps of one book in ONE Hardcover request. Returns {alias: data} or None (request failed)."""
+    parts, decl, var = [], [], {}
+    if conds:
+        decl.append('$w:editions_bool_exp!'); var['w'] = {'_or': conds}
+        parts.append(f"ids: editions(where:$w, limit:5){{ title asin isbn_13 isbn_10 book{{ {HC_BOOK_FIELDS} }} }}")
+    for qi, q in enumerate(queries):
+        decl.append(f'$q{qi}:String!'); var[f'q{qi}'] = q
+        parts.append(f's{qi}: search(query:$q{qi}, query_type:"Book", per_page:8, page:1){{ results }}')
+    if eds:
+        decl.append('$t:[String!]'); var['t'] = eds
+        parts.append(f"ted: editions(where:{{title:{{_in:$t}}}}, limit:10){{ title book{{ {HC_BOOK_FIELDS} }} }}")
+    if not parts: return {}
+    return hc_query(f"query({','.join(decl)}){{ {' '.join(parts)} }}", var)
 
 def hc_audio_asin(hc, abs_dur, authors, targets, narrators, lang):
     """Second-source path: Hardcover lists the Audible ASIN (+ audio length) of the audio edition. A candidate is taken only if the
@@ -2484,6 +2563,15 @@ def build_queue(lib_id, history, recheck):
     for it in work_queue: it['_lib'] = lib_id
     return work_queue
 
+def gr_book_series(meta, aud):
+    """[(series name, number)] of this book from ABS and from the Audible product (for the Goodreads series match)."""
+    out = [(x.get('name'), x.get('sequence')) for x in (meta.get('series') or []) if x.get('name') and x.get('sequence')]
+    for cs in ((aud or {}).get('meta_raw') or {}).get('series') or []:
+        n = cs.get('name') or cs.get('title')
+        m_ = re.search(r'\d+(?:\.\d+)?', str(cs.get('part') or cs.get('sequence') or ''))
+        if n and m_: out.append((n, m_.group(0)))
+    return list(dict.fromkeys(out))
+
 def enabled_sources():
     return ['audible'] + (['hardcover'] if HARDCOVER_ENABLED else []) + (['goodreads'] if GOODREADS_ENABLED else [])
 
@@ -2538,6 +2626,7 @@ def rating_only_pass(item, key, idx, total):
         if hc_data and hc_data.get('id') and not DRY_RUN: HC_CACHE[key] = {'id': hc_data['id'], 'slug': hc_data.get('slug')}
     if 'goodreads' in due:
         hc_gids = (hc_data or {}).get('gr_ids') or (hc_fetch_gr_ids(hc_data['id']) if hc_data and hc_data.get('id') and not GR_STATE['blocked'] else [])
+        GR_CTX['series'] = gr_book_series(meta, aud)
         gr_data, gr_status = get_goodreads_data(meta.get('isbn'), aud.get('title_raw') or title, authors, authors[0] if authors else "",
                                                 ov.get('goodreads') or GR_CACHE.get(key), hc_gids)
         if not gr_data and gr_status not in ('deferred', 'blocked', 'disabled'): stats['gr_missing'] += 1
@@ -3042,6 +3131,7 @@ def process_queue(work_queue, history, failed, recheck):
                 gr_title = (aud_data or {}).get('title_raw') or search_title  # Audible's clean title searches best
                 cached_url = ov.get('goodreads') or (None if item.get('_manual_trigger') else GR_CACHE.get(key))
                 hc_gids = (hc_data or {}).get('gr_ids') or (hc_fetch_gr_ids(hc_data['id']) if hc_data and hc_data.get('id') and GOODREADS_ENABLED and not GR_STATE['blocked'] and 'goodreads' in src_due else [])
+                GR_CTX['series'] = gr_book_series(meta, aud_data)
                 if 'goodreads' in src_due or not GOODREADS_ENABLED:
                     gr_data, gr_status = get_goodreads_data(meta.get('isbn'), gr_title, authors, authors[0] if authors else "", cached_url, hc_gids,
                                                             force=bool(item.get('_manual_trigger') or ONLY_ITEMS))
