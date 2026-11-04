@@ -1052,16 +1052,63 @@ LAST_MATCH = {}  # evidence of the last accepted search hit: {asin, confirmed, e
 SEARCH_CTX = {}  # {'old_title','old_authors'}: what the current ASIN in ABS points to (set by the caller)
 REVIEW_FILE = os.path.join(SCRIPT_DIR, 'review_queue.json')
 
-def add_review(key, title, kind, candidate, reason, evidence=None):
+def add_review(key, title, kind, candidate, reason, evidence=None, ctx=None):
     """Uncertain automatic decision: nothing is written, the user decides in the review list (review_queue.json)."""
     decided = rw_json(os.path.join(SCRIPT_DIR, 'review_decisions.json')) or {}
     if f"{kind}|{key}|{candidate}" in decided: return  # user already decided (accepted or rejected)
     q = rw_json(REVIEW_FILE) or []
     if not isinstance(q, list): q = []
-    if any(x.get('key') == key and x.get('kind') == kind and x.get('candidate') == candidate for x in q): return
+    for x in q:
+        if x.get('key') == key and x.get('kind') == kind and x.get('candidate') == candidate:
+            if ctx and x.get('status') == 'open': x['ctx'], x['run'] = ctx, RUN_ID; rw_json(REVIEW_FILE, q)  # seen again: refresh the context for group_confirm()
+            return
     q.append({'key': key, 'title': title, 'kind': kind, 'candidate': candidate, 'reason': reason, 'evidence': evidence or [],
               'run': RUN_ID, 'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'status': 'open'})
+    if ctx: q[-1]['ctx'] = ctx
     rw_json(REVIEW_FILE, q)
+
+def group_confirm():
+    """Several ABS books with the SAME title (>= 3) whose candidates each match runtime (to the minute) and narrator and are DIFFERENT volumes
+    of ONE Audible series (distinct numbers; where ABS names the same series its number agrees) confirm each other: the shared ABS title is a
+    series/collection name, not a book title ('Realms of War' = War of the Spider Queen 1-6). The books get the candidate ASIN and the Audible title.
+    Respects lock_asin / lock_title; every change is journaled."""
+    q = rw_json(REVIEW_FILE) or []
+    if not isinstance(q, list): return
+    groups = {}
+    for e in q:
+        c = e.get('ctx') or {}
+        if e.get('run') == RUN_ID and e.get('status') == 'open' and e.get('kind') in ('asin', 'title') and c.get('cand_asin'):
+            groups.setdefault(normalize_title_text(e.get('title') or ''), {}).setdefault(e['key'], []).append(e)
+    changed = False
+    for gtitle, members in groups.items():
+        if not gtitle or len(members) < 3: continue
+        asins = {k: es[0]['ctx']['cand_asin'] for k, es in members.items()}
+        if len(set(asins.values())) != len(asins): continue  # two books, one candidate: not a group of different volumes
+        if any(ASIN_OWNERS.get(a, set()) - {k} for k, a in asins.items()): continue
+        data = {k: get_audible_data(a, members[k][0]['ctx'].get('lang')) for k, a in asins.items()}
+        if any(not isinstance(d, dict) or not d.get('title_raw') for d in data.values()): continue
+        pairs = {k: dict(_series_pairs((d.get('meta_raw') or {}).get('series'))) for k, d in data.items()}
+        common = set.intersection(*(set(p) for p in pairs.values())) if pairs else set()
+        good = None
+        for sk in sorted(common):
+            nums = [pairs[k][sk] for k in members]
+            if any(n is None for n in nums) or len(set(nums)) != len(nums): continue
+            if all(not (an is not None and an != pairs[k][sk]) for k, es in members.items() for ak, an in es[0]['ctx'].get('abs_series', []) if ak == sk):
+                good = sk; break
+        if not good: continue
+        logging.info(f"  🧩 Group confirmation: {len(members)} books titled '{gtitle}' are volumes {sorted(pairs[k][good] for k in members)} of ONE Audible series ('{good}'), each with runtime to the minute + narrator.")
+        for k, es in members.items():
+            c, d, asin_ = es[0]['ctx'], data[k], asins[k]
+            tags_ = set(c.get('tags') or [])
+            updates, old = {}, {}
+            if any(e['kind'] == 'asin' for e in es) and 'lock_asin' not in tags_: updates['asin'], old['asin'] = asin_, None
+            if 'lock_title' not in tags_ and d.get('title_raw') and d['title_raw'] != es[0]['title']: updates['title'], old['title'] = d['title_raw'], es[0]['title']
+            if updates and abs_update(c['iid'], k, es[0]['title'], updates, old, 'group_confirm'):
+                if 'asin' in updates: ASIN_OWNERS.setdefault(asin_, set()).add(k)
+                logging.info(f"     💾 {es[0]['title']} -> {', '.join(f'{f}: {v}' for f, v in updates.items())}{' (DRY_RUN)' if DRY_RUN else ''}")
+            for e in es: e['status'], e['resolved_by'] = 'auto_accepted', 'group_confirm'
+            changed = True
+    if changed: rw_json(REVIEW_FILE, q)
 
 def roman(n):
     out = ""
@@ -2184,7 +2231,8 @@ def process_queue(work_queue, history, failed, recheck):
                                                          meta.get("narrators") or [], aud_data.get("narrators_raw"), abs_dur, aud_data.get("runtime_sec"))
                     if plaus == "asin_ok_metadata_differs":
                         logging.info(f"      -> ℹ️ ASIN is right (same narrator and runtime) but ABS title/authors differ from Audible '{aud_data.get('title_raw')}' ({', '.join(plaus_why)}): proposal in the review list")
-                        add_review(key, title, "title", aud_data.get("title_raw"), "ASIN confirmed by runtime and narrator; ABS title/author differ", plaus_why)
+                        add_review(key, title, "title", aud_data.get("title_raw"), "ASIN confirmed by runtime and narrator; ABS title/author differ", plaus_why,
+                                   ctx={'iid': iid, 'cand_asin': asin, 'aud_title': aud_data.get('title_raw'), 'abs_series': [list(p) for p in _series_pairs(meta.get('series'))], 'tags': sorted(tags), 'lang': lang})
                 if not asin:
                     logging.info("      -> ⚠️ No ASIN in ABS.")
                     should_search = True
@@ -2248,7 +2296,8 @@ def process_queue(work_queue, history, failed, recheck):
                                                              abs_series=meta.get('series') or [])
                     
                     if not found and weak_ and 'lock_asin' not in tags:
-                        add_review(key, title, 'asin', weak_['asin'], f"runtime (to the minute) and narrator match '{weak_['title']}'; title similarity {weak_.get('title_score')}, author {'matches' if weak_.get('author_ok') else 'differs'} - not enough for an automatic change")
+                        add_review(key, title, 'asin', weak_['asin'], f"runtime (to the minute) and narrator match '{weak_['title']}'; title similarity {weak_.get('title_score')}, author {'matches' if weak_.get('author_ok') else 'differs'} - not enough for an automatic change",
+                                   ctx={'iid': iid, 'cand_asin': weak_['asin'], 'aud_title': weak_.get('title'), 'abs_series': [list(p) for p in _series_pairs(meta.get('series'))], 'tags': sorted(tags), 'lang': lang})
                     if found and found != asin and (ASIN_OWNERS.get(found, set()) - {key}):
                         logging.info(f"        ⛔ ASIN {found} already belongs to another book in the library/run: not assigned (needs a manual look)")
                         add_review(key, title, 'asin', found, 'ASIN already belongs to another book')
@@ -2757,6 +2806,7 @@ def main():
     if ABS_BACKUP and not DRY_RUN: create_abs_backup()
     if not SERIES_ONLY:
         run_libraries(history, failed, recheck)
+        group_confirm()
         if not DRY_RUN: rw_json(HISTORY_FILE, history); rw_json(FAILED_FILE, failed); rw_json(RECHECK_FILE, recheck); rw_json(HC_CACHE_FILE, HC_CACHE)
         save_reports()
         if AUTHOR_NOTES: rw_json(os.path.join(REPORT_DIR, "author_variants.json"), AUTHOR_NOTES)
