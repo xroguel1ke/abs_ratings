@@ -427,3 +427,7 @@ Found 6 deviations vs golden that the regress gate missed (it only covered round
 - golden updated: Alice im Wunderland (.de listing), Shannara (.com listing, 9,900 ratings); synthetic expectations 29/30/32: listing with the most ratings (alt = old).
 Regress now covers the WHOLE library (wl00/wl01) + all synthetic batches: 100% green.
 Risky changes outside golden after the fixes: 3, all hand-verified correct (Casual Farming 3 Virtual-Voice ASIN -> narrated edition; Judicator Jane 7 new ASIN + language und -> English). Added to golden (1875).
+
+## Phase C: the 45 library books that were not in golden analysed -> golden now covers the WHOLE library (1920: 1904 confirmed, 14 not on Audible, 2 duplicates)
+36 existing ASIN confirmed, 3 other edition (ratings only), 6 not found -> analysed: 5 really not on Audible (Dragonheart/Todd McCaffrey, Imaginary Friends, Valkyrie's Dawn, Dragonsteel Prime, Book of Lost Tales), 1 FOUND after a fix: Berserk of Gluttony Vol. 1 (ABS narrator = author in Japanese name order "Isshiki Ichika" vetoed the real narrator) -> Fix: narrator==author compares names order-independently (same_person_name). Test, regress 100% green.
+Library result (Audible, current code): 1904 of 1906 books that exist on Audible are matched/kept correctly (99.9%); 0 wrong.

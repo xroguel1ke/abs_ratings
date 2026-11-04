@@ -64,6 +64,7 @@ def test_messy_number_prefix_single_word():
 
 def test_messy_series_prefix_single_word():
     assert (A.parse_messy_title('Prince of the Doomed City 01 Entranced') or {}).get('title') == 'Entranced'
+    assert A.same_person_name('Isshiki Ichika', 'Ichika Isshiki') and not A.same_person_name('Dan Bittner', 'Ichika Isshiki') and A.same_person_name('José Pérez', 'Perez Jose')
     assert (A.parse_messy_title('The Four Horsemen [Thalassa] 02 War', ['The Four Horsemen [Thalassa]']) or {}).get('title') == 'War' and A.parse_messy_title('The Four Horsemen [Thalassa] 02 War') is None
     assert (A.parse_messy_title('06 Rick') or {}).get('title') == 'Rick' and A.parse_messy_title('007 Skyfall') is None and A.parse_messy_title('06 It') is None
     assert (A.parse_messy_title('Heist 01 Heist', ['Heist']) or {}).get('title') == 'Heist' and A.parse_messy_title('Heist 01 Heist') is None and (A.parse_messy_title('Planetside 03 Colonyside', ['Planetside']) or {}).get('title') == 'Colonyside'

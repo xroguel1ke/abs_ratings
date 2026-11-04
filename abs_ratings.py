@@ -1069,6 +1069,11 @@ def series_candidates(abs_series, authors_list, duration, domain):
     return [a for _, a in sorted(out)]  # closest runtime first
 
 
+def same_person_name(a, b):
+    """Same name regardless of word order and accents ('Isshiki Ichika' = 'Ichika Isshiki': Japanese name order)."""
+    tok = lambda s: sorted(re.sub(r"[^a-z ]", " ", fold_accents(s or "").lower()).split())
+    return bool(tok(a)) and tok(a) == tok(b)
+
 LAST_MATCH = {}  # evidence of the last accepted search hit: {asin, confirmed, evidence[]}
 SEARCH_CTX = {}  # {'old_title','old_authors'}: what the current ASIN in ABS points to (set by the caller)
 
@@ -1196,7 +1201,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                        only_domain=None, narrators=None, abs_series=None, extra_candidates=None, only_extra=False, only_queries=None):
     """Find an ASIN via the Audible catalog search API. Every candidate is verified by loading
     the product (title, author, runtime). Returns the ASIN, None (no match) or False (API error)."""
-    narrators = [n for n in (narrators or []) if not any(fold_accents(n).lower() == fold_accents(a).lower() for a in (authors_list or []))]  # an ABS "narrator" equal to the author is a data error, not evidence
+    narrators = [n for n in (narrators or []) if not any(same_person_name(n, a) for a in (authors_list or []))]  # an ABS "narrator" equal to the author is a data error, not evidence
     prim_auth = authors_list[0] if authors_list else ""
     short = re.split(r'\s*[:(]\s*|\s+-\s+', title)[0].strip()  # 'Dragon's Kin: Dragonriders of Pern, Book 16' -> 'Dragon's Kin'
     queries = [{"keywords": f"{title} {prim_auth}".strip()}]
