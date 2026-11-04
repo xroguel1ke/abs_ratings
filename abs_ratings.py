@@ -2033,6 +2033,24 @@ class ItemCapture(logging.Handler):
         if len(self.lines) < 80: self.lines.append(record.getMessage().strip())
 ITEM_LOG = ItemCapture()
 
+def compare_view(title, authors, meta, abs_dur, aud):
+    """ABS vs Audible side by side for the web UI (book page): [abs value, audible value] per field (strings)."""
+    aud = aud or {}
+    mr = aud.get('meta_raw') or {}
+    fmt_min = lambda s: f"{round(s / 60)} min" if s else ''
+    ser = lambda xs: '; '.join(f"{x.get('name') or x.get('title')}{' #' + str(x.get('sequence') or x.get('part')) if (x.get('sequence') or x.get('part')) else ''}" for x in xs or [] if (x.get('name') or x.get('title')))
+    return {
+        'Titel': [title or '', aud.get('title_raw') or ''],
+        'Autor': [', '.join(authors or []), ', '.join(aud.get('authors_raw') or [])],
+        'Sprecher': [', '.join(meta.get('narrators') or []), ', '.join(aud.get('narrators_raw') or [])],
+        'Laufzeit': [fmt_min(abs_dur), fmt_min(aud.get('runtime_sec'))],
+        'Reihe': [ser(meta.get('series')), ser(mr.get('series'))],
+        'Verlag': [meta.get('publisher') or '', (mr.get('publisher') or {}).get('name') or ''],
+        'Jahr': [str(meta.get('publishedYear') or ''), str(parse_release_year(mr.get('releaseDate')) or '')],
+        'Sprache': [meta.get('language') or '', mr.get('language') or ''],
+    } if aud.get('title_raw') else {}
+
+
 def set_result(key, lib_id, iid, title, authors, asin, status, reason, extra=None):
     RESULTS[key] = {'lib': lib_id, 'id': iid, 'title': title, 'author': ', '.join(authors or []), 'asin': asin,
                     'status': status, 'reason': reason, 'run': RUN_ID, 'dry_run': DRY_RUN,
@@ -2723,7 +2741,8 @@ def process_queue(work_queue, history, failed, recheck):
                                                    any(x.get('key') == key and x.get('status', 'open') == 'open' for x in (rw_json(REVIEW_FILE) or []) if isinstance(x, dict)))
                 set_result(key, lib_id, iid, title, authors, asin, status, reason,
                            {'notes': notes, 'certainty': cert, 'certainty_parts': cert_parts, 'domain': (aud_data or {}).get('domain'), 'goodreads': (gr_data or {}).get('url'),
-                            'hardcover': (hc_data or {}).get('url')})
+                            'hardcover': (hc_data or {}).get('url'), 'compare': compare_view(title, authors, meta, abs_dur, aud_data),
+                            'evidence': (LAST_MATCH.get('evidence') or []) if asin_from_search else []})
 
                 consecutive_rl = 0
                 break 

@@ -9,6 +9,7 @@
 <a data-tour="runs" href="{{ url_for('runs') }}" class="{{ 'active' if ep in ('runs','run_view') }}">Läufe</a>
 <a href="{{ url_for('logs') }}" class="{{ 'active' if ep in ('logs','log_view') }}">Logs</a>
 <a data-tour="settings" href="{{ url_for('settings') }}" class="{{ 'active' if ep=='settings' }}">Einstellungen</a>
+<form action="{{ url_for('books') }}" method="get" style="margin:0 8px"><input type="search" name="q" placeholder="Buch suchen…" style="width:180px;padding:6px 12px;border-radius:99px"></form>
 <span class="right">{% if running %}<a href="{{ url_for('run_view', run_id=current_run.id) }}"><span class="badge running">● läuft: {{ current_run.label }}</span></a>{% elif next_run %}nächster Lauf: {{ next_run|dt }}{% endif %}
 <button type="button" class="iconbtn" id="theme-toggle" title="Design">◐</button>
 <a href="{{ url_for('password') }}">Passwort</a><a href="{{ url_for('logout') }}">Abmelden</a></span></div></header>{% endif %}

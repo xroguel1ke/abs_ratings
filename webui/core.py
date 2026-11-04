@@ -3,7 +3,7 @@ Core of the web UI: settings, run manager (starts abs_ratings.py as a subprocess
 notifications (Apprise) and readers for the files the script writes into the data folder.
 The script itself stays a normal command line program; the UI only passes environment variables.
 """
-import json, os, re, secrets, signal, subprocess, sys, threading, time, zipfile, io
+import glob, json, os, re, secrets, signal, subprocess, sys, threading, time, zipfile, io
 from datetime import datetime, timedelta
 
 import requests
@@ -408,6 +408,28 @@ def remove_alias(lib, member):
     with _lock:
         a = _load_json(path, {})
         if a.get(lib, {}).pop(member, None) is not None: _save_json(path, a)
+
+
+def book_changes(key, limit=200):
+    """All journal entries of one book: applied changes (changes.jsonl, with undo state) + the newest planned-changes file."""
+    out, undone = [], set()
+    try:
+        with open(os.path.join(CONFIG_DIR, 'undone.jsonl'), encoding='utf-8') as f:
+            undone = {json.loads(l).get('id') for l in f if l.strip()}
+    except (OSError, ValueError): pass
+    planned = sorted(glob.glob(os.path.join(REPORT_DIR, 'planned_changes_*.jsonl')))[-1:]
+    for path in [os.path.join(CONFIG_DIR, 'changes.jsonl')] + planned:
+        try:
+            with open(path, encoding='utf-8') as f:
+                for l in f:
+                    if key not in l: continue
+                    try: e = json.loads(l)
+                    except ValueError: continue
+                    if e.get('key') != key: continue
+                    e['undone'] = f"{e.get('run')}|{e.get('item')}|{e.get('field')}|{e.get('ts')}" in undone
+                    out.append(e)
+        except OSError: pass
+    return sorted(out, key=lambda e: e.get('ts') or '', reverse=True)[:limit]
 
 
 def run_changes(run_id):

@@ -49,7 +49,7 @@ def test_books_list_sorted_by_certainty():
     assert h.index('Low') < h.index('High') < h.index('None'), 'ascending: low first, books without score last'
     h = c.get('/books?sort=certainty&dir=desc').get_data(as_text=True); assert h.index('High') < h.index('Low')
     assert 'High' not in c.get('/books?max=50').get_data(as_text=True)
-    assert 'Sicherheit: 35' in c.get('/problem/a').get_data(as_text=True)
+    assert 'Sicherheit 35 / 100' in c.get('/problem/a').get_data(as_text=True)
 
 
 def test_status_page_coverage_and_api():

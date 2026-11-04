@@ -140,7 +140,7 @@ def problem(key):
                                         label=f"Einzelbuch: {res.get('title')}")
         if err: flash(err, 'error'); return redirect(url_for('problem', key=key))
         return redirect(url_for('run_view', run_id=run_id, back=key))
-    return render_template('problem.html', key=key, r=res, ov=ov)
+    return render_template('problem.html', key=key, r=res, ov=ov, changes=core.book_changes(key))
 
 
 @app.route('/merged/<path:mid>/<action>', methods=['POST'])
