@@ -370,3 +370,6 @@ Audible chain changed: A20-A22 = 100 random verified library books + 60 EN + 20 
 
 ## RULE CLARIFICATION (2026-11-04, user): counting batch = 100 NEW library books + 60 EN + 20 DE synthetic; passing books go into golden, changes are tested against golden. Written into CLAUDE.md.
 Finding: the library has no new verified books left (1873 of 1873 golden books used in rounds 1-7/A1-A11). Hardcover batches H1-H9 and the A20-A22 plan therefore reused library books (H: 900 reused) – I had not said that clearly. Interim: 100 reused library books + 140 EN + 60 DE NEW synthetic per Audible batch; user to decide how to treat the missing new library books. Audible streak: A14 (synthetic only) is not counted -> 0 of 4. Hardcover streak H7, H8 counted with reused library books -> flagged.
+
+## USER DECISION (2026-11-04): no new library books left -> every counting batch = 100 EN + 80 DE synthetic (real Audible products not in the library). Reusing library books brings nothing.
+Passing batches stay in golden / tests/synthetic; every fix is tested against the whole golden list (tools/regress.sh). Streaks restart at 0: Audible 0 of 4, Hardcover 0 of 3 (A14, H7-H9 had a different mix and do not count). Chain A20-A22 (reused library books) cancelled.
