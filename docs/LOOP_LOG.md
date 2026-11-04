@@ -373,3 +373,7 @@ Finding: the library has no new verified books left (1873 of 1873 golden books u
 
 ## USER DECISION (2026-11-04): no new library books left -> every counting batch = 100 EN + 80 DE synthetic (real Audible products not in the library). Reusing library books brings nothing.
 Passing batches stay in golden / tests/synthetic; every fix is tested against the whole golden list (tools/regress.sh). Streaks restart at 0: Audible 0 of 4, Hardcover 0 of 3 (A14, H7-H9 had a different mix and do not count). Chain A20-A22 (reused library books) cancelled.
+## Batch A20 started (SYNTH=20, 100 EN + 80 DE, Audible-only): streak 0 of 4
+
+## Batch A20 (100 EN + 80 DE synthetic, Audible-only, 0 errors) – CLEAN -> Audible streak 1 of 4 (A20)
+180/180 correct at the first run. Whole-library offline replay (2 halves, current code): golden 1870/1873; 3 deviations (Lies Weeping, Dragon's Kin 16, Renegades of Pern) probably missing series-listing recordings -> live single-book check queued; 1 new ASIN change outside golden (Casual Farming 3, B0GDRXB26Y -> B0BLRVZP6N) to verify by hand.
