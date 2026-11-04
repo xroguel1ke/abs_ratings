@@ -564,7 +564,7 @@ def parse_messy_title(t, abs_series_names=None):
             return {'title': rest, 'series': series, 'sequence': None if '-' in seq else str(float(seq)).rstrip('0').rstrip('.'), 'kind': 'series_prefix'}  # '01-3' = a range (omnibus): no single volume number
     if m := RE_LEADING_NUM.match(t):
         rest_ = m.group(2).strip()
-        if len(rest_.split()) >= 2 or (re.fullmatch(r'0[1-9]', m.group(1)) and len(rest_) >= 5):  # '03 Blutmale' yes, '007 Skyfall' no
+        if len(rest_.split()) >= 2 or (re.fullmatch(r'0[1-9]', m.group(1)) and len(rest_) >= 3):  # '03 Blutmale', '06 Rick' yes ('0N' = file-name prefix; the match still needs the full evidence), '007 Skyfall' no
             return {'title': rest_, 'sequence': str(int(m.group(1))), 'kind': 'number_prefix'}
     return None
 
@@ -1056,7 +1056,7 @@ def series_candidates(abs_series, authors_list, duration, domain):
         try:
             r = requests.get(f"https://{host}/1.0/catalog/products", params={"asins": ",".join(children[i:i + 50]), "response_groups": "product_attrs,contributors,media"},
                              headers=hdr, timeout=20)
-            prods = r.json().get('products') or [] if r.status_code == 200 else []
+            prods = (r.json().get('products') or []) if r.status_code == 200 else []
         except (requests.RequestException, ValueError): prods = []
         for p in prods:
             rt = int(p.get('runtime_length_min') or 0) * 60
@@ -1067,6 +1067,43 @@ def series_candidates(abs_series, authors_list, duration, domain):
 
 LAST_MATCH = {}  # evidence of the last accepted search hit: {asin, confirmed, evidence[]}
 SEARCH_CTX = {}  # {'old_title','old_authors'}: what the current ASIN in ABS points to (set by the caller)
+
+
+def preferred_twin(lang, key):
+    """After an accepted search hit: the SAME recording as another listing that fits better - in the preferred store of the
+    book language (English -> .com) when the hit came from another store, or with ABS's publisher+year when the hit lacks them.
+    Twin = same narrators, matching authors, runtime within 2 min of the hit, title score >= 0.85 vs the hit, not owned by
+    another book. One targeted query (title + author + narrator of the hit). Returns (asin, why) or None."""
+    m = LAST_MATCH
+    if not (m.get('asin') and m.get('confirmed') and m.get('narrators') and m.get('authors') and m.get('runtime')): return None
+    pref = PREFERRED_STORE.get(map_language(lang)) if lang else None
+    other_store = bool(pref and m.get('domain') != pref)
+    want_pub = bool(not m.get('pub_year') and SEARCH_CTX.get('pub') and SEARCH_CTX.get('year'))
+    if not (other_store or want_pub): return None
+    domain = pref if other_store else m.get('domain')
+    norm = lambda xs: {re.sub(r'[^a-z]', '', x.lower()) for x in xs if x}
+    throttle('audible_api')
+    try:
+        r = requests.get(f"https://{AUDIBLE_API_HOSTS[domain]}/1.0/catalog/products",
+                         params={"num_results": 20, "title": m['title'], "author": m['authors'][0], "narrator": m['narrators'][0], "response_groups": "product_attrs"},
+                         headers={"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}, timeout=15)
+        prods = (r.json().get('products') or []) if r.status_code == 200 else []
+    except (requests.RequestException, ValueError): return None
+    best = None
+    for prod in prods:
+        c = prod.get('asin')
+        if not c or c == m['asin'] or (ASIN_OWNERS.get(c, set()) - {key}): continue
+        p = get_audible_api(c, domain)
+        if not isinstance(p, dict) or not p.get('runtime_sec') or abs(p['runtime_sec'] - m['runtime']) > 120: continue
+        if norm(p.get('narrators_raw') or []) != norm(m['narrators']) or not match_author(m['authors'], ", ".join(p.get('authors_raw') or [])): continue
+        if search_match_score(m['title'], p.get('title_raw') or '', p.get('subtitle_raw')) < 0.85 and search_match_score(p.get('title_raw') or '', m['title'], None) < 0.85: continue
+        pub = ((p.get('meta_raw') or {}).get('publisher') or {}).get('name') or ''
+        yr = str(parse_release_year((p.get('meta_raw') or {}).get('releaseDate')) or '')
+        pub_ok = bool(SEARCH_CTX.get('pub') and re.sub(r'[^a-z0-9]', '', pub.lower()) == re.sub(r'[^a-z0-9]', '', str(SEARCH_CTX['pub']).lower()) and yr == str(SEARCH_CTX.get('year')))
+        if want_pub and not pub_ok and not other_store: continue  # same store: only a publisher+year match is a better listing
+        if best is None or pub_ok > best[2]: best = (c, p.get('title_raw'), pub_ok)
+    if not best: return None
+    return best[0], f"same recording as {m['asin']} ({m.get('domain')}): {'preferred store ' + domain if other_store else ''}{' + ' if other_store and best[2] else ''}{'ABS publisher+year' if best[2] else ''}"
 REVIEW_FILE = os.path.join(SCRIPT_DIR, 'review_queue.json')
 
 def add_review(key, title, kind, candidate, reason, evidence=None, ctx=None):
@@ -1295,7 +1332,8 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 if ser_loose and not dur_ok: evidence.append('series-number(other name)')
                 confirmed = auth_ok and t_score >= 0.85 and ((dur_ok and extra >= 1) or (dur_near_n and not dur_ok and extra + ser_loose >= 2) or extra >= 2)
                 ev_txt = ", ".join(evidence)
-                LAST_MATCH.clear(); LAST_MATCH.update({'asin': cand, 'confirmed': confirmed, 'evidence': evidence, 'title': found_title})
+                LAST_MATCH.clear(); LAST_MATCH.update({'asin': cand, 'confirmed': confirmed, 'evidence': evidence, 'title': found_title, 'domain': domain,
+                                   'runtime': p.get('runtime_sec'), 'narrators': p.get('narrators_raw') or [], 'authors': p.get('authors_raw') or [], 'pub_year': pub_year})
                 msg = (f"        ✅ API match on {domain}: '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, "
                        f"runtime {'✓' if dur_ok else '≈ (same narrator, inside tolerance)'}) evidence: {ev_txt}")
                 if strict and not dur_ok and dur_near_n:  # keep looking: a candidate with exact runtime beats an approximate one
@@ -2325,6 +2363,11 @@ def process_queue(work_queue, history, failed, recheck):
                         add_review(key, title, 'asin', found, 'weak evidence for an ASIN change', LAST_MATCH.get('evidence'))
                         stats['review'] = stats.get('review', 0) + 1
                         found = None
+                    if found and found != asin and LAST_MATCH.get('asin') == found and 'lock_asin' not in tags:
+                        tw = preferred_twin(lang_target or lang, key)  # same recording, better listing (preferred store / ABS publisher+year)
+                        if tw:
+                            logging.info(f"        🔁 Better listing of the same recording: {tw[0]} ({tw[1]})")
+                            found = tw[0]
                     if found:
                         if found != asin:
                             logging.info(f"        ✨ NEW ASIN Found: {found}")
