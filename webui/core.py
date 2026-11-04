@@ -38,11 +38,12 @@ FIELDS = [
     ('USE_AUDIBLE_API', 'Use the Audible API', 'bool', True, 'Off = read web pages only (not recommended)', 'Audible'),
     ('AUDIBLE_API_INTERVAL', 'Interval Audible API (s)', 'float', 1, '', 'Audible'),
     ('AUDIBLE_WEB_INTERVAL', 'Interval Audible web page (s)', 'float', 3, '', 'Audible'),
-    ('RUNTIME_TOLERANCE_PCT', 'Runtime tolerance (%)', 'float', 15, 'A bigger difference = another edition', 'Audible'),
-    ('RUNTIME_TOLERANCE_MIN', 'Runtime tolerance (min)', 'float', 20, 'Both limits must be exceeded', 'Audible'),
+    ('RUNTIME_TOLERANCE_PCT', 'Same-book runtime tolerance (%)', 'float', 15, 'Only decides whether the ASIN still names the same BOOK (another recording can be 12-16 % longer). Lower values lose correct matches. Narrator, publisher, year and cover need the runtime within 10 min anyway', 'Audible'),
+    ('RUNTIME_TOLERANCE_MIN', 'Same-book runtime tolerance (min)', 'float', 20, 'Both limits must be exceeded', 'Audible'),
 
-    ('HARDCOVER_ENABLED', 'Use Hardcover', 'bool', True, 'Ratings and the print ISBN. Limit: 5000 requests per day (the scan stops before)', 'Hardcover'),
+    ('HARDCOVER_ENABLED', 'Use Hardcover', 'bool', True, 'Ratings and the print ISBN. The scan stops shortly before the daily limit', 'Hardcover'),
     ('HARDCOVER_TOKEN', 'Hardcover API token', 'secret', '', 'hardcover.app → Settings → API', 'Hardcover'),
+    ('HARDCOVER_PAID', 'Paid Hardcover plan', 'bool', False, 'Off = free plan: at most 5000 requests per day. On = 50000 per day. Both 60 per minute', 'Hardcover'),
     ('HARDCOVER_INTERVAL', 'Interval Hardcover (s)', 'float', 1.1, 'Hardcover allows 60 requests per minute', 'Hardcover'),
 
     ('GOODREADS_ENABLED', 'Use Goodreads', 'bool', False, 'Experimental: Goodreads blocks bots quickly. At the first block Goodreads is stopped for the scan', 'Goodreads'),
@@ -50,6 +51,7 @@ FIELDS = [
     ('GOODREADS_INTERVAL', 'Interval Goodreads (s)', 'float', 10, '', 'Goodreads'),
     ('GR_BLOCK_COOLDOWN', 'Pause after a Goodreads block (s)', 'int', 900, '', 'Goodreads'),
     ('GR_MAX_COOLDOWNS', 'Pauses before Goodreads is skipped', 'int', 0, '0 = stop at the first block (recommended)', 'Goodreads'),
+    ('GR_BOOK_PAGES', 'Also load Goodreads book pages', 'bool', False, 'Off = read the rating from the search list only (book pages trigger the bot block much sooner)', 'Goodreads'),
     ('GR_MISSING_RECHECK_DAYS', 'Re-check books without Goodreads (days)', 'int', 30, '', 'Goodreads'),
 
     ('RATING_ORDER', 'Order in the rating block', 'str', 'audible,goodreads,hardcover', 'Comma separated, e.g. audible,hardcover,goodreads', 'Metadata'),
@@ -69,7 +71,7 @@ FIELDS = [
 # rarely changed: shown folded ("Advanced") inside their card
 ADVANCED = {'ABS_TIMEOUT', 'SLEEP_TIMER', 'NO_RATINGS_RECHECK_DAYS', 'USE_AUDIBLE_API', 'AUDIBLE_API_INTERVAL',
             'AUDIBLE_WEB_INTERVAL', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'HARDCOVER_INTERVAL', 'GOODREADS_INTERVAL', 'GR_BLOCK_COOLDOWN',
-            'GR_MAX_COOLDOWNS', 'GR_MISSING_RECHECK_DAYS', 'SERIES_LOCK_AFTER_MERGE'}
+            'GR_MAX_COOLDOWNS', 'GR_MISSING_RECHECK_DAYS', 'GR_BOOK_PAGES', 'SERIES_LOCK_AFTER_MERGE'}
 # settings sections (left menu, one form + save button each) -> the field groups (cards) they contain
 SECTIONS = {'Connection': ['Connection'], 'Run': ['Run'], 'Sources': ['Audible', 'Hardcover', 'Goodreads'], 'Metadata': ['Metadata'],
             'Series & authors': ['Series & authors'], 'Logs': ['Logs'], 'Schedule': [], 'Notifications': [], 'Interface': ['Interface']}
@@ -415,11 +417,13 @@ def api_status():
         except OSError: continue
         if st['hc_left'] is None and (m := re.findall(r'daily limit left: (\d+)', txt)):
             st['hc_left'], st['hc_when'] = int(m[-1]), f[4:23].replace('_', ' ')
-            st['hc_used'] = max(0, 5000 - st['hc_left'])
             st['hc_reset'] = (re.findall(r'limit reset: ([^)]+)\)', txt) or [''])[-1]
         if st['gr'] == 'unknown' and 'Goodreads' in txt:
             st['gr'] = 'blocked (last scan)' if re.search(r'Bot challenge|still blocks|blocks requests', txt) else 'ok (last scan)'
         if st['hc_left'] is not None and st['gr'] != 'unknown': break
+    s = load_settings(); st['hc_limit'] = 50000 if s.get('HARDCOVER_PAID') else 5000
+    u = _load_json(os.path.join(CONFIG_DIR, 'hardcover_usage.json'), {})
+    st['hc_used'] = u.get('requests', 0) if u.get('day') == datetime.utcnow().strftime('%Y-%m-%d') else 0  # own budget, UTC day
     for name, label in (('hardcover_cache.json', 'Hardcover IDs'), ('goodreads_cache.json', 'Goodreads pages'), ('audible_series.json', 'Audible series'),
                         ('audible_authors.json', 'Audible authors'), ('rating_history.json', 'Rating history')):
         d = _load_json(os.path.join(CONFIG_DIR, name), {})

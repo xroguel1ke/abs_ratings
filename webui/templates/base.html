@@ -1,8 +1,8 @@
 <!doctype html><html lang="{{ lang }}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}ABS Ratings{% endblock %}</title><link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+<title>{% block title %}ABS Ratings{% endblock %}</title><link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon.svg') }}"><link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 <script>window.I18N = {{ js_i18n|tojson }};</script>
 <script src="{{ url_for('static', filename='app.js') }}"></script></head><body>
-{% if session.auth %}<header><div class="nav"><span class="brand">⭐ ABS Ratings</span><button type="button" class="iconbtn navtoggle" aria-label="{{ _('Menu') }}" onclick="this.closest('.nav').classList.toggle('open')">☰</button>
+{% if session.auth %}<header><div class="nav"><span class="brand"><img src="{{ url_for('static', filename='icon.svg') }}" alt="" class="logo">ABS Ratings</span><button type="button" class="iconbtn navtoggle" aria-label="{{ _('Menu') }}" onclick="this.closest('.nav').classList.toggle('open')">☰</button>
 {% set ep = request.endpoint %}
 <div class="links">
 <a data-tour="dashboard" href="{{ url_for('dashboard') }}" class="{{ 'active' if ep in ('dashboard','problem') }}">{{ _('Overview') }}</a>

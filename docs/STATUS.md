@@ -1,8 +1,8 @@
 # Status (live) – single source for ALL open items
 
-Updated: 2026-11-04 17:00 – Audible matching done (chain 5 clean, whole library in golden), pilot on 30 real books verified,
-web UI design/settings/history/undo/apply done. Overall ≈ 70 %.
-Next: Hardcover counting batches (daily limit renews), web UI items 1/4/5/7/13/14, Phase C remainder, final report.
+Updated: 2026-11-04 22:00 – English UI done (German selectable). User raised the Hardcover account to 50k/day (60/min, burst 30):
+Hardcover batches can run now. Overall ≈ 72 %.
+Next: Hardcover counting batches, Goodreads search-list-only mode, runtime tolerance default, app icon, Phase C remainder, final report.
 Rule: update this file after every batch/chain and whenever an item changes (task requirement). Items come from the task
 (`/mnt/user/appdata/abs_prompt_matching_loop.md`) [A] and from user requests in chat [U].
 
@@ -13,7 +13,9 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 |---|---|---|
 | [A] Audible matching (ASIN repair/search, store, other edition, language, titles) | ✅ 100 % | 4 clean chains of 180 fresh books (100 EN + 80 DE), 0 wrong matches ever; whole library 1904/1906 existing books correct (99.9 %) |
 | [A] Hardcover matching + cross-check against Audible | ⏳ 70 % | streak 0 of 3 with the final mix (H10 clean, then fixes reset it); daily limit; every HC hit auto cross-checked |
-| [A] Phase C: 3 rounds with EVERY Hardcover hit hand-checked | ❌ | needs Hardcover quota |
+| [A] Phase C: 3 rounds with EVERY Hardcover hit hand-checked | ❌ | quota now available (50k) |
+| [U] Hardcover 'paid plan' checkbox: own daily budget 5000 (free) / 50000 (paid), counted locally (hardcover_usage.json); production default = free | ⏳ | built, to be tested |
+| [U] Runtime tolerance default lower than 15 % / 20 min | ⏳ | measured: 5 %/10 min loses 16 of 1920 verified ASINs (e.g. Pern, other recording 12-16 % longer) - too strict; measuring 10 %/15 min |
 | [A] Phase C: full-library check incl. Hardcover cross-check | ⚠️ 60 % | Audible part done (6 real bugs found + fixed); Hardcover part open |
 | [A] Series merge / author normalisation: every planned merge hand-checked, 0 wrong | ⚠️ 85 % | 19 merges hand-checked; write + undo vs fake ABS ok; REAL test ok (ABS removes emptied series/authors, undo re-creates them with new ids) |
 | [A] Fake-ABS edge cases for series/authors (articles, Saga, Light Novel, translations, initials, two real authors) | ⚠️ | only synthetic unit tests (test_series/test_authors), no fake-ABS books |
@@ -42,8 +44,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [U] Hardcover Goodreads-ID path first | ✅ | correct 5/5; /book/show may be guarded more strictly than search |
 | [U] Limit measurement until a reliable requests/hour + per night value | ⏳ | test 4: blocked after ~3 book pages; test 5: 6 books via search ok, block on the 7th BOOK page |
 | [U] Open Library fallback for the Goodreads ID / ISBN | ❌ | measure first |
-| [new] Rating from the Goodreads SEARCH result row (no /book/show page) | ❌ | test 5: search pages pass, book pages get blocked |
-| [new] Rating from the Goodreads SEARCH result row (no /book/show page) | ❌ | test 5: search pages pass, book pages get blocked |
+| [new] Search-list-only mode: rating from the SEARCH result row, never a /book/show page (GR_BOOK_PAGES=false) | ⏳ | probe 2026-11-04: rows carry 'x.xx avg rating — n ratings'; title-only query ranks the real book first, 'title + author' returns summaries. Patch ready, then live test ~25 books |
 | [U] Production rhythm (≈25 per night?) | ❌ | after the measurements |
 
 ## Safety & tests
@@ -77,7 +78,8 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 ## Web UI language
 | Item | State | Note |
 |---|---|---|
-| [U] English web UI, English as DEFAULT, German selectable | ❌ | next after the real series-merge test |
+| [U] English web UI, English as DEFAULT, German selectable | ✅ | Settings > Interface; webui/i18n_de.py; tests/test_webui_i18n.py in the regress gate (every string translated, no German on English pages) |
+| [U] App icon instead of the star, also as browser-tab favicon | ⏳ | SVG headphones + star drafted |
 
 ## Finish (Phase C end)
 | Item | State |

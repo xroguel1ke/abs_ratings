@@ -115,3 +115,7 @@ tr.risky td{background:color-mix(in srgb,var(--warn) 9%,transparent)}
 .hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px;margin-bottom:8px}
 .herocard{display:block;color:var(--fg);margin:0}.herocard:hover{text-decoration:none;box-shadow:var(--shadow2)}
 .herocard .v{font-size:2em;font-weight:600;margin:2px 0}.herocard .go{margin-top:8px;color:var(--accent);font-weight:500}
+
+/* app icon */
+.logo{width:26px;height:26px;vertical-align:middle;margin-right:8px;border-radius:7px}
+.logo-lg{width:44px;height:44px;border-radius:11px;margin-right:12px}

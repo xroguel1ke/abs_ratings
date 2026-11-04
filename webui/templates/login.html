@@ -1,3 +1,3 @@
-{% extends 'base.html' %}{% block body %}<div class="center card"><h1>⭐ ABS Ratings</h1>
+{% extends 'base.html' %}{% block body %}<div class="center card"><h1><img src="{{ url_for('static', filename='icon.svg') }}" alt="" class="logo logo-lg">ABS Ratings</h1>
 <form method="post"><p><input type="password" name="password" placeholder="{{ _('Password') }}" autofocus></p><button class="primary">{{ _('Log in') }}</button></form>
 <p class="muted small">{{ _('First password:') }} <code>admin</code> ({{ _('changed afterwards') }}).</p></div>{% endblock %}
