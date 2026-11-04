@@ -15,7 +15,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [A] Hardcover matching + cross-check against Audible | ⏳ 70 % | streak 0 of 3 with the final mix (H10 clean, then fixes reset it); daily limit; every HC hit auto cross-checked |
 | [A] Phase C: 3 rounds with EVERY Hardcover hit hand-checked | ❌ | needs Hardcover quota |
 | [A] Phase C: full-library check incl. Hardcover cross-check | ⚠️ 60 % | Audible part done (6 real bugs found + fixed); Hardcover part open |
-| [A] Series merge / author normalisation: every planned merge hand-checked, 0 wrong | ⚠️ 60 % | decisions = hand-verified baseline (lib_check, 14 merges, 5 author fixes); NOT re-reviewed in this loop; WRITE path never tested (not even fake) |
+| [A] Series merge / author normalisation: every planned merge hand-checked, 0 wrong | ⚠️ 85 % | 19 merges hand-checked; write + undo vs fake ABS ok (33 books restored exactly); real-ABS test (series objects) needs user OK |
 | [A] Fake-ABS edge cases for series/authors (articles, Saga, Light Novel, translations, initials, two real authors) | ⚠️ | only synthetic unit tests (test_series/test_authors), no fake-ABS books |
 | [A] Negative cache for not-on-Audible books (re-check after ~90 days) | ⚠️ check | failed_history parks books after N attempts until REFRESH_DAYS – verify it matches the task |
 | [U] Group confirmation (same-title books of one series) | ✅ | Realms of War = Spider Queen 1-6 |

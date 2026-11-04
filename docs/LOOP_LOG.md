@@ -443,3 +443,6 @@ Undo in the real ABS (Exodus from the Long Sun, 8 changes): 7 ok, cover FAILED: 
 ABS server backup (POST /api/backups) returned HTTP 500 twice - the run had continued; now a failed requested ABS backup STOPS a real run (ABS_BACKUP=false to skip consciously). User to check ABS: Settings -> Backups.
 
 ## Web UI (user list, all 4 done 2026-11-04): Material theme light/dark + toggle + onboarding tour; book page with reasoning (certainty parts, search evidence), ABS<->Audible comparison, change list, global search; history page with undo per field/book/run (abs_undo.py); apply a dry run (abs_apply.py: writes only values ABS still has, conflicts and locks skipped, ABS backup first, journaled + undoable) - e2e tested against the fake ABS (check 27 + 1 conflict, apply 27, undo 27).
+
+## Series/author merge WRITE path vs the fake ABS (tools/series_write_test.py): whole library, SERIES_ONLY, DRY_RUN=false
+33 changes in 33 books = 14 series merges + 5 author fixes (= hand-verified lib_check baseline), all with merge_id; undo of one merge ok, undo of the run ok; all 33 books equal the snapshot again. All 19 merges hand-checked: plausible (one ugly but official Audible name: "... Squire ♀ Light Novel"). Open: real-ABS behaviour (series objects, empty old series) needs a tiny real test with the user OK.
