@@ -36,7 +36,8 @@
 <form method="post" class="sec" data-sec="{{ slug(sec) }}">{% for g in grps %}{{ group_card(g) }}{% endfor %}{% if sec == 'Interface' %}<div class="card"><h2 style="margin-top:0">{{ _('Onboarding') }}</h2>
  <p class="small">{{ _('The tour explains the pages of the app in a few steps. It starts automatically on the first visit.') }}</p>
  <div class="row"><button type="button" class="primary" onclick="window.ABSTour && ABSTour.start()">{{ _('Start the tour') }}</button>
- <span class="muted small">{{ _('Switch between light and dark at the top right with ☾ / ☀ (on the first visit the system setting applies, afterwards your choice in this browser).') }}</span></div></div>{% endif %}{{ save(sec) }}</form>
+ <span class="muted small">{{ _('Switch between light and dark at the top right with ☾ / ☀ (on the first visit the system setting applies, afterwards your choice in this browser).') }}</span></div></div>
+<div class="card"><h2 style="margin-top:0">{{ _('Password') }}</h2><p><a class="btn" href="{{ url_for('password') }}">{{ _('Change password') }} →</a></p></div>{% endif %}{{ save(sec) }}</form>
 {% endfor %}
 
 <form method="post" class="sec" data-sec="{{ slug('Schedule') }}"><div class="card"><h2 style="margin-top:0">{{ _('Schedule') }}</h2>

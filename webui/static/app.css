@@ -119,3 +119,11 @@ tr.risky td{background:color-mix(in srgb,var(--warn) 9%,transparent)}
 /* app icon */
 .logo{width:26px;height:26px;vertical-align:middle;margin-right:8px;border-radius:7px}
 .logo-lg{width:44px;height:44px;border-radius:11px;margin-right:12px}
+
+/* running scan in the header: one compact pill, never wider than the room it has (full label as tooltip) */
+.nav .runpill{padding:0;max-width:220px;overflow:hidden}.nav .runpill:hover{background:none}
+.nav .runpill .badge{display:block;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+
+/* header stays one line: menu entries never wrap (the burger menu takes over below 800px) */
+@media (min-width:801px){.nav .links{flex-wrap:nowrap;min-width:0}.nav .links a{white-space:nowrap}}
+.nav .right a.iconbtn{padding:4px 8px;text-decoration:none}

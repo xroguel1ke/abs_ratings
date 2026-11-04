@@ -101,7 +101,7 @@ add({
 add({
     # navigation / base
     'Overview': 'Übersicht', 'Review list': 'Prüfliste', 'Status': 'Status', 'Scans': 'Scans', 'History': 'Verlauf', 'Settings': 'Einstellungen',
-    'Menu': 'Menü', 'Search…': 'Suchen…', 'running': 'läuft', 'next scan': 'nächster Scan', 'Light / dark': 'Hell / dunkel',
+    'Menu': 'Menü', 'Scan running': 'Scan läuft', 'Search…': 'Suchen…', 'running': 'läuft', 'next scan': 'nächster Scan', 'Light / dark': 'Hell / dunkel',
     'Password': 'Passwort', 'Log out': 'Abmelden',
     # overview
     'Not set up yet: please enter the ABS URL, token and libraries under': 'Noch nicht eingerichtet: bitte ABS-URL, Token und Bibliotheken eintragen unter',

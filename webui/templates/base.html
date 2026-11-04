@@ -12,10 +12,12 @@
 <a data-tour="runs" href="{{ url_for('runs') }}" class="{{ 'active' if ep in ('runs','run_view') }}">{{ _('Scans') }}</a>
 <a data-tour="history" href="{{ url_for('history') }}" class="{{ 'active' if ep in ('history','history_run') }}">{{ _('History') }}</a>
 <a data-tour="settings" href="{{ url_for('settings') }}" class="{{ 'active' if ep in ('settings','logs','log_view') }}">{{ _('Settings') }}</a>
-<form action="{{ url_for('books') }}" method="get" style="margin:0 8px"><input type="search" name="q" placeholder="{{ _('Search…') }}" style="width:130px;padding:6px 12px;border-radius:99px"></form>
+<form action="{{ url_for('books') }}" method="get" style="margin:0 8px"><input type="search" name="q" placeholder="{{ _('Search…') }}" style="width:120px;padding:6px 12px;border-radius:99px"></form>
 </div>
-<span class="right">{% if running %}<a href="{{ url_for('run_view', run_id=current_run.id) }}"><span class="badge running">● {{ _('running') }}: {{ current_run.label }}</span></a>{% elif next_run %}{{ _('next scan') }}: {{ next_run|dt }}{% endif %}
+<span class="right">{% if running %}<a class="runpill" href="{{ url_for('run_view', run_id=current_run.id) }}" title="{{ current_run.label }}"><span class="badge running">● {{ _('Scan running') }}<span id="runpct"></span></span></a>
+<script>(function(){ const el=document.getElementById('runpct'); async function tick(){ try{ const j=await (await fetch("{{ url_for('api_run_progress', run_id=current_run.id) }}")).json();
+ if(j.status!=='running'){ el.textContent=''; return; } el.textContent=j.total? ' · '+Math.round(j.pct||0)+' %' : ''; }catch(e){} setTimeout(tick, 5000); } tick(); })();</script>{% elif next_run %}{{ _('next scan') }}: {{ next_run|dt }}{% endif %}
 <button type="button" class="iconbtn" id="theme-toggle" title="{{ _('Light / dark') }}">☾</button>
-<a href="{{ url_for('password') }}">{{ _('Password') }}</a><a href="{{ url_for('logout') }}">{{ _('Log out') }}</a></span></div></header>{% endif %}
+<a class="iconbtn" href="{{ url_for('logout') }}" title="{{ _('Log out') }}" aria-label="{{ _('Log out') }}">⏻</a></span></div></header>{% endif %}
 <main>{% with msgs = get_flashed_messages(with_categories=true) %}{% for c, m in msgs %}<div class="flash {{ c }}">{{ m }}</div>{% endfor %}{% endwith %}
 {% block body %}{% endblock %}</main></body></html>
