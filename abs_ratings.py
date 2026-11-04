@@ -1743,6 +1743,8 @@ def hc_query(query, variables=None):
         return None
     left = r.headers.get('X-Ratelimit-Daily-Remaining') or ''
     if left.isdigit(): HC_STATE['daily_left'] = int(left)
+    rst = next((v for k, v in r.headers.items() if 'reset' in k.lower() and 'ratelimit' in k.lower()), None)  # when the daily limit renews (if Hardcover tells)
+    if rst: HC_STATE['reset'] = rst
     if r.status_code == 429: raise SourceBlockedException('HTTP 429')
     if r.status_code in (401, 403):
         HC_STATE['disabled'] = f"token rejected (HTTP {r.status_code})"
@@ -2843,7 +2845,7 @@ def log_run_summary(start_time, series_result):
     s = stats
     hc = HC_STATE
     hc_line = (f"Hardcover: found {s['hc_found']} | not found {s['hc_missing']} | requests {hc['requests']}"
-               + (f" (daily limit left: {hc['daily_left']})" if hc['daily_left'] is not None else '')
+               + (f" (daily limit left: {hc['daily_left']})" if hc['daily_left'] is not None else '') + (f" (limit reset: {hc['reset']})" if hc.get('reset') else '')
                + (f" | stopped: {hc['disabled']}" if hc['disabled'] else '')) if HARDCOVER_ENABLED else "Hardcover: off"
     lines = [
         f"Books processed: {s['processed']} (skipped/locked: {s['skipped']}, manual updates: {s['manual_retrigger']}, re-checks: {s['recheck']})",

@@ -61,8 +61,8 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | 7 | Comparison ABS ↔ Audible ↔ Hardcover + planned change | ✅ | 3 columns + change list on the book page |
 | 8 | Reasoning per match (title, author, runtime, narrator, number, source) | ✅ | + source of the ASIN and of the Hardcover match |
 | 11 | Change history with undo per change / book / run | ✅ | |
-| 13 | Coverage statistics incl. ratings + Hardcover + trend over time | ⚠️ 50 % | publisher/year/ISBN/series added; ratings, Hardcover, trend missing |
-| 14 | Hardcover / API status: used/left today, cache size, reset time | ⚠️ 70 % | reset time missing |
+| 13 | Coverage statistics incl. ratings + Hardcover + trend over time | ✅ | + Audible/Goodreads ratings, Hardcover, change since the first snapshot (coverage_history.json) |
+| 14 | Hardcover / API status: used/left today, cache size, reset time | ✅ | used/left; reset time shown when Hardcover sends a reset header (logged since today), else "daily" |
 | – | Review list page | ✅ | see accept gap above |
 | – | [U] Design (Material light/dark), onboarding tour, settings with left sections + save per section, confirm dialog | ✅ | |
 | – | Screenshots in docs/screenshots/ (no private titles, public repo) | ⚠️ | settings only |

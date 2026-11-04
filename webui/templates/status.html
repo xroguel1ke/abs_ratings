@@ -1,19 +1,20 @@
 {% extends 'base.html' %}{% block title %}Status{% endblock %}{% block body %}
-<h2>Status</h2>
+<h1>Status</h1>
 <div class="tiles">
- <div class="tile"><div class="v">{% if api.hc_left is not none %}{{ api.hc_left }}{% else %}–{% endif %}</div><div class="l">Hardcover-Anfragen übrig{% if api.hc_when %} (Stand {{ api.hc_when }}){% endif %}</div></div>
+ <div class="tile"><div class="v">{% if api.hc_left is not none %}{{ api.hc_left }}{% else %}–{% endif %}</div><div class="l">Hardcover-Anfragen übrig{% if api.hc_used is defined %} · {{ api.hc_used }} von 5000 heute verbraucht{% endif %}{% if api.hc_when %} (Stand {{ api.hc_when }}){% endif %}<br>Reset: {{ api.hc_reset or 'täglich (Uhrzeit meldet Hardcover nicht)' }}</div></div>
  <div class="tile"><div class="v" style="font-size:1.1em">{{ api.gr }}</div><div class="l">Goodreads</div></div>
  <div class="tile"><div class="v">{{ api.queue }}</div><div class="l"><a href="{{ url_for('dashboard', tab='queue') }}">Einträge in der Prüfliste</a></div></div>
 </div>
 <p class="muted small">Das Hardcover-Tageslimit setzt sich täglich zurück; der Lauf stoppt automatisch kurz davor (Reserve 25). Goodreads wird bei der ersten Sperre sofort beendet und beim nächsten Lauf neu versucht.</p>
 
 <h3>Abdeckung der Bibliothek</h3>
-<div class="card tablewrap"><table><tr><th>Feld</th><th>vorhanden</th><th>Anteil</th><th></th></tr>
+<div class="card tablewrap"><table><tr><th>Feld</th><th>vorhanden</th><th>Anteil</th><th>Verlauf</th><th></th></tr>
 {% for label, have, total, pct, titles in rows %}<tr><td>{{ label }}</td><td>{{ have }} / {{ total }}</td>
 <td style="min-width:160px"><div style="background:var(--line);border-radius:6px;height:10px"><div style="width:{{ pct }}%;height:10px;border-radius:6px;background:{{ 'var(--ok)' if pct >= 95 else 'var(--warn)' if pct >= 80 else 'var(--err)' }}"></div></div><span class="small">{{ pct }} %</span></td>
+<td class="small">{% if label in first %}{% set d = pct - first[label] %}<span class="{{ 'badge ok' if d > 0.05 else ('badge err' if d < -0.05 else 'muted') }}">{{ '%+.1f'|format(d) }} %</span>{% else %}<span class="muted">–</span>{% endif %}</td>
 <td class="small">{% if titles %}<details><summary>{{ total - have }} ohne</summary>{{ titles | join(', ') }}{% if total - have > titles|length %} …{% endif %}</details>{% endif %}</td></tr>
-{% else %}<tr><td colspan="4" class="muted">Noch kein Bibliotheks-Report vorhanden (läuft beim Reihen-Task).</td></tr>{% endfor %}</table>
-{% if generated %}<p class="muted small">Stand: {{ generated }}</p>{% endif %}</div>
+{% else %}<tr><td colspan="5" class="muted">Noch kein Bibliotheks-Report vorhanden (läuft beim Reihen-Task).</td></tr>{% endfor %}</table>
+{% if generated %}<p class="muted small">Stand: {{ generated }}{% if first_ts %} · Verlauf seit {{ first_ts }} ({{ points }} Messpunkte){% else %} · Verlauf erscheint ab dem zweiten Bericht{% endif %}</p>{% endif %}</div>
 
 <h3>Zwischenspeicher</h3>
 <div class="card tablewrap"><table>{% for k, v in api.caches.items() %}<tr><td>{{ k }}</td><td>{{ v }} Einträge</td></tr>{% endfor %}</table></div>

@@ -390,7 +390,9 @@ def books():
 @login_required
 def status():
     rows, generated = core.coverage()
-    return render_template('status.html', rows=rows, generated=generated, api=core.api_status())
+    trend = core.coverage_trend()
+    first = {k: v for k, v in (trend[0]['pct'] if len(trend) > 1 else {}).items()}
+    return render_template('status.html', rows=rows, generated=generated, api=core.api_status(), first=first, first_ts=(trend[0]['ts'] if len(trend) > 1 else ''), points=len(trend))
 
 
 @app.route('/report')

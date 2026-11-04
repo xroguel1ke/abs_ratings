@@ -367,8 +367,31 @@ def coverage():
     for k, titles in (rep.get('missing') or {}).items():
         have = max(total - len(titles), 0)
         rows.append((FIELD_LABELS.get(k, k), have, total, round(100 * have / total, 1) if total else 0, sorted(titles)[:40]))
+    # ratings per source from the last check of every book (results.json)
+    res = results(); n = len(res)
+    if n:
+        for label, pred in (('Bewertungen Audible', lambda r: r.get('status') == 'ok'), ('Bewertungen Goodreads', lambda r: bool(r.get('goodreads'))),
+                            ('Hardcover', lambda r: bool(r.get('hardcover')))):
+            miss = [r.get('title') or '?' for r in res.values() if not pred(r)]
+            rows.append((label, n - len(miss), n, round(100 * (n - len(miss)) / n, 1), sorted(miss)[:40]))
     rows.sort(key=lambda r: r[3])
+    _coverage_trend(rows, rep.get('generated', '') or datetime.now().strftime('%Y-%m-%d'))
     return rows, rep.get('generated', '')
+
+
+def _coverage_trend(rows, stamp):
+    """Keep one coverage snapshot per report/day in coverage_history.json (for the trend on the status page)."""
+    path = os.path.join(CONFIG_DIR, 'coverage_history.json')
+    hist = _load_json(path, [])
+    snap = {'ts': stamp, 'pct': {r[0]: r[3] for r in rows}}
+    if not hist or hist[-1].get('ts') != stamp:
+        hist.append(snap); _save_json(path, hist[-120:])
+    elif hist[-1].get('pct') != snap['pct']:
+        hist[-1] = snap; _save_json(path, hist[-120:])
+
+
+def coverage_trend():
+    return _load_json(os.path.join(CONFIG_DIR, 'coverage_history.json'), [])
 
 def api_status():
     """Hardcover daily limit / Goodreads state from the newest run logs, cache sizes, open review items."""
@@ -381,6 +404,8 @@ def api_status():
         except OSError: continue
         if st['hc_left'] is None and (m := re.findall(r'daily limit left: (\d+)', txt)):
             st['hc_left'], st['hc_when'] = int(m[-1]), f[4:23].replace('_', ' ')
+            st['hc_used'] = max(0, 5000 - st['hc_left'])
+            st['hc_reset'] = (re.findall(r'limit reset: ([^)]+)\)', txt) or [''])[-1]
         if st['gr'] == 'unbekannt' and 'Goodreads' in txt:
             st['gr'] = 'gesperrt (im letzten Lauf)' if re.search(r'Bot challenge|still blocks|blocks requests', txt) else 'ok (im letzten Lauf)'
         if st['hc_left'] is not None and st['gr'] != 'unbekannt': break
