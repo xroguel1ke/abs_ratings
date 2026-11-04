@@ -92,6 +92,12 @@ def test_crosscheck_same_series_and_number():
     assert not A.hc_audible_crosscheck({'title': 'Home Sweet Home', 'authors': ['J R'], 'source': 'search', 'series': [("Jake's Magical Market", 2.0)]}, aud)[0], 'other number = other book'
 
 
+def test_crosscheck_alternative_titles():
+    aud = {'title_raw': 'Der Drachenbeinthron', 'authors_raw': ['T W'], 'meta_raw': {'language': 'german'}}
+    assert A.hc_audible_crosscheck({'title': 'The Dragonbone Chair', 'authors': ['T W'], 'source': 'search', 'alts': ['Der Drachenbeinthron']}, aud)[0]
+    assert not A.hc_audible_crosscheck({'title': 'The Dragonbone Chair', 'authors': ['T W'], 'source': 'search', 'alts': ['Something Else']}, aud)[0]
+
+
 def test_isbn_checks():
     assert A.isbn_bad_reason('B0D2LJ6SJ2') == 'value is an ASIN, not an ISBN'
     assert A.isbn_bad_reason('9780553580334') is None            # real ISBN-13 (House Corrino)

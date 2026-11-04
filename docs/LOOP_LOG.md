@@ -335,3 +335,8 @@ Hardcover not found 5 (box set/collection, translator-as-author fixed, others).
 ## Hardcover batch H2 (100 other verified library books, Hardcover ON, 2:40 min, 0 errors) – NOT clean (1 refinement), Hardcover streak 0
 Found 96/100; first run the cross-check dropped 2 harmless cases ("Home Sweet Home" = Jake's Magical Market 3, "Stone Will" = Dragon Heart 1: Hardcover lists the book under its subtitle, Audible under the series name). Refinement: same series name AND same number on Hardcover and Audible counts as confirmation (test: other number = other book). Then 96 ok, 0 dropped. ASIN results with Hardcover ON equal the golden list 100/100 (H1 and H2).
 ## Hardcover batch H3 started
+
+## Hardcover batch H3 (100 other verified library books, Hardcover ON, 2:58 min, 0 errors) – NOT clean (1 refinement), Hardcover streak 0
+Found 93/100; ASIN results = golden 100/100; cross-check dropped 1: "The Dragonbone Chair" vs German "Der Drachenbeinthron" (Hardcover lists the German title as an alternative title) -> the Audible title matching an alternative Hardcover title confirms the hit. Then 91 ok, 0 dropped. ISBN repair: 23 fixes, 14 without verified replacement.
+Pattern of the refinements so far (all with the SAME root: Hardcover/Audible name a book differently): subtitle vs series name, translation, series prefix, alternative titles. Each was resolved with an evidence-based rule + a "must still reject" test.
+## Hardcover batch H4 started
