@@ -352,3 +352,6 @@ Found 96/100, ASIN results = golden 100/100, no cross-check drops, no rule chang
 ## Hardcover batch H6 (100 other verified library books, Hardcover ON, 0 errors) – CLEAN -> Hardcover streak 3 of 3 (H4, H5, H6)
 Found 96/100, ASIN results = golden 100/100, no cross-check drops, no rule change. Hardcover streak goal reached; Hardcover paths remain covered by the regress gate.
 ## Batch A14 started (SYNTH=16, 140 EN + 60 DE, Audible-only): code frozen, Audible streak 0 of 4
+
+## CORRECTION (2026-11-04): Hardcover streak reset to 0 of 3
+H1-H6 ran with library books only (no synthetic books). Counting rule v2 requires 100 library + 60 EN + 20 DE synthetic per batch. H4-H6 do not count. New Hardcover batches H7+ use SYNTH (fresh seed per batch), Hardcover ON; started only after the running Audible batch (one concurrent request per host).
