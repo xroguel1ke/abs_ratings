@@ -1,0 +1,7 @@
+{# How a changed value is shown (history, scan details, test-run review, book page) #}
+{% macro show(field, v, new=False) -%}
+{%- if field == 'description' -%}<span class="muted">{{ _('%(n)s characters', n=(v or '')|length) }}</span>
+{%- elif field == 'cover' -%}{% if v and (v|string).startswith('http') %}<a href="{{ v }}" target="_blank">{{ _('Image') }} ↗</a>{% elif v %}<span class="muted">{{ _('backup available') if not new else _('present') }}</span>{% else %}–{% endif %}
+{%- elif field == 'author' -%}{{ v|hv(field) }}
+{%- else -%}{{ (v|hv(field))|truncate(240) }}{%- endif -%}
+{%- endmacro %}

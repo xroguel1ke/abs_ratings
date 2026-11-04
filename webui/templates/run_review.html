@@ -1,6 +1,6 @@
-{% extends 'base.html' %}{% block title %}{{ _('Review test run') }}{% endblock %}{% block body %}
+{% extends 'base.html' %}{% import '_values.html' as V %}{% block title %}{{ _('Review test run') }}{% endblock %}{% block body %}
 {% set FL = {'asin': 'ASIN', 'title': _('Title'), 'subtitle': _('Subtitle'), 'description': _('Description'), 'genres': _('Genres'), 'cover': _('Cover'), 'language': _('Language'), 'publisher': _('Publisher'), 'publishedYear': _('Year'), 'narrators': _('Narrators'), 'authors': _('Authors'), 'series': _('Series'), 'isbn': 'ISBN', 'explicit': 'Explicit', 'abridged': _('Abridged'), 'tags': 'Tags'} %}
-{% macro val(e, v) %}{% if e.field == 'description' %}<span class="muted">{{ _('%(n)s characters', n=(v or '')|length) }}</span>{% elif e.field == 'cover' %}{% if v and v.startswith('http') %}<a href="{{ v }}" target="_blank">{{ _('Image') }} ↗</a>{% elif v %}<span class="muted">{{ _('present') }}</span>{% else %}–{% endif %}{% elif v is none or v == '' or v == [] %}–{% else %}{{ v }}{% endif %}{% endmacro %}
+{% macro val(e, v) %}{{ V.show(e.field, v) }}{% endmacro %}
 {% macro row(e) %}<tr class="{{ 'risky' if e.risky }}"><td><input type="checkbox" name="sel" value="{{ e.n }}" form="applyform" class="pick g-{{ e.field }}" checked></td>
 <td><a href="{{ url_for('problem', key=e.key) }}">{{ e.title }}</a>{% if e.risky %} <span class="badge warn" title="{{ _('risky change: check carefully') }}">⚠️ {{ risky_labels.get(e.field, e.field) }}</span>{% endif %}<div class="muted small">{{ e.source }}</div></td>
 <td class="small">{{ val(e, e.old) }}</td><td class="small">{{ val(e, e.new) }}</td></tr>{% endmacro %}

@@ -85,6 +85,20 @@ def test_language_saved_in_interface_section():
     assert core.load_settings()['UI_LANGUAGE'] == 'en'
 
 
+def test_values_are_human_readable():
+    hv = W.human_value
+    assert hv([{'name': 'The Legend of Drizzt', 'sequence': '1'}], 'series') == 'The Legend of Drizzt #1'
+    assert hv([{'name': 'A', 'sequence': '1'}, {'name': 'B', 'sequence': None}], 'series') == 'A #1; B'
+    assert hv([{'name': 'R. A. Salvatore'}, {'name': 'X'}], 'authors') == 'R. A. Salvatore, X'
+    assert hv(['Fantasy', 'Epic'], 'genres') == 'Fantasy, Epic' and hv(None) == '–' and hv([]) == '–' and hv(True) == 'yes'
+    with open(os.path.join(cfg, 'changes.jsonl'), 'w') as f:
+        f.write(json.dumps({'run': 'r1', 'ts': '2026-11-04T10:00:00+00:00', 'item': 'i1', 'key': 'lib_1', 'title': 'Homeland', 'field': 'series',
+                            'old': [{'name': 'The Legend of Drizzt', 'sequence': '1'}], 'new': [{'name': 'Legend of Drizzt', 'sequence': '1'}],
+                            'source': 'series_merge', 'dry_run': False}) + '\n')
+    h = client().get('/history/r1').get_data(as_text=True)
+    assert 'The Legend of Drizzt #1' in h and 'Legend of Drizzt #1' in h and "[{&#39;name" not in h and "{'name'" not in h, h[-1500:]
+
+
 def test_scan_page_remembers_choices_without_changing_settings():
     c = client()
     before = {k: core.load_settings().get(k) for k in ('AUTHOR_NORMALIZE', 'SERIES_MERGE', 'BATCH_SIZE')}

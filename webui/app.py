@@ -3,7 +3,7 @@ import json, os, re, functools
 from collections import Counter
 from datetime import datetime
 
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_file, abort, flash, g
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_file, abort, flash, g, has_request_context
 
 from webui import core, i18n
 
@@ -17,6 +17,9 @@ STATUS_LABEL = dict(PROBLEM_STATUS, ok='OK', ignored='Ignored')
 
 def lang():
     """UI language of this request (settings: UI_LANGUAGE, default English)."""
+    if not has_request_context():  # outside a request (tests, background): the saved setting
+        try: return core.load_settings().get('UI_LANGUAGE') or 'en'
+        except Exception: return 'en'
     if 'lang' not in g:
         try: g.lang = core.load_settings().get('UI_LANGUAGE') or 'en'
         except Exception: g.lang = 'en'
@@ -42,6 +45,38 @@ def de(text):
     if text.startswith('Ratings of another edition'): return text.replace('Ratings of another edition', 'Bewertungen einer anderen Ausgabe').replace('ASIN not available anymore', 'ASIN nicht mehr verfügbar')
     return REASON_DE.get(text, text)
 app.jinja_env.filters['de'] = de
+
+
+FIELD_NAMES = {'asin': 'ASIN', 'title': 'Title', 'subtitle': 'Subtitle', 'description': 'Description', 'genres': 'Genres', 'cover': 'Cover',
+               'language': 'Language', 'publisher': 'Publisher', 'publishedYear': 'Year', 'narrators': 'Narrators', 'authors': 'Authors',
+               'series': 'Series', 'isbn': 'ISBN', 'explicit': 'Explicit', 'abridged': 'Abridged', 'tags': 'Tags', 'author': 'Empty author'}
+
+
+def field_label(f): return T(FIELD_NAMES.get(f, f))
+
+
+def human_value(v, field=''):
+    """A journal / planned value as people read it: series 'Name #1; Other #2', lists comma-separated, yes/no, '–' for empty.
+    (The journal keeps the raw ABS values for undo; this is only how they are shown.)"""
+    if v is None or v == '' or v == [] or v == {}: return '–'
+    if isinstance(v, bool): return T('yes') if v else T('no')
+    if isinstance(v, dict):
+        if v.get('name'): return human_value([v], field)
+        return ', '.join(f"{k}: {human_value(x)}" for k, x in v.items())
+    if isinstance(v, (list, tuple)):
+        out = []
+        for x in v:
+            if isinstance(x, dict):
+                n = x.get('name') or x.get('title') or ''
+                seq = x.get('sequence') if x.get('sequence') not in (None, '') else x.get('part')
+                out.append(f"{n} #{seq}" if seq not in (None, '') else n)
+            else: out.append(str(x))
+        return ('; ' if field == 'series' else ', ').join(o for o in out if o) or '–'
+    return str(v)
+
+
+app.jinja_env.filters['hv'] = human_value
+app.jinja_env.globals['field_label'] = field_label
 
 
 def login_required(view):

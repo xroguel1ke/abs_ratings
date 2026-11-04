@@ -1,4 +1,4 @@
-{% extends 'base.html' %}{% block title %}{{ _('History') }} {{ run_id }}{% endblock %}{% block body %}
+{% extends 'base.html' %}{% import '_values.html' as V %}{% block title %}{{ _('History') }} {{ run_id }}{% endblock %}{% block body %}
 {% set FL = {'asin': 'ASIN', 'title': _('Title'), 'subtitle': _('Subtitle'), 'description': _('Description'), 'genres': _('Genres'), 'cover': _('Cover'), 'language': _('Language'), 'publisher': _('Publisher'), 'publishedYear': _('Year'), 'narrators': _('Narrators'), 'authors': _('Authors'), 'series': _('Series'), 'isbn': 'ISBN', 'explicit': 'Explicit', 'abridged': _('Abridged'), 'tags': 'Tags', 'author': _('Empty author')} %}
 <p><a href="{{ url_for('history') }}">← {{ _('History') }}</a></p>
 <h1>{{ _('Scan') }} {{ run_id }}</h1>
@@ -14,8 +14,8 @@
 <div class="card tablewrap"><table class="diff"><tr><th>{{ _('Book') }}</th><th>{{ _('Field') }}</th><th>{{ _('Old') }}</th><th>{{ _('New') }}</th><th></th></tr>
 {% for e in entries %}<tr>
 <td><a href="{{ url_for('problem', key=e.key) }}">{{ e.title }}</a></td><td>{{ FL.get(e.field, e.field) }}</td>
-<td class="small">{% if e.field == 'description' %}<span class="muted">{{ _('%(n)s characters', n=(e.old or '')|length) }}</span>{% elif e.field == 'cover' %}<span class="muted">{{ _('backup available') if e.old else _('no cover') }}</span>{% else %}{{ e.old if e.old is not none else '–' }}{% endif %}</td>
-<td class="small">{% if e.field == 'description' %}{{ _('%(n)s characters', n=(e.new or '')|length) }}{% elif e.field == 'cover' %}<a href="{{ e.new }}" target="_blank">{{ _('Image') }} ↗</a>{% else %}{{ e.new }}{% endif %}</td>
+<td class="small">{{ V.show(e.field, e.old) }}</td>
+<td class="small">{{ V.show(e.field, e.new, True) }}</td>
 <td class="row" style="flex-wrap:nowrap">{% if e.undone %}<span class="badge warn">{{ _('undone') }}</span>{% elif e.field == 'author' %}<span class="muted small">{{ _('cannot be undone') }}</span>{% else %}
  <form method="post" action="{{ url_for('history_undo', run_id=run_id) }}" data-confirm="{{ _('Undo this change?') }}"><input type="hidden" name="item" value="{{ e.item }}"><input type="hidden" name="field" value="{{ e.field }}"><input type="hidden" name="label" value="{{ e.title }}: {{ FL.get(e.field, e.field) }}"><button title="{{ _('only this field') }}">↶ {{ _('Field') }}</button></form>
  <form method="post" action="{{ url_for('history_undo', run_id=run_id) }}" data-confirm="{{ _('Undo all changes of this book in this scan?') }}"><input type="hidden" name="item" value="{{ e.item }}"><input type="hidden" name="label" value="{{ e.title }} ({{ _('whole book') }})"><button title="{{ _('all fields of this book') }}">↶ {{ _('Book') }}</button></form>

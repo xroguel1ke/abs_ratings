@@ -1,4 +1,4 @@
-{% extends 'base.html' %}{% block title %}{{ r.title }}{% endblock %}{% block body %}
+{% extends 'base.html' %}{% import '_values.html' as V %}{% block title %}{{ r.title }}{% endblock %}{% block body %}
 {% set PL = {'title': _('title'), 'author': _('author'), 'runtime': _('runtime'), 'narrator': _('narrator'), 'number': _('series/volume'), 'publisher+year': _('publisher+year'), 'hardcover': 'Hardcover', 'asin from search': _('found by search'), 'other edition': _('other edition'), 'open review entry': _('open review entry')} %}
 {% set FL = {'asin': 'ASIN', 'title': _('Title'), 'subtitle': _('Subtitle'), 'description': _('Description'), 'genres': _('Genres'), 'cover': _('Cover'), 'language': _('Language'), 'publisher': _('Publisher'), 'publishedYear': _('Year'), 'narrators': _('Narrators'), 'authors': _('Authors'), 'series': _('Series'), 'isbn': 'ISBN', 'explicit': 'Explicit', 'tags': 'Tags'} %}
 {# compare keys are stored in German by the script #}
@@ -36,8 +36,8 @@
 <div class="card tablewrap"><h2 style="margin-top:0">{{ _('Changes to this book') }}</h2>
 {% if changes %}<table class="diff"><tr><th>{{ _('Time') }}</th><th>{{ _('Field') }}</th><th>{{ _('Old') }}</th><th>{{ _('New') }}</th><th>{{ _('Status') }}</th></tr>
 {% for e in changes %}<tr><td class="small">{{ e.ts|dt }}</td><td>{{ FL.get(e.field, e.field) }}</td>
-<td class="small">{% if e.field == 'description' %}<span class="muted">{{ _('%(n)s characters', n=(e.old or '')|length) }}</span>{% else %}{{ e.old if e.old is not none else '–' }}{% endif %}</td>
-<td class="small">{% if e.field == 'description' %}{{ _('%(n)s characters', n=(e.new or '')|length) }}{% elif e.field == 'cover' %}<a href="{{ e.new }}" target="_blank">{{ _('Image') }} ↗</a>{% else %}{{ e.new }}{% endif %}</td>
+<td class="small">{{ V.show(e.field, e.old) }}</td>
+<td class="small">{{ V.show(e.field, e.new, True) }}</td>
 <td>{% if e.dry_run %}<span class="badge">{{ _('planned (test run)') }}</span>{% elif e.undone %}<span class="badge warn">{{ _('undone') }}</span>{% else %}<span class="badge ok">{{ _('written') }}</span>{% endif %}</td></tr>{% endfor %}</table>
 {% else %}<p class="muted">{{ _('No changes recorded.') }}</p>{% endif %}</div>
 
