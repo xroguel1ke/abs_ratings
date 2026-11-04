@@ -1090,6 +1090,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
     prim_auth = authors_list[0] if authors_list else ""
     short = re.split(r'\s*[:(]\s*|\s+-\s+', title)[0].strip()  # 'Dragon's Kin: Dragonriders of Pern, Book 16' -> 'Dragon's Kin'
     queries = [{"keywords": f"{title} {prim_auth}".strip()}]
+    if extract_volume(title): queries.insert(0, {"title": title})  # numbered title: the exact-title query first (keyword queries return the OTHER volumes and the loop stops after 4 candidates)
     if prim_auth: queries.append({"title": title, "author": prim_auth})
     if short and short != title and len(short) >= 4:
         queries.append({"title": short, "author": prim_auth} if prim_auth else {"keywords": short})
