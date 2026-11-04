@@ -431,3 +431,5 @@ Risky changes outside golden after the fixes: 3, all hand-verified correct (Casu
 ## Phase C: the 45 library books that were not in golden analysed -> golden now covers the WHOLE library (1920: 1904 confirmed, 14 not on Audible, 2 duplicates)
 36 existing ASIN confirmed, 3 other edition (ratings only), 6 not found -> analysed: 5 really not on Audible (Dragonheart/Todd McCaffrey, Imaginary Friends, Valkyrie's Dawn, Dragonsteel Prime, Book of Lost Tales), 1 FOUND after a fix: Berserk of Gluttony Vol. 1 (ABS narrator = author in Japanese name order "Isshiki Ichika" vetoed the real narrator) -> Fix: narrator==author compares names order-independently (same_person_name). Test, regress 100% green.
 Library result (Audible, current code): 1904 of 1906 books that exist on Audible are matched/kept correctly (99.9%); 0 wrong.
+
+## NOTE: Phase C fixes (twin by ratings, series relevance/cache, owned-ASIN skip, name order) came AFTER the Audible streak -> by the rule the Audible streak restarts. Confirmation chain 5 (Audible-only, final code): a41, a42, a43, a44 (100 EN + 80 DE each).
