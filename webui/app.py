@@ -313,13 +313,13 @@ def runs():
             core.RUNNER.stop(); flash('Lauf wird abgebrochen.', 'ok'); return redirect(url_for('runs'))
         rs, items = None, None
         if a == 'start':  # scan page: tasks as checkboxes (metadata & ratings / authors / series) + test-run switch
-            meta, authors, series = (request.form.get(k) == 'on' for k in ('task_meta', 'task_authors', 'task_series'))
-            if not (meta or authors or series): flash('Bitte mindestens eine Aufgabe wählen.', 'error'); return redirect(url_for('runs'))
+            meta, authors, series, roles, empty = (request.form.get(k) == 'on' for k in ('task_meta', 'task_authors', 'task_series', 'task_roles', 'task_empty'))
+            if not (meta or authors or series or roles or empty): flash('Bitte mindestens eine Aufgabe wählen.', 'error'); return redirect(url_for('runs'))
             dry = request.form.get('dry') == 'on'
             kind = 'full' if meta else 'series'  # without metadata only the series/author task runs (whole library)
-            tasks = [t for t, on in (('Metadaten', meta), ('Autoren', authors), ('Reihen', series)) if on]
+            tasks = [t for t, on in (('Metadaten', meta), ('Autoren', authors), ('Reihen', series), ('nur echte Autoren', roles), ('leere Autoren', empty)) if on]
             label = f"{'Testlauf' if dry else 'Scan (echt)'}: {', '.join(tasks)}"
-            rs = {'SERIES_MERGE': series, 'AUTHOR_NORMALIZE': authors}
+            rs = {'SERIES_MERGE': series, 'AUTHOR_NORMALIZE': authors, 'REMOVE_ROLE_CREDITS': roles, 'REMOVE_EMPTY_AUTHORS': empty}
         else:  # older buttons (kept for links / scripts)
             kind = {'run': 'full', 'dry': 'full', 'series': 'series'}.get(a)
             if not kind: abort(400)

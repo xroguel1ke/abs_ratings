@@ -65,6 +65,8 @@ def main():
         old_show = e['old'] if e['field'] != 'description' else f"<{len(e['old'] or '')} chars>"
         print(f"  [{e['run']}] {e['title']}: {e['field']} -> {json.dumps(old_show, ensure_ascii=False)[:120]}")
         if not a.apply: continue
+        if e['field'] == 'author':  # an EMPTY author object was deleted (no book had it) - nothing to restore
+            print('     (empty author removed - nothing to undo)'); continue
         try:
             if e['field'] == 'cover' and e.get('old') and os.path.isfile(str(e['old'])):  # replaced cover: upload the backup again
                 data = open(e['old'], 'rb').read()

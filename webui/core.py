@@ -60,6 +60,8 @@ FIELDS = [
     ('SERIES_MERGE', 'Reihen automatisch zusammenführen', 'bool', True, 'Nur sichere Fälle, unsichere landen im Merge-Review', 'Reihen & Autoren'),
     ('AUTHOR_NORMALIZE', 'Autoren-Schreibweisen vereinheitlichen', 'bool', True, '', 'Reihen & Autoren'),
     ('LIBRARY_REPORT', 'Bibliotheks-Report erstellen', 'bool', True, '', 'Reihen & Autoren'),
+    ('REMOVE_ROLE_CREDITS', 'Nur echte Autoren behalten', 'bool', True, 'Entfernt Illustratoren, Übersetzer, Herausgeber, Vorwort … aus dem Autorenfeld (nur wenn ein echter Autor bleibt); werden auch nie von Audible übernommen', 'Reihen & Autoren'),
+    ('REMOVE_EMPTY_AUTHORS', 'Leere Autoren entfernen', 'bool', True, 'Löscht in ABS nur Autoren ohne ein einziges Buch (Reste nach Zusammenführungen); Bücher werden nie gelöscht', 'Reihen & Autoren'),
     ('SERIES_LOCK_AFTER_MERGE', 'Nach Zusammenführung lock_series setzen', 'bool', False, 'Alte Variante, nicht empfohlen', 'Reihen & Autoren'),
 ]
 # rarely changed: shown folded ("Erweitert") inside their card
@@ -209,7 +211,7 @@ def parse_env_summary():
     return out
 
 
-RUN_OVERRIDABLE = {'BATCH_SIZE', 'REFRESH_DAYS', 'HARDCOVER_ENABLED', 'GOODREADS_ENABLED', 'SERIES_MERGE', 'AUTHOR_NORMALIZE', 'UPDATE_COVERS'}  # start dialog
+RUN_OVERRIDABLE = {'BATCH_SIZE', 'REFRESH_DAYS', 'HARDCOVER_ENABLED', 'GOODREADS_ENABLED', 'SERIES_MERGE', 'AUTHOR_NORMALIZE', 'UPDATE_COVERS', 'REMOVE_ROLE_CREDITS', 'REMOVE_EMPTY_AUTHORS'}  # start dialog
 KIND_LABELS = {'full': 'Lauf', 'series': 'Nur Reihen & Report', 'item': 'Einzelbuch', 'undo': 'Rückgängig', 'apply': 'Testlauf übernehmen'}
 
 

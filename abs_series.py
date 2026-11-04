@@ -85,6 +85,14 @@ def fmt_seqs(nums):
 def _n(x): return str(int(x)) if float(x).is_integer() else str(x)
 
 
+# Role credits that are not authors ('Kevin Steinbach - translator', 'X - Illustrator', 'Y - Übersetzer'): Audible lists them in the authors list
+ROLE_CREDIT_RE = re.compile(r'\s+[-–]\s+(illustrat\w*|illustrations?|translat\w*|translated by|edited by|editor|editors|introductions?|foreword|afterword|preface|contributor|adapt\w*|cover\s+\w+|'
+                            r'übersetz\w*|übertragen\w*|herausgeb\w*|hrsg\.?|zeichn\w*|illustriert\w*|vorwort|nachwort|bearbeit\w*)\s*$', re.I)
+
+
+def is_role_credit(name): return bool(name and ROLE_CREDIT_RE.search(name))
+
+
 def fold_accents(s):
     """'Kurmaić' -> 'Kurmaic'"""
     return "".join(c for c in unicodedata.normalize("NFKD", s or "") if not unicodedata.combining(c))
@@ -157,7 +165,7 @@ def interleaved(g_seqs, c_seqs):
     return sum(1 for i in range(1, len(side)) if side[i] != side[i - 1]) >= 2
 
 
-UNCERTAIN = ('not enough numbered books', "numbers don't complement", 'matches more than one series', "numbers don't interleave")
+UNCERTAIN = ('not enough numbered books', "numbers don't complement", 'matches more than one series', "numbers don't interleave", 'contains book(s) with lock_series')  # -> review list
 
 def series_info(s):
     """Titles (with number) and authors of a Series object, for the web UI."""
@@ -191,8 +199,9 @@ def merge_check(group, cand, decisions=None):
     g_authors = set().union(*(s.authors for s in group))
     if not (g_authors & cand.authors): return False, rel, 'no shared author'
     # A manually locked book means the user decided on this series name: don't touch the series
-    locked = [r['title'] for r, _ in cand.entries if 'lock_series' in r['tags']]
-    if locked: return False, rel, f"contains book(s) with lock_series: {', '.join(locked[:3])}"
+    # (on EITHER side: a book you locked in the target series also means 'don't touch these names')
+    locked = [r['title'] for r, _ in cand.entries if 'lock_series' in r['tags']] + [r['title'] for s in group for r, _ in s.entries if 'lock_series' in r['tags']]
+    lock_msg = f"contains book(s) with lock_series: {', '.join(locked[:3])}" if locked else ''  # only a merge that is OTHERWISE allowed becomes a review case
     # Every single book of the smaller series must share an author with the target
     foreign = [r['title'] for r, _ in cand.entries if not ({author_key(a) for a in r['authors']} & g_authors)]
     if foreign: return False, rel, f"book(s) by other authors: {', '.join(foreign[:3])}"
@@ -209,14 +218,14 @@ def merge_check(group, cand, decisions=None):
             if loose == 'contained' or len(g_seqs) < 2 or len(c_seqs) < 2:
                 return False, None, f"sub-series or no number evidence ({fmt_seqs(g_seqs)} vs {fmt_seqs(c_seqs)})"
             return False, rel, f"numbers don't interleave ({fmt_seqs(g_seqs)} vs {fmt_seqs(c_seqs)}) and the names are only loosely similar"
-        return True, rel, 'ok'
+        return (False, rel, lock_msg) if locked else (True, rel, 'ok')
     if rel != 'exact':
         # Fuzzy names need the book numbers to complement each other (fill gaps or continue the series)
         if not c_seqs or not g_seqs: return False, rel, 'not enough numbered books to prove it is the same series'
         lo, hi = min(g_seqs), max(g_seqs)
         fills = any(lo < x < hi or x == hi + 1 or x == lo - 1 for x in c_seqs)
         if not fills: return False, rel, f"numbers don't complement ({fmt_seqs(g_seqs)} vs {fmt_seqs(c_seqs)})"
-    return True, rel, 'ok'
+    return (False, rel, lock_msg) if locked else (True, rel, 'ok')
 
 
 def collect_records(ctx):
@@ -457,7 +466,61 @@ def apply_author_fixes(ctx, records, fixes, count):
         if abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'authors': [{'name': a} for a in new_auth]},
                       {'authors': [{'name': a} for a in r['authors']]}, 'author_normalize', extra={'merge_id': mid}):
             changed += 1
+            r['authors'] = new_auth  # later steps (role credits) must build on the fixed names, not overwrite them
     return changed
+
+
+
+
+# ================= AUTHOR CLEAN-UP (user rules 2026-11-04) =================
+
+def role_base(name):
+    """'You Shiina - illustrator' -> 'You Shiina'."""
+    return ROLE_CREDIT_RE.sub('', name or '').strip()
+
+
+def remove_role_credits(ctx, records, known_roles=()):
+    """Only real authors in the author field: role credits ('X - illustrator', 'Y - translator', 'Z - Übersetzer', ...) are removed
+    when at least one real author remains. A plain name counts as a role credit when it was seen WITH a role suffix somewhere
+    (this library or Audible, e.g. 'Kurone Mishima - illustrator') AND it is nowhere the first author of a book. lock_authors respected."""
+    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    roles = {author_key(role_base(a)) for r in records for a in r['authors'] if is_role_credit(a)} | {author_key(n) for n in known_roles}
+    first = {author_key(r['authors'][0]) for r in records if r['authors'] and not is_role_credit(r['authors'][0])}
+    changed = 0
+    for r in records:
+        if not r['authors'] or 'lock_authors' in r['tags']: continue
+        drop = [a for i, a in enumerate(r['authors']) if is_role_credit(a) or (i > 0 and author_key(a) in roles and author_key(a) not in first)]
+        keep = [a for a in r['authors'] if a not in drop]
+        if not drop or not keep: continue  # never leave a book without author
+        if abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'authors': [{'name': a} for a in keep]},
+                      {'authors': [{'name': a} for a in r['authors']]}, 'role_credit_removed'):
+            changed += 1
+            logging.info(f"   🎨 ONLY AUTHORS{' (DRY_RUN)' if dry else ''}: '{r['title']}': removed {', '.join(drop)}")
+    return changed
+
+
+def remove_empty_authors(ctx):
+    """Delete ABS author objects that have NO book (left-overs). Every candidate is re-checked right before deleting
+    (GET /api/authors/<id>?include=items must list 0 books); books are never touched. Journaled (not undoable: an empty author)."""
+    s, url, dry = ctx['session'], ctx['abs_url'].rstrip('/'), ctx['dry_run']
+    removed = 0
+    ids = ctx['library_ids'] if isinstance(ctx['library_ids'], (list, tuple, set)) else str(ctx['library_ids']).replace(';', ',').split(',')
+    for lib in [str(l).strip() for l in ids if str(l).strip()]:
+        try: authors = s.get(f"{url}/api/libraries/{lib}/authors", timeout=60).json().get('authors') or []
+        except Exception as e: logging.warning(f"   Could not load authors of {lib}: {e}"); continue
+        for a in authors:
+            if a.get('numBooks') not in (0, None) or not a.get('id'): continue
+            try:
+                d = s.get(f"{url}/api/authors/{a['id']}", params={'include': 'items'}, timeout=30).json()
+                if d.get('libraryItems') or d.get('numBooks'): continue  # has books after all: never delete
+            except Exception: continue
+            if not dry:
+                r = s.delete(f"{url}/api/authors/{a['id']}", timeout=30)
+                if r.status_code != 200: logging.warning(f"   Could not delete empty author '{a.get('name')}' (HTTP {r.status_code})"); continue
+            ctx['journal'](f"author:{a['id']}", '', a.get('name') or '?', 'author', a.get('name'), None, 'empty_author_removed')
+            removed += 1
+            logging.info(f"   🧹 EMPTY AUTHOR{' (DRY_RUN)' if dry else ''} removed: '{a.get('name')}' (0 books)")
+    return removed
 
 
 def write_series_index(ctx, records, merges):
@@ -631,6 +694,10 @@ def run(ctx):
         fixes, count, author_review = find_author_fixes(records, ctx['decisions'], ctx.get('author_links'))
         logging.info(f"   Author spelling variants: {len(fixes)} (review: {len(author_review)})")
         authors_changed = apply_author_fixes(ctx, records, fixes, count)
+    if ctx.get('remove_role_credits'):
+        authors_changed += remove_role_credits(ctx, records, ctx.get('role_names') or ())
+    if ctx.get('remove_empty_authors'):
+        ctx['empty_authors_removed'] = remove_empty_authors(ctx)
     # Web UI files: merge history, uncertain cases, decisions (a confirmed merge may have been reopened)
     series_review = []
     for r in rejected:

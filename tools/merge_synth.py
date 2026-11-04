@@ -167,9 +167,36 @@ def make(seed, out):
         for b in groups[k1]: add(b, k1[0], k1[1])
         for b in groups[k2]: add(b, k2[0], k2[1])
         cases.append({'case': 'different_person', 'kind': 'author', 'expect': 'never', 'names': [k1[1], k2[1]]})
+    # only real authors: role credits (user rule 2026-11-04)
+    role_cases = []
+    for role in ('illustrator', 'translator', 'Übersetzer', 'editor', 'foreword'):
+        k = take()
+        if not k: break
+        s, a = k; b = groups[k][0]; helper = f'Helper {role.title()} {len(role_cases)}'
+        add(b, s, a); items[-1]['media']['metadata']['authors'].append({'id': 'au-h' + helper, 'name': f'{helper} - {role}'})
+        role_cases.append({'case': 'role_suffix', 'item': items[-1]['id'], 'remove': f'{helper} - {role}'})
+    k = take(lambda k: len(groups[k]) >= 2)
+    if k:  # learned: the same illustrator WITHOUT suffix on another volume is removed too
+        s, a = k; b1, b2 = groups[k][:2]; ill = 'Kurone Testillustrator'
+        add(b1, s, a); items[-1]['media']['metadata']['authors'].append({'id': 'au-ill', 'name': ill + ' - illustrator'})
+        role_cases.append({'case': 'role_suffix', 'item': items[-1]['id'], 'remove': ill + ' - illustrator'})
+        add(b2, s, a); items[-1]['media']['metadata']['authors'].append({'id': 'au-ill2', 'name': ill})
+        role_cases.append({'case': 'role_learned_plain', 'item': items[-1]['id'], 'remove': ill})
+    k = take()
+    if k:  # never: the only author of a book is a role credit (no real author would remain)
+        s, a = k; b = groups[k][0]; add(b, s, 'Solo Person - translator')
+        role_cases.append({'case': 'role_only_author', 'item': items[-1]['id'], 'remove': None})
+    k1, k2 = take(), take()
+    if k1 and k2:  # never: a real author (first author of a book) who illustrates elsewhere stays
+        s, a = k1; add(groups[k1][0], s, 'Dual Talent')
+        s2, a2 = k2; add(groups[k2][0], s2, a2); items[-1]['media']['metadata']['authors'].append({'id': 'au-dt', 'name': 'Dual Talent - illustrator'})
+        role_cases.append({'case': 'role_suffix', 'item': items[-1]['id'], 'remove': 'Dual Talent - illustrator'})
+        role_cases.append({'case': 'real_author_kept', 'item': items[-2]['id'], 'remove': None})
+    empty = [{'id': f'au-empty-{i}', 'name': f'Empty Leftover {i}'} for i in range(3)]
     snap = {'libraries': {'libraries': [{'id': LIB, 'name': 'Synthetic merge test', 'mediaType': 'book'}]},
             'lists': {LIB: {'results': items}}, 'items': {x['id']: x for x in items}}
-    json.dump({'seed': seed, 'snapshot': snap, 'cases': cases}, open(out, 'w', encoding='utf-8'), ensure_ascii=False)
+    snap['empty_authors'] = empty
+    json.dump({'seed': seed, 'snapshot': snap, 'cases': cases, 'role_cases': role_cases, 'empty_authors': [e['name'] for e in empty]}, open(out, 'w', encoding='utf-8'), ensure_ascii=False)
     print(f"{len(items)} books, {len(cases)} cases -> {out}: " + ', '.join(f"{c}={sum(1 for x in cases if x['case'] == c)}" for c in dict.fromkeys(x['case'] for x in cases)))
 
 
@@ -201,7 +228,25 @@ def evaluate(batch, data):
         else:
             if hit: wrong += 1; print('  WRONG', c['case'], c['names'], '->', hit)
             else: ok += 1
-    print(f"merge batch: {ok}/{len(cases)} ok | wrong {wrong} | missed {missed}")
+    # only real authors + empty authors
+    batch_d = json.load(open(batch, encoding='utf-8'))
+    removed = {}
+    for e in plan:
+        if e.get('source') == 'role_credit_removed':
+            removed[e['item']] = {a['name'] for a in e.get('old') or []} - {a['name'] for a in e.get('new') or []}
+    for c in batch_d.get('role_cases') or []:
+        got = removed.get(c['item'], set())
+        exp = {c['remove']} if c['remove'] else set()
+        if c['remove'] and c['remove'] not in got: missed += 1; print('  MISSED', c['case'], c['remove'])
+        elif got - exp: wrong += 1; print('  WRONG', c['case'], 'removed', got - exp)
+        else: ok += 1
+    del_names = {e['old'] for e in plan if e.get('source') == 'empty_author_removed'}
+    exp_del = set(batch_d.get('empty_authors') or [])
+    if del_names - exp_del: wrong += 1; print('  WRONG deleted authors that have books:', del_names - exp_del)
+    elif exp_del - del_names: missed += 1; print('  MISSED empty authors:', exp_del - del_names)
+    elif exp_del: ok += 1
+    n_all = len(cases) + len(batch_d.get('role_cases') or []) + (1 if exp_del else 0)
+    print(f"merge batch: {ok}/{n_all} ok | wrong {wrong} | missed {missed}")
     return 0 if not wrong and not missed else 1
 
 

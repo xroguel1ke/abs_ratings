@@ -58,6 +58,38 @@ def del_cover(iid):
     log_write('cover_delete', iid, None)
     return jsonify(success=True)
 
+def _authors(lib=None):
+    """Author objects derived from the items (+ SNAP['empty_authors'] = authors without books, for the clean-up test)."""
+    out = {}
+    for it in SNAP['items'].values():
+        if lib and it.get('libraryId') not in (lib, None): continue
+        for a in ((it.get('media') or {}).get('metadata') or {}).get('authors') or []:
+            o = out.setdefault(a.get('name'), {'id': a.get('id') or 'au-' + a.get('name', ''), 'name': a.get('name'), 'numBooks': 0, 'items': []})
+            o['numBooks'] += 1; o['items'].append(it['id'])
+    for a in SNAP.get('empty_authors') or []:
+        if a['id'] not in DELETED_AUTHORS: out.setdefault(a['name'], {'id': a['id'], 'name': a['name'], 'numBooks': 0, 'items': []})
+    return [a for a in out.values() if a['id'] not in DELETED_AUTHORS]
+
+DELETED_AUTHORS = set()
+
+@app.get('/api/libraries/<lib>/authors')
+def lib_authors(lib): return jsonify(authors=[{k: v for k, v in a.items() if k != 'items'} for a in _authors(lib)])
+
+@app.get('/api/authors/<aid>')
+def author(aid):
+    a = next((x for x in _authors() if x['id'] == aid), None)
+    if not a: return jsonify(error='not found'), 404
+    return jsonify(id=a['id'], name=a['name'], numBooks=a['numBooks'], libraryItems=[{'id': i} for i in a['items']] if request.args.get('include') == 'items' else None)
+
+@app.delete('/api/authors/<aid>')
+def delete_author(aid):
+    a = next((x for x in _authors() if x['id'] == aid), None)
+    if not a: return jsonify(error='not found'), 404
+    if a['numBooks']: return jsonify(error='author has books'), 400  # the fake refuses what must never happen
+    DELETED_AUTHORS.add(aid); log_write('author_delete', None, {'id': aid, 'name': a['name']})
+    return jsonify(success=True)
+
+
 @app.post('/api/backups')
 def backups():
     log_write('backup', None, None)

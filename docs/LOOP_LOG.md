@@ -453,3 +453,11 @@ ABS server backup (POST /api/backups) returned HTTP 500 twice - the run had cont
 ABS backup ok; written: Emily Wilde -> Emily Wilde Series (1 book), V.E. Schwab -> V. E. Schwab (1 book). Real ABS behaviour: the emptied series object "Emily Wilde" and author object "V.E. Schwab" were REMOVED by ABS automatically (no empty leftovers). Undo: 2/2, both books equal the backup; ABS re-created "Emily Wilde" and "V.E. Schwab" with NEW ids -> data stored on the old ABS author object (photo, bio) would not come back after merge+undo. Found on the way: "Bury Our Bones in the Midnight Soil" (V. E. Schwab) sits in Abercrombie's "The Age of Madness #2" in ABS (already in the snapshot, not from this tool).
 
 ## Series rule (user): interleaving numbers = strong evidence. loosely_similar() + interleaved() in abs_series.merge_check; 3 unit tests; whole library unchanged (14 merges, 5 author fixes, 0 uncertain); regress green. Synthetic merge batches started (tools/merge_synth.py + merge_round.sh): batch 1 31/31 (series cases only; Audible corpus for author cases being built).
+
+## Authors clean-up + series tests (user, 2026-11-04 evening)
+- lock_series bug found by the synthetic merge batches: a locked book in the TARGET series did not block -> fixed (either side); such otherwise-allowed merges now go to the review list (library: Elderlings, Black Summoner LN, Immortal Great Souls).
+- Accented author spelling wins over the accent-less one (Gablé, not Gable); eval checks the direction.
+- Only real authors: role credits removed (26 books in the library: Konosuba translator x12, Killing Slimes translators, Christopher Tolkien - editor, ...), learned plain illustrators (Audible lists e.g. "Kurone Mishima" plain and "You Shiina - illustrator"), never from Audible.
+- Empty ABS authors deleted (re-check, never books); fake ABS has the author endpoints and refuses deleting authors with books.
+- Synthetic merge batches with a 300-series Audible corpus: final code batches 9/10/11 = 56/56, 57/57, 58/58 -> SERIES/AUTHOR STREAK REACHED (3 of 3). Regress green, library baseline 13 merges, 3 review, 5 author fixes.
+- 3 unexplained crashes today (Bus error, Segfault, impossible TypeError in difflib), not reproducible -> possibly a RAM issue on the server; user informed.

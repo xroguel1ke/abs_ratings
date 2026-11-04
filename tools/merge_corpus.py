@@ -15,9 +15,13 @@ lib_series = {series_key(s.get('name') or '') for it in snap.values() for s in (
 
 
 def get(url, **params):
-    time.sleep(0.5)
-    r = requests.get(url, params=params, headers=H, timeout=30)
-    return r.json() if r.status_code == 200 else {}
+    for attempt in (1, 2):  # one retry; a network error skips this series instead of ending the whole run
+        time.sleep(0.5 * attempt)
+        try:
+            r = requests.get(url, params=params, headers=H, timeout=30)
+            return r.json() if r.status_code == 200 else {}
+        except (requests.RequestException, ValueError): continue
+    return {}
 
 
 out, done = {}, 0
@@ -39,6 +43,7 @@ for title, asins in sorted(known.items()):
                       'duration': int(p.get('runtime_length_min') or 0) * 60, 'language': (p.get('language') or 'english').capitalize()})
     if len(books) >= 2 and len({b['author'] for b in books}) == 1:
         out[title] = sorted(books, key=lambda b: int(b['seq'])); done += 1
-        if done % 25 == 0: print('series', done, flush=True)
+        if done % 25 == 0:
+            print('series', done, flush=True); json.dump(out, open('tests/synthetic/merge_corpus.json', 'w', encoding='utf-8'), ensure_ascii=False)
 json.dump(out, open('tests/synthetic/merge_corpus.json', 'w', encoding='utf-8'), ensure_ascii=False)
 print('corpus:', len(out), 'series ->', 'tests/synthetic/merge_corpus.json')

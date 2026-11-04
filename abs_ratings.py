@@ -35,6 +35,10 @@ RESULTS_FILE = os.path.join(SCRIPT_DIR, "results.json")      # last result per b
 OVERRIDES_FILE = os.path.join(SCRIPT_DIR, "overrides.json")  # manual fixes from the web UI: asin, goodreads, ignore
 ONLY_ITEMS = [x.strip() for x in os.getenv('ONLY_ITEMS', '').split(',') if x.strip()]  # 'libid_itemid' -> single-book mode
 ABS_BACKUP = os.getenv('ABS_BACKUP', 'false').lower() == 'true'  # create an ABS backup before a real run
+REMOVE_ROLE_CREDITS = os.getenv('REMOVE_ROLE_CREDITS', 'true').lower() == 'true'  # only real authors: remove 'X - illustrator', 'Y - translator', ...
+REMOVE_EMPTY_AUTHORS = os.getenv('REMOVE_EMPTY_AUTHORS', 'true').lower() == 'true'  # delete ABS author objects with 0 books
+ROLE_NAMES_FILE = os.path.join(SCRIPT_DIR, 'role_credits.json')  # names seen with a role suffix on Audible ('Kurone Mishima - illustrator')
+ROLE_NAMES = set()
 SERIES_ALIASES_FILE = os.path.join(SCRIPT_DIR, "series_aliases.json")  # {library: {"alias name": "series name"}} (editable)
 SERIES_INDEX_FILE = os.path.join(SCRIPT_DIR, "series_index.json")      # Series that exist in ABS (written by the series task)
 CHANGES_FILE = os.path.join(SCRIPT_DIR, "changes.jsonl")  # Every applied change (old -> new), used by abs_undo.py
@@ -795,6 +799,8 @@ def get_audible_api(asin, domain):
            'authors_asin': [{'name': a.get('name'), 'asin': a.get('asin')} for a in (p.get('authors') or []) if a.get('name') and a.get('asin')],
            'runtime_sec': int(p.get('runtime_length_min') or 0) * 60}
     if p.get('subtitle'): res['subtitle_raw'] = p['subtitle']
+    from abs_series import is_role_credit, role_base
+    ROLE_NAMES.update(role_base(a) for a in res['authors_raw'] if is_role_credit(a))  # learn illustrators/translators for the clean-up
     rating = p.get('rating') or {}
     def dist(name):
         d = rating.get(name) or {}
@@ -2616,6 +2622,9 @@ def process_queue(work_queue, history, failed, recheck):
                             log_updates.append(f"Narrators: -> {aud_narr}")
                     if not aud_data.get('related_edition'): note_author_links(authors, aud_data)
                     aud_auth = aud_data.get('authors_raw') or []
+                    from abs_series import is_role_credit, author_key as _ak
+                    _roles = {_ak(n) for n in ROLE_NAMES}
+                    aud_auth = [n for i, n in enumerate(aud_auth) if not is_role_credit(n) and not (i > 0 and _ak(n) in _roles)]  # only real authors
                     if aud_auth and not authors:
                         if 'lock_authors' in tags: logging.info(f"        🔒 Authors Update Skipped (Locked): {aud_auth}")
                         else:
@@ -2978,6 +2987,7 @@ def main():
         logging.info(f"Series aliases: {sum(len(v) for v in SERIES_ALIASES.values())} | Known series: {sum(len(v) for v in SERIES_INDEX.values())}")
     RESULTS.update(rw_json(RESULTS_FILE)); OVERRIDES.update(rw_json(OVERRIDES_FILE))
     COVER_STATE.update(rw_json(COVER_STATE_FILE))
+    ROLE_NAMES.update(rw_json(ROLE_NAMES_FILE) or [])
     FILLED_NARR.update(rw_json(FILLED_NARR_FILE) or [])
     try:  # also every narrator fill already in the journal (runs before this file existed)
         with open(CHANGES_FILE, encoding='utf-8') as f_:
@@ -2994,6 +3004,7 @@ def main():
         if AUTHOR_NOTES: rw_json(os.path.join(REPORT_DIR, "author_variants.json"), AUTHOR_NOTES)
         rw_json(RESULTS_FILE, RESULTS)  # also in DRY_RUN: it is the web UI's view of the last check
         if not DRY_RUN: rw_json(COVER_STATE_FILE, COVER_STATE)
+        rw_json(ROLE_NAMES_FILE, sorted(ROLE_NAMES))  # knowledge, also from dry runs
         if not DRY_RUN: rw_json(FILLED_NARR_FILE, sorted(FILLED_NARR))
 
     series_result = {}
@@ -3008,6 +3019,7 @@ def main():
                 'decisions_file': os.path.join(SCRIPT_DIR, 'merge_decisions.json'), 'merges_file': os.path.join(SCRIPT_DIR, 'merges.json'),
                 'review_file': os.path.join(SCRIPT_DIR, 'merge_review.json'),
                 'author_links': {n: sorted(a) for n, a in AUTHOR_LINKS.items()},
+                'remove_role_credits': REMOVE_ROLE_CREDITS, 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
                 'audible_series_names': set(SERIES_ASINS),
                 'extra': {'author_notes': AUTHOR_NOTES, 'unmapped_genres': UNMAPPED_GENRES},
             })

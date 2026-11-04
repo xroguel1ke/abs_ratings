@@ -34,6 +34,12 @@ def test_different_authors_are_never_merged():
     assert names(r)[0] == []
 
 
+def test_lock_series_in_the_target_blocks_merge_too():
+    r = _series('Coven Crest Academy', 'X', [1, 2]) + _series('Coven Crest Academy Series', 'X', [3, 4], 200)
+    r[2]['tags'] = {'lock_series'}
+    assert names(r)[0] == []
+
+
 def test_lock_series_blocks_merge():
     r = [rec(1, 'a', 'X', 'The Big Saga', '1'), rec(2, 'b', 'X', 'The Big Saga', '2'), rec(3, 'c', 'X', 'Big Series', '3', tags=['lock_series'])]
     assert names(r)[0] == []

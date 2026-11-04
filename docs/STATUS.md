@@ -17,12 +17,13 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [A] Phase C: full-library check incl. Hardcover cross-check | ⚠️ 60 % | Audible part done (6 real bugs found + fixed); Hardcover part open |
 | [A] Series merge / author normalisation: every planned merge hand-checked, 0 wrong | ⚠️ 85 % | 19 merges hand-checked; write + undo vs fake ABS ok; REAL test ok (ABS removes emptied series/authors, undo re-creates them with new ids) |
 | [A] Fake-ABS edge cases for series/authors (articles, Saga, Light Novel, translations, initials, two real authors) | ⚠️ | only synthetic unit tests (test_series/test_authors), no fake-ABS books |
-| [U] Synthetic series/author merge batches (real Audible series, not in the library): must-merge, must-not-merge, uncertain cases; 3 clean batches in a row | ⏳ | started 2026-11-04 |
-| [U] Unsure series/author merges on the ONE review list; review list with a left menu (books, series merge, author merge, other) | ❌ | after the synthetic merge tests |
+| [U] Synthetic series/author merge batches; 3 clean in a row | ✅ | batches 9-11 clean (56/57/58 cases incl. role credits + empty authors) |
+| [U] One review list with a left menu (books, series, authors, other) | ✅ | |
 | [new] "Other" review cases: book in a series of another author (e.g. Bury Our Bones in "The Age of Madness") | ❌ | |
-| [U] Remove empty authors (0 books) in ABS - only empty author objects, re-checked right before deleting, never books; web UI checkbox "remove empty authors" | ⏳ | building now |
-| [U] Illustrators / role credits (" - illustrator", translator, ...): never taken from Audible as authors; removed in ABS when another real author remains; web UI checkbox "remove illustrators" | ⏳ | building now (library + Audible analysed first) |
-| [U] Series merge blocked by lock_series -> on the review list (user decides) | ⏳ | |
+| [U] Remove empty authors (0 books) - re-checked before delete, never books; checkbox on the scan page + setting | ✅ | tested vs fake ABS (refuses deleting authors with books) |
+| [U] Only real authors: role credits removed / never taken from Audible; learned plain illustrators; checkbox + setting | ✅ | 26 library books cleaned in the dry run |
+| [new] Plain illustrators never seen with a suffix (e.g. only "Kurone Mishima") -> Hardcover contribution roles | ❌ | needs Hardcover quota |
+| [U] Series merge blocked by lock_series -> on the review list (user decides) | ✅ | 3 cases in the library |
 | [A] Negative cache for not-on-Audible books (re-check after ~90 days) | ⚠️ check | failed_history parks books after N attempts until REFRESH_DAYS – verify it matches the task |
 | [U] Group confirmation (same-title books of one series) | ✅ | Realms of War = Spider Queen 1-6 |
 | [U] Covers: Audible cover for verified ASINs, also replacing, backup + undo | ✅ | real ABS undo tested (byte-identical) |

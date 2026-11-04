@@ -7,6 +7,8 @@
   <label class="badge"><input type="checkbox" name="task_meta" checked> Metadaten &amp; Bewertungen</label>
   <label class="badge"><input type="checkbox" name="task_authors" {{ 'checked' if s.AUTHOR_NORMALIZE }}> Autoren vereinheitlichen</label>
   <label class="badge"><input type="checkbox" name="task_series" {{ 'checked' if s.SERIES_MERGE }}> Reihen zusammenführen</label>
+  <label class="badge" title="Illustratoren, Übersetzer, Herausgeber, Vorwort … aus dem Autorenfeld entfernen (nur wenn ein echter Autor bleibt)"><input type="checkbox" name="task_roles" {{ 'checked' if s.REMOVE_ROLE_CREDITS }}> Nur echte Autoren</label>
+  <label class="badge" title="ABS-Autoren ohne ein einziges Buch löschen"><input type="checkbox" name="task_empty" {{ 'checked' if s.REMOVE_EMPTY_AUTHORS }}> Leere Autoren entfernen</label>
   <span style="flex:1"></span>
   <label class="badge"><input type="checkbox" name="dry" id="dry" checked onchange="dryToggle()"> Testlauf (nichts schreiben)</label>
   <button class="primary" id="startbtn" {{ 'disabled' if running }}>▶ Scan starten</button>
