@@ -1,6 +1,5 @@
-{% extends 'base.html' %}{% block body %}
-<h1>Einstellungen</h1>
-<form method="post" id="sf" class="sgrid">
+{% extends 'base.html' %}{% block title %}Einstellungen{% endblock %}{% block body %}
+{% macro slug(g) %}{{ g|lower|replace(' & ', '-')|replace(' ', '-') }}{% endmacro %}
 {% macro field(key, label, ftype, default, help_) %}
  {% if ftype == 'libraries' %}
  <div class="f" style="padding:8px 0;border-bottom:1px dashed var(--line)"><b>{{ label }}</b>
@@ -17,8 +16,13 @@
   {% if help_ %}<span class="h">{{ help_ }}</span>{% endif %}</label>
  {% endif %}
 {% endmacro %}
+{% set SECS = (groups.keys()|list) + ['Zeitplan', 'Benachrichtigungen', 'Oberfläche'] %}
+<h1>Einstellungen</h1>
+<div class="slayout">
+<nav class="snav" aria-label="Bereiche">{% for g in SECS %}{% set pv = providers.get(g) %}<a href="#{{ slug(g) }}" data-sec="{{ slug(g) }}"{% if pv %} style="--pc:{{ pv[1] }}"{% endif %}>{% if pv %}<span class="dot"></span>{% endif %}{{ g }}{% if g == 'Goodreads' %} <span class="badge warn">exp.</span>{% endif %}</a>{% endfor %}</nav>
+<form method="post" id="sf" class="spanel">
 {% for group, fields in groups.items() %}{% set pv = providers.get(group) %}
-<div class="card{{ ' provider' if pv }}" {% if pv %}style="--pc:{{ pv[1] }}"{% endif %}>
+<div class="card{{ ' provider' if pv }}" data-sec="{{ slug(group) }}" {% if pv %}style="--pc:{{ pv[1] }}"{% endif %}>
  <h2 style="margin-top:0">{% if pv %}<span class="pv-icon">{{ pv[0] }}</span>{% endif %}{{ group }}{% if group == 'Goodreads' %} <span class="badge warn">experimentell</span>{% endif %}</h2>
  {% if pv %}<p class="muted small" style="margin-top:-6px">{{ pv[2] }}</p>{% endif %}
  {% for key, label, ftype, default, help_, g in fields if key not in adv %}{{ field(key, label, ftype, default, help_) }}{% endfor %}
@@ -28,28 +32,38 @@
  {% if group == 'Verbindung' %}<p class="small" id="test_abs"></p>{% elif group == 'Hardcover' %}<p class="small" id="test_hardcover"></p>{% endif %}
 </div>{% endfor %}
 
-<div class="card"><h2 style="margin-top:0">Zeitplan</h2>
+<div class="card" data-sec="zeitplan"><h2 style="margin-top:0">Zeitplan</h2>
  <label class="f"><span>Zeitplan aktiv</span><span><input type="checkbox" name="schedule_enabled" {{ 'checked' if s.schedule_enabled }}></span></label>
  <label class="f"><span>Cron-Modus</span><span><input type="checkbox" name="schedule_mode" id="cronmode" {{ 'checked' if s.schedule_mode=='cron' }} onchange="cronToggle()"></span><span class="h">Aus = Wochentage + Uhrzeit</span></label>
  <div id="simple"><div class="f" style="padding:8px 0"><b>Wochentage</b><div class="row" style="margin-top:6px">
   {% for d in ['Mo','Di','Mi','Do','Fr','Sa','So'] %}<label class="badge"><input type="checkbox" name="schedule_days" value="{{ loop.index0 }}" {{ 'checked' if loop.index0 in s.schedule_days }}> {{ d }}</label>{% endfor %}</div></div>
   <label class="f"><span>Uhrzeit</span><input type="time" name="schedule_time" value="{{ s.schedule_time }}" style="max-width:140px"></label></div>
  <div id="cron"><label class="f"><span>Cron-Ausdruck</span><span class="row"><input type="text" name="schedule_cron" id="cronexpr" value="{{ s.schedule_cron }}" style="max-width:220px"><button type="button" onclick="test('cron')">Prüfen</button></span><span class="h">Minute Stunde Tag Monat Wochentag, z.B. <code>30 2 * * *</code> = täglich 02:30</span></label><p class="small" id="test_cron"></p></div>
- <p class="muted small">Nächster Lauf: {{ next_run|dt if next_run else '–' }} (nach dem Speichern aktualisiert). Geplante Läufe verwenden die Einstellung „Testlauf“ oben.</p>
+ <p class="muted small">Nächster Lauf: {{ next_run|dt if next_run else '–' }} (nach dem Speichern aktualisiert). Geplante Läufe verwenden die Einstellung „Testlauf“ unter Lauf.</p>
 </div>
 
-<div class="card"><h2 style="margin-top:0">Benachrichtigungen</h2>
+<div class="card" data-sec="benachrichtigungen"><h2 style="margin-top:0">Benachrichtigungen</h2>
  <label class="f"><span>Apprise-URL</span><span class="row"><input type="text" name="apprise_url" id="apprise_url" value="{{ s.apprise_url }}" placeholder="z.B. ntfy://ntfy.sh/mein-topic oder discord://webhook_id/token" style="flex:1"><button type="button" onclick="test('notify')">Testen</button></span>
  <span class="h">Leer = aus. Unterstützt ntfy, Discord, Telegram, Gotify, E-Mail u.v.m. (<a href="https://github.com/caronc/apprise/wiki" target="_blank">Formate</a>)</span></label>
  <label class="f"><span>Benachrichtigen bei</span><select name="notify_on"><option value="errors" {{ 'selected' if s.notify_on=='errors' }}>nur Fehlern</option><option value="always" {{ 'selected' if s.notify_on=='always' }}>jedem Lauf</option></select></label>
  <p class="small" id="test_notify"></p>
 </div>
-<div class="card"><h2 style="margin-top:0">Oberfläche</h2>
+<div class="card" data-sec="oberfläche"><h2 style="margin-top:0">Oberfläche</h2>
  <div class="row"><button type="button" onclick="window.ABSTour && ABSTour.start()">Einführungstour neu starten</button>
  <span class="muted small">Design (hell / dunkel / automatisch) wechselst du oben rechts mit ◐.</span></div>
 </div>
-<p><button class="primary">Speichern</button></p></form>
+<p class="savebar"><button class="primary">Speichern</button> <span class="muted small">speichert alle Bereiche</span></p></form>
+</div>
 <script>
+(function(){
+ const cards=[...document.querySelectorAll('.spanel > .card[data-sec]')], links=[...document.querySelectorAll('.snav a')];
+ function show(id){ if(!cards.some(c=>c.dataset.sec===id)) id=cards[0].dataset.sec;
+  cards.forEach(c=>c.classList.toggle('on', c.dataset.sec===id)); links.forEach(a=>a.classList.toggle('active', a.dataset.sec===id));
+  try{ localStorage.setItem('abs_settings_sec', id); }catch(e){} }
+ links.forEach(a=>a.addEventListener('click', e=>{ e.preventDefault(); history.replaceState(null, '', '#'+a.dataset.sec); show(a.dataset.sec); }));
+ let start=decodeURIComponent(location.hash.slice(1)); if(!start){ try{ start=localStorage.getItem('abs_settings_sec')||''; }catch(e){} }
+ show(start);
+})();
 function cronToggle(){ const c=document.getElementById('cronmode').checked; document.getElementById('cron').style.display=c?'':'none'; document.getElementById('simple').style.display=c?'none':''; }
 cronToggle();
 async function test(what){ const fd=new FormData(); const out=document.getElementById('test_'+what); out.textContent='…';

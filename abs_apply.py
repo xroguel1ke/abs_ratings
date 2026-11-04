@@ -38,13 +38,17 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--run', required=True, help='id of the dry run')
     ap.add_argument('--keys', default='', help='only these item keys (comma separated)')
+    ap.add_argument('--select', default='', help='JSON file with the line numbers (0-based) of the planned changes to apply (web UI checkboxes)')
     ap.add_argument('--apply', action='store_true', help='really write (default: report only)')
     a = ap.parse_args()
     A.DRY_RUN = not a.apply
     A.setup_logging()
     path = os.path.join(A.REPORT_DIR, f"planned_changes_{a.run}.jsonl")
     if not os.path.exists(path): logging.error(f"No planned changes for run {a.run} ({path})"); return 2
-    plan = [json.loads(l) for l in open(path, encoding='utf-8') if l.strip()]
+    plan = [dict(json.loads(l), _n=n) for n, l in enumerate(open(path, encoding='utf-8')) if l.strip()]
+    if a.select:
+        sel = set(json.load(open(a.select, encoding='utf-8')))
+        plan = [e for e in plan if e['_n'] in sel]
     only = {k for k in a.keys.split(',') if k}
     if only: plan = [e for e in plan if e.get('key') in only]
     logging.info(f"{'APPLY' if a.apply else 'CHECK (nothing written)'} dry run {a.run}: {len(plan)} planned changes, {len({e['item'] for e in plan})} books")
