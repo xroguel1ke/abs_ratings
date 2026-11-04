@@ -1,17 +1,74 @@
-# Status (live)
+# Status (live) – single source for ALL open items
 
-Updated: 2026-11-03 22:45 – counting batch A1 evaluated (not clean; first run with synthetic books: 80/80 after 3 fixes), A2 running – overall progress: ~33 % (0 % = before the task, 100 % = stop criterion of phase C met; measured against the 20-30 h plan; now 4 clean batches of 100+80 needed)
-Next step: round 7 (audible-only) now; tomorrow Hardcover-focused tests + Goodreads single-request probe; then synthetic fake-ABS books, more web UI points.
+Updated: 2026-11-04 17:00 – Audible matching done (chain 5 clean, whole library in golden), pilot on 30 real books verified,
+web UI design/settings/history/undo/apply done. Overall ≈ 70 %.
+Next: Hardcover counting batches (daily limit renews), web UI items 1/4/5/7/13/14, Phase C remainder, final report.
+Rule: update this file after every batch/chain and whenever an item changes (task requirement). Items come from the task
+(`/mnt/user/appdata/abs_prompt_matching_loop.md`) [A] and from user requests in chat [U].
 
-| Area | % | Note |
+Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
+
+## Matching & data
+| Item | State | Note |
 |---|---|---|
-| Matching Audible (ASIN repair/search) | 80 | 200/200 golden; Hardcover-ASIN + series-listing + exact-runtime paths added; plausibility audit pending |
-| Metadata (series, narrators, genres, ...) | 70 | box-set series number bug found |
-| Hardcover | 80 | 1797 hits in full run; not yet cross-checked against Audible |
-| Goodreads (experimental) | 40 | off in tests; GOODREADS_SAMPLE not implemented |
-| Series merge / author normalize | 60 | not yet reviewed in this loop |
-| Safety (DRY_RUN, undo, lock tags, review queue) | 65 | multi-evidence gate + review_queue.json (no UI page yet) |
-| Speed / rate limits | 70 | full run ~2h15m |
-| Test infrastructure | 60 | record/replay (19 s per 100 books), golden 200, evaluate.py, fake ABS from snapshot; synthetic books + pytest missing |
-| Web UI (10 points) | 0 | not started in this loop |
-| Container / build / docs | 80 | :matching-loop image added to workflow |
+| [A] Audible matching (ASIN repair/search, store, other edition, language, titles) | ✅ 100 % | 4 clean chains of 180 fresh books (100 EN + 80 DE), 0 wrong matches ever; whole library 1904/1906 existing books correct (99.9 %) |
+| [A] Hardcover matching + cross-check against Audible | ⏳ 70 % | streak 0 of 3 with the final mix (H10 clean, then fixes reset it); daily limit; every HC hit auto cross-checked |
+| [A] Phase C: 3 rounds with EVERY Hardcover hit hand-checked | ❌ | needs Hardcover quota |
+| [A] Phase C: full-library check incl. Hardcover cross-check | ⚠️ 60 % | Audible part done (6 real bugs found + fixed); Hardcover part open |
+| [A] Series merge / author normalisation: every planned merge hand-checked, 0 wrong | ⚠️ 60 % | decisions = hand-verified baseline (lib_check, 14 merges, 5 author fixes); NOT re-reviewed in this loop; WRITE path never tested (not even fake) |
+| [A] Fake-ABS edge cases for series/authors (articles, Saga, Light Novel, translations, initials, two real authors) | ⚠️ | only synthetic unit tests (test_series/test_authors), no fake-ABS books |
+| [A] Negative cache for not-on-Audible books (re-check after ~90 days) | ⚠️ check | failed_history parks books after N attempts until REFRESH_DAYS – verify it matches the task |
+| [U] Group confirmation (same-title books of one series) | ✅ | Realms of War = Spider Queen 1-6 |
+| [U] Covers: Audible cover for verified ASINs, also replacing, backup + undo | ✅ | real ABS undo tested (byte-identical) |
+| [U] ISBN = print edition (HC/Goodreads), Audible audio ISBN last fallback, ASIN never | ⚠️ 80 % | built + offline tested; live test with Hardcover open; then re-measure the 636 ISBN review entries |
+| [U] Description update when ABS text is truncated/very short and Audible's is clearly complete | ❌ | |
+| [U] Narrator == author hygiene (remove the wrong ABS narrator) | ❌ | search already ignores it |
+| [U] Duplicate books report (same recording twice) in the UI | ❌ | data exists (library_report duplicate_recordings) |
+| [U] Build-up / maintenance mode (~30 random books per day) + change monitoring (respect manual edits) | ❌ | |
+| [U] Lock feature kept but de-emphasised; lock report | ⚠️ | locks respected everywhere; no report/UI |
+| [U] Safe parallelism experiments (never >1 request per host) | ❌ | |
+
+## Goodreads (experimental)
+| Item | State | Note |
+|---|---|---|
+| [A] Sparse sampling (GOODREADS_SAMPLE), stop at first block, never bypass | ✅ | |
+| [U] Hardcover Goodreads-ID path first | ✅ | correct 5/5; /book/show may be guarded more strictly than search |
+| [U] Limit measurement until a reliable requests/hour + per night value | ⏳ | test 4 blocked after ~3 pages; test 5 (search only) scheduled |
+| [U] Open Library fallback for the Goodreads ID / ISBN | ❌ | measure first |
+| [U] Production rhythm (≈25 per night?) | ❌ | after the measurements |
+
+## Safety & tests
+| Item | State | Note |
+|---|---|---|
+| [A] DRY_RUN default, journal for every write, undo | ✅ | |
+| [A] Real write + undo end-to-end against the fake ABS | ✅ | + real pilot on 30 books (user OK) |
+| [A] ABS backup before real runs | ✅ | run stops when it fails (user's ABS max backup size fixed) |
+| [A] Golden list + record/replay + evaluate + regress gate | ✅ | whole library + all synthetic batches |
+| [A] pytest suite | ❌ | tests are scripts run by tools/regress.sh, not bundled as pytest |
+| [A] Review list small, only real doubt cases | ❌ | 636 ISBN entries (re-measure after print-ISBN logic) |
+| [U] Review list: accept for ISBN and title kinds | ❌ | only ASIN accept works |
+
+## Web UI (task: 10 points, Playwright vs fake ABS, screenshots in docs/screenshots/)
+| # | Item | State | Note |
+|---|---|---|---|
+| 1 | Start dialog with per-run settings (books, refresh days, sources, selection all / problems / new / list) | ❌ | |
+| 3 | Live progress (bar, ETA, book, counters) | ✅ | |
+| 4 | Apply dry run: grouped by kind, filterable, checkboxes, no new Audible requests | ⚠️ 60 % | apply all + conflict check done; selection page in progress |
+| 5 | Mark suspicious changes (title, ASIN change, language, new series, other edition) on top | ❌ | part of the selection page |
+| 6 | Search over all books + test/real run per book | ✅ | |
+| 7 | Comparison ABS ↔ Audible ↔ Hardcover + planned change | ⚠️ 70 % | Hardcover column missing |
+| 8 | Reasoning per match (title, author, runtime, narrator, number, source) | ⚠️ 90 % | source (ASIN/ISBN/search) as own field missing |
+| 11 | Change history with undo per change / book / run | ✅ | |
+| 13 | Coverage statistics incl. ratings + Hardcover + trend over time | ⚠️ 50 % | publisher/year/ISBN/series added; ratings, Hardcover, trend missing |
+| 14 | Hardcover / API status: used/left today, cache size, reset time | ⚠️ 70 % | reset time missing |
+| – | Review list page | ✅ | see accept gap above |
+| – | [U] Design (Material light/dark), onboarding tour, settings with left sections + save per section, confirm dialog | ✅ | |
+| – | Screenshots in docs/screenshots/ (no private titles, public repo) | ⚠️ | settings only |
+
+## Finish (Phase C end)
+| Item | State |
+|---|---|
+| README for the new UI functions | ❌ |
+| Change overview for a later merge (to web-ui/main) | ❌ |
+| Final report in LOOP_LOG + to the user (numbers, changes, limits, first-run recommendation) | ❌ |
+| CLAUDE.md / ROADMAP.md up to date with all learned rules | ⚠️ |
