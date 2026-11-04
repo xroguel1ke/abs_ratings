@@ -100,3 +100,4 @@ header{position:sticky}.nav{position:relative}
 .modal h3{margin:0 0 8px;font-size:1.1em}.modal p{margin:0 0 18px;white-space:pre-line}
 button.danger-fill{background:var(--err);border-color:var(--err);color:#fff}
 @keyframes fade{from{opacity:0}to{opacity:1}}
+tr.risky td{background:color-mix(in srgb,var(--warn) 9%,transparent)}

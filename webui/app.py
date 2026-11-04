@@ -165,6 +165,11 @@ def run_apply(run_id):
 
 
 RISKY = {'asin': 'ASIN', 'title': 'Titel', 'language': 'Sprache', 'series': 'Reihe', 'authors': 'Autoren', 'isbn': 'ISBN'}
+LANG_CODES = {'eng': 'english', 'en': 'english', 'ger': 'german', 'deu': 'german', 'de': 'german', 'fre': 'french', 'fra': 'french', 'fr': 'french',
+              'spa': 'spanish', 'es': 'spanish', 'ita': 'italian', 'it': 'italian', 'jpn': 'japanese', 'ja': 'japanese'}
+
+
+def _lang(v): v = str(v or '').strip().lower(); return LANG_CODES.get(v, v)
 
 
 @app.route('/run/<run_id>/review')
@@ -182,6 +187,7 @@ def run_review(run_id):
                 e = json.loads(l); e['n'] = n
                 # risky = can change WHICH book the entry points to or what it is called (CLAUDE.md "riskant")
                 e['risky'] = e['field'] in RISKY and not (e['field'] == 'isbn' and not e.get('old')) and not (e['field'] == 'series' and e.get('old'))
+                if e['field'] == 'language': e['risky'] = bool(e.get('old')) and _lang(e.get('old')) != _lang(e.get('new'))  # 'eng' -> 'English' is no change
                 if (q and q not in (e.get('title') or '').lower()) or (only and e['field'] != only): continue
                 plan.append(e)
     except OSError: abort(404)

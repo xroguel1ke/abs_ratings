@@ -11,6 +11,7 @@
 {% if run.summary %}<div class="card small">{{ run.summary }}</div>{% endif %}
 {% if run.dry_run and run.kind in ('full', 'item') and run.status != 'running' and changes %}
 <div class="card"><h2 style="margin-top:0">Diesen Testlauf übernehmen</h2>
+ <p><a class="btn primary" href="{{ url_for('run_review', run_id=run.id) }}">Änderungen prüfen und auswählen →</a> <span class="muted small">gruppiert, riskante zuerst, mit Häkchen</span></p>
  <p class="small">Schreibt genau die {{ changes|length }} geplanten Änderungen in ABS – aber nur dort, wo der ABS-Wert noch derselbe ist wie beim Testlauf. Wurde ein Buch inzwischen geändert (von dir oder einem anderen Lauf) oder gesperrt, wird diese Änderung übersprungen und im Log genannt. Vorher wird ein ABS-Backup angelegt (falls eingestellt); alles erscheint danach unter <a href="{{ url_for('history') }}">Verlauf</a> und lässt sich rückgängig machen.</p>
  <div class="row"><form method="post" action="{{ url_for('run_apply', run_id=run.id) }}"><input type="hidden" name="mode" value="check"><button>Erst prüfen (nichts schreiben)</button></form>
  <form method="post" action="{{ url_for('run_apply', run_id=run.id) }}" data-confirm="{{ changes|length }} Änderungen jetzt wirklich in ABS schreiben?"><input type="hidden" name="mode" value="apply"><button class="primary">Übernehmen</button></form></div>
