@@ -143,6 +143,19 @@ def problem(key):
     return render_template('problem.html', key=key, r=res, ov=ov, changes=core.book_changes(key))
 
 
+@app.route('/run/<run_id>/apply', methods=['POST'])
+@login_required
+def run_apply(run_id):
+    """Apply the planned changes of a dry run: 'check' only compares with ABS, 'apply' writes (abs_apply.py)."""
+    run = core.RUNNER.get(run_id) or abort(404)
+    if not run.get('dry_run') or run.get('kind') not in ('full', 'item') or not re.fullmatch(r'[\w-]+', run_id): abort(400)
+    really = request.form.get('mode') == 'apply'
+    args = ['--run', run_id] + (['--apply'] if really else [])
+    new_id, err = core.RUNNER.start('apply', undo_args=args, label=f"{'Testlauf übernehmen' if really else 'Testlauf prüfen'}: {run.get('label')} ({run_id})")
+    if err: flash(err, 'error'); return redirect(url_for('run_view', run_id=run_id))
+    return redirect(url_for('run_view', run_id=new_id))
+
+
 @app.route('/history')
 @login_required
 def history():

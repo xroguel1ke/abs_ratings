@@ -9,6 +9,12 @@
 <div style="background:var(--line);border-radius:8px;height:12px;margin:8px 0"><div id="pb" style="height:12px;border-radius:8px;width:0;background:var(--ok);transition:width .6s"></div></div>
 <div class="row small" id="pc" style="gap:16px;flex-wrap:wrap"></div></div>{% endif %}
 {% if run.summary %}<div class="card small">{{ run.summary }}</div>{% endif %}
+{% if run.dry_run and run.kind in ('full', 'item') and run.status != 'running' and changes %}
+<div class="card"><h2 style="margin-top:0">Diesen Testlauf übernehmen</h2>
+ <p class="small">Schreibt genau die {{ changes|length }} geplanten Änderungen in ABS – aber nur dort, wo der ABS-Wert noch derselbe ist wie beim Testlauf. Wurde ein Buch inzwischen geändert (von dir oder einem anderen Lauf) oder gesperrt, wird diese Änderung übersprungen und im Log genannt. Vorher wird ein ABS-Backup angelegt (falls eingestellt); alles erscheint danach unter <a href="{{ url_for('history') }}">Verlauf</a> und lässt sich rückgängig machen.</p>
+ <div class="row"><form method="post" action="{{ url_for('run_apply', run_id=run.id) }}"><input type="hidden" name="mode" value="check"><button>Erst prüfen (nichts schreiben)</button></form>
+ <form method="post" action="{{ url_for('run_apply', run_id=run.id) }}" onsubmit="return confirm('{{ changes|length }} Änderungen jetzt wirklich in ABS schreiben?')"><input type="hidden" name="mode" value="apply"><button class="primary">Übernehmen</button></form></div>
+</div>{% endif %}
 {% if run.status != 'running' %}<div class="card tablewrap"><h2 style="margin-top:0">{{ 'Geplante' if run.dry_run else 'Durchgeführte' }} Änderungen ({{ changes|length }})</h2>
 <table class="diff"><tr><th>Buch</th><th>Feld</th><th>Vorher</th><th>Nachher</th></tr>
 {% for c in changes[:500] %}<tr><td>{{ c.title }}<div class="muted small">{{ c.source }}</div></td><td>{{ c.field }}</td>

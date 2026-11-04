@@ -194,7 +194,7 @@ def parse_env_summary():
     return out
 
 
-KIND_LABELS = {'full': 'Lauf', 'series': 'Nur Reihen & Report', 'item': 'Einzelbuch', 'undo': 'Rückgängig'}
+KIND_LABELS = {'full': 'Lauf', 'series': 'Nur Reihen & Report', 'item': 'Einzelbuch', 'undo': 'Rückgängig', 'apply': 'Testlauf übernehmen'}
 
 
 class RunManager:
@@ -223,6 +223,7 @@ class RunManager:
             if not s.get('ABS_URL') or not s.get('API_TOKEN'): return None, 'ABS-URL und Token fehlen (Einstellungen).'
             run_id = datetime.now().strftime('%Y%m%d-%H%M%S')
             dry = s['DRY_RUN'] if dry_run is None else dry_run
+            if kind == 'apply': dry = False
             extra = {'RUN_ID': run_id, 'DRY_RUN': 'true' if dry else 'false'}
             if kind == 'series': extra['SERIES_ONLY'] = 'true'
             if kind == 'item': extra['ONLY_ITEMS'] = ','.join(only_items or [])
@@ -231,6 +232,10 @@ class RunManager:
             if kind == 'undo':
                 cmd = [sys.executable, '-u', os.path.join(APP_DIR, 'abs_undo.py')] + list(undo_args or [])
                 log_path = os.path.join(LOG_DIR, f"undo_{run_id}.log")
+            elif kind == 'apply':  # apply a dry run (abs_apply.py checks every value against ABS before writing)
+                env['DRY_RUN'] = 'false'
+                cmd = [sys.executable, '-u', os.path.join(APP_DIR, 'abs_apply.py')] + list(undo_args or [])
+                log_path = os.path.join(LOG_DIR, f"run_{run_id}.log")
             else:
                 cmd = [sys.executable, '-u', os.path.join(APP_DIR, 'abs_ratings.py')]
                 log_path = os.path.join(LOG_DIR, f"run_{run_id}.log")
