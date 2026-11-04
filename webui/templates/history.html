@@ -1,0 +1,11 @@
+{% extends 'base.html' %}{% block title %}Verlauf{% endblock %}{% block body %}
+{% set FL = {'asin': 'ASIN', 'title': 'Titel', 'subtitle': 'Untertitel', 'description': 'Beschreibung', 'genres': 'Genres', 'cover': 'Cover', 'language': 'Sprache', 'publisher': 'Verlag', 'publishedYear': 'Jahr', 'narrators': 'Sprecher', 'authors': 'Autoren', 'series': 'Reihe', 'isbn': 'ISBN', 'explicit': 'Explicit', 'abridged': 'Gekürzt', 'tags': 'Tags'} %}
+<h1>Verlauf</h1>
+<p class="muted small">Alle Änderungen, die wirklich in ABS geschrieben wurden (Testläufe erscheinen hier nicht, die stehen unter <a href="{{ url_for('runs') }}">Läufe</a>). Jede Änderung lässt sich einzeln, pro Buch oder für den ganzen Lauf rückgängig machen; ersetzte Cover werden aus der Sicherung wiederhergestellt.</p>
+<div class="card tablewrap"><table><tr><th>Lauf</th><th>Bücher</th><th>Änderungen</th><th>Felder</th><th>Rückgängig</th></tr>
+{% for r in runs %}<tr><td><a href="{{ url_for('history_run', run_id=r.run) }}">{{ r.start|dt }}</a><div class="muted small">{{ r.run }}</div></td>
+<td>{{ r.books }}</td><td>{{ r.changes }}</td>
+<td class="small">{% for f, n in r.fields|dictsort %}<span class="badge">{{ FL.get(f, f) }} {{ n }}</span> {% endfor %}</td>
+<td>{% if r.undone == r.changes %}<span class="badge warn">alles</span>{% elif r.undone %}<span class="badge warn">{{ r.undone }}</span>{% else %}<span class="muted">–</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">Noch nichts in ABS geschrieben.</td></tr>{% endfor %}</table></div>
+{% endblock %}

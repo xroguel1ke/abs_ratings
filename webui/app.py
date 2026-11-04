@@ -1,5 +1,5 @@
 """ABS Ratings web UI (Flask). Start: python -m webui.app (port 47823, data folder /config)."""
-import os, functools
+import os, re, functools
 from collections import Counter
 from datetime import datetime
 
@@ -141,6 +141,35 @@ def problem(key):
         if err: flash(err, 'error'); return redirect(url_for('problem', key=key))
         return redirect(url_for('run_view', run_id=run_id, back=key))
     return render_template('problem.html', key=key, r=res, ov=ov, changes=core.book_changes(key))
+
+
+@app.route('/history')
+@login_required
+def history():
+    return render_template('history.html', runs=core.history())
+
+
+@app.route('/history/<run_id>')
+@login_required
+def history_run(run_id):
+    q, field = request.args.get('q', ''), request.args.get('field', '')
+    entries = core.history_entries(run_id, q, field)
+    fields = sorted({e.get('field') for e in core.history_entries(run_id)})
+    return render_template('history_run.html', run_id=run_id, entries=entries, q=q, field=field, fields=fields)
+
+
+@app.route('/history/<run_id>/undo', methods=['POST'])
+@login_required
+def history_undo(run_id):
+    """Undo a whole run, one book of it, or one field of one book - always through abs_undo.py (journaled in undone.jsonl)."""
+    item, field = request.form.get('item', ''), request.form.get('field', '')
+    if not re.fullmatch(r'[\w-]+', run_id) or (item and not re.fullmatch(r'[\w-]+', item)) or (field and not re.fullmatch(r'\w+', field)):
+        abort(400)
+    args = ['--run', run_id] + (['--item', item] if item else []) + (['--field', field] if field else []) + ['--apply']
+    what = request.form.get('label') or ('ganzer Lauf ' + run_id)
+    run_id_u, err = core.RUNNER.start('undo', undo_args=args, label=f"Rückgängig: {what}")
+    if err: flash(err, 'error'); return redirect(url_for('history_run', run_id=run_id))
+    return redirect(url_for('run_view', run_id=run_id_u))
 
 
 @app.route('/merged/<path:mid>/<action>', methods=['POST'])

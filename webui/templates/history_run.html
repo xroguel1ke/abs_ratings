@@ -1,0 +1,24 @@
+{% extends 'base.html' %}{% block title %}Verlauf {{ run_id }}{% endblock %}{% block body %}
+{% set FL = {'asin': 'ASIN', 'title': 'Titel', 'subtitle': 'Untertitel', 'description': 'Beschreibung', 'genres': 'Genres', 'cover': 'Cover', 'language': 'Sprache', 'publisher': 'Verlag', 'publishedYear': 'Jahr', 'narrators': 'Sprecher', 'authors': 'Autoren', 'series': 'Reihe', 'isbn': 'ISBN', 'explicit': 'Explicit', 'abridged': 'Gekürzt', 'tags': 'Tags'} %}
+<p><a href="{{ url_for('history') }}">← Verlauf</a></p>
+<h1>Lauf {{ run_id }}</h1>
+<form class="card row" method="get">
+ <input type="search" name="q" value="{{ q }}" placeholder="Buch filtern" style="flex:2 1 220px">
+ <select name="field" style="flex:1 1 160px"><option value="">alle Felder</option>{% for f in fields %}<option value="{{ f }}" {{ 'selected' if f == field }}>{{ FL.get(f, f) }}</option>{% endfor %}</select>
+ <button class="primary">Filtern</button>
+</form>
+<form method="post" action="{{ url_for('history_undo', run_id=run_id) }}" onsubmit="return confirm('Den GANZEN Lauf rückgängig machen? Alle {{ entries|rejectattr('undone')|list|length }} noch aktiven Änderungen werden in ABS zurückgesetzt.')" style="margin-bottom:14px">
+ <input type="hidden" name="label" value="ganzer Lauf {{ run_id }}"><button class="danger" {{ 'disabled' if q or field }}>↶ Ganzen Lauf rückgängig</button>
+ {% if q or field %}<span class="muted small">(ohne Filter verfügbar)</span>{% endif %}
+</form>
+<div class="card tablewrap"><table class="diff"><tr><th>Buch</th><th>Feld</th><th>Alt</th><th>Neu</th><th></th></tr>
+{% for e in entries %}<tr>
+<td><a href="{{ url_for('problem', key=e.key) }}">{{ e.title }}</a></td><td>{{ FL.get(e.field, e.field) }}</td>
+<td class="small">{% if e.field == 'description' %}<span class="muted">{{ (e.old or '')|length }} Zeichen</span>{% elif e.field == 'cover' %}<span class="muted">{{ 'Sicherung vorhanden' if e.old else 'kein Cover' }}</span>{% else %}{{ e.old if e.old is not none else '–' }}{% endif %}</td>
+<td class="small">{% if e.field == 'description' %}{{ (e.new or '')|length }} Zeichen{% elif e.field == 'cover' %}<a href="{{ e.new }}" target="_blank">Bild ↗</a>{% else %}{{ e.new }}{% endif %}</td>
+<td class="row" style="flex-wrap:nowrap">{% if e.undone %}<span class="badge warn">rückgängig</span>{% else %}
+ <form method="post" action="{{ url_for('history_undo', run_id=run_id) }}" onsubmit="return confirm('Diese Änderung rückgängig machen?')"><input type="hidden" name="item" value="{{ e.item }}"><input type="hidden" name="field" value="{{ e.field }}"><input type="hidden" name="label" value="{{ e.title }}: {{ FL.get(e.field, e.field) }}"><button title="nur dieses Feld">↶ Feld</button></form>
+ <form method="post" action="{{ url_for('history_undo', run_id=run_id) }}" onsubmit="return confirm('Alle Änderungen dieses Buches in diesem Lauf rückgängig machen?')"><input type="hidden" name="item" value="{{ e.item }}"><input type="hidden" name="label" value="{{ e.title }} (ganzes Buch)"><button title="alle Felder dieses Buches">↶ Buch</button></form>
+{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">Keine Änderungen{{ ' für diesen Filter' if q or field }}.</td></tr>{% endfor %}</table></div>
+{% endblock %}

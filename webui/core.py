@@ -410,6 +410,51 @@ def remove_alias(lib, member):
         if a.get(lib, {}).pop(member, None) is not None: _save_json(path, a)
 
 
+def _undone_ids():
+    try:
+        with open(os.path.join(CONFIG_DIR, 'undone.jsonl'), encoding='utf-8') as f:
+            return {json.loads(l).get('id') for l in f if l.strip()}
+    except (OSError, ValueError): return set()
+
+
+def entry_id(e): return f"{e.get('run')}|{e.get('item')}|{e.get('field')}|{e.get('ts')}"  # same id as abs_undo.py
+
+
+def history():
+    """Applied changes (changes.jsonl) grouped by run, newest first: [{run, start, end, changes, books, undone, fields{field: n}}]."""
+    undone, runs = _undone_ids(), {}
+    try:
+        with open(os.path.join(CONFIG_DIR, 'changes.jsonl'), encoding='utf-8') as f:
+            for l in f:
+                try: e = json.loads(l)
+                except ValueError: continue
+                r = runs.setdefault(e.get('run'), {'run': e.get('run'), 'start': e.get('ts'), 'end': e.get('ts'), 'changes': 0, 'books': set(), 'undone': 0, 'fields': {}})
+                r['changes'] += 1; r['books'].add(e.get('item')); r['undone'] += entry_id(e) in undone
+                r['fields'][e.get('field')] = r['fields'].get(e.get('field'), 0) + 1
+                r['start'], r['end'] = min(r['start'] or '', e.get('ts') or ''), max(r['end'] or '', e.get('ts') or '')
+    except OSError: pass
+    out = sorted(runs.values(), key=lambda r: r['start'] or '', reverse=True)
+    for r in out: r['books'] = len(r['books'])
+    return out
+
+
+def history_entries(run_id, q='', field=''):
+    """Applied changes of one run with undo state, optionally filtered by book title and field."""
+    undone, out = _undone_ids(), []
+    try:
+        with open(os.path.join(CONFIG_DIR, 'changes.jsonl'), encoding='utf-8') as f:
+            for l in f:
+                if f'"run": "{run_id}"' not in l: continue
+                try: e = json.loads(l)
+                except ValueError: continue
+                if q and q.lower() not in (e.get('title') or '').lower(): continue
+                if field and e.get('field') != field: continue
+                e['undone'] = entry_id(e) in undone
+                out.append(e)
+    except OSError: pass
+    return out
+
+
 def book_changes(key, limit=200):
     """All journal entries of one book: applied changes (changes.jsonl, with undo state) + the newest planned-changes file."""
     out, undone = [], set()
