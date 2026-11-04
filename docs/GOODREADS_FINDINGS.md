@@ -35,3 +35,5 @@ Promise of Blood 4.13 (66,533), Rise of the Living Forge 5 4.67 (970), The Shado
 Next steps (carefully): 15 books at 45-60 s, later one small sample per run (≈25/night was fine for 13 days). The block of 20:40 lifted within ≤ 2 h 23 min.
 
 ## Test 4 (2026-11-04 13:58): 15 library books, Hardcover-ID path first, 60 s interval, only Goodreads live (Audible/Hardcover from recordings), stop at the first block
+Result: 13:58:57 1st page ok (Have Sword, Will Travel 3.76/1270, correct); ~2-3 live /book/show/ requests at 60 s, then 14:01:54 WAF bot challenge (HTTP 202) -> Goodreads stopped for the run (as designed). No Goodreads traffic since test 3 (23:15 yesterday, 6 ok).
+Hypothesis: /book/show/ pages (Hardcover-ID path) are guarded more strictly than /search (the user's nightly runs with 25-30 mostly-search requests ran 13 days without a block). Next probe >= 16:30: search path only (GR_TRIES=0), few books, 60 s.
