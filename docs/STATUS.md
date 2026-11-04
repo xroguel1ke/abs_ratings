@@ -36,6 +36,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [U] Limit measurement until a reliable requests/hour + per night value | ⏳ | test 4: blocked after ~3 book pages; test 5: 6 books via search ok, block on the 7th BOOK page |
 | [U] Open Library fallback for the Goodreads ID / ISBN | ❌ | measure first |
 | [new] Rating from the Goodreads SEARCH result row (no /book/show page) | ❌ | test 5: search pages pass, book pages get blocked |
+| [new] Rating from the Goodreads SEARCH result row (no /book/show page) | ❌ | test 5: search pages pass, book pages get blocked |
 | [U] Production rhythm (≈25 per night?) | ❌ | after the measurements |
 
 ## Safety & tests
