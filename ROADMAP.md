@@ -106,3 +106,6 @@ Today: description filled only when empty (rating block aside). New: replace the
 (a) the ABS text is a prefix / truncated part of Audible's text, or (b) it is very short (< 30 % of Audible's length and < 300 characters).
 Never when `lock_description` is set; journaled old -> new (undo); rating block stays on top. A long self-written description is never replaced. Tests: truncated -> replaced, own long text -> kept, locked -> kept.
 Rating blocks (already so): per source, new ratings replace the old block of that source; if a source finds nothing this run, the old block of that source is kept.
+
+- [ ] Goodreads fallback without search (user idea 2026-11-04): when Hardcover has no Goodreads ID, ask Open Library (search by title+author, verified) for the Goodreads ID (identifiers.goodreads) or an ISBN -> /book/show/<id> or /book/isbn/<isbn> = 1 Goodreads request instead of 2. First measure how many Hardcover gaps Open Library fills; title/author verification on the Goodreads page as today.
+- [ ] Goodreads limit measurements continue in parallel (own host) until a reliable requests/hour and requests/night value exists (docs/GOODREADS_FINDINGS.md).

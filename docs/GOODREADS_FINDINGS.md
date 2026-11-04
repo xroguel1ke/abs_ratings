@@ -33,3 +33,5 @@ The block that started ~20:40 (test 1) was lifted within <= 2 h 23 min (probe 2 
 ## Test 3 result (2026-11-03 23:05-23:15): 6 books via Hardcover IDs, 60 s interval, NO block; 5 pages read, all correct
 Promise of Blood 4.13 (66,533), Rise of the Living Forge 5 4.67 (970), The Shadow of the Gods 4.17 (121,428), In the Labyrinth of Drakes 4.39 (10,020), Death's End 4.40 (190,322). Title/author verification passed every time (title score ≥ 0.81).
 Next steps (carefully): 15 books at 45-60 s, later one small sample per run (≈25/night was fine for 13 days). The block of 20:40 lifted within ≤ 2 h 23 min.
+
+## Test 4 (2026-11-04 13:58): 15 library books, Hardcover-ID path first, 60 s interval, only Goodreads live (Audible/Hardcover from recordings), stop at the first block
