@@ -133,7 +133,29 @@ def name_relation(a, b):
     return None
 
 
-UNCERTAIN = ('not enough numbered books', "numbers don't complement", 'matches more than one series')
+LOOSE_NAME_RATIO = 0.8  # names this similar (or one inside the other) merge only with interleaving book numbers
+
+
+def loosely_similar(a, b):
+    """Names that are only loosely alike: ratio >= 0.8 or all words of one inside the other ('Realm Saga' / 'The Realm')."""
+    if not a.key or not b.key: return False
+    wa, wb = set(a.key.split()), set(b.key.split())
+    if (wa <= wb or wb <= wa) and max(len(w) for w in (wa & wb or {''})) >= 4: return True
+    return difflib.SequenceMatcher(None, a.key, b.key).ratio() >= LOOSE_NAME_RATIO
+
+
+def interleaved(g_seqs, c_seqs):
+    """Strong evidence for one series (user rule 2026-11-04): both sides have >= 2 numbers, together they form ONE gapless run, and the
+    sides alternate at least twice (1-3,7-8,10 | 4-6,9,11-13). Whole numbers only."""
+    g = {int(x) for x in g_seqs if float(x).is_integer()}; c = {int(x) for x in c_seqs if float(x).is_integer()}
+    if len(g) < 2 or len(c) < 2 or g & c: return False
+    u = sorted(g | c)
+    if u[-1] - u[0] + 1 != len(u): return False
+    side = ['g' if x in g else 'c' for x in u]
+    return sum(1 for i in range(1, len(side)) if side[i] != side[i - 1]) >= 2
+
+
+UNCERTAIN = ('not enough numbered books', "numbers don't complement", 'matches more than one series', "numbers don't interleave")
 
 def merge_id(kind, lib, member, target): return f"{kind}|{lib}|{member}->{target}"
 
@@ -145,7 +167,10 @@ def merge_check(group, cand, decisions=None):
     dec = (decisions or {}).get(merge_id('series', getattr(cand, 'lib', ''), cand.name, target.name), {}).get('action')
     if dec in ('keep', 'undone'): return False, rel or 'manual', 'kept separate (your decision)'
     if dec == 'merge': return True, 'your decision', 'ok'
-    if not rel: return False, None, 'names not similar'
+    loose = False
+    if not rel:
+        if not loosely_similar(target, cand): return False, None, 'names not similar'
+        rel, loose = 'similar (numbers interleave)', True
     if target.variant != cand.variant:
         return False, rel, f"different edition ({', '.join(sorted(target.variant)) or 'plain'} vs {', '.join(sorted(cand.variant)) or 'plain'})"
     g_authors = set().union(*(s.authors for s in group))
@@ -162,6 +187,9 @@ def merge_check(group, cand, decisions=None):
     c_seqs = {parse_seq(q) for r, q in cand.entries if parse_seq(q) is not None and r['id'] not in g_ids}
     if overlap := g_seqs & c_seqs:
         return False, rel, f"book numbers overlap ({fmt_seqs(overlap)})"
+    if loose:  # only loosely similar names: the numbers must interleave into one gapless run, otherwise it goes to the review list
+        if not interleaved(g_seqs, c_seqs): return False, rel, f"names only loosely similar and numbers don't interleave ({fmt_seqs(g_seqs)} vs {fmt_seqs(c_seqs)})"
+        return True, rel, 'ok'
     if rel != 'exact':
         # Fuzzy names need the book numbers to complement each other (fill gaps or continue the series)
         if not c_seqs or not g_seqs: return False, rel, 'not enough numbered books to prove it is the same series'

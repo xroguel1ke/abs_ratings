@@ -54,6 +54,29 @@ def test_duplicate_recordings_in_report():
     assert len(rep['duplicate_recordings']) == 1 and rep['duplicate_recordings'][0]['titles'] == ['Throne', 'Throne Hunters 5'], rep['duplicate_recordings']
 
 
+def _series(name, author, nums, start=100):
+    return [rec(start + i, f'{name} {n}', author, name, str(n)) for i, n in enumerate(nums)]
+
+
+def test_interleaved_numbers_merge_loosely_similar_names():  # user rule 2026-11-04
+    r = _series('Ember Realm Chronicles', 'X', [1, 2, 3, 7, 8, 10]) + _series('Ember Realm', 'X', [4, 5, 6, 9, 11, 12, 13], 200)
+    m, _ = names(r)
+    assert len(m) == 1 and set([m[0][0]] + m[0][1]) == {'Ember Realm Chronicles', 'Ember Realm'}, m
+
+
+def test_loose_names_without_interleaving_are_not_merged():
+    for a, b in (([1, 2, 3], [4, 5, 6]), ([1, 2], [5, 6]), ([1, 3], [2])):  # continuation only, gap, one side too small
+        r = _series('Ember Realm Chronicles', 'X', a) + _series('Ember Realm', 'X', b, 200)
+        assert names(r)[0] == [], (a, b)
+
+
+def test_interleaved_but_other_author_or_edition_never_merges():
+    r = _series('Ember Realm Chronicles', 'X', [1, 2, 3, 7, 8]) + _series('Ember Realm', 'Y', [4, 5, 6, 9], 200)
+    assert names(r)[0] == []
+    r = _series('Ember Realm', 'X', [1, 2, 3, 7, 8]) + _series('Ember Realm (Full Cast)', 'X', [4, 5, 6, 9], 200)
+    assert names(r)[0] == []
+
+
 if __name__ == '__main__':
     n = 0
     for name, fn in sorted(globals().items()):

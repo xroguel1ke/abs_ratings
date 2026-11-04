@@ -39,6 +39,7 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
 - **Group confirmation** (`group_confirm`, user idea 2026-11-04): >= 3 ABS books with the SAME title whose candidates each match runtime (to the minute) + narrator and are DIFFERENT volumes of ONE Audible series (distinct numbers, agreeing with ABS numbers of the same series) confirm each other: the shared title is a collection name, the books get ASIN + Audible title (lock_asin/lock_title respected, journaled). Regress round 08 (Realms of War = War of the Spider Queen 1-6).
 - **Other edition:** ASIN gone but same title/author exists as another recording → use its ratings, change nothing else.
 - **Language mismatch:** title + narrator + series decide whether ABS language or the ASIN is wrong; if nothing decides → change nothing.
+- **Interleaving numbers** (user rule 2026-11-04): two series with only LOOSELY similar names (ratio >= 0.8 or one name inside the other) merge when their numbers interleave into ONE gapless run (both sides >= 2 books, sides alternate >= 2 times, e.g. 1-3,7-8,10 | 4-6,9,11-13); same author, same edition, no lock_series still required. Loosely similar without interleaving -> review list.
 - **Series merge** (`abs_series.merge_check`): names equal after normalization (articles, generic words like Series/Saga,
   format labels like Light Novel) or same word count + ratio ≥0.9; never a name contained in a longer one
   (`Dune` vs `Dune, les origines`), same edition, every book shares an author, no overlapping numbers, complementary
