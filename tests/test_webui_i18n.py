@@ -95,7 +95,13 @@ def test_values_are_human_readable():
         f.write(json.dumps({'run': 'r1', 'ts': '2026-11-04T10:00:00+00:00', 'item': 'i1', 'key': 'lib_1', 'title': 'Homeland', 'field': 'series',
                             'old': [{'name': 'The Legend of Drizzt', 'sequence': '1'}], 'new': [{'name': 'Legend of Drizzt', 'sequence': '1'}],
                             'source': 'series_merge', 'dry_run': False}) + '\n')
+    d = W.diff_value
+    assert str(d(['A', 'B'], ['B', 'C'], 'authors')) == '<span class="del">A</span>, B' and str(d(['B', 'C'], ['A', 'B'], 'authors', True)) == 'B, <span class="ins">C</span>'
+    assert str(d('The Big Book Two', 'The Big Book', 'title', True)) == 'The Big Book <span class="ins">Two</span>' and str(d('The Big Book', 'The Big Book Two', 'title')) == 'The Big Book'
+    assert str(d('B0AAA', 'B0BBB', 'asin')) == '<span class="del">B0AAA</span>' and str(d(None, 'x', 'isbn')) == '–'
+    assert str(d('<b>', None, 'title', True)) == '<span class="ins">&lt;b&gt;</span>', 'escaped'
     h = client().get('/history/r1').get_data(as_text=True)
+    assert '<span class="del">The Legend of Drizzt #1</span>' in h and '<span class="ins">Legend of Drizzt #1</span>' in h
     assert 'The Legend of Drizzt #1' in h and 'Legend of Drizzt #1' in h and "[{&#39;name" not in h and "{'name'" not in h, h[-1500:]
 
 

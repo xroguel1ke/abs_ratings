@@ -19,7 +19,7 @@
 {% if run.status != 'running' %}<div class="card tablewrap"><h2 style="margin-top:0">{{ _('Planned changes') if run.dry_run else _('Changes made') }} ({{ changes|length }})</h2>
 <table class="diff"><tr><th>{{ _('Book') }}</th><th>{{ _('Field') }}</th><th>{{ _('Before') }}</th><th>{{ _('After') }}</th></tr>
 {% for c in changes[:500] %}<tr><td>{{ c.title }}<div class="muted small">{{ c.source }}</div></td><td>{{ field_label(c.field) }}</td>
-<td class="small">{{ V.show(c.field, c.old) }}</td><td class="small">{{ V.show(c.field, c.new, True) }}</td></tr>
+<td class="small">{{ V.show(c.field, c.old, False, c.new) }}</td><td class="small">{{ V.show(c.field, c.new, True, c.old) }}</td></tr>
 {% else %}<tr><td colspan="4" class="muted">{{ _('No changes.') }}</td></tr>{% endfor %}</table>{% if changes|length > 500 %}<p class="muted small">… {{ _('%(n)s more in the log / planned_changes.', n=changes|length - 500) }}</p>{% endif %}</div>{% endif %}
 <h2>Log</h2><pre class="log" id="log"></pre>
 <script>

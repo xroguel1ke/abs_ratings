@@ -127,3 +127,7 @@ tr.risky td{background:color-mix(in srgb,var(--warn) 9%,transparent)}
 /* header stays one line: menu entries never wrap (the burger menu takes over below 800px) */
 @media (min-width:801px){.nav .links{flex-wrap:nowrap;min-width:0}.nav .links a{white-space:nowrap}}
 .nav .right a.iconbtn{padding:4px 8px;text-decoration:none}
+
+/* old/new: removed (old side) red, added (new side) green */
+.del{color:var(--err);background:color-mix(in srgb, var(--err) 10%, transparent);border-radius:4px;padding:0 3px;text-decoration:line-through;text-decoration-thickness:1px}
+.ins{color:var(--ok);background:color-mix(in srgb, var(--ok) 12%, transparent);border-radius:4px;padding:0 3px;font-weight:500}

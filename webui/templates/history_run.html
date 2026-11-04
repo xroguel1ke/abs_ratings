@@ -14,8 +14,8 @@
 <div class="card tablewrap"><table class="diff"><tr><th>{{ _('Book') }}</th><th>{{ _('Field') }}</th><th>{{ _('Old') }}</th><th>{{ _('New') }}</th><th></th></tr>
 {% for e in entries %}<tr>
 <td><a href="{{ url_for('problem', key=e.key) }}">{{ e.title }}</a></td><td>{{ FL.get(e.field, e.field) }}</td>
-<td class="small">{{ V.show(e.field, e.old) }}</td>
-<td class="small">{{ V.show(e.field, e.new, True) }}</td>
+<td class="small">{{ V.show(e.field, e.old, False, e.new) }}</td>
+<td class="small">{{ V.show(e.field, e.new, True, e.old) }}</td>
 <td class="row" style="flex-wrap:nowrap">{% if e.undone %}<span class="badge warn">{{ _('undone') }}</span>{% elif e.field == 'author' %}<span class="muted small">{{ _('cannot be undone') }}</span>{% else %}
  <form method="post" action="{{ url_for('history_undo', run_id=run_id) }}" data-confirm="{{ _('Undo this change?') }}"><input type="hidden" name="item" value="{{ e.item }}"><input type="hidden" name="field" value="{{ e.field }}"><input type="hidden" name="label" value="{{ e.title }}: {{ FL.get(e.field, e.field) }}"><button title="{{ _('only this field') }}">↶ {{ _('Field') }}</button></form>
  <form method="post" action="{{ url_for('history_undo', run_id=run_id) }}" data-confirm="{{ _('Undo all changes of this book in this scan?') }}"><input type="hidden" name="item" value="{{ e.item }}"><input type="hidden" name="label" value="{{ e.title }} ({{ _('whole book') }})"><button title="{{ _('all fields of this book') }}">↶ {{ _('Book') }}</button></form>

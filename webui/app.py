@@ -1,5 +1,6 @@
 """ABS Ratings web UI (Flask). Start: python -m webui.app (port 47823, data folder /config)."""
-import json, os, re, functools
+import json, os, re, functools, difflib
+from markupsafe import Markup
 from collections import Counter
 from datetime import datetime
 
@@ -76,6 +77,46 @@ def human_value(v, field=''):
 
 
 app.jinja_env.filters['hv'] = human_value
+
+LIST_FIELDS = {'authors', 'narrators', 'genres', 'tags', 'series'}
+
+
+def _items(v, field):
+    if v is None or v == '' or v == []: return []
+    if isinstance(v, (list, tuple)): return [human_value([x], field) for x in v]
+    return [human_value(v, field)]
+
+
+def diff_value(v, other, field='', new=False):
+    """The value with its differences marked: removed parts red (old side), added parts green (new side).
+    Lists: per entry. Short texts: per word, unless nearly everything changed (then the whole value).
+    Single values (ASIN, ISBN, year): the whole value."""
+    esc = lambda x: str(Markup.escape(x))
+    cls = 'ins' if new else 'del'
+    mark = lambda x: f'<span class="{cls}">{esc(x)}</span>'
+    if v is None or v == '' or v == []: return Markup('–')
+    if other is None or other == '' or other == []:  # all new / all removed
+        return Markup(mark(human_value(v, field)))
+    if field in LIST_FIELDS or isinstance(v, (list, tuple)):
+        mine, theirs = _items(v, field), set(_items(other, field))
+        sep = '; ' if field == 'series' else ', '
+        return Markup(sep.join(esc(x) if x in theirs else mark(x) for x in mine))
+    a, b = human_value(v, field), human_value(other, field)
+    if a == b: return Markup(esc(a))
+    wa, wb = a.split(), b.split()
+    if len(wa) <= 1 or len(wb) <= 1: return Markup(mark(a))
+    # opcodes over (other -> this) for the new side, (this -> other) for the old side; we print only THIS side's words
+    sm = difflib.SequenceMatcher(None, wb, wa) if new else difflib.SequenceMatcher(None, wa, wb)
+    if sm.ratio() < 0.4: return Markup(mark(a))  # nearly everything differs: one mark, no patchwork
+    out = []
+    for op, i1, i2, j1, j2 in sm.get_opcodes():
+        words = wa[j1:j2] if new else wa[i1:i2]
+        if not words: continue
+        out.append(' '.join(esc(w) for w in words) if op == 'equal' else mark(' '.join(words)))
+    return Markup(' '.join(out))
+
+
+app.jinja_env.filters['hvd'] = diff_value
 app.jinja_env.globals['field_label'] = field_label
 
 

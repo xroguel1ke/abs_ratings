@@ -36,8 +36,8 @@
 <div class="card tablewrap"><h2 style="margin-top:0">{{ _('Changes to this book') }}</h2>
 {% if changes %}<table class="diff"><tr><th>{{ _('Time') }}</th><th>{{ _('Field') }}</th><th>{{ _('Old') }}</th><th>{{ _('New') }}</th><th>{{ _('Status') }}</th></tr>
 {% for e in changes %}<tr><td class="small">{{ e.ts|dt }}</td><td>{{ FL.get(e.field, e.field) }}</td>
-<td class="small">{{ V.show(e.field, e.old) }}</td>
-<td class="small">{{ V.show(e.field, e.new, True) }}</td>
+<td class="small">{{ V.show(e.field, e.old, False, e.new) }}</td>
+<td class="small">{{ V.show(e.field, e.new, True, e.old) }}</td>
 <td>{% if e.dry_run %}<span class="badge">{{ _('planned (test run)') }}</span>{% elif e.undone %}<span class="badge warn">{{ _('undone') }}</span>{% else %}<span class="badge ok">{{ _('written') }}</span>{% endif %}</td></tr>{% endfor %}</table>
 {% else %}<p class="muted">{{ _('No changes recorded.') }}</p>{% endif %}</div>
 
