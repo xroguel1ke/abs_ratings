@@ -58,8 +58,8 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | 4 | Apply dry run: grouped by kind, filterable, checkboxes, no new Audible requests | ✅ | review page: groups, filter, checkboxes, check/apply selection; e2e tested (untick a group -> exactly those skipped) |
 | 5 | Mark suspicious changes (title, ASIN change, language, new series, other edition) on top | ✅ | ⚠️ section on top of the review page (language code -> name is not risky) |
 | 6 | Search over all books + test/real run per book | ✅ | |
-| 7 | Comparison ABS ↔ Audible ↔ Hardcover + planned change | ⚠️ 70 % | Hardcover column missing |
-| 8 | Reasoning per match (title, author, runtime, narrator, number, source) | ⚠️ 90 % | source (ASIN/ISBN/search) as own field missing |
+| 7 | Comparison ABS ↔ Audible ↔ Hardcover + planned change | ✅ | 3 columns + change list on the book page |
+| 8 | Reasoning per match (title, author, runtime, narrator, number, source) | ✅ | + source of the ASIN and of the Hardcover match |
 | 11 | Change history with undo per change / book / run | ✅ | |
 | 13 | Coverage statistics incl. ratings + Hardcover + trend over time | ⚠️ 50 % | publisher/year/ISBN/series added; ratings, Hardcover, trend missing |
 | 14 | Hardcover / API status: used/left today, cache size, reset time | ⚠️ 70 % | reset time missing |

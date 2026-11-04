@@ -21,13 +21,14 @@
  <p><b>Sicherheit {{ r.get('certainty') }} / 100</b> – so setzt sie sich zusammen:</p>
  <div class="row">{% for k, v in (r.get('certainty_parts') or {}).items() %}<span class="badge {{ 'err' if v < 0 else 'ok' if v > 0 else '' }}">{{ PL.get(k, k) }} {{ ('%+d' % v) if v < 0 else '+' ~ v }}</span>{% endfor %}</div>
  {% endif %}
+  <p class="small"><b>Quelle der ASIN:</b> {{ r.asin_source or '–' }}{% if r.hc_source %} · <b>Hardcover gefunden über:</b> {{ r.hc_source }}{% endif %}</p>
  {% if r.evidence %}<p class="small" style="margin-top:10px"><b>Belege der ASIN-Suche:</b> {{ r.evidence|join(', ') }}</p>{% endif %}
 </div>
 
-{% if r.compare %}<div class="card tablewrap"><h2 style="margin-top:0">Vergleich ABS ↔ Audible</h2>
-<table><tr><th>Feld</th><th>ABS</th><th>Audible</th><th></th></tr>
+{% if r.compare %}<div class="card tablewrap"><h2 style="margin-top:0">Vergleich ABS ↔ Audible ↔ Hardcover</h2>
+<table><tr><th>Feld</th><th>ABS</th><th>Audible</th><th></th><th>Hardcover</th></tr>
 {% for f, v in r.compare.items() %}{% if f == 'Laufzeit' and v[0] and v[1] %}{% set same = ((v[0][:-4]|int) - (v[1][:-4]|int))|abs <= 2 %}{% else %}{% set same = (v[0]|lower|replace(' ','')) == (v[1]|lower|replace(' ','')) %}{% endif %}
-<tr><td class="muted">{{ f }}</td><td>{{ v[0] or '–' }}</td><td>{{ v[1] or '–' }}</td><td>{% if v[0] and v[1] %}<span class="badge {{ 'ok' if same else 'warn' }}">{{ '=' if same else '≠' }}</span>{% elif v[1] %}<span class="badge">nur Audible</span>{% endif %}</td></tr>{% endfor %}
+<tr><td class="muted">{{ f }}</td><td>{{ v[0] or '–' }}</td><td>{{ v[1] or '–' }}</td><td>{% if v[0] and v[1] %}<span class="badge {{ 'ok' if same else 'warn' }}">{{ '=' if same else '≠' }}</span>{% elif v[1] %}<span class="badge">nur Audible</span>{% endif %}</td><td class="muted">{{ (v[2] if v|length > 2 else '') or '–' }}</td></tr>{% endfor %}
 </table><p class="muted small">„≠“ heißt nicht falsch: ABS-Werte werden nur gefüllt, wenn sie leer sind (Ausnahmen: kaputte Dateinamen-Titel, Cover bei verifizierter ASIN).</p></div>{% endif %}
 
 <div class="card tablewrap"><h2 style="margin-top:0">Änderungen an diesem Buch</h2>
