@@ -69,3 +69,9 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
 ## Open work
 See `ROADMAP.md`. Next most valuable: Hardcover source (need a real API response first), rating block settings
 (sources/order/format), apply-a-dry-run, report/history/undo pages.
+
+## Counting batches (user rule – do not weaken, do not change without the user's explicit OK)
+- Every counting batch = **100 NEW library books** (never in an earlier counting batch) + **60 EN + 20 DE synthetic books** (real Audible products that are NOT in the library, fresh seed each batch). Hardcover batches have exactly the same mix (Hardcover ON).
+- Books that pass go into `tests/private/golden.json` / `tests/synthetic/` (regress gate). After every rule change the whole golden list is replayed (`tools/regress.sh`).
+- Streaks: Audible 4 clean batches in a row, Hardcover 3 clean batches in a row. Any fix resets the streak. Never count a batch with a weaker mix.
+- Status 2026-11-04: all 1873 verified library books were already used (round 1-7, A1-A11), no new library books remain. Until the user decides otherwise: 100 reused library books (regression) + MORE new synthetic books (140 EN + 60 DE) so that no less is tested; say this openly in the log.

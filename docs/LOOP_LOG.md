@@ -367,3 +367,6 @@ Library 100/100 = golden, synthetic 80/80 = expected, Hardcover found 151/180 (2
 ## Hardcover batch H8 (100 library + 60 EN + 20 DE synthetic, Hardcover ON, 0 errors) – CLEAN -> Hardcover streak 2 of 3 (H7, H8)
 Library 100/100, synthetic 80/80, Hardcover found 150/180, cross-check dropped 0, no rule change. (Loop idled ~3 h after H8 finished because nothing was queued; now batches are chained: H9 -> A15 -> A16 -> A17.)
 Audible chain changed: A20-A22 = 100 random verified library books + 60 EN + 20 DE synthetic (Audible-only), per counting rule v2.
+
+## RULE CLARIFICATION (2026-11-04, user): counting batch = 100 NEW library books + 60 EN + 20 DE synthetic; passing books go into golden, changes are tested against golden. Written into CLAUDE.md.
+Finding: the library has no new verified books left (1873 of 1873 golden books used in rounds 1-7/A1-A11). Hardcover batches H1-H9 and the A20-A22 plan therefore reused library books (H: 900 reused) – I had not said that clearly. Interim: 100 reused library books + 140 EN + 60 DE NEW synthetic per Audible batch; user to decide how to treat the missing new library books. Audible streak: A14 (synthetic only) is not counted -> 0 of 4. Hardcover streak H7, H8 counted with reused library books -> flagged.
