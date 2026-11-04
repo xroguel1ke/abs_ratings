@@ -433,3 +433,6 @@ Risky changes outside golden after the fixes: 3, all hand-verified correct (Casu
 Library result (Audible, current code): 1904 of 1906 books that exist on Audible are matched/kept correctly (99.9%); 0 wrong.
 
 ## NOTE: Phase C fixes (twin by ratings, series relevance/cache, owned-ASIN skip, name order) came AFTER the Audible streak -> by the rule the Audible streak restarts. Confirmation chain 5 (Audible-only, final code): a41, a42, a43, a44 (100 EN + 80 DE each).
+
+## Confirmation chain 5 (final code, Audible-only): a41 180/180 | a42 180/180 | a43 180/180 | a44 180/180 -> AUDIBLE MATCHING DONE (4 clean batches in a row with fresh 100 EN + 80 DE, final code; whole library 100% in regress).
+ISBN (user decisions 2026-11-04): field = PRINT ISBN. Order: Hardcover print edition (same language) -> Goodreads print ISBN (empty only) -> LAST fallback Audible audio-edition ISBN (own small request, same recording, checksum, never the ASIN). A wrong ISBN without a better value stays (review list). Library report now also counts publisher/year/ISBN/series.
