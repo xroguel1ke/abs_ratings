@@ -396,3 +396,7 @@ Cover audit (partial, read-only, 288 verified books compared by image hash befor
 ## Batch A23 (100 EN + 80 DE synthetic, Audible-only, frozen code, 0 errors) – CLEAN -> Audible streak 1 of 4 (A23)
 180/180 at the first run. Covers: 164 planned (all books without cover and a verified ASIN).
 ## Hardcover batch H10 started (SYNTH=24, 100 EN + 80 DE, Hardcover ON): Hardcover streak 0 of 3
+
+## H10 (h24, seed 24, 100 EN + 80 DE, Hardcover ON): CLEAN 180/180, HC hits 107, drops 0 -> Hardcover streak 1 of 3. Audible streak 1 of 4 (A23).
+Loop mode from now (user, token saving): chains of 4 batches (A/H alternating), compact evaluation tools/eval_batch.sh, short log entries.
+## Chain 1 started: a25 (Audible), h26 (HC), a27 (Audible), h28 (HC)
