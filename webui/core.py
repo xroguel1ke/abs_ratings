@@ -19,46 +19,57 @@ RUNS_FILE = os.path.join(CONFIG_DIR, 'webui_runs.json')
 # ---------------------------------------------------------------- settings
 # (key, label, type, default, help, group). 'secret' fields are never sent back to the browser.
 FIELDS = [
+    # (key, label, type, default, help, group) - groups are rendered as cards in this order; ADVANCED keys sit in a folded part of their card
     ('ABS_URL', 'Audiobookshelf URL', 'str', '', 'z.B. http://192.168.50.16:13378', 'Verbindung'),
     ('API_TOKEN', 'ABS API-Token', 'secret', '', 'ABS: Einstellungen → Benutzer → API-Token', 'Verbindung'),
     ('LIBRARY_IDS', 'Bibliotheken', 'libraries', '', 'Welche ABS-Bibliotheken bearbeitet werden', 'Verbindung'),
-    ('HARDCOVER_TOKEN', 'Hardcover API-Token', 'secret', '', 'hardcover.app → Settings → API', 'Verbindung'),
+    ('ABS_TIMEOUT', 'ABS Timeout (s)', 'int', 30, '', 'Verbindung'),
 
     ('DRY_RUN', 'Testlauf (DRY_RUN) für geplante Läufe', 'bool', True, 'An = nichts wird in ABS geschrieben, nur geplant und protokolliert', 'Lauf'),
     ('BATCH_SIZE', 'Bücher pro Lauf', 'int', 300, 'Zufällig aus allen fälligen Büchern aller Bibliotheken', 'Lauf'),
     ('REFRESH_DAYS', 'Auffrischen nach (Tage)', 'int', 90, '0 = alle Bücher sind fällig (einmaliger Komplett-Durchlauf)', 'Lauf'),
-    ('SLEEP_TIMER', 'Zusätzliche Pause zwischen Büchern (s)', 'float', 0, 'Jede Quelle hat ihren eigenen Mindestabstand (unten), 0 ist daher sicher und am schnellsten', 'Lauf'),
-    ('ABS_BACKUP', 'ABS-Backup vor echten Läufen', 'bool', True, 'Legt vor jedem Lauf ohne DRY_RUN ein ABS-Backup an', 'Lauf'),
-    ('ABS_TIMEOUT', 'ABS Timeout (s)', 'int', 30, '', 'Lauf'),
+    ('ABS_BACKUP', 'ABS-Backup vor echten Läufen', 'bool', True, 'Legt vor jedem Lauf ohne DRY_RUN ein ABS-Backup an; schlägt es fehl, wird nichts geschrieben', 'Lauf'),
+    ('SLEEP_TIMER', 'Zusätzliche Pause zwischen Büchern (s)', 'float', 0, 'Jede Quelle hat ihren eigenen Mindestabstand, 0 ist daher sicher und am schnellsten', 'Lauf'),
+    ('NO_RATINGS_RECHECK_DAYS', 'Neu prüfen ohne Bewertungen (Tage)', 'int', 7, '', 'Lauf'),
+    ('LOG_LEVEL', 'Log-Level', 'choice:INFO|DEBUG', 'INFO', '', 'Lauf'),
+    ('LOG_RETENTION_DAYS', 'Logs aufbewahren (Tage)', 'int', 30, '', 'Lauf'),
 
-    ('USE_AUDIBLE_API', 'Audible-API nutzen', 'bool', True, 'Aus = nur Webseiten auslesen (nicht empfohlen)', 'Quellen'),
-    ('AUDIBLE_MARKETPLACES', 'Audible-Shops', 'str', 'com,co.uk,ca,com.au,de,fr,it,es', 'In diesen Shops wird eine ASIN gesucht', 'Quellen'),
-    ('AUDIBLE_API_INTERVAL', 'Abstand Audible-API (s)', 'float', 1, '', 'Quellen'),
-    ('AUDIBLE_WEB_INTERVAL', 'Abstand Audible-Webseite (s)', 'float', 3, '', 'Quellen'),
-    ('GOODREADS_ENABLED', 'Goodreads', 'bool', True, 'Aus = keine Goodreads-Anfragen, vorhandene Bewertungen bleiben', 'Quellen'),
-    ('GOODREADS_MAX_PER_RUN', 'Goodreads-Suchen pro Lauf', 'int', 300, 'Gemerkte Bücher zählen nicht. 0 = unbegrenzt', 'Quellen'),
-    ('GOODREADS_INTERVAL', 'Abstand Goodreads (s)', 'float', 10, '', 'Quellen'),
-    ('GR_BLOCK_COOLDOWN', 'Pause nach Goodreads-Sperre (s)', 'int', 900, '', 'Quellen'),
-    ('GR_MAX_COOLDOWNS', 'Pausen bis Goodreads übersprungen wird', 'int', 2, '', 'Quellen'),
-    ('HARDCOVER_ENABLED', 'Hardcover', 'bool', True, 'Braucht den Hardcover-Token (Verbindung). Nur Bewertungen, keine Metadaten. Limit: 5000 Anfragen/Tag', 'Quellen'),
-    ('HARDCOVER_INTERVAL', 'Abstand Hardcover (s)', 'float', 1.1, 'Hardcover erlaubt 60 Anfragen pro Minute', 'Quellen'),
-    ('RATING_ORDER', 'Reihenfolge im Bewertungsblock', 'str', 'audible,goodreads,hardcover', 'Komma-getrennt, z.B. audible,hardcover,goodreads', 'Quellen'),
+    ('AUDIBLE_MARKETPLACES', 'Audible-Shops', 'str', 'com,co.uk,ca,com.au,de,fr,it,es', 'In diesen Shops wird eine ASIN gesucht', 'Audible'),
+    ('USE_AUDIBLE_API', 'Audible-API nutzen', 'bool', True, 'Aus = nur Webseiten auslesen (nicht empfohlen)', 'Audible'),
+    ('AUDIBLE_API_INTERVAL', 'Abstand Audible-API (s)', 'float', 1, '', 'Audible'),
+    ('AUDIBLE_WEB_INTERVAL', 'Abstand Audible-Webseite (s)', 'float', 3, '', 'Audible'),
+    ('RUNTIME_TOLERANCE_PCT', 'Laufzeit-Toleranz (%)', 'float', 15, 'Größere Abweichung = andere Ausgabe', 'Audible'),
+    ('RUNTIME_TOLERANCE_MIN', 'Laufzeit-Toleranz (min)', 'float', 20, 'Beide Grenzen müssen überschritten sein', 'Audible'),
 
-    ('FILL_COVERS', 'Fehlende Cover von Audible setzen', 'bool', True, '', 'Metadaten'),
+    ('HARDCOVER_ENABLED', 'Hardcover nutzen', 'bool', True, 'Bewertungen und die Print-ISBN. Limit: 5000 Anfragen pro Tag (der Lauf stoppt vorher)', 'Hardcover'),
+    ('HARDCOVER_TOKEN', 'Hardcover API-Token', 'secret', '', 'hardcover.app → Settings → API', 'Hardcover'),
+    ('HARDCOVER_INTERVAL', 'Abstand Hardcover (s)', 'float', 1.1, 'Hardcover erlaubt 60 Anfragen pro Minute', 'Hardcover'),
+
+    ('GOODREADS_ENABLED', 'Goodreads nutzen', 'bool', False, 'Experimentell: Goodreads sperrt Bots schnell. Bei der ersten Sperre wird Goodreads für den Lauf beendet', 'Goodreads'),
+    ('GOODREADS_MAX_PER_RUN', 'Goodreads-Anfragen pro Lauf', 'int', 25, 'Gemerkte Bücher zählen nicht. Bisher sicher: ca. 25 pro Nacht', 'Goodreads'),
+    ('GOODREADS_INTERVAL', 'Abstand Goodreads (s)', 'float', 10, '', 'Goodreads'),
+    ('GR_BLOCK_COOLDOWN', 'Pause nach Goodreads-Sperre (s)', 'int', 900, '', 'Goodreads'),
+    ('GR_MAX_COOLDOWNS', 'Pausen bis Goodreads übersprungen wird', 'int', 0, '0 = bei der ersten Sperre aufhören (empfohlen)', 'Goodreads'),
+    ('GR_MISSING_RECHECK_DAYS', 'Neu prüfen ohne Goodreads (Tage)', 'int', 30, '', 'Goodreads'),
+
+    ('RATING_ORDER', 'Reihenfolge im Bewertungsblock', 'str', 'audible,goodreads,hardcover', 'Komma-getrennt, z.B. audible,hardcover,goodreads', 'Metadaten'),
+    ('FILL_COVERS', 'Fehlende Cover setzen', 'bool', True, 'Nur bei verifizierter ASIN', 'Metadaten'),
+    ('UPDATE_COVERS', 'Vorhandene Cover ersetzen', 'bool', True, 'Nur bei verifizierter ASIN (gleiche Aufnahme); das alte Cover wird gesichert und lässt sich zurückholen', 'Metadaten'),
     ('GENRE_LANGUAGE', 'Genre-Sprache', 'choice:en|keep', 'en', 'en = deutsche Audible-Genres übersetzen, keep = unverändert', 'Metadaten'),
-    ('RUNTIME_TOLERANCE_PCT', 'Laufzeit-Toleranz (%)', 'float', 15, 'Größere Abweichung = andere Ausgabe', 'Metadaten'),
-    ('RUNTIME_TOLERANCE_MIN', 'Laufzeit-Toleranz (min)', 'float', 20, 'Beide Grenzen müssen überschritten sein', 'Metadaten'),
-    ('NO_RATINGS_RECHECK_DAYS', 'Neu prüfen ohne Bewertungen (Tage)', 'int', 7, '', 'Metadaten'),
-    ('GR_MISSING_RECHECK_DAYS', 'Neu prüfen ohne Goodreads (Tage)', 'int', 30, '', 'Metadaten'),
 
     ('SERIES_MERGE', 'Reihen automatisch zusammenführen', 'bool', True, 'Nur sichere Fälle, unsichere landen im Merge-Review', 'Reihen & Autoren'),
     ('AUTHOR_NORMALIZE', 'Autoren-Schreibweisen vereinheitlichen', 'bool', True, '', 'Reihen & Autoren'),
-    ('SERIES_LOCK_AFTER_MERGE', 'Nach Zusammenführung lock_series setzen', 'bool', False, 'Alte Variante, nicht empfohlen', 'Reihen & Autoren'),
     ('LIBRARY_REPORT', 'Bibliotheks-Report erstellen', 'bool', True, '', 'Reihen & Autoren'),
-
-    ('LOG_LEVEL', 'Log-Level', 'choice:INFO|DEBUG', 'INFO', '', 'Logs'),
-    ('LOG_RETENTION_DAYS', 'Logs aufbewahren (Tage)', 'int', 30, '', 'Logs'),
+    ('SERIES_LOCK_AFTER_MERGE', 'Nach Zusammenführung lock_series setzen', 'bool', False, 'Alte Variante, nicht empfohlen', 'Reihen & Autoren'),
 ]
+# rarely changed: shown folded ("Erweitert") inside their card
+ADVANCED = {'ABS_TIMEOUT', 'SLEEP_TIMER', 'NO_RATINGS_RECHECK_DAYS', 'LOG_LEVEL', 'LOG_RETENTION_DAYS', 'USE_AUDIBLE_API', 'AUDIBLE_API_INTERVAL',
+            'AUDIBLE_WEB_INTERVAL', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'HARDCOVER_INTERVAL', 'GOODREADS_INTERVAL', 'GR_BLOCK_COOLDOWN',
+            'GR_MAX_COOLDOWNS', 'GR_MISSING_RECHECK_DAYS', 'SERIES_LOCK_AFTER_MERGE'}
+# cards that belong to a data source: icon + colour stripe
+PROVIDERS = {'Audible': ('🎧', '#e8913a', 'Hauptquelle: ASIN, Bewertungen, Metadaten, Cover'),
+             'Hardcover': ('📘', '#7d6bd6', 'Bewertungen und Print-ISBN'),
+             'Goodreads': ('📗', '#8a7a52', 'Bewertungen – experimentell')}
 SCRIPT_KEYS = [f[0] for f in FIELDS if f[0] != 'LOG_RETENTION_DAYS']
 DEFAULTS = {f[0]: f[3] for f in FIELDS}
 DEFAULTS.update({

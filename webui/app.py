@@ -376,7 +376,7 @@ def settings():
     libs = core.abs_libraries(s) if s.get('ABS_URL') and s.get('API_TOKEN') else []
     groups = {}
     for f in core.FIELDS: groups.setdefault(f[5], []).append(f)
-    return render_template('settings.html', s=s, groups=groups, libs=libs, selected=set((s.get('LIBRARY_IDS') or '').split(',')),
+    return render_template('settings.html', s=s, groups=groups, adv=core.ADVANCED, providers=core.PROVIDERS, libs=libs, selected=set((s.get('LIBRARY_IDS') or '').split(',')),
                            next_run=core.next_run_time(s))
 
 
