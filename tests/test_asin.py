@@ -64,6 +64,7 @@ def test_messy_number_prefix_single_word():
 
 def test_messy_series_prefix_single_word():
     assert (A.parse_messy_title('Prince of the Doomed City 01 Entranced') or {}).get('title') == 'Entranced'
+    assert (A.parse_messy_title('Robots 00.1 I, Robot') or {}).get('title') == 'I, Robot' and A.parse_messy_title('Robots 00.1 I, Robot')['sequence'] == '0.1' and A.parse_messy_title('Robots 5 Foo Bar') is None
     assert (A.parse_messy_title('Shadow Country Trilogy 01-3 Shadow Country') or {}).get('title') == 'Shadow Country' and A.parse_messy_title('Shadow Country Trilogy 01-3 Shadow Country')['sequence'] is None  # range = omnibus
     assert A.parse_messy_title('Catch 22 Heller') is None and A.parse_messy_title('The Book of the New Sun 05 The Urth of the New Sun')
 
