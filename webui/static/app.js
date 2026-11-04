@@ -1,4 +1,6 @@
-// ABS Ratings web UI: theme switch (light / dark) and the onboarding tour. No external libraries.
+// ABS Ratings web UI: theme switch (light / dark), onboarding tour, confirm dialog. No external libraries.
+// Texts are English; window.I18N (set by base.html) holds the German translation when the UI language is German.
+function T(s) { return (window.I18N && window.I18N[s]) || s; }
 (function () {
   var store = {
     get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -7,7 +9,7 @@
 
   // ---- theme ----
   // first visit: follow the system setting (not stored); the switch toggles light <-> dark and remembers the choice in this browser
-  var ICON = { light: '☾', dark: '☀' }, LABEL = { light: 'Zu dunkel wechseln', dark: 'Zu hell wechseln' };
+  var ICON = { light: '☾', dark: '☀' }, LABEL = { light: T('Switch to dark'), dark: T('Switch to light') };
   function systemTheme() { try { return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch (e) { return 'light'; } }
   function applyTheme(t) {
     document.documentElement.setAttribute('data-theme', t);
@@ -29,15 +31,15 @@
 
   // ---- onboarding tour ----
   var STEPS = [
-    { sel: null, t: 'Willkommen bei ABS Ratings', p: 'Kurzer Rundgang in 9 Schritten. Du kannst ihn jederzeit überspringen und unter Einstellungen neu starten.' },
-    { sel: '[data-tour=dashboard]', t: 'Übersicht', p: 'Überblick nach jedem Lauf: Bücher mit Bewertungen, Probleme, die Prüfliste (Vorschläge, die du bestätigst) und zusammengeführte Reihen/Autoren.' },
-    { sel: '[data-tour=books]', t: 'Bücher', p: 'Alle geprüften Bücher, sortiert nach Sicherheit des Treffers. Mit Suche, Vergleich ABS ↔ Audible und der Begründung jeder Entscheidung.' },
-    { sel: '[data-tour=review]', t: 'Prüfliste', p: 'Alles, was deine Entscheidung braucht: unsichere Buch-Treffer, Reihen und Autoren (links nach Bereich), dazu automatisch zusammengeführte Reihen/Autoren zum Bestätigen oder Zurücknehmen.' },
-    { sel: '[data-tour=status]', t: 'Status', p: 'Zustand der Quellen (Audible, Hardcover, Goodreads) und was gerade läuft.' },
-    { sel: '[data-tour=runs]', t: 'Scans', p: 'Hier startest du einen Scan: Metadaten & Bewertungen, Autoren, Reihen per Häkchen. Zuerst als Testlauf – dann wird nichts geschrieben und du prüfst die Änderungen vorher.' },
-    { sel: '[data-tour=history]', t: 'Verlauf', p: 'Alles, was wirklich in ABS geschrieben wurde - pro Lauf, Buch und Feld. Jede Änderung lässt sich einzeln, pro Buch oder für den ganzen Lauf rückgängig machen.' },
-    { sel: '[data-tour=settings]', t: 'Einstellungen', p: 'ABS-Verbindung, Zeitplan, Quellen und Benachrichtigungen. Hier startest du auch diese Tour neu.' },
-    { sel: '#theme-toggle', t: 'Design', p: 'Hell oder dunkel. Beim ersten Besuch gilt die Systemeinstellung, danach merkt sich der Browser deine Wahl.' }
+    { sel: null, t: T('Welcome to ABS Ratings'), p: T('A short tour in 9 steps. You can skip it at any time and restart it under Settings.') },
+    { sel: '[data-tour=dashboard]', t: T('Overview'), p: T('What needs you, the last and the next scan, and the state of the library.') },
+    { sel: '[data-tour=books]', t: T('Books'), p: T('All checked books, sorted by how certain the match is. With search, ABS ↔ Audible comparison and the reasoning of every decision.') },
+    { sel: '[data-tour=review]', t: T('Review list'), p: T('Everything that needs your decision: uncertain book matches, series and authors (left menu), plus merged series/authors to confirm or undo.') },
+    { sel: '[data-tour=status]', t: T('Status'), p: T('Coverage of every metadata field and the state of the sources (Audible, Hardcover, Goodreads).') },
+    { sel: '[data-tour=runs]', t: T('Scans'), p: T('Start a scan here: metadata & ratings, authors, series - each a checkbox. Start with a test run: nothing is written and you check the changes first.') },
+    { sel: '[data-tour=history]', t: T('History'), p: T('Everything that was really written to ABS - per scan, book and field. Every change can be undone on its own, per book or for the whole scan.') },
+    { sel: '[data-tour=settings]', t: T('Settings'), p: T('ABS connection, schedule, sources, notifications, logs and the language. You can restart this tour here.') },
+    { sel: '#theme-toggle', t: T('Design'), p: T('Light or dark. On the first visit the system setting is used, then the browser remembers your choice.') }
   ];
   var i = 0, dim = null, box = null, hl = null;
   function clear() { if (hl) hl.classList.remove('tour-hl'); hl = null; }
@@ -47,9 +49,9 @@
     var s = STEPS[i], el = s.sel ? document.querySelector(s.sel) : null;
     if (s.sel && !el) { if (i < STEPS.length - 1) { i++; return show(); } return end(); }
     if (el) { el.classList.add('tour-hl'); hl = el; }
-    box.innerHTML = '<h3></h3><p></p><div class="row"><button type="button" data-a="skip">Überspringen</button>' +
-      '<span class="row">' + (i > 0 ? '<button type="button" data-a="back">Zurück</button>' : '') +
-      '<button type="button" class="primary" data-a="next">' + (i === STEPS.length - 1 ? 'Fertig' : 'Weiter') + '</button></span></div>' +
+    box.innerHTML = '<h3></h3><p></p><div class="row"><button type="button" data-a="skip">' + T('Skip') + '</button>' +
+      '<span class="row">' + (i > 0 ? '<button type="button" data-a="back">' + T('Back') + '</button>' : '') +
+      '<button type="button" class="primary" data-a="next">' + (i === STEPS.length - 1 ? T('Done') : T('Next')) + '</button></span></div>' +
       '<div class="muted small" style="margin-top:8px">' + (i + 1) + ' / ' + STEPS.length + '</div>';
     box.querySelector('h3').textContent = s.t; box.querySelector('p').textContent = s.p;
     var r = el ? el.getBoundingClientRect() : null, w = Math.min(340, window.innerWidth - 24);
@@ -81,11 +83,11 @@
   function dialog(msg, okText, danger) {
     return new Promise(function (resolve) {
       var back = document.createElement('div'); back.className = 'modal-back';
-      back.innerHTML = '<div class="modal" role="dialog" aria-modal="true"><h3>Bitte bestätigen</h3><p></p>' +
-        '<div class="row" style="justify-content:flex-end"><button type="button" data-a="no">Abbrechen</button>' +
+      back.innerHTML = '<div class="modal" role="dialog" aria-modal="true"><h3>' + T('Please confirm') + '</h3><p></p>' +
+        '<div class="row" style="justify-content:flex-end"><button type="button" data-a="no">' + T('Cancel') + '</button>' +
         '<button type="button" data-a="yes" class="' + (danger ? 'primary danger-fill' : 'primary') + '"></button></div></div>';
       back.querySelector('p').textContent = msg;
-      back.querySelector('[data-a=yes]').textContent = okText || 'Bestätigen';
+      back.querySelector('[data-a=yes]').textContent = T(okText || 'Confirm');
       function close(v) { document.removeEventListener('keydown', key); back.remove(); resolve(v); }
       function key(e) { if (e.key === 'Escape') close(false); if (e.key === 'Enter') close(true); }
       back.addEventListener('click', function (e) { var a = e.target.getAttribute('data-a'); if (a) close(a === 'yes'); else if (e.target === back) close(false); });
@@ -99,9 +101,9 @@
     var msg = (b && b.getAttribute('data-confirm')) || f.getAttribute('data-confirm');
     if (!msg || f.dataset.confirmed) return;
     e.preventDefault();
-    var danger = /rückgängig|echter lauf|wirklich|löschen|schreiben/i.test(msg) || (b && b.classList.contains('danger'));
+    var danger = /undo|rückgängig|real scan|echter|really|wirklich|delete|löschen|write|schreiben/i.test(msg) || (b && b.classList.contains('danger'));
     var ok = (b && b.getAttribute('data-confirm-ok')) || f.getAttribute('data-confirm-ok');
-    dialog(msg, ok, danger).then(function (yes) {
+    dialog(T(msg), ok, danger).then(function (yes) {
       if (!yes) return;
       f.dataset.confirmed = '1';
       if (f.requestSubmit) f.requestSubmit(b || undefined); else f.submit();

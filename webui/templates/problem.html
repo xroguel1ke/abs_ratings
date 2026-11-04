@@ -1,57 +1,59 @@
 {% extends 'base.html' %}{% block title %}{{ r.title }}{% endblock %}{% block body %}
-{% set PL = {'title': 'Titel', 'author': 'Autor', 'runtime': 'Laufzeit', 'narrator': 'Sprecher', 'number': 'Reihe/Band', 'publisher+year': 'Verlag+Jahr', 'hardcover': 'Hardcover', 'asin from search': 'per Suche gefunden', 'other edition': 'andere Ausgabe', 'open review entry': 'offener Prüfeintrag'} %}
-{% set FL = {'asin': 'ASIN', 'title': 'Titel', 'subtitle': 'Untertitel', 'description': 'Beschreibung', 'genres': 'Genres', 'cover': 'Cover', 'language': 'Sprache', 'publisher': 'Verlag', 'publishedYear': 'Jahr', 'narrators': 'Sprecher', 'authors': 'Autoren', 'series': 'Reihe', 'isbn': 'ISBN', 'explicit': 'Explicit', 'tags': 'Tags'} %}
-<p><a href="{{ url_for('books') }}">← Bücher</a> · <a href="{{ url_for('dashboard') }}">Übersicht</a></p>
+{% set PL = {'title': _('title'), 'author': _('author'), 'runtime': _('runtime'), 'narrator': _('narrator'), 'number': _('series/volume'), 'publisher+year': _('publisher+year'), 'hardcover': 'Hardcover', 'asin from search': _('found by search'), 'other edition': _('other edition'), 'open review entry': _('open review entry')} %}
+{% set FL = {'asin': 'ASIN', 'title': _('Title'), 'subtitle': _('Subtitle'), 'description': _('Description'), 'genres': _('Genres'), 'cover': _('Cover'), 'language': _('Language'), 'publisher': _('Publisher'), 'publishedYear': _('Year'), 'narrators': _('Narrators'), 'authors': _('Authors'), 'series': _('Series'), 'isbn': 'ISBN', 'explicit': 'Explicit', 'tags': 'Tags'} %}
+{# compare keys are stored in German by the script #}
+{% set CK = {'Titel': _('Title'), 'Autor': _('Author'), 'Laufzeit': _('Runtime'), 'Sprecher': _('Narrator'), 'Reihe': _('Series'), 'Verlag': _('Publisher'), 'Jahr': _('Year'), 'Sprache': _('Language')} %}
+<p><a href="{{ url_for('books') }}">← {{ _('Books') }}</a> · <a href="{{ url_for('dashboard') }}">{{ _('Overview') }}</a></p>
 <h1>{{ r.title }}</h1>
 <div class="card"><div class="row" style="gap:18px">
  <span><span class="badge {{ r.status }}">{{ status_label.get(r.status, r.status) }}</span></span>
- <span>Autor: {{ r.author or '–' }}</span><span>ASIN: {% if r.asin %}<code>{{ r.asin }}</code>{% else %}–{% endif %}{% if r.domain %} <span class="muted small">({{ r.domain }})</span>{% endif %}</span>
+ <span>{{ _('Author') }}: {{ r.author or '–' }}</span><span>ASIN: {% if r.asin %}<code>{{ r.asin }}</code>{% else %}–{% endif %}{% if r.domain %} <span class="muted small">({{ r.domain }})</span>{% endif %}</span>
  {% if r.goodreads %}<a href="{{ r.goodreads }}" target="_blank">Goodreads ↗</a>{% endif %}
  {% if r.hardcover %}<a href="{{ r.hardcover }}" target="_blank">Hardcover ↗</a>{% endif %}
  {% if r.asin and r.domain %}<a href="https://{{ r.domain }}/pd/{{ r.asin }}" target="_blank">Audible ↗</a>{% endif %}
- {% if abs_base %}<a href="{{ abs_base }}/item/{{ r.id }}" target="_blank">In ABS öffnen ↗</a>{% endif %}
- <span class="muted small">geprüft: {{ r.ts|dt }}{{ ' (Testlauf)' if r.dry_run }}</span></div>
- {% if ov %}<p class="small">Manuelle Vorgaben: {% for k, v in ov.items() %}<span class="badge">{{ k }}: {{ v }}</span> {% endfor %}</p>{% endif %}
+ {% if abs_base %}<a href="{{ abs_base }}/item/{{ r.id }}" target="_blank">{{ _('Open in ABS') }} ↗</a>{% endif %}
+ <span class="muted small">{{ _('checked') }}: {{ r.ts|dt }}{{ (' (' ~ _('test run') ~ ')') if r.dry_run }}</span></div>
+ {% if ov %}<p class="small">{{ _('Manual overrides') }}: {% for k, v in ov.items() %}<span class="badge">{{ k }}: {{ v }}</span> {% endfor %}</p>{% endif %}
 </div>
 
-<div class="card"><h2 style="margin-top:0">Begründung</h2>
- {% if r.reason %}<p><b>Ergebnis:</b> {{ r.reason|de }}</p>{% endif %}
+<div class="card"><h2 style="margin-top:0">{{ _('Reasoning') }}</h2>
+ {% if r.reason %}<p><b>{{ _('Result') }}:</b> {{ r.reason|de }}</p>{% endif %}
  {% for n in r.notes or [] %}<p class="muted small">{{ n|de }}</p>{% endfor %}
  {% if r.get('certainty') is not none %}
- <p><b>Sicherheit {{ r.get('certainty') }} / 100</b> – so setzt sie sich zusammen:</p>
+ <p><b>{{ _('Certainty') }} {{ r.get('certainty') }} / 100</b> – {{ _('made up of') }}:</p>
  <div class="row">{% for k, v in (r.get('certainty_parts') or {}).items() %}<span class="badge {{ 'err' if v < 0 else 'ok' if v > 0 else '' }}">{{ PL.get(k, k) }} {{ ('%+d' % v) if v < 0 else '+' ~ v }}</span>{% endfor %}</div>
  {% endif %}
-  <p class="small"><b>Quelle der ASIN:</b> {{ r.asin_source or '–' }}{% if r.hc_source %} · <b>Hardcover gefunden über:</b> {{ r.hc_source }}{% endif %}</p>
- {% if r.evidence %}<p class="small" style="margin-top:10px"><b>Belege der ASIN-Suche:</b> {{ r.evidence|join(', ') }}</p>{% endif %}
+  <p class="small"><b>{{ _('Source of the ASIN') }}:</b> {{ r.asin_source or '–' }}{% if r.hc_source %} · <b>{{ _('Hardcover found via') }}:</b> {{ r.hc_source }}{% endif %}</p>
+ {% if r.evidence %}<p class="small" style="margin-top:10px"><b>{{ _('Evidence of the ASIN search') }}:</b> {{ r.evidence|join(', ') }}</p>{% endif %}
 </div>
 
-{% if r.compare %}<div class="card tablewrap"><h2 style="margin-top:0">Vergleich ABS ↔ Audible ↔ Hardcover</h2>
-<table><tr><th>Feld</th><th>ABS</th><th>Audible</th><th></th><th>Hardcover</th></tr>
+{% if r.compare %}<div class="card tablewrap"><h2 style="margin-top:0">{{ _('Comparison') }} ABS ↔ Audible ↔ Hardcover</h2>
+<table><tr><th>{{ _('Field') }}</th><th>ABS</th><th>Audible</th><th></th><th>Hardcover</th></tr>
 {% for f, v in r.compare.items() %}{% if f == 'Laufzeit' and v[0] and v[1] %}{% set same = ((v[0][:-4]|int) - (v[1][:-4]|int))|abs <= 2 %}{% else %}{% set same = (v[0]|lower|replace(' ','')) == (v[1]|lower|replace(' ','')) %}{% endif %}
-<tr><td class="muted">{{ f }}</td><td>{{ v[0] or '–' }}</td><td>{{ v[1] or '–' }}</td><td>{% if v[0] and v[1] %}<span class="badge {{ 'ok' if same else 'warn' }}">{{ '=' if same else '≠' }}</span>{% elif v[1] %}<span class="badge">nur Audible</span>{% endif %}</td><td class="muted">{{ (v[2] if v|length > 2 else '') or '–' }}</td></tr>{% endfor %}
-</table><p class="muted small">„≠“ heißt nicht falsch: ABS-Werte werden nur gefüllt, wenn sie leer sind (Ausnahmen: kaputte Dateinamen-Titel, Cover bei verifizierter ASIN).</p></div>{% endif %}
+<tr><td class="muted">{{ CK.get(f, f) }}</td><td>{{ v[0] or '–' }}</td><td>{{ v[1] or '–' }}</td><td>{% if v[0] and v[1] %}<span class="badge {{ 'ok' if same else 'warn' }}">{{ '=' if same else '≠' }}</span>{% elif v[1] %}<span class="badge">{{ _('Audible only') }}</span>{% endif %}</td><td class="muted">{{ (v[2] if v|length > 2 else '') or '–' }}</td></tr>{% endfor %}
+</table><p class="muted small">{{ _('"≠" does not mean wrong: ABS values are only filled when they are empty (exceptions: broken file-name titles, cover for a verified ASIN).') }}</p></div>{% endif %}
 
-<div class="card tablewrap"><h2 style="margin-top:0">Änderungen an diesem Buch</h2>
-{% if changes %}<table class="diff"><tr><th>Zeit</th><th>Feld</th><th>Alt</th><th>Neu</th><th>Status</th></tr>
+<div class="card tablewrap"><h2 style="margin-top:0">{{ _('Changes to this book') }}</h2>
+{% if changes %}<table class="diff"><tr><th>{{ _('Time') }}</th><th>{{ _('Field') }}</th><th>{{ _('Old') }}</th><th>{{ _('New') }}</th><th>{{ _('Status') }}</th></tr>
 {% for e in changes %}<tr><td class="small">{{ e.ts|dt }}</td><td>{{ FL.get(e.field, e.field) }}</td>
-<td class="small">{% if e.field == 'description' %}<span class="muted">{{ (e.old or '')|length }} Zeichen</span>{% else %}{{ e.old if e.old is not none else '–' }}{% endif %}</td>
-<td class="small">{% if e.field == 'description' %}{{ (e.new or '')|length }} Zeichen{% elif e.field == 'cover' %}<a href="{{ e.new }}" target="_blank">Bild ↗</a>{% else %}{{ e.new }}{% endif %}</td>
-<td>{% if e.dry_run %}<span class="badge">geplant (Testlauf)</span>{% elif e.undone %}<span class="badge warn">rückgängig</span>{% else %}<span class="badge ok">geschrieben</span>{% endif %}</td></tr>{% endfor %}</table>
-{% else %}<p class="muted">Keine Änderungen protokolliert.</p>{% endif %}</div>
+<td class="small">{% if e.field == 'description' %}<span class="muted">{{ _('%(n)s characters', n=(e.old or '')|length) }}</span>{% else %}{{ e.old if e.old is not none else '–' }}{% endif %}</td>
+<td class="small">{% if e.field == 'description' %}{{ _('%(n)s characters', n=(e.new or '')|length) }}{% elif e.field == 'cover' %}<a href="{{ e.new }}" target="_blank">{{ _('Image') }} ↗</a>{% else %}{{ e.new }}{% endif %}</td>
+<td>{% if e.dry_run %}<span class="badge">{{ _('planned (test run)') }}</span>{% elif e.undone %}<span class="badge warn">{{ _('undone') }}</span>{% else %}<span class="badge ok">{{ _('written') }}</span>{% endif %}</td></tr>{% endfor %}</table>
+{% else %}<p class="muted">{{ _('No changes recorded.') }}</p>{% endif %}</div>
 
-<div class="card"><h2 style="margin-top:0">Manuell reparieren</h2>
+<div class="card"><h2 style="margin-top:0">{{ _('Repair manually') }}</h2>
 <form method="post">
- <label class="f"><span>ASIN oder Link</span><input type="text" name="smart" placeholder="ASIN, Audible-, Goodreads- oder Hardcover-Link (wird automatisch erkannt)"></label>
- <details><summary class="small muted">oder getrennte Felder</summary>
-  <label class="f"><span>Audible ASIN / Link</span><input type="text" name="asin"></label>
-  <label class="f"><span>Goodreads-Link</span><input type="text" name="goodreads"></label>
-  <label class="f"><span>Hardcover-Link</span><input type="text" name="hardcover"></label>
+ <label class="f"><span>{{ _('ASIN or link') }}</span><input type="text" name="smart" placeholder="{{ _('ASIN, Audible, Goodreads or Hardcover link (detected automatically)') }}"></label>
+ <details><summary class="small muted">{{ _('or separate fields') }}</summary>
+  <label class="f"><span>{{ _('Audible ASIN / link') }}</span><input type="text" name="asin"></label>
+  <label class="f"><span>{{ _('Goodreads link') }}</span><input type="text" name="goodreads"></label>
+  <label class="f"><span>{{ _('Hardcover link') }}</span><input type="text" name="hardcover"></label>
  </details>
- <p class="row" style="margin-top:12px"><button class="primary" name="action" value="apply">Übernehmen & bearbeiten</button>
- <button name="action" value="test">Erst als Testlauf</button>
- <button name="action" value="retry">Ohne Vorgabe neu prüfen</button>
- {% if ov.ignore %}<button name="action" value="unignore">Nicht mehr ignorieren</button>{% else %}<button name="action" value="ignore">Ignorieren</button>{% endif %}</p>
- <p class="muted small">Eine manuelle ASIN wird in ABS geschrieben und danach nie automatisch ersetzt. Ein Goodreads- oder Hardcover-Link wird fest für dieses Buch verwendet.</p>
+ <p class="row" style="margin-top:12px"><button class="primary" name="action" value="apply">{{ _('Apply & process') }}</button>
+ <button name="action" value="test">{{ _('Test run first') }}</button>
+ <button name="action" value="retry">{{ _('Check again without override') }}</button>
+ {% if ov.ignore %}<button name="action" value="unignore">{{ _('Stop ignoring') }}</button>{% else %}<button name="action" value="ignore">{{ _('Ignore') }}</button>{% endif %}</p>
+ <p class="muted small">{{ _('A manual ASIN is written to ABS and never replaced automatically afterwards. A Goodreads or Hardcover link is used permanently for this book.') }}</p>
 </form></div>
-<details class="card"><summary><b>Log der letzten Prüfung</b></summary><pre class="log" style="margin-top:10px">{{ (r.log or ['(kein Log)'])|join('\n') }}</pre></details>
+<details class="card"><summary><b>{{ _('Log of the last check') }}</b></summary><pre class="log" style="margin-top:10px">{{ (r.log or ['(' ~ _('no log') ~ ')'])|join('\n') }}</pre></details>
 {% endblock %}

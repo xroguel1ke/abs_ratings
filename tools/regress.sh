@@ -8,7 +8,7 @@ DEV=/mnt/user/appdata/abs_ratings_dev; cd $DEV; fail=0
 IMG=ghcr.io/xroguel1ke/abs_ratings:web-ui
 py() { timeout 600 docker run --rm --name "abs_ratings_test_regress_$$" -e PYTHONDONTWRITEBYTECODE=1 -v $DEV:/src -w /src $IMG python -I "$@"; }
 echo "== 1 syntax";  py -c 'import sys; [compile(open(f).read(), f, "exec") for f in ("abs_ratings.py","abs_series.py","abs_undo.py","recorder.py")]; print("ok")' || fail=1
-echo "== 2 unit tests"; py tests/test_authors.py | tail -1 || fail=1; py tests/test_series.py | tail -1 || fail=1; py tests/test_asin.py | tail -1 || fail=1; py tests/test_webui_queue.py | tail -1 || fail=1
+echo "== 2 unit tests"; py tests/test_authors.py | tail -1 || fail=1; py tests/test_series.py | tail -1 || fail=1; py tests/test_asin.py | tail -1 || fail=1; py tests/test_webui_queue.py | tail -1 || fail=1; py tests/test_webui_i18n.py | tail -1 || fail=1
 echo "== 3 library-wide series/author decisions"; py tools/lib_check.py || fail=1
 echo "== 4 golden rounds"
 i=0

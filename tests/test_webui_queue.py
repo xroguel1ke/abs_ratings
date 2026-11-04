@@ -49,7 +49,7 @@ def test_books_list_sorted_by_certainty():
     assert h.index('Low') < h.index('High') < h.index('None'), 'ascending: low first, books without score last'
     h = c.get('/books?sort=certainty&dir=desc').get_data(as_text=True); assert h.index('High') < h.index('Low')
     assert 'High' not in c.get('/books?max=50').get_data(as_text=True)
-    assert 'Sicherheit 35 / 100' in c.get('/problem/a').get_data(as_text=True)
+    assert 'Certainty 35 / 100' in c.get('/problem/a').get_data(as_text=True)
 
 
 def test_status_page_coverage_and_api():
@@ -57,7 +57,7 @@ def test_status_page_coverage_and_api():
     json.dump({'books': 10, 'generated': 'now', 'missing': {'asin': ['A', 'B'], 'cover': []}}, open(os.path.join(cfg, 'reports', 'library_report.json'), 'w'))
     open(os.path.join(cfg, 'logs', 'run_2026-01-01_00-00-00.log'), 'w').write('Hardcover: found 5 (daily limit left: 4321)\nGoodreads blocks requests: Bot challenge')
     html = client().get('/status').get_data(as_text=True)
-    assert '80.0' in html and '100.0' in html and '4321' in html and 'gesperrt' in html, html[-900:]
+    assert '80.0' in html and '100.0' in html and '4321' in html and 'blocked' in html, html[-900:]
 
 
 def test_run_progress_parser():

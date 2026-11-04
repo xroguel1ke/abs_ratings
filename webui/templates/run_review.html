@@ -1,35 +1,35 @@
-{% extends 'base.html' %}{% block title %}Testlauf prüfen{% endblock %}{% block body %}
-{% set FL = {'asin': 'ASIN', 'title': 'Titel', 'subtitle': 'Untertitel', 'description': 'Beschreibung', 'genres': 'Genres', 'cover': 'Cover', 'language': 'Sprache', 'publisher': 'Verlag', 'publishedYear': 'Jahr', 'narrators': 'Sprecher', 'authors': 'Autoren', 'series': 'Reihe', 'isbn': 'ISBN', 'explicit': 'Explicit', 'abridged': 'Gekürzt', 'tags': 'Tags'} %}
-{% macro val(e, v) %}{% if e.field == 'description' %}<span class="muted">{{ (v or '')|length }} Zeichen</span>{% elif e.field == 'cover' %}{% if v and v.startswith('http') %}<a href="{{ v }}" target="_blank">Bild ↗</a>{% elif v %}<span class="muted">vorhanden</span>{% else %}–{% endif %}{% elif v is none or v == '' or v == [] %}–{% else %}{{ v }}{% endif %}{% endmacro %}
+{% extends 'base.html' %}{% block title %}{{ _('Review test run') }}{% endblock %}{% block body %}
+{% set FL = {'asin': 'ASIN', 'title': _('Title'), 'subtitle': _('Subtitle'), 'description': _('Description'), 'genres': _('Genres'), 'cover': _('Cover'), 'language': _('Language'), 'publisher': _('Publisher'), 'publishedYear': _('Year'), 'narrators': _('Narrators'), 'authors': _('Authors'), 'series': _('Series'), 'isbn': 'ISBN', 'explicit': 'Explicit', 'abridged': _('Abridged'), 'tags': 'Tags'} %}
+{% macro val(e, v) %}{% if e.field == 'description' %}<span class="muted">{{ _('%(n)s characters', n=(v or '')|length) }}</span>{% elif e.field == 'cover' %}{% if v and v.startswith('http') %}<a href="{{ v }}" target="_blank">{{ _('Image') }} ↗</a>{% elif v %}<span class="muted">{{ _('present') }}</span>{% else %}–{% endif %}{% elif v is none or v == '' or v == [] %}–{% else %}{{ v }}{% endif %}{% endmacro %}
 {% macro row(e) %}<tr class="{{ 'risky' if e.risky }}"><td><input type="checkbox" name="sel" value="{{ e.n }}" form="applyform" class="pick g-{{ e.field }}" checked></td>
-<td><a href="{{ url_for('problem', key=e.key) }}">{{ e.title }}</a>{% if e.risky %} <span class="badge warn" title="riskante Änderung: genau prüfen">⚠️ {{ risky_labels.get(e.field, e.field) }}</span>{% endif %}<div class="muted small">{{ e.source }}</div></td>
+<td><a href="{{ url_for('problem', key=e.key) }}">{{ e.title }}</a>{% if e.risky %} <span class="badge warn" title="{{ _('risky change: check carefully') }}">⚠️ {{ risky_labels.get(e.field, e.field) }}</span>{% endif %}<div class="muted small">{{ e.source }}</div></td>
 <td class="small">{{ val(e, e.old) }}</td><td class="small">{{ val(e, e.new) }}</td></tr>{% endmacro %}
-<p><a href="{{ url_for('run_view', run_id=run.id) }}">← zum Testlauf</a></p>
-<h1>Testlauf prüfen <span class="muted" style="font-weight:400">({{ total }} Änderungen)</span></h1>
+<p><a href="{{ url_for('run_view', run_id=run.id) }}">← {{ _('back to the test run') }}</a></p>
+<h1>{{ _('Review test run') }} <span class="muted" style="font-weight:400">({{ _('%(n)s changes', n=total) }})</span></h1>
 <form class="card row" method="get">
- <input type="search" name="q" value="{{ q }}" placeholder="Buch filtern" style="flex:2 1 220px">
- <select name="field" style="flex:1 1 160px"><option value="">alle Felder</option>{% for f, es in groups %}<option value="{{ f }}" {{ 'selected' if f == field }}>{{ FL.get(f, f) }}</option>{% endfor %}</select>
- <button class="primary">Filtern</button>{% if q or field %}<a href="{{ url_for('run_review', run_id=run.id) }}">Filter aufheben</a>{% endif %}
+ <input type="search" name="q" value="{{ q }}" placeholder="{{ _('Filter books') }}" style="flex:2 1 220px">
+ <select name="field" style="flex:1 1 160px"><option value="">{{ _('all fields') }}</option>{% for f, es in groups %}<option value="{{ f }}" {{ 'selected' if f == field }}>{{ FL.get(f, f) }}</option>{% endfor %}</select>
+ <button class="primary">{{ _('Filter') }}</button>{% if q or field %}<a href="{{ url_for('run_review', run_id=run.id) }}">{{ _('Clear filter') }}</a>{% endif %}
 </form>
 <div class="card">
- <p class="small" style="margin-top:0">Angehakte Änderungen werden geschrieben – aber nur, wenn der ABS-Wert noch derselbe ist wie beim Testlauf (sonst übersprungen und im Log genannt). Keine neuen Audible-Anfragen. Vorher ABS-Backup, danach alles unter <a href="{{ url_for('history') }}">Verlauf</a> rückgängig machbar.</p>
- <form id="applyform" method="post" action="{{ url_for('run_apply', run_id=run.id) }}" class="row" data-confirm="Die ausgewählten Änderungen jetzt in ABS schreiben?" data-confirm-ok="Schreiben">
+ <p class="small" style="margin-top:0">{{ _('Checked changes are written - but only if the ABS value is still the same as in the test run (otherwise skipped and named in the log). No new Audible requests. ABS backup first, afterwards everything can be undone under') }} <a href="{{ url_for('history') }}">{{ _('History') }}</a>.</p>
+ <form id="applyform" method="post" action="{{ url_for('run_apply', run_id=run.id) }}" class="row" data-confirm="{{ _('Write the selected changes to ABS now?') }}" data-confirm-ok="{{ _('Write') }}">
   <input type="hidden" name="selection" value="1">
-  <button type="button" onclick="pickAll(true)">alle wählen</button><button type="button" onclick="pickAll(false)">keine</button>
+  <button type="button" onclick="pickAll(true)">{{ _('select all') }}</button><button type="button" onclick="pickAll(false)">{{ _('none') }}</button>
   <span class="muted small" id="cnt"></span><span style="flex:1"></span>
-  <button name="mode" value="check">Auswahl prüfen (nichts schreiben)</button>
-  <button name="mode" value="apply" class="primary">Auswahl übernehmen</button>
+  <button name="mode" value="check">{{ _('Check selection (write nothing)') }}</button>
+  <button name="mode" value="apply" class="primary">{{ _('Apply selection') }}</button>
  </form>
 </div>
-{% if risky and not field %}<div class="card tablewrap" style="border-left:5px solid var(--warn)"><h2 style="margin-top:0">⚠️ Riskante Änderungen zuerst prüfen ({{ risky|length }})</h2>
-<p class="muted small">ASIN-Wechsel oder neue ASIN, Titel, Sprache, neue Reihe, Autoren, ISBN-Ersatz: Sie ändern, welches Buch gemeint ist oder wie es heißt. Jede einzeln ansehen (Klick auf den Titel zeigt Vergleich und Begründung).</p>
-<table class="diff"><tr><th></th><th>Buch</th><th>Alt</th><th>Neu</th></tr>{% for e in risky %}{{ row(e) }}{% endfor %}</table></div>{% endif %}
+{% if risky and not field %}<div class="card tablewrap" style="border-left:5px solid var(--warn)"><h2 style="margin-top:0">⚠️ {{ _('Check risky changes first') }} ({{ risky|length }})</h2>
+<p class="muted small">{{ _('ASIN change or new ASIN, title, language, new series, authors, ISBN replacement: they change which book is meant or what it is called. Look at each one (a click on the title shows comparison and reason).') }}</p>
+<table class="diff"><tr><th></th><th>{{ _('Book') }}</th><th>{{ _('Old') }}</th><th>{{ _('New') }}</th></tr>{% for e in risky %}{{ row(e) }}{% endfor %}</table></div>{% endif %}
 {% for f, es in groups %}{% set safe = es|rejectattr('risky')|list %}{% if safe %}
 <details class="card tablewrap" {{ 'open' if field or groups|length == 1 }}><summary><b>{{ FL.get(f, f) }}</b> <span class="muted">({{ safe|length }})</span>
- <label class="small" style="margin-left:12px" onclick="event.stopPropagation()"><input type="checkbox" checked onchange="pickGroup('{{ f }}', this.checked)"> ganze Gruppe</label></summary>
-<table class="diff" style="margin-top:8px"><tr><th></th><th>Buch</th><th>Alt</th><th>Neu</th></tr>{% for e in safe %}{{ row(e) }}{% endfor %}</table></details>{% endif %}{% endfor %}
+ <label class="small" style="margin-left:12px" onclick="event.stopPropagation()"><input type="checkbox" checked onchange="pickGroup('{{ f }}', this.checked)"> {{ _('whole group') }}</label></summary>
+<table class="diff" style="margin-top:8px"><tr><th></th><th>{{ _('Book') }}</th><th>{{ _('Old') }}</th><th>{{ _('New') }}</th></tr>{% for e in safe %}{{ row(e) }}{% endfor %}</table></details>{% endif %}{% endfor %}
 <script>
-function count(){ const n=document.querySelectorAll('.pick:checked').length; document.getElementById('cnt').textContent=n+' von '+document.querySelectorAll('.pick').length+' ausgewählt'; }
+function count(){ const n=document.querySelectorAll('.pick:checked').length; document.getElementById('cnt').textContent=T('%(a)s of %(b)s selected').replace('%(a)s',n).replace('%(b)s',document.querySelectorAll('.pick').length); }
 function pickAll(v){ document.querySelectorAll('.pick').forEach(c=>c.checked=v); count(); }
 function pickGroup(f,v){ document.querySelectorAll('.pick.g-'+f).forEach(c=>{ if(!c.closest('tr').classList.contains('risky')) c.checked=v; }); count(); }
 document.addEventListener('change', e=>{ if(e.target.classList.contains('pick')) count(); }); count();

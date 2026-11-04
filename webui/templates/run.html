@@ -1,26 +1,26 @@
 {% extends 'base.html' %}{% block body %}
-<p>{% if back %}<a href="{{ url_for('problem', key=back) }}">← zurück zum Buch</a>{% else %}<a href="{{ url_for('runs') }}">← Läufe</a>{% endif %}</p>
-<h1>{{ run.label }} {% if run.dry_run %}<span class="badge">Testlauf</span>{% endif %}</h1>
-<div class="card row" style="gap:18px"><span>Status: <span id="st" class="badge {{ 'ok' if run.status=='ok' else ('running' if run.status=='running' else 'err') }}">{{ run.status }}</span></span>
-<span>Start: {{ run.start|dt }}</span><span>Ende: {{ run.end|dt }}</span>
-{% if run.status=='running' %}<form method="post" action="{{ url_for('runs') }}"><button class="danger" name="action" value="stop">■ Abbrechen</button></form>{% endif %}
-<a href="{{ url_for('log_download', kind='log', name=run.log) }}">Log herunterladen</a></div>
+<p>{% if back %}<a href="{{ url_for('problem', key=back) }}">← {{ _('back to the book') }}</a>{% else %}<a href="{{ url_for('runs') }}">← {{ _('Scans') }}</a>{% endif %}</p>
+<h1>{{ run.label }} {% if run.dry_run %}<span class="badge">{{ _('Test run') }}</span>{% endif %}</h1>
+<div class="card row" style="gap:18px"><span>{{ _('Status') }}: <span id="st" class="badge {{ 'ok' if run.status=='ok' else ('running' if run.status=='running' else 'err') }}">{{ run.status }}</span></span>
+<span>{{ _('Start') }}: {{ run.start|dt }}</span><span>{{ _('End') }}: {{ run.end|dt }}</span>
+{% if run.status=='running' %}<form method="post" action="{{ url_for('runs') }}"><button class="danger" name="action" value="stop">■ {{ _('Cancel') }}</button></form>{% endif %}
+<a href="{{ url_for('log_download', kind='log', name=run.log) }}">{{ _('Download log') }}</a></div>
 {% if run.status=='running' %}<div class="card" id="prog"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><b id="pt">…</b><span class="muted" id="pe"></span></div>
 <div style="background:var(--line);border-radius:8px;height:12px;margin:8px 0"><div id="pb" style="height:12px;border-radius:8px;width:0;background:var(--ok);transition:width .6s"></div></div>
 <div class="row small" id="pc" style="gap:16px;flex-wrap:wrap"></div></div>{% endif %}
 {% if run.summary %}<div class="card small">{{ run.summary }}</div>{% endif %}
 {% if run.dry_run and run.kind in ('full', 'item') and run.status != 'running' and changes %}
-<div class="card"><h2 style="margin-top:0">Diesen Testlauf übernehmen</h2>
- <p><a class="btn primary" href="{{ url_for('run_review', run_id=run.id) }}">Änderungen prüfen und auswählen →</a> <span class="muted small">gruppiert, riskante zuerst, mit Häkchen</span></p>
- <p class="small">Schreibt genau die {{ changes|length }} geplanten Änderungen in ABS – aber nur dort, wo der ABS-Wert noch derselbe ist wie beim Testlauf. Wurde ein Buch inzwischen geändert (von dir oder einem anderen Lauf) oder gesperrt, wird diese Änderung übersprungen und im Log genannt. Vorher wird ein ABS-Backup angelegt (falls eingestellt); alles erscheint danach unter <a href="{{ url_for('history') }}">Verlauf</a> und lässt sich rückgängig machen.</p>
- <div class="row"><form method="post" action="{{ url_for('run_apply', run_id=run.id) }}"><input type="hidden" name="mode" value="check"><button>Erst prüfen (nichts schreiben)</button></form>
- <form method="post" action="{{ url_for('run_apply', run_id=run.id) }}" data-confirm="{{ changes|length }} Änderungen jetzt wirklich in ABS schreiben?"><input type="hidden" name="mode" value="apply"><button class="primary">Übernehmen</button></form></div>
+<div class="card"><h2 style="margin-top:0">{{ _('Apply this test run') }}</h2>
+ <p><a class="btn primary" href="{{ url_for('run_review', run_id=run.id) }}">{{ _('Review and select changes') }} →</a> <span class="muted small">{{ _('grouped, risky ones first, with checkboxes') }}</span></p>
+ <p class="small">{{ _('Writes exactly the %(n)s planned changes to ABS - but only where the ABS value is still the same as in the test run. If a book was changed in the meantime (by you or another scan) or locked, that change is skipped and named in the log. An ABS backup is made first (if enabled); everything then appears under History and can be undone.', n=changes|length) }} <a href="{{ url_for('history') }}">{{ _('History') }}</a></p>
+ <div class="row"><form method="post" action="{{ url_for('run_apply', run_id=run.id) }}"><input type="hidden" name="mode" value="check"><button>{{ _('Check first (write nothing)') }}</button></form>
+ <form method="post" action="{{ url_for('run_apply', run_id=run.id) }}" data-confirm="{{ _('Really write %(n)s changes to ABS now?', n=changes|length) }}"><input type="hidden" name="mode" value="apply"><button class="primary">{{ _('Apply') }}</button></form></div>
 </div>{% endif %}
-{% if run.status != 'running' %}<div class="card tablewrap"><h2 style="margin-top:0">{{ 'Geplante' if run.dry_run else 'Durchgeführte' }} Änderungen ({{ changes|length }})</h2>
-<table class="diff"><tr><th>Buch</th><th>Feld</th><th>Vorher</th><th>Nachher</th></tr>
+{% if run.status != 'running' %}<div class="card tablewrap"><h2 style="margin-top:0">{{ _('Planned changes') if run.dry_run else _('Changes made') }} ({{ changes|length }})</h2>
+<table class="diff"><tr><th>{{ _('Book') }}</th><th>{{ _('Field') }}</th><th>{{ _('Before') }}</th><th>{{ _('After') }}</th></tr>
 {% for c in changes[:500] %}<tr><td>{{ c.title }}<div class="muted small">{{ c.source }}</div></td><td>{{ c.field }}</td>
 <td class="small">{{ (c.old|string)[:220] if c.field!='description' else '…' }}</td><td class="small">{{ (c.new|string)[:220] if c.field!='description' else (c.new|striptags)[:220] }}</td></tr>
-{% else %}<tr><td colspan="4" class="muted">Keine Änderungen.</td></tr>{% endfor %}</table>{% if changes|length > 500 %}<p class="muted small">… {{ changes|length - 500 }} weitere im Log / planned_changes.</p>{% endif %}</div>{% endif %}
+{% else %}<tr><td colspan="4" class="muted">{{ _('No changes.') }}</td></tr>{% endfor %}</table>{% if changes|length > 500 %}<p class="muted small">… {{ _('%(n)s more in the log / planned_changes.', n=changes|length - 500) }}</p>{% endif %}</div>{% endif %}
 <h2>Log</h2><pre class="log" id="log"></pre>
 <script>
 let off=0, done=false;
@@ -29,8 +29,8 @@ async function poll(){ const r=await fetch("{{ url_for('api_run_log', run_id=run
  el.textContent+=j.text; off=j.offset; if(atBottom) el.scrollTop=el.scrollHeight;
  if(j.status!=='running'){ if(!done && "{{ run.status }}"==='running'){ done=true; location.reload(); } return; } setTimeout(poll,1500); }
 async function prog(){ if(done) return; try{ const r=await fetch("{{ url_for('api_run_progress', run_id=run.id) }}"); const j=await r.json(); if(j.status!=='running') return;
- document.getElementById('pt').textContent=j.total? (j.n+" / "+j.total+" · "+(j.title||'')) : 'Startet …'; document.getElementById('pe').textContent=j.eta? ('Restzeit '+j.eta):''; document.getElementById('pb').style.width=(j.pct||0)+'%';
- document.getElementById('pc').innerHTML=[['Audible gefunden',j.audible_found],['ohne Audible-Daten',j.no_audible],['Hardcover',j.hardcover],['Goodreads',j.goodreads+(j.goodreads_blocked?' (gesperrt)':'')],['neue ASIN',j.new_asin],['Prüfliste',j.reviews]].map(x=>'<span><b>'+x[1]+'</b> '+x[0]+'</span>').join('');
+ document.getElementById('pt').textContent=j.total? (j.n+" / "+j.total+" · "+(j.title||'')) : T('Starting …'); document.getElementById('pe').textContent=j.eta? (T('Time left')+' '+j.eta):''; document.getElementById('pb').style.width=(j.pct||0)+'%';
+ document.getElementById('pc').innerHTML=[[T('Audible found'),j.audible_found],[T('without Audible data'),j.no_audible],['Hardcover',j.hardcover],['Goodreads',j.goodreads+(j.goodreads_blocked?' ('+T('blocked')+')':'')],[T('new ASIN'),j.new_asin],[T('Review list'),j.reviews]].map(x=>'<span><b>'+x[1]+'</b> '+x[0]+'</span>').join('');
  }catch(e){} setTimeout(prog,1500); }
 if(document.getElementById('prog')) prog();
 poll();

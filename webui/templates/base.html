@@ -1,20 +1,21 @@
-<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<!doctype html><html lang="{{ lang }}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}ABS Ratings{% endblock %}</title><link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+<script>window.I18N = {{ js_i18n|tojson }};</script>
 <script src="{{ url_for('static', filename='app.js') }}"></script></head><body>
-{% if session.auth %}<header><div class="nav"><span class="brand">⭐ ABS Ratings</span><button type="button" class="iconbtn navtoggle" aria-label="Menü" onclick="this.closest('.nav').classList.toggle('open')">☰</button>
+{% if session.auth %}<header><div class="nav"><span class="brand">⭐ ABS Ratings</span><button type="button" class="iconbtn navtoggle" aria-label="{{ _('Menu') }}" onclick="this.closest('.nav').classList.toggle('open')">☰</button>
 {% set ep = request.endpoint %}
 <div class="links">
-<a data-tour="dashboard" href="{{ url_for('dashboard') }}" class="{{ 'active' if ep in ('dashboard','problem') }}">Übersicht</a>
-<a data-tour="books" href="{{ url_for('books') }}" class="{{ 'active' if ep=='books' }}">Bücher</a>
-<a data-tour="review" href="{{ url_for('review_page') }}" class="{{ 'active' if ep=='review_page' }}">Prüfliste</a>
-<a data-tour="status" href="{{ url_for('status') }}" class="{{ 'active' if ep=='status' }}">Status</a>
-<a data-tour="runs" href="{{ url_for('runs') }}" class="{{ 'active' if ep in ('runs','run_view') }}">Scans</a>
-<a data-tour="history" href="{{ url_for('history') }}" class="{{ 'active' if ep in ('history','history_run') }}">Verlauf</a>
-<a data-tour="settings" href="{{ url_for('settings') }}" class="{{ 'active' if ep=='settings' }}">Einstellungen</a>
-<form action="{{ url_for('books') }}" method="get" style="margin:0 8px"><input type="search" name="q" placeholder="Suchen…" style="width:130px;padding:6px 12px;border-radius:99px"></form>
+<a data-tour="dashboard" href="{{ url_for('dashboard') }}" class="{{ 'active' if ep in ('dashboard','problem') }}">{{ _('Overview') }}</a>
+<a data-tour="books" href="{{ url_for('books') }}" class="{{ 'active' if ep=='books' }}">{{ _('Books') }}</a>
+<a data-tour="review" href="{{ url_for('review_page') }}" class="{{ 'active' if ep=='review_page' }}">{{ _('Review list') }}</a>
+<a data-tour="status" href="{{ url_for('status') }}" class="{{ 'active' if ep=='status' }}">{{ _('Status') }}</a>
+<a data-tour="runs" href="{{ url_for('runs') }}" class="{{ 'active' if ep in ('runs','run_view') }}">{{ _('Scans') }}</a>
+<a data-tour="history" href="{{ url_for('history') }}" class="{{ 'active' if ep in ('history','history_run') }}">{{ _('History') }}</a>
+<a data-tour="settings" href="{{ url_for('settings') }}" class="{{ 'active' if ep in ('settings','logs','log_view') }}">{{ _('Settings') }}</a>
+<form action="{{ url_for('books') }}" method="get" style="margin:0 8px"><input type="search" name="q" placeholder="{{ _('Search…') }}" style="width:130px;padding:6px 12px;border-radius:99px"></form>
 </div>
-<span class="right">{% if running %}<a href="{{ url_for('run_view', run_id=current_run.id) }}"><span class="badge running">● läuft: {{ current_run.label }}</span></a>{% elif next_run %}nächster Lauf: {{ next_run|dt }}{% endif %}
-<button type="button" class="iconbtn" id="theme-toggle" title="Hell / dunkel">☾</button>
-<a href="{{ url_for('password') }}">Passwort</a><a href="{{ url_for('logout') }}">Abmelden</a></span></div></header>{% endif %}
+<span class="right">{% if running %}<a href="{{ url_for('run_view', run_id=current_run.id) }}"><span class="badge running">● {{ _('running') }}: {{ current_run.label }}</span></a>{% elif next_run %}{{ _('next scan') }}: {{ next_run|dt }}{% endif %}
+<button type="button" class="iconbtn" id="theme-toggle" title="{{ _('Light / dark') }}">☾</button>
+<a href="{{ url_for('password') }}">{{ _('Password') }}</a><a href="{{ url_for('logout') }}">{{ _('Log out') }}</a></span></div></header>{% endif %}
 <main>{% with msgs = get_flashed_messages(with_categories=true) %}{% for c, m in msgs %}<div class="flash {{ c }}">{{ m }}</div>{% endfor %}{% endwith %}
 {% block body %}{% endblock %}</main></body></html>

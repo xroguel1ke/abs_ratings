@@ -1,43 +1,43 @@
-{% extends 'base.html' %}{% block title %}Übersicht{% endblock %}{% block body %}
-<h1>Übersicht</h1>
-{% if not settings.ABS_URL or not settings.API_TOKEN %}<div class="flash error">Noch nicht eingerichtet: bitte zuerst unter <a href="{{ url_for('settings') }}">Einstellungen</a> ABS-URL, Token und Bibliotheken eintragen.</div>{% endif %}
+{% extends 'base.html' %}{% block title %}{{ _('Overview') }}{% endblock %}{% block body %}
+<h1>{{ _('Overview') }}</h1>
+{% if not settings.ABS_URL or not settings.API_TOKEN %}<div class="flash error">{{ _('Not set up yet: please enter the ABS URL, token and libraries under') }} <a href="{{ url_for('settings') }}">{{ _('Settings') }}</a>.</div>{% endif %}
 
 <div class="hero">
  <a class="card herocard" href="{{ url_for('review_page') }}">
-  <div class="muted small">Zu prüfen</div><div class="v">{{ tiles.queue + tiles.review + tiles.merged }}</div>
-  <div class="small">{{ tiles.queue }} Bücher · {{ tiles.review }} unsichere Reihen/Autoren · {{ tiles.merged }} Zusammenführungen bestätigen</div>
-  <div class="go">Prüfliste öffnen →</div></a>
+  <div class="muted small">{{ _('To review') }}</div><div class="v">{{ tiles.queue + tiles.review + tiles.merged }}</div>
+  <div class="small">{{ _('%(a)s books · %(b)s uncertain series/authors · %(c)s merges to confirm', a=tiles.queue, b=tiles.review, c=tiles.merged) }}</div>
+  <div class="go">{{ _('Open the review list') }} →</div></a>
  <div class="card herocard">
-  <div class="muted small">Letzter Scan</div>
+  <div class="muted small">{{ _('Last scan') }}</div>
   {% if last %}<div class="v" style="font-size:1.2em"><a href="{{ url_for('run_view', run_id=last.id) }}">{{ last.start|dt }}</a></div>
-  <div class="small"><span class="badge {{ 'ok' if last.status=='ok' else 'err' }}">{{ last.status }}</span>{% if last.dry_run %} <span class="badge">Testlauf</span>{% endif %} {{ last.label }}</div>
+  <div class="small"><span class="badge {{ 'ok' if last.status=='ok' else 'err' }}">{{ last.status }}</span>{% if last.dry_run %} <span class="badge">{{ _('Test run') }}</span>{% endif %} {{ last.label }}</div>
   {% if last.summary %}<div class="muted small" style="margin-top:4px">{{ last.summary[:180] }}{{ '…' if last.summary|length > 180 }}</div>{% endif %}
-  {% else %}<div class="v" style="font-size:1.2em">–</div><div class="muted small">noch kein Scan</div>{% endif %}</div>
+  {% else %}<div class="v" style="font-size:1.2em">–</div><div class="muted small">{{ _('no scan yet') }}</div>{% endif %}</div>
  <a class="card herocard" href="{{ url_for('runs') }}">
-  <div class="muted small">Nächster Scan</div><div class="v" style="font-size:1.2em">{{ next_run|dt if next_run else 'kein Zeitplan' }}</div>
-  <div class="small">Goodreads: {{ gr_note or ('aus' if not settings.GOODREADS_ENABLED else 'an') }}</div>
-  <div class="go">Scan starten →</div></a>
+  <div class="muted small">{{ _('Next scan') }}</div><div class="v" style="font-size:1.2em">{{ next_run|dt if next_run else _('no schedule') }}</div>
+  <div class="small">Goodreads: {{ gr_note or (_('off') if not settings.GOODREADS_ENABLED else _('on')) }}</div>
+  <div class="go">{{ _('Start a scan') }} →</div></a>
 </div>
 
-<h2>Bibliothek</h2>
+<h2>{{ _('Library') }}</h2>
 <div class="tiles">
- <div class="tile"><div class="v">{{ tiles.books }}</div><div class="l">Bücher geprüft</div></div>
- <div class="tile"><div class="v" style="color:var(--ok)">{{ tiles.ok }}</div><div class="l">mit Bewertungen</div></div>
- <div class="tile"><div class="v" style="color:var(--err)">{{ tiles.not_found }}</div><div class="l">nicht gefunden</div></div>
- <div class="tile"><div class="v" style="color:var(--warn)">{{ tiles.other_edition }}</div><div class="l">andere Ausgabe</div></div>
- <div class="tile"><div class="v">{{ tiles.no_ratings_yet }}</div><div class="l">noch keine Bewertungen</div></div>
+ <div class="tile"><div class="v">{{ tiles.books }}</div><div class="l">{{ _('books checked') }}</div></div>
+ <div class="tile"><div class="v" style="color:var(--ok)">{{ tiles.ok }}</div><div class="l">{{ _('with ratings') }}</div></div>
+ <div class="tile"><div class="v" style="color:var(--err)">{{ tiles.not_found }}</div><div class="l">{{ _('not found') }}</div></div>
+ <div class="tile"><div class="v" style="color:var(--warn)">{{ tiles.other_edition }}</div><div class="l">{{ _('other edition') }}</div></div>
+ <div class="tile"><div class="v">{{ tiles.no_ratings_yet }}</div><div class="l">{{ _('no ratings yet') }}</div></div>
 </div>
-<p class="small"><a href="{{ url_for('status') }}">Abdeckung aller Felder →</a> · <a href="{{ url_for('report') }}" target="_blank">Bibliotheks-Report ↗</a></p>
+<p class="small"><a href="{{ url_for('status') }}">{{ _('Coverage of all fields') }} →</a> · <a href="{{ url_for('report') }}" target="_blank">{{ _('Library report') }} ↗</a></p>
 
-<h2>Bücher ohne Bewertungen ({{ tiles.problems }})</h2>
+<h2>{{ _('Books without ratings') }} ({{ tiles.problems }})</h2>
 <form class="card row" method="get">
- <select name="status" style="flex:1 1 200px"><option value="">alle</option>
+ <select name="status" style="flex:1 1 200px"><option value="">{{ _('all') }}</option>
  {% for k in ['not_found','other_edition','no_ratings_yet','error'] %}<option value="{{ k }}" {{ 'selected' if status_filter==k }}>{{ status_label[k] }} ({{ counts.get(k,0) }})</option>{% endfor %}</select>
- <input type="search" name="q" value="{{ q }}" placeholder="Titel oder Autor" style="flex:2 1 220px"><button class="primary">Filtern</button></form>
-<div class="card tablewrap"><table><tr><th>Buch</th><th>Status</th><th>Grund</th><th>ASIN</th></tr>
+ <input type="search" name="q" value="{{ q }}" placeholder="{{ _('Title or author') }}" style="flex:2 1 220px"><button class="primary">{{ _('Filter') }}</button></form>
+<div class="card tablewrap"><table><tr><th>{{ _('Book') }}</th><th>{{ _('Status') }}</th><th>{{ _('Reason') }}</th><th>ASIN</th></tr>
 {% for r in problems[:300] %}<tr><td><a href="{{ url_for('problem', key=r.key) }}">{{ r.title }}</a><div class="muted small">{{ r.author }}</div></td>
-<td><span class="badge {{ r.status }}">{{ status_label[r.status] }}</span>{% if r.dry_run %}<div class="muted small">aus Testlauf</div>{% endif %}</td>
+<td><span class="badge {{ r.status }}">{{ status_label[r.status] }}</span>{% if r.dry_run %}<div class="muted small">{{ _('from a test run') }}</div>{% endif %}</td>
 <td class="small">{{ r.reason|de }}{% for n in r.notes or [] %}<div class="muted">{{ n|de }}</div>{% endfor %}</td><td class="small">{% if r.asin %}<code>{{ r.asin }}</code>{% else %}–{% endif %}</td></tr>
-{% else %}<tr><td colspan="4" class="muted">Keine{{ ' für diesen Filter' if status_filter or q }}. Die Liste füllt sich nach dem ersten Scan.</td></tr>{% endfor %}</table>
-{% if problems|length > 300 %}<p class="muted small">Erste 300 von {{ problems|length }} – bitte filtern.</p>{% endif %}</div>
+{% else %}<tr><td colspan="4" class="muted">{{ _('None.') }} {{ _('The list fills after the first scan.') }}</td></tr>{% endfor %}</table>
+{% if problems|length > 300 %}<p class="muted small">{{ _('First 300 of %(n)s - please filter.', n=problems|length) }}</p>{% endif %}</div>
 {% endblock %}

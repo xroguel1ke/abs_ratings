@@ -1,25 +1,25 @@
-{% extends 'base.html' %}{% block title %}Status{% endblock %}{% block body %}
-<h1>Status</h1>
+{% extends 'base.html' %}{% block title %}{{ _('Status') }}{% endblock %}{% block body %}
+<h1>{{ _('Status') }}</h1>
 <div class="tiles">
- <div class="tile"><div class="v">{% if api.hc_left is not none %}{{ api.hc_left }}{% else %}–{% endif %}</div><div class="l">Hardcover-Anfragen übrig{% if api.hc_used is defined %} · {{ api.hc_used }} von 5000 heute verbraucht{% endif %}{% if api.hc_when %} (Stand {{ api.hc_when }}){% endif %}<br>Reset: {{ api.hc_reset or 'täglich (Uhrzeit meldet Hardcover nicht)' }}</div></div>
- <div class="tile"><div class="v" style="font-size:1.1em">{{ api.gr }}</div><div class="l">Goodreads</div></div>
- <div class="tile"><div class="v">{{ api.queue }}</div><div class="l"><a href="{{ url_for('dashboard', tab='queue') }}">Einträge in der Prüfliste</a></div></div>
+ <div class="tile"><div class="v">{% if api.hc_left is not none %}{{ api.hc_left }}{% else %}–{% endif %}</div><div class="l">{{ _('Hardcover requests left') }}{% if api.hc_used is defined %} · {{ _('%(n)s of 5000 used today', n=api.hc_used) }}{% endif %}{% if api.hc_when %} ({{ _('as of') }} {{ api.hc_when }}){% endif %}<br>{{ _('Reset') }}: {{ api.hc_reset or _('daily (Hardcover does not report the time)') }}</div></div>
+ <div class="tile"><div class="v" style="font-size:1.1em">{{ _(api.gr) }}</div><div class="l">Goodreads</div></div>
+ <div class="tile"><div class="v">{{ api.queue }}</div><div class="l"><a href="{{ url_for('review_page') }}">{{ _('Entries in the review list') }}</a></div></div>
 </div>
-<p class="muted small">Das Hardcover-Tageslimit setzt sich täglich zurück; der Lauf stoppt automatisch kurz davor (Reserve 25). Goodreads wird bei der ersten Sperre sofort beendet und beim nächsten Lauf neu versucht.</p>
+<p class="muted small">{{ _('The Hardcover daily limit resets every day; the scan stops automatically shortly before it (reserve 25). Goodreads is stopped at the first block and tried again in the next scan.') }}</p>
 
-<h3>Abdeckung der Bibliothek</h3>
-<div class="card tablewrap"><table><tr><th>Feld</th><th>vorhanden</th><th>Anteil</th><th>Verlauf</th><th></th></tr>
-{% for label, have, total, pct, titles in rows %}{% if pct is none %}<tr><td>{{ label }}</td><td colspan="4" class="muted small">wird ab dem nächsten Scan gezählt</td></tr>{% else %}<tr><td>{{ label }}</td><td>{{ have }} / {{ total }}</td>
+<h3>{{ _('Library coverage') }}</h3>
+<div class="card tablewrap"><table><tr><th>{{ _('Field') }}</th><th>{{ _('present') }}</th><th>{{ _('Share') }}</th><th>{{ _('Trend') }}</th><th></th></tr>
+{% for label, have, total, pct, titles in rows %}{% if pct is none %}<tr><td>{{ _(label) }}</td><td colspan="4" class="muted small">{{ _('counted from the next scan on') }}</td></tr>{% else %}<tr><td>{{ _(label) }}</td><td>{{ have }} / {{ total }}</td>
 <td style="min-width:160px"><div style="background:var(--line);border-radius:6px;height:10px"><div style="width:{{ pct }}%;height:10px;border-radius:6px;background:{{ 'var(--ok)' if pct >= 95 else 'var(--warn)' if pct >= 80 else 'var(--err)' }}"></div></div><span class="small">{{ pct }} %</span></td>
 <td class="small">{% if label in first %}{% set d = pct - first[label] %}<span class="{{ 'badge ok' if d > 0.05 else ('badge err' if d < -0.05 else 'muted') }}">{{ '%+.1f'|format(d) }} %</span>{% else %}<span class="muted">–</span>{% endif %}</td>
-<td class="small">{% if titles %}<details><summary>{{ total - have }} ohne</summary>{{ titles | join(', ') }}{% if total - have > titles|length %} …{% endif %}</details>{% endif %}</td></tr>{% endif %}
-{% else %}<tr><td colspan="5" class="muted">Noch kein Bibliotheks-Report vorhanden (läuft beim Reihen-Task).</td></tr>{% endfor %}</table>
-{% if generated %}<p class="muted small">Stand: {{ generated }}{% if first_ts %} · Verlauf seit {{ first_ts }} ({{ points }} Messpunkte){% else %} · Verlauf erscheint ab dem zweiten Bericht{% endif %}</p>{% endif %}</div>
+<td class="small">{% if titles %}<details><summary>{{ _('%(n)s without', n=total - have) }}</summary>{{ titles | join(', ') }}{% if total - have > titles|length %} …{% endif %}</details>{% endif %}</td></tr>{% endif %}
+{% else %}<tr><td colspan="5" class="muted">{{ _('No library report yet (made by the series task).') }}</td></tr>{% endfor %}</table>
+{% if generated %}<p class="muted small">{{ _('As of') }}: {{ generated }}{% if first_ts %} · {{ _('trend since %(t)s (%(n)s data points)', t=first_ts, n=points) }}{% else %} · {{ _('the trend appears from the second report on') }}{% endif %}</p>{% endif %}</div>
 
-<h3>ISBN-Feld fehlerhaft, kein Ersatz gefunden ({{ isbn_bad|length }})</h3>
-<div class="card tablewrap"><p class="muted small" style="margin-top:0">Im ISBN-Feld steht z.B. eine ASIN. Ersetzt wird nur mit einer geprüften ISBN (Print-Ausgabe über Hardcover, sonst die Hörbuch-ISBN von Audible); gibt es keine, bleibt der Wert stehen. Nichts zu entscheiden – der nächste Lauf versucht es wieder{% if isbn_bad and not isbn_bad[0].hardcover_asked %} (Hardcover war im letzten Lauf nicht verfügbar){% endif %}.</p>
-{% if isbn_bad %}<details><summary>{{ isbn_bad|length }} Bücher anzeigen</summary><table><tr><th>Buch</th><th>ISBN-Feld</th><th>Grund</th></tr>{% for x in isbn_bad[:500] %}<tr><td><a href="{{ url_for('problem', key=x.key) }}">{{ x.title }}</a><div class="muted small">{{ x.author }}</div></td><td><code>{{ x.isbn }}</code></td><td class="small">{{ x.reason }}</td></tr>{% endfor %}</table></details>{% else %}<p class="muted">Keine.</p>{% endif %}</div>
+<h3>{{ _('ISBN field wrong, no replacement found') }} ({{ isbn_bad|length }})</h3>
+<div class="card tablewrap"><p class="muted small" style="margin-top:0">{{ _('The ISBN field holds e.g. an ASIN. It is only replaced with a verified ISBN (print edition via Hardcover, otherwise the audiobook ISBN from Audible); if there is none, the value stays. Nothing to decide - the next scan tries again') }}{% if isbn_bad and not isbn_bad[0].hardcover_asked %} ({{ _('Hardcover was not available in the last scan') }}){% endif %}.</p>
+{% if isbn_bad %}<details><summary>{{ _('Show %(n)s books', n=isbn_bad|length) }}</summary><table><tr><th>{{ _('Book') }}</th><th>{{ _('ISBN field') }}</th><th>{{ _('Reason') }}</th></tr>{% for x in isbn_bad[:500] %}<tr><td><a href="{{ url_for('problem', key=x.key) }}">{{ x.title }}</a><div class="muted small">{{ x.author }}</div></td><td><code>{{ x.isbn }}</code></td><td class="small">{{ x.reason|de }}</td></tr>{% endfor %}</table></details>{% else %}<p class="muted">{{ _('None.') }}</p>{% endif %}</div>
 
-<h3>Zwischenspeicher</h3>
-<div class="card tablewrap"><table>{% for k, v in api.caches.items() %}<tr><td>{{ k }}</td><td>{{ v }} Einträge</td></tr>{% endfor %}</table></div>
+<h3>{{ _('Caches') }}</h3>
+<div class="card tablewrap"><table>{% for k, v in api.caches.items() %}<tr><td>{{ _(k) }}</td><td>{{ _('%(n)s entries', n=v) }}</td></tr>{% endfor %}</table></div>
 {% endblock %}

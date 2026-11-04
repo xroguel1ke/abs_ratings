@@ -19,64 +19,66 @@ RUNS_FILE = os.path.join(CONFIG_DIR, 'webui_runs.json')
 # ---------------------------------------------------------------- settings
 # (key, label, type, default, help, group). 'secret' fields are never sent back to the browser.
 FIELDS = [
-    # (key, label, type, default, help, group) - groups are rendered as cards in this order; ADVANCED keys sit in a folded part of their card
-    ('ABS_URL', 'Audiobookshelf URL', 'str', '', 'z.B. http://192.168.50.16:13378', 'Verbindung'),
-    ('API_TOKEN', 'ABS API-Token', 'secret', '', 'ABS: Einstellungen → Benutzer → API-Token', 'Verbindung'),
-    ('LIBRARY_IDS', 'Bibliotheken', 'libraries', '', 'Welche ABS-Bibliotheken bearbeitet werden', 'Verbindung'),
-    ('ABS_TIMEOUT', 'ABS Timeout (s)', 'int', 30, '', 'Verbindung'),
+    # (key, label, type, default, help, group) - English source text (German in webui/i18n_de.py); groups are cards, SECTIONS the left menu
+    ('ABS_URL', 'Audiobookshelf URL', 'str', '', 'e.g. http://192.168.50.16:13378', 'Connection'),
+    ('API_TOKEN', 'ABS API token', 'secret', '', 'ABS: Settings → Users → API token', 'Connection'),
+    ('LIBRARY_IDS', 'Libraries', 'libraries', '', 'Which ABS libraries are processed', 'Connection'),
+    ('ABS_TIMEOUT', 'ABS timeout (s)', 'int', 30, '', 'Connection'),
 
-    ('DRY_RUN', 'Testlauf (DRY_RUN) für geplante Läufe', 'bool', True, 'An = nichts wird in ABS geschrieben, nur geplant und protokolliert', 'Lauf'),
-    ('BATCH_SIZE', 'Bücher pro Lauf', 'int', 300, 'Zufällig aus allen fälligen Büchern aller Bibliotheken', 'Lauf'),
-    ('REFRESH_DAYS', 'Auffrischen nach (Tage)', 'int', 90, '0 = alle Bücher sind fällig (einmaliger Komplett-Durchlauf)', 'Lauf'),
-    ('ABS_BACKUP', 'ABS-Backup vor echten Läufen', 'bool', True, 'Legt vor jedem Lauf ohne DRY_RUN ein ABS-Backup an; schlägt es fehl, wird nichts geschrieben', 'Lauf'),
-    ('SLEEP_TIMER', 'Zusätzliche Pause zwischen Büchern (s)', 'float', 0, 'Jede Quelle hat ihren eigenen Mindestabstand, 0 ist daher sicher und am schnellsten', 'Lauf'),
-    ('NO_RATINGS_RECHECK_DAYS', 'Neu prüfen ohne Bewertungen (Tage)', 'int', 7, '', 'Lauf'),
-    ('LOG_LEVEL', 'Log-Level', 'choice:INFO|DEBUG', 'INFO', 'DEBUG nur zur Fehlersuche (viel größere Logs)', 'Logs'),
-    ('LOG_RETENTION_DAYS', 'Logs aufbewahren (Tage)', 'int', 30, 'Ältere Logs und Planungsdateien werden gelöscht', 'Logs'),
+    ('DRY_RUN', 'Test run (DRY_RUN) for scheduled scans', 'bool', True, 'On = nothing is written to ABS, changes are only planned and logged', 'Run'),
+    ('BATCH_SIZE', 'Books per scan', 'int', 300, 'Picked at random from all due books of all libraries', 'Run'),
+    ('REFRESH_DAYS', 'Refresh after (days)', 'int', 90, '0 = every book is due (one complete pass)', 'Run'),
+    ('ABS_BACKUP', 'ABS backup before real scans', 'bool', True, 'Creates an ABS backup before every scan without DRY_RUN; if it fails nothing is written', 'Run'),
+    ('SLEEP_TIMER', 'Extra pause between books (s)', 'float', 0, 'Every source has its own minimum interval, so 0 is safe and fastest', 'Run'),
+    ('NO_RATINGS_RECHECK_DAYS', 'Re-check books without ratings (days)', 'int', 7, '', 'Run'),
+    ('LOG_LEVEL', 'Log level', 'choice:INFO|DEBUG', 'INFO', 'DEBUG only for troubleshooting (much bigger logs)', 'Logs'),
+    ('LOG_RETENTION_DAYS', 'Keep logs (days)', 'int', 30, 'Older logs and planning files are deleted', 'Logs'),
 
-    ('AUDIBLE_MARKETPLACES', 'Audible-Shops', 'str', 'com,co.uk,ca,com.au,de,fr,it,es', 'In diesen Shops wird eine ASIN gesucht', 'Audible'),
-    ('USE_AUDIBLE_API', 'Audible-API nutzen', 'bool', True, 'Aus = nur Webseiten auslesen (nicht empfohlen)', 'Audible'),
-    ('AUDIBLE_API_INTERVAL', 'Abstand Audible-API (s)', 'float', 1, '', 'Audible'),
-    ('AUDIBLE_WEB_INTERVAL', 'Abstand Audible-Webseite (s)', 'float', 3, '', 'Audible'),
-    ('RUNTIME_TOLERANCE_PCT', 'Laufzeit-Toleranz (%)', 'float', 15, 'Größere Abweichung = andere Ausgabe', 'Audible'),
-    ('RUNTIME_TOLERANCE_MIN', 'Laufzeit-Toleranz (min)', 'float', 20, 'Beide Grenzen müssen überschritten sein', 'Audible'),
+    ('AUDIBLE_MARKETPLACES', 'Audible stores', 'str', 'com,co.uk,ca,com.au,de,fr,it,es', 'An ASIN is searched in these stores', 'Audible'),
+    ('USE_AUDIBLE_API', 'Use the Audible API', 'bool', True, 'Off = read web pages only (not recommended)', 'Audible'),
+    ('AUDIBLE_API_INTERVAL', 'Interval Audible API (s)', 'float', 1, '', 'Audible'),
+    ('AUDIBLE_WEB_INTERVAL', 'Interval Audible web page (s)', 'float', 3, '', 'Audible'),
+    ('RUNTIME_TOLERANCE_PCT', 'Runtime tolerance (%)', 'float', 15, 'A bigger difference = another edition', 'Audible'),
+    ('RUNTIME_TOLERANCE_MIN', 'Runtime tolerance (min)', 'float', 20, 'Both limits must be exceeded', 'Audible'),
 
-    ('HARDCOVER_ENABLED', 'Hardcover nutzen', 'bool', True, 'Bewertungen und die Print-ISBN. Limit: 5000 Anfragen pro Tag (der Lauf stoppt vorher)', 'Hardcover'),
-    ('HARDCOVER_TOKEN', 'Hardcover API-Token', 'secret', '', 'hardcover.app → Settings → API', 'Hardcover'),
-    ('HARDCOVER_INTERVAL', 'Abstand Hardcover (s)', 'float', 1.1, 'Hardcover erlaubt 60 Anfragen pro Minute', 'Hardcover'),
+    ('HARDCOVER_ENABLED', 'Use Hardcover', 'bool', True, 'Ratings and the print ISBN. Limit: 5000 requests per day (the scan stops before)', 'Hardcover'),
+    ('HARDCOVER_TOKEN', 'Hardcover API token', 'secret', '', 'hardcover.app → Settings → API', 'Hardcover'),
+    ('HARDCOVER_INTERVAL', 'Interval Hardcover (s)', 'float', 1.1, 'Hardcover allows 60 requests per minute', 'Hardcover'),
 
-    ('GOODREADS_ENABLED', 'Goodreads nutzen', 'bool', False, 'Experimentell: Goodreads sperrt Bots schnell. Bei der ersten Sperre wird Goodreads für den Lauf beendet', 'Goodreads'),
-    ('GOODREADS_MAX_PER_RUN', 'Goodreads-Anfragen pro Lauf', 'int', 25, 'Gemerkte Bücher zählen nicht. Bisher sicher: ca. 25 pro Nacht', 'Goodreads'),
-    ('GOODREADS_INTERVAL', 'Abstand Goodreads (s)', 'float', 10, '', 'Goodreads'),
-    ('GR_BLOCK_COOLDOWN', 'Pause nach Goodreads-Sperre (s)', 'int', 900, '', 'Goodreads'),
-    ('GR_MAX_COOLDOWNS', 'Pausen bis Goodreads übersprungen wird', 'int', 0, '0 = bei der ersten Sperre aufhören (empfohlen)', 'Goodreads'),
-    ('GR_MISSING_RECHECK_DAYS', 'Neu prüfen ohne Goodreads (Tage)', 'int', 30, '', 'Goodreads'),
+    ('GOODREADS_ENABLED', 'Use Goodreads', 'bool', False, 'Experimental: Goodreads blocks bots quickly. At the first block Goodreads is stopped for the scan', 'Goodreads'),
+    ('GOODREADS_MAX_PER_RUN', 'Goodreads requests per scan', 'int', 25, 'Remembered books do not count. Safe so far: about 25 per night', 'Goodreads'),
+    ('GOODREADS_INTERVAL', 'Interval Goodreads (s)', 'float', 10, '', 'Goodreads'),
+    ('GR_BLOCK_COOLDOWN', 'Pause after a Goodreads block (s)', 'int', 900, '', 'Goodreads'),
+    ('GR_MAX_COOLDOWNS', 'Pauses before Goodreads is skipped', 'int', 0, '0 = stop at the first block (recommended)', 'Goodreads'),
+    ('GR_MISSING_RECHECK_DAYS', 'Re-check books without Goodreads (days)', 'int', 30, '', 'Goodreads'),
 
-    ('RATING_ORDER', 'Reihenfolge im Bewertungsblock', 'str', 'audible,goodreads,hardcover', 'Komma-getrennt, z.B. audible,hardcover,goodreads', 'Metadaten'),
-    ('FILL_COVERS', 'Fehlende Cover setzen', 'bool', True, 'Nur bei verifizierter ASIN', 'Metadaten'),
-    ('UPDATE_COVERS', 'Vorhandene Cover ersetzen', 'bool', True, 'Nur bei verifizierter ASIN (gleiche Aufnahme); das alte Cover wird gesichert und lässt sich zurückholen', 'Metadaten'),
-    ('GENRE_LANGUAGE', 'Genre-Sprache', 'choice:en|keep', 'en', 'en = deutsche Audible-Genres übersetzen, keep = unverändert', 'Metadaten'),
+    ('RATING_ORDER', 'Order in the rating block', 'str', 'audible,goodreads,hardcover', 'Comma separated, e.g. audible,hardcover,goodreads', 'Metadata'),
+    ('FILL_COVERS', 'Set missing covers', 'bool', True, 'Only for a verified ASIN', 'Metadata'),
+    ('UPDATE_COVERS', 'Replace existing covers', 'bool', True, 'Only for a verified ASIN (same recording); the old cover is backed up and can be restored', 'Metadata'),
+    ('GENRE_LANGUAGE', 'Genre language', 'choice:en|keep', 'en', 'en = translate German Audible genres, keep = unchanged', 'Metadata'),
 
-    ('SERIES_MERGE', 'Reihen automatisch zusammenführen', 'bool', True, 'Nur sichere Fälle, unsichere landen im Merge-Review', 'Reihen & Autoren'),
-    ('AUTHOR_NORMALIZE', 'Autoren-Schreibweisen vereinheitlichen', 'bool', True, '', 'Reihen & Autoren'),
-    ('LIBRARY_REPORT', 'Bibliotheks-Report erstellen', 'bool', True, '', 'Reihen & Autoren'),
-    ('REMOVE_ROLE_CREDITS', 'Nur echte Autoren behalten', 'bool', True, 'Entfernt Illustratoren, Übersetzer, Herausgeber, Vorwort … aus dem Autorenfeld (nur wenn ein echter Autor bleibt); werden auch nie von Audible übernommen', 'Reihen & Autoren'),
-    ('REMOVE_EMPTY_AUTHORS', 'Leere Autoren entfernen', 'bool', True, 'Löscht in ABS nur Autoren ohne ein einziges Buch (Reste nach Zusammenführungen); Bücher werden nie gelöscht', 'Reihen & Autoren'),
-    ('SERIES_LOCK_AFTER_MERGE', 'Nach Zusammenführung lock_series setzen', 'bool', False, 'Alte Variante, nicht empfohlen', 'Reihen & Autoren'),
+    ('SERIES_MERGE', 'Merge series automatically', 'bool', True, 'Only safe cases; uncertain ones go to the review list', 'Series & authors'),
+    ('AUTHOR_NORMALIZE', 'Unify author spellings', 'bool', True, '', 'Series & authors'),
+    ('REMOVE_ROLE_CREDITS', 'Keep only real authors', 'bool', True, 'Removes illustrators, translators, editors, forewords … from the author field (only when a real author remains); never taken from Audible', 'Series & authors'),
+    ('REMOVE_EMPTY_AUTHORS', 'Remove empty authors', 'bool', True, 'Deletes only ABS authors without a single book (left-overs after merges); books are never deleted', 'Series & authors'),
+    ('LIBRARY_REPORT', 'Create the library report', 'bool', True, '', 'Series & authors'),
+    ('SERIES_LOCK_AFTER_MERGE', 'Set lock_series after a merge', 'bool', False, 'Old variant, not recommended', 'Series & authors'),
+
+    ('UI_LANGUAGE', 'Language', 'choice:en|de', 'en', 'English (default) or Deutsch', 'Interface'),
 ]
-# rarely changed: shown folded ("Erweitert") inside their card
+# rarely changed: shown folded ("Advanced") inside their card
 ADVANCED = {'ABS_TIMEOUT', 'SLEEP_TIMER', 'NO_RATINGS_RECHECK_DAYS', 'USE_AUDIBLE_API', 'AUDIBLE_API_INTERVAL',
             'AUDIBLE_WEB_INTERVAL', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'HARDCOVER_INTERVAL', 'GOODREADS_INTERVAL', 'GR_BLOCK_COOLDOWN',
             'GR_MAX_COOLDOWNS', 'GR_MISSING_RECHECK_DAYS', 'SERIES_LOCK_AFTER_MERGE'}
-# settings sections (left list, one form + save button each) -> the field groups (cards) they contain
-SECTIONS = {'Verbindung': ['Verbindung'], 'Lauf': ['Lauf'], 'Quellen': ['Audible', 'Hardcover', 'Goodreads'], 'Metadaten': ['Metadaten'],
-            'Reihen & Autoren': ['Reihen & Autoren'], 'Logs': ['Logs'], 'Zeitplan': [], 'Benachrichtigungen': [], 'Onboarding': []}
-def section_slug(name): return re.sub(r'[^a-z0-9]+', '-', name.lower().replace('&', 'und')).strip('-')
+# settings sections (left menu, one form + save button each) -> the field groups (cards) they contain
+SECTIONS = {'Connection': ['Connection'], 'Run': ['Run'], 'Sources': ['Audible', 'Hardcover', 'Goodreads'], 'Metadata': ['Metadata'],
+            'Series & authors': ['Series & authors'], 'Logs': ['Logs'], 'Schedule': [], 'Notifications': [], 'Interface': ['Interface']}
+def section_slug(name): return re.sub(r'[^a-z0-9]+', '-', name.lower().replace('&', 'and')).strip('-')
 # cards that belong to a data source: icon + colour stripe
-PROVIDERS = {'Audible': ('🎧', '#e8913a', 'Hauptquelle: ASIN, Bewertungen, Metadaten, Cover'),
-             'Hardcover': ('📘', '#7d6bd6', 'Bewertungen und Print-ISBN'),
-             'Goodreads': ('📗', '#8a7a52', 'Bewertungen – experimentell')}
-SCRIPT_KEYS = [f[0] for f in FIELDS if f[0] != 'LOG_RETENTION_DAYS']
+PROVIDERS = {'Audible': ('🎧', '#e8913a', 'Main source: ASIN, ratings, metadata, cover'),
+             'Hardcover': ('📘', '#7d6bd6', 'Ratings and print ISBN'),
+             'Goodreads': ('📗', '#8a7a52', 'Ratings – experimental')}
+SCRIPT_KEYS = [f[0] for f in FIELDS if f[0] not in ('LOG_RETENTION_DAYS', 'UI_LANGUAGE')]
 DEFAULTS = {f[0]: f[3] for f in FIELDS}
 DEFAULTS.update({
     'schedule_enabled': False, 'schedule_mode': 'simple', 'schedule_days': [0, 1, 2, 3, 4, 5, 6],
@@ -138,14 +140,17 @@ def abs_get(s, path, timeout=10):
     return requests.get(f"{s['ABS_URL'].rstrip('/')}{path}", headers={'Authorization': f"Bearer {s['API_TOKEN']}"}, timeout=timeout)
 
 
-def abs_test(s):
+def _t(text, **kw): return text % kw if kw else text  # default (English) for the message callbacks below
+
+
+def abs_test(s, t=_t):
     try:
         r = abs_get(s, '/api/libraries')
         if r.status_code == 200:
-            return True, f"Verbunden. {len(r.json().get('libraries', []))} Bibliotheken gefunden."
-        return False, f"ABS antwortet mit HTTP {r.status_code}" + (' (Token falsch?)' if r.status_code == 401 else '')
+            return True, t('Connected. %(n)s libraries found.', n=len(r.json().get('libraries', [])))
+        return False, t('ABS answers with HTTP %(c)s', c=r.status_code) + (' (' + t('wrong token?') + ')' if r.status_code == 401 else '')
     except requests.RequestException as e:
-        return False, f"Keine Verbindung: {e}"
+        return False, t('No connection: %(e)s', e=e)
 
 
 def abs_libraries(s):
@@ -162,17 +167,17 @@ def abs_healthy(s):
     except requests.RequestException: return False
 
 
-def hardcover_test(token):
+def hardcover_test(token, t=_t):
     try:
         r = requests.post('https://api.hardcover.app/v1/graphql', json={'query': '{ me { username } }'},
                           headers={'Authorization': token if token.lower().startswith('bearer') else f'Bearer {token}'}, timeout=15)
         if r.status_code == 200 and 'errors' not in r.json():
             me = r.json().get('data', {}).get('me')
             name = (me[0] if isinstance(me, list) and me else me or {}).get('username', '?')
-            return True, f"Verbunden als {name}."
-        return False, f"Hardcover antwortet mit HTTP {r.status_code}: {r.text[:150]}"
+            return True, t('Connected as %(n)s.', n=name)
+        return False, t('Hardcover answers with HTTP %(c)s', c=r.status_code) + ': ' + r.text[:150]
     except (requests.RequestException, ValueError) as e:
-        return False, f"Keine Verbindung: {e}"
+        return False, t('No connection: %(e)s', e=e)
 
 
 # ---------------------------------------------------------------- notifications
@@ -212,7 +217,7 @@ def parse_env_summary():
 
 
 RUN_OVERRIDABLE = {'BATCH_SIZE', 'REFRESH_DAYS', 'HARDCOVER_ENABLED', 'GOODREADS_ENABLED', 'SERIES_MERGE', 'AUTHOR_NORMALIZE', 'UPDATE_COVERS', 'REMOVE_ROLE_CREDITS', 'REMOVE_EMPTY_AUTHORS'}  # start dialog
-KIND_LABELS = {'full': 'Lauf', 'series': 'Nur Reihen & Report', 'item': 'Einzelbuch', 'undo': 'Rückgängig', 'apply': 'Testlauf übernehmen'}
+KIND_LABELS = {'full': 'Scan', 'series': 'Series & report only', 'item': 'Single book', 'undo': 'Undo', 'apply': 'Apply test run'}
 
 
 class RunManager:
@@ -237,10 +242,10 @@ class RunManager:
     def start(self, kind='full', dry_run=None, only_items=None, trigger='manual', label=None, undo_args=None, run_settings=None):
         """run_settings: values for THIS run only (start dialog), applied on top of the saved settings, never saved."""
         with self.lock:
-            if self.running(): return None, 'Es läuft bereits ein Lauf.'
+            if self.running(): return None, 'A scan is already running.'
             s = load_settings()
             if run_settings: s = {**s, **{k: v for k, v in run_settings.items() if k in RUN_OVERRIDABLE}}
-            if not s.get('ABS_URL') or not s.get('API_TOKEN'): return None, 'ABS-URL und Token fehlen (Einstellungen).'
+            if not s.get('ABS_URL') or not s.get('API_TOKEN'): return None, 'ABS URL and token are missing (settings).'
             run_id = datetime.now().strftime('%Y%m%d-%H%M%S')
             dry = s['DRY_RUN'] if dry_run is None else dry_run
             if kind == 'apply': dry = False
@@ -357,8 +362,8 @@ def overrides(): return _load_json(os.path.join(CONFIG_DIR, 'overrides.json'), {
 def merges(): return _load_json(os.path.join(CONFIG_DIR, 'merges.json'), {})
 def review(): return _load_json(os.path.join(CONFIG_DIR, 'merge_review.json'), {'series': [], 'authors': []})
 def decisions(): return _load_json(os.path.join(CONFIG_DIR, 'merge_decisions.json'), {})
-FIELD_LABELS = {'asin': 'ASIN', 'cover': 'Cover', 'series': 'Reihe', 'narrators': 'Sprecher', 'description': 'Beschreibung', 'authors': 'Autor',
-                'genres': 'Genres', 'publisher': 'Verlag', 'year': 'Jahr', 'isbn': 'ISBN', 'language': 'Sprache', 'ratings': 'Bewertungen'}
+FIELD_LABELS = {'asin': 'ASIN', 'cover': 'Cover', 'series': 'Series', 'narrators': 'Narrators', 'description': 'Description', 'authors': 'Author',
+                'genres': 'Genres', 'publisher': 'Publisher', 'year': 'Year', 'isbn': 'ISBN', 'language': 'Language', 'ratings': 'Ratings'}
 
 def coverage():
     """Share of books that HAVE each field, from library_report.json (written by the series/report task). [(label, have, total, percent, missing titles)]"""
@@ -376,7 +381,7 @@ def coverage():
     # ratings per source from the last check of every book (results.json)
     res = results(); n = len(res)
     if n:
-        for label, pred in (('Bewertungen Audible', lambda r: r.get('status') == 'ok'), ('Bewertungen Goodreads', lambda r: bool(r.get('goodreads'))),
+        for label, pred in (('Audible ratings', lambda r: r.get('status') == 'ok'), ('Goodreads ratings', lambda r: bool(r.get('goodreads'))),
                             ('Hardcover', lambda r: bool(r.get('hardcover')))):
             miss = [r.get('title') or '?' for r in res.values() if not pred(r)]
             rows.append((label, n - len(miss), n, round(100 * (n - len(miss)) / n, 1), sorted(miss)[:40]))
@@ -401,7 +406,7 @@ def coverage_trend():
 
 def api_status():
     """Hardcover daily limit / Goodreads state from the newest run logs, cache sizes, open review items."""
-    st = {'hc_left': None, 'hc_when': '', 'gr': 'unbekannt', 'caches': {}, 'queue': len(open_queue())}
+    st = {'hc_left': None, 'hc_when': '', 'gr': 'unknown', 'caches': {}, 'queue': len(open_queue())}
     try:
         logs = sorted((f for f in os.listdir(LOG_DIR) if f.startswith('run_') and f.endswith('.log')), reverse=True)
     except OSError: logs = []
@@ -412,11 +417,11 @@ def api_status():
             st['hc_left'], st['hc_when'] = int(m[-1]), f[4:23].replace('_', ' ')
             st['hc_used'] = max(0, 5000 - st['hc_left'])
             st['hc_reset'] = (re.findall(r'limit reset: ([^)]+)\)', txt) or [''])[-1]
-        if st['gr'] == 'unbekannt' and 'Goodreads' in txt:
-            st['gr'] = 'gesperrt (im letzten Lauf)' if re.search(r'Bot challenge|still blocks|blocks requests', txt) else 'ok (im letzten Lauf)'
-        if st['hc_left'] is not None and st['gr'] != 'unbekannt': break
-    for name, label in (('hardcover_cache.json', 'Hardcover-IDs'), ('goodreads_cache.json', 'Goodreads-Seiten'), ('audible_series.json', 'Audible-Reihen'),
-                        ('audible_authors.json', 'Audible-Autoren'), ('rating_history.json', 'Bewertungs-Verlauf')):
+        if st['gr'] == 'unknown' and 'Goodreads' in txt:
+            st['gr'] = 'blocked (last scan)' if re.search(r'Bot challenge|still blocks|blocks requests', txt) else 'ok (last scan)'
+        if st['hc_left'] is not None and st['gr'] != 'unknown': break
+    for name, label in (('hardcover_cache.json', 'Hardcover IDs'), ('goodreads_cache.json', 'Goodreads pages'), ('audible_series.json', 'Audible series'),
+                        ('audible_authors.json', 'Audible authors'), ('rating_history.json', 'Rating history')):
         d = _load_json(os.path.join(CONFIG_DIR, name), {})
         st['caches'][label] = len(d)
     return st
@@ -630,7 +635,7 @@ def parse_fix_input(text):
     if 'hardcover.app' in t:
         m = re.search(r'hardcover\.app/books/([\w-]+)', t)
         if m: return {'hardcover': f"https://hardcover.app/books/{m.group(1)}"}
-    return {'error': 'Nicht erkannt. Erwartet: ASIN, Audible-, Goodreads- oder Hardcover-Link.'}
+    return {'error': 'Not recognised. Expected: ASIN, Audible, Goodreads or Hardcover link.'}
 
 
 PROBLEM_STATUSES = ('not_found', 'other_edition', 'no_ratings_yet', 'error')
@@ -642,7 +647,7 @@ def select_items(s, mode, text='', limit=300):
     res = results()
     if mode == 'problems':
         keys = [k for k, r in res.items() if r.get('status') in PROBLEM_STATUSES]
-        return keys[:limit], f"{len(keys)} Problem-Bücher" + (f", die ersten {limit}" if len(keys) > limit else '')
+        return keys[:limit], f"{len(keys)} problem books" + (f", the first {limit}" if len(keys) > limit else '')
     libs = [l for l in (s.get('LIBRARY_IDS') or '').replace(';', ',').split(',') if l.strip()]
     if mode == 'new':
         keys = []
@@ -652,7 +657,7 @@ def select_items(s, mode, text='', limit=300):
                     k = f"{lib.strip()}_{it['id']}"
                     if k not in res: keys.append(k)
             except (requests.RequestException, ValueError): pass
-        return keys[:limit], f"{len(keys)} noch nie geprüfte Bücher" + (f", die ersten {limit}" if len(keys) > limit else '')
+        return keys[:limit], f"{len(keys)} never checked books" + (f", the first {limit}" if len(keys) > limit else '')
     if mode == 'list':
         by_title = {}
         for k, r in res.items(): by_title.setdefault((r.get('title') or '').strip().lower(), []).append(k)
@@ -665,5 +670,5 @@ def select_items(s, mode, text='', limit=300):
             elif t.lower() in by_title: keys += by_title[t.lower()]
             else: unknown.append(t)
         keys = list(dict.fromkeys(keys))
-        return keys[:limit], f"{len(keys)} Bücher aus der Liste" + (f"; nicht gefunden: {', '.join(unknown[:5])}" if unknown else '')
-    return None, 'alle fälligen Bücher'
+        return keys[:limit], f"{len(keys)} books from the list" + (f"; not found: {', '.join(unknown[:5])}" if unknown else '')
+    return None, 'all due books'

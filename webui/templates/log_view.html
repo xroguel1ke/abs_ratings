@@ -1,8 +1,8 @@
 {% extends 'base.html' %}{% block body %}
 <p><a href="{{ url_for('logs') }}">← Logs</a></p><h1>{{ name }}</h1>
-<div class="card row"><input type="text" id="flt" placeholder="Filter (z.B. WARNING, Rejected, Titel)" style="max-width:340px">
-<label class="small"><input type="checkbox" id="follow" checked> live mitlaufen</label>
-<a class="btn" href="{{ url_for('log_download', kind=kind, name=name) }}">⬇ Herunterladen</a><span class="muted small">{{ size|size }}{{ ', es werden die letzten 400 KB angezeigt' if size > 400000 }}</span></div>
+<div class="card row"><input type="text" id="flt" placeholder="{{ _('Filter (e.g. WARNING, Rejected, title)') }}" style="max-width:340px">
+<label class="small"><input type="checkbox" id="follow" checked> {{ _('follow live') }}</label>
+<a class="btn" href="{{ url_for('log_download', kind=kind, name=name) }}">⬇ {{ _('Download') }}</a><span class="muted small">{{ size|size }}{{ (', ' ~ _('showing the last 400 KB')) if size > 400000 }}</span></div>
 <pre class="log" id="log"></pre>
 <script>
 let off=0, all='';
