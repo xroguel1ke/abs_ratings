@@ -747,6 +747,7 @@ def audible_isbn(asin, domain):
 def audio_isbn_fallback(asin, aud, abs_dur, narrators, asin_from_search, key, current_isbn):
     """Audible audio-edition ISBN as the last fallback: same recording only (runtime +-2 min AND shared narrator or a search-confirmed
     ASIN), valid checksum, never the ASIN itself (Audible sometimes stores the ASIN as ISBN), never one another book owns."""
+    if not (HARDCOVER_ENABLED and not HC_STATE.get('disabled')): return None  # Hardcover (print ISBN) not asked in this run: wait, never fall back early
     if not (asin and aud and abs_dur and aud.get('runtime_sec') and abs(abs_dur - aud['runtime_sec']) <= 120): return None
     if not (same_recording(abs_dur, narrators, aud) or asin_from_search): return None
     i = normalize_isbn(audible_isbn(aud.get('asin') or asin, aud.get('domain')))
