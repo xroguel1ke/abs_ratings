@@ -343,3 +343,7 @@ Pattern of the refinements so far (all with the SAME root: Hardcover/Audible nam
 
 ## Hardcover batch H4 (100 other verified library books, Hardcover ON, 2:18 min, 0 errors) – CLEAN -> Hardcover streak 1 of 3
 Found 97/100, cross-check ok 97 / dropped 0, ASIN results = golden 100/100, no rule change needed. Hand check: 14 random hits all the same work (ISBN/ASIN/search; incl. German "Der Abschiedsstein" = "Stone of Farewell", light-novel volume numbers equal). Not found (3): Konosuba Vol. 4 (3 searches, no hit with equal volume), The Family Name (Nuttall; 2 searches, no hit) = absent or differently listed at Hardcover, no wrong hit. ISBN repair: 22 planned, 15 without verified replacement -> stay on the review list. Hardcover daily limit left 4439.
+## Hardcover batch H5 started
+
+## Hardcover batch H5 (100 other verified library books, Hardcover ON, ~2.5 min, 0 errors) – CLEAN -> Hardcover streak 2 of 3
+Found 96/100, ASIN results = golden 100/100, no cross-check drops, no rule change. (Loop was idle ~4 h afterwards: background start returned at once and I did not continue; watchdog notification was correct.)
