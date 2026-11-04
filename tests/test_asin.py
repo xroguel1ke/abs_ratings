@@ -73,6 +73,10 @@ def test_hardcover_audible_crosscheck():
     assert A.hc_audible_crosscheck({'title': 'Dragon Heart', 'authors': []}, aud)[0], 'no author on Hardcover is no contradiction'
     assert not A.hc_audible_crosscheck({'title': 'Dragon Heart', 'authors': ['Other Person']}, aud)[0]
     assert not A.hc_audible_crosscheck({'title': 'Completely Different Book', 'authors': ['Ben Scott']}, aud)[0]
+    assert A.hc_audible_crosscheck({'title': 'Ascendant Insanity', 'authors': ['X Y'], 'source': 'ISBN'}, {'title_raw': 'An Outcast in Another World: Ascendant Insanity', 'authors_raw': ['X Y']})[0]
+    assert A.hc_audible_crosscheck({'title': "Shadow's Edge", 'authors': ['B V'], 'source': 'ASIN'}, {'title_raw': 'Am Rande der Schatten', 'authors_raw': ['B V'], 'meta_raw': {'language': 'german'}})[0]
+    assert not A.hc_audible_crosscheck({'title': 'Realms of War', 'authors': ['P A'], 'source': 'ISBN'}, {'title_raw': 'Annihilation', 'authors_raw': ['P A'], 'meta_raw': {'language': 'english'}})[0], 'English books: a different title is never excused by the identifier'
+    assert not A.hc_audible_crosscheck({'title': "Dragon's Kin", 'authors': ['A M'], 'source': 'search'}, {'title_raw': 'Dragonsblood', 'authors_raw': ['A M']})[0], 'a wrong title-search hit must be dropped'
 
 
 def test_series_prefix_with_colon_and_number_in_title_head():

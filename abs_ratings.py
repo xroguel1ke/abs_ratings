@@ -1616,7 +1616,13 @@ def hc_audible_crosscheck(hc, aud):
             search_match_score(aud.get('title_raw') or '', hc.get('title') or '', ''), search_match_score(hc.get('title') or '', aud.get('title_raw') or '', aud.get('subtitle_raw')))
     a = match_author(aud.get('authors_raw') or [], ', '.join(hc.get('authors') or [])) if (aud.get('authors_raw') and hc.get('authors')) else None
     why = f"title {t:.2f}, author {'?' if a is None else '✓' if a else '✗'}"
-    return (t >= 0.7 and a is not False), why
+    hw, aw = set(normalize_title_text(hc.get('title') or '').split()), set(normalize_title_text(aud.get('title_raw') or '').split())
+    contained = bool(hw and aw and (hw <= aw or aw <= hw) and min(len(hw), len(aw)) >= 2)  # 'Ascendant Insanity' in 'An Outcast in Another World: Ascendant Insanity'
+    non_english = str((aud.get('meta_raw') or {}).get('language') or 'english').lower() not in ('english', 'en', 'eng')
+    tied = hc.get('source') in ('ISBN', 'ASIN', 'manual link') and non_english  # identifier + non-English edition: a different title is a translation ('Shadow\'s Edge' = 'Am Rande der Schatten')
+    if tied: why += ', tied by ' + hc['source']
+    elif contained and t < 0.7: why += ', title words contained'
+    return (a is not False and (t >= 0.7 or contained or tied)), why
 
 def hc_goodreads_ids(book):
     """Goodreads book IDs Hardcover knows for this book (one per edition; the rating belongs to the work, any edition page shows it)."""
@@ -1815,17 +1821,19 @@ def hc_audio_asin(hc, abs_dur, authors, targets, narrators, lang):
             return asin, ['hardcover-edition-asin', 'author', 'runtime', 'title' if t_abs >= 0.85 else 'title-via-hardcover-isbn'], p
     return None
 
-def hc_replacement_isbn(hc, asin, abs_dur):
+def hc_replacement_isbn(hc, asin, abs_dur, abs_lang="English"):
     """ISBN-13 of a Hardcover edition of the (verified) book: the edition carrying our ASIN or the audio length first, otherwise any print edition.
     Returns (isbn, how) or None."""
-    data = hc_query("query($id:Int!){ editions(where:{book_id:{_eq:$id}, isbn_13:{_is_null:false}}, limit:25){ isbn_13 asin audio_seconds } }", {'id': hc['id']})
+    data = hc_query("query($id:Int!){ editions(where:{book_id:{_eq:$id}, isbn_13:{_is_null:false}}, limit:25){ isbn_13 asin audio_seconds language{ language } } }", {'id': hc['id']})
     eds = [(normalize_isbn(e.get('isbn_13')), e) for e in ((data or {}).get('editions') or [])]
     eds = [(i, e) for i, e in eds if i and isbn_checksum_ok(i)]
     for i, e in eds:
         if asin and e.get('asin') == asin: return i, 'edition with our ASIN'
     for i, e in eds:
         if abs_dur and e.get('audio_seconds') and abs(e['audio_seconds'] - abs_dur) <= 600: return i, 'audio edition with matching length'
-    return (eds[0][0], 'other edition of the same book') if eds else None
+    # any other edition only counts if it is in the SAME LANGUAGE as the book (no Polish ISBN for an English audiobook)
+    same_lang = [(i, e) for i, e in eds if str(((e.get('language') or {}).get('language')) or '').lower() == str(abs_lang or '').lower()]
+    return (same_lang[0][0], 'other edition of the same book (same language)') if same_lang else None
 
 def normalize_desc(d):
     """Compare descriptions independent of how ABS stores them ('<br />' vs '<br>', '&amp;' vs '&')."""
@@ -2438,7 +2446,8 @@ def process_queue(work_queue, history, failed, recheck):
 
                 # Hardcover: ratings only. Audible's clean title first, the ABS title as second comparison.
                 hc_targets = list(dict.fromkeys(t for t in [(aud_data or {}).get('title_raw') if not skip_meta else None, search_title, title] if t))
-                hc_data, hc_status = get_hardcover_data(key, hc_targets, authors, asin, meta.get('isbn'), ov.get('hardcover'),
+                hc_data, hc_status = get_hardcover_data(key, hc_targets, list(dict.fromkeys([*authors, *((aud_data or {}).get('authors_raw') or [])])),  # ABS and Audible authors (ABS sometimes lists the translator)
+                                                         asin, meta.get('isbn'), ov.get('hardcover'),
                                                         use_cache=not item.get('_manual_trigger'),
                                                         abs_series=[(x.get('name'), x.get('sequence')) for x in (meta.get('series') or [])])
                 if hc_data and hc_data.get('id') and not DRY_RUN: HC_CACHE[key] = {'id': hc_data['id'], 'slug': hc_data.get('slug')}
@@ -2466,7 +2475,7 @@ def process_queue(work_queue, history, failed, recheck):
                     fix = None
                     if 'lock_isbn' in tags: logging.info(f"        🔒 ISBN '{meta.get('isbn')}' looks wrong ({bad_isbn}) but is locked")
                     elif verified:
-                        try: fix = hc_replacement_isbn(hc_data, asin, abs_dur)
+                        try: fix = hc_replacement_isbn(hc_data, asin, abs_dur, map_language(meta.get('language')) if meta.get('language') else 'English')
                         except SourceBlockedException: fix = None
                         if fix and (ISBN_OWNERS.get(fix[0], set()) - {key}):
                             logging.info(f"        ⛔ ISBN {fix[0]} already belongs to another book: not assigned")
