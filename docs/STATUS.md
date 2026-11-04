@@ -33,8 +33,9 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 |---|---|---|
 | [A] Sparse sampling (GOODREADS_SAMPLE), stop at first block, never bypass | ✅ | |
 | [U] Hardcover Goodreads-ID path first | ✅ | correct 5/5; /book/show may be guarded more strictly than search |
-| [U] Limit measurement until a reliable requests/hour + per night value | ⏳ | test 4 blocked after ~3 pages; test 5 (search only) scheduled |
+| [U] Limit measurement until a reliable requests/hour + per night value | ⏳ | test 4: blocked after ~3 book pages; test 5: 6 books via search ok, block on the 7th BOOK page |
 | [U] Open Library fallback for the Goodreads ID / ISBN | ❌ | measure first |
+| [new] Rating from the Goodreads SEARCH result row (no /book/show page) | ❌ | test 5: search pages pass, book pages get blocked |
 | [U] Production rhythm (≈25 per night?) | ❌ | after the measurements |
 
 ## Safety & tests

@@ -37,3 +37,7 @@ Next steps (carefully): 15 books at 45-60 s, later one small sample per run (≈
 ## Test 4 (2026-11-04 13:58): 15 library books, Hardcover-ID path first, 60 s interval, only Goodreads live (Audible/Hardcover from recordings), stop at the first block
 Result: 13:58:57 1st page ok (Have Sword, Will Travel 3.76/1270, correct); ~2-3 live /book/show/ requests at 60 s, then 14:01:54 WAF bot challenge (HTTP 202) -> Goodreads stopped for the run (as designed). No Goodreads traffic since test 3 (23:15 yesterday, 6 ok).
 Hypothesis: /book/show/ pages (Hardcover-ID path) are guarded more strictly than /search (the user's nightly runs with 25-30 mostly-search requests ran 13 days without a block). Next probe >= 16:30: search path only (GR_TRIES=0), few books, 60 s.
+
+## Test 5 (2026-11-04 16:32): search path only (GR_TRIES=0), 8 library books, 60 s interval, only Goodreads live
+Result: 16:32-16:39 six books via SEARCH (search page + book page each, ~12 requests at 60 s) ok; 16:40 the 7th book page (/book/show) got the WAF challenge -> stopped. Test 4 (ID path, book pages only) was blocked after 2-3 pages.
+Interpretation: the /book/show pages are guarded much more strictly than /search. IDEA: take the rating from the search result row (avg rating + count are shown there) when title + author verify -> ONE request per book on the less guarded endpoint, no book page. Next probe: >= 3 h later, search-page-only parsing.
