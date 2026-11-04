@@ -355,3 +355,7 @@ Found 96/100, ASIN results = golden 100/100, no cross-check drops, no rule chang
 
 ## CORRECTION (2026-11-04): Hardcover streak reset to 0 of 3
 H1-H6 ran with library books only (no synthetic books). Counting rule v2 requires 100 library + 60 EN + 20 DE synthetic per batch. H4-H6 do not count. New Hardcover batches H7+ use SYNTH (fresh seed per batch), Hardcover ON; started only after the running Audible batch (one concurrent request per host).
+
+## Batch A14 (200 synthetic [140 EN + 60 DE], Audible-only, ~10 min, 0 errors) – CLEAN -> Audible streak 1 of 4 (A14)
+200/200 correct at the first run. (Evaluation note: round dir a14 held an older planned_changes file from an earlier run of the same name; tools/check_round.sh now takes the newest file.)
+## Hardcover batch H7 started (100 library + 60 EN + 20 DE synthetic, SYNTH=17, Hardcover ON): Hardcover streak 0 of 3
