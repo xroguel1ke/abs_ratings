@@ -23,6 +23,7 @@
  {% set more = fields|selectattr(0, 'in', adv)|list %}
  {% if more %}<details class="adv"><summary class="small muted">Erweitert ({{ more|length }})</summary>
   {% for key, label, ftype, default, help_, g in more %}{{ field(key, label, ftype, default, help_) }}{% endfor %}</details>{% endif %}
+{% if group == 'Logs' %}<p><a class="btn" href="{{ url_for('logs') }}">Logs ansehen und herunterladen →</a></p>{% endif %}
  {% if group == 'Verbindung' %}<p class="small" id="test_abs"></p>{% elif group == 'Hardcover' %}<p class="small" id="test_hardcover"></p>{% endif %}
 </div>{% endmacro %}
 {% macro save(sec) %}<p class="savebar"><input type="hidden" name="section" value="{{ sec }}"><button class="primary">{{ sec }} speichern</button></p>{% endmacro %}
@@ -67,6 +68,7 @@
  links.forEach(a=>a.addEventListener('click', e=>{ e.preventDefault(); history.replaceState(null, '', '#'+a.dataset.sec); show(a.dataset.sec); nav.classList.remove('open'); }));
  let start=decodeURIComponent(location.hash.slice(1)); if(!start){ try{ start=localStorage.getItem('abs_settings_sec')||''; }catch(e){} }
  show(start);
+ window.addEventListener('hashchange', ()=>show(decodeURIComponent(location.hash.slice(1))));
 })();
 function cronToggle(){ const c=document.getElementById('cronmode').checked; document.getElementById('cron').style.display=c?'':'none'; document.getElementById('simple').style.display=c?'none':''; }
 cronToggle();

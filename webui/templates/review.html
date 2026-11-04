@@ -1,0 +1,64 @@
+{% extends 'base.html' %}{% block title %}Prüfliste{% endblock %}{% block body %}
+{% macro titles(list) %}{% if list %}<ul class="tlist">{% for t in list[:8] %}<li>{{ t }}</li>{% endfor %}{% if list|length > 8 %}<li class="muted">… {{ list|length - 8 }} weitere</li>{% endif %}</ul>{% endif %}{% endmacro %}
+{% macro side(name, books, tl, authors, label) %}<div class="mside"><div class="muted small">{{ label }}</div><b>{{ name }}</b>
+ <div class="small">{% if books %}Bände {{ books }}{% endif %}{% if authors %} · {{ authors|join(', ') }}{% endif %}</div>{{ titles(tl) }}</div>{% endmacro %}
+
+<div class="row" style="justify-content:space-between"><h1>Prüfliste</h1><button type="button" class="iconbtn snav-toggle" onclick="document.querySelector('.snav').classList.toggle('open')">☰ Bereiche</button></div>
+<p class="muted small">Hier steht nur, was eine Entscheidung von dir braucht, plus die automatisch zusammengeführten Reihen und Autoren zum Bestätigen oder Zurücknehmen. Nichts Unsicheres wird ohne dich geschrieben.</p>
+<div class="slayout">
+<nav class="snav" aria-label="Bereiche">{% for k, s in secs.items() %}<a href="#{{ k }}" data-sec="{{ k }}">{{ s.label }} <span class="badge {{ 'warn' if counts[k] else '' }}" style="margin-left:auto">{{ counts[k] }}</span></a>{% endfor %}</nav>
+<div class="spanel">
+
+<div class="sec" data-sec="buecher">
+<div class="card"><h2 style="margin-top:0">Bücher</h2><p class="muted small" style="margin-top:-6px">Neue ASIN, Titelvorschlag oder Hardcover-Zuordnung, bei denen die Belege für eine automatische Änderung nicht reichen. „Übernehmen“ schreibt den Vorschlag (danach im Verlauf rückgängig machbar), „Verwerfen“ lässt das Buch wie es ist – der Vorschlag kommt nicht wieder.</p></div>
+{% for x in secs.buecher.entries %}{% set r = x.res %}{% set store = r.domain or 'www.audible.com' %}
+<div class="card mcard">
+ <div class="row" style="justify-content:space-between"><div><span class="badge warn">{{ {'asin': 'ASIN', 'isbn': 'ISBN', 'title': 'Titel', 'hardcover': 'Hardcover'}.get(x.kind, x.kind) }}</span>
+  <a href="{{ url_for('problem', key=x.key) }}"><b>{{ x.title }}</b></a></div>
+  <div class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('queue_action', qid=x.id, action='accept') }}"><button class="primary">Übernehmen</button></form>
+  <form method="post" action="{{ url_for('queue_action', qid=x.id, action='reject') }}"><button>Verwerfen</button></form></div></div>
+ <p class="small" style="margin:8px 0 4px">Vorschlag: <code>{{ x.candidate }}</code> – {{ x.reason }}</p>
+ {% if x.evidence %}<p class="muted small" style="margin:0">Belege: {{ x.evidence|join(', ') }}</p>{% endif %}
+ <div class="links small">{% if r.asin %}<a href="https://{{ store }}/pd/{{ r.asin }}" target="_blank">Audible (aktuell) ↗</a>{% endif %}
+  {% if x.kind == 'asin' and x.candidate %}<a href="https://{{ store }}/pd/{{ x.candidate }}" target="_blank">Vorschlag auf Audible ↗</a>{% if '.de' not in store %}<a href="https://www.audible.de/pd/{{ x.candidate }}" target="_blank">.de ↗</a>{% endif %}{% endif %}
+  {% if r.goodreads %}<a href="{{ r.goodreads }}" target="_blank">Goodreads ↗</a>{% endif %}{% if r.hardcover %}<a href="{{ r.hardcover }}" target="_blank">Hardcover ↗</a>{% endif %}
+  {% if abs_base and r.id %}<a href="{{ abs_base }}/item/{{ r.id }}" target="_blank">ABS ↗</a>{% endif %}</div>
+</div>{% else %}<div class="card muted">Keine offenen Bücher.</div>{% endfor %}
+</div>
+
+{% for k, kind in (('reihen', 'Reihe'), ('autoren', 'Autor')) %}{% set s = secs[k] %}
+<div class="sec" data-sec="{{ k }}">
+<div class="card"><h2 style="margin-top:0">{{ 'Reihen zusammenführen' if k == 'reihen' else 'Autoren vereinheitlichen' }}</h2>
+ <p class="muted small" style="margin-top:-6px">{% if k == 'reihen' %}Zusammengeführt wird automatisch nur, wenn die Namen nach dem Bereinigen gleich sind (oder fast gleich und sich die Bandnummern ergänzen bzw. verzahnen), jedes Buch einen gemeinsamen Autor hat, die Ausgabe gleich ist und sich keine Nummern überschneiden.{% else %}Vereinheitlicht wird automatisch nur bei Beleg für dieselbe Person: Schreibweise (Initialen, Leerzeichen, Akzente), dieselbe Audible-Autor-ID oder identische Bücher. Ziel ist eine Schreibweise in lateinischer Schrift.{% endif %}</p></div>
+<h3>Unsicher – deine Entscheidung ({{ s.review|length }})</h3>
+{% for x in s.review %}<div class="card mcard">
+ <div class="mpair">{{ side(x.series, x.series_books if k == 'reihen' else '', x.series_titles, x.series_authors, 'Kandidat') }}<div class="marrow">→</div>{{ side(x.other, x.other_books if k == 'reihen' else '', x.other_titles, x.other_authors, 'Ziel') }}</div>
+ <div class="row" style="justify-content:space-between;margin-top:8px"><span class="small"><b>Warum unsicher:</b> {{ x.reason }}</span>
+  <span class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('review_action', mid=x.id, action='merge') }}"><button class="primary">Zusammenführen</button></form>
+  <form method="post" action="{{ url_for('review_action', mid=x.id, action='keep') }}"><button>Getrennt lassen</button></form></span></div>
+</div>{% else %}<div class="card muted">Keine unsicheren Fälle.</div>{% endfor %}
+<h3>Automatisch zusammengeführt ({{ s.merged|length }})</h3>
+{% for m in s.merged %}<div class="card mcard">
+ <div class="mpair">{{ side(m.member, m.member_books, m.member_titles, m.member_authors, 'vorher') }}<div class="marrow">→</div>{{ side(m.target, m.target_books, m.target_titles, m.target_authors, 'jetzt') }}</div>
+ <div class="row" style="justify-content:space-between;margin-top:8px"><span class="small"><span class="badge {{ 'ok' if m.status == 'applied' else 'warn' }}">{{ 'übernommen' if m.status == 'applied' else 'geplant (Testlauf)' }}</span> {{ m.member_count }} Buch/Bücher · {{ {'exact': 'gleicher Name nach Bereinigung', 'similar': 'fast gleicher Name, Nummern ergänzen sich', 'spelling': 'gleiche Person, andere Schreibweise'}.get(m.relation, m.relation) }} · {{ m.last_seen }}</span>
+  <span class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('merged_action', mid=m.id, action='confirm') }}"><button>✓ Passt</button></form>
+  <form method="post" action="{{ url_for('merged_action', mid=m.id, action='undo') }}" data-confirm="Zusammenführung rückgängig machen? Die alten Namen werden wiederhergestellt und hier wird künftig nicht mehr zusammengeführt."><button class="danger">↶ Rückgängig</button></form></span></div>
+</div>{% else %}<div class="card muted">Nichts offen.</div>{% endfor %}
+{% if generated %}<p class="muted small">Stand: {{ generated }}</p>{% endif %}
+</div>{% endfor %}
+
+<div class="sec" data-sec="sonstiges">
+<div class="card"><h2 style="margin-top:0">Sonstiges</h2><p class="muted small" style="margin-top:-6px">Gleiche Aufnahme zweimal in der Bibliothek (gleicher Autor, gleicher Sprecher, Laufzeit auf 2 Sekunden gleich). Das Skript ändert hier nichts – in ABS selbst aufräumen.</p></div>
+{% for d in secs.sonstiges.dups %}<div class="card mcard small"><b>{{ d.titles|join(' · ') }}</b><div class="muted">{{ (d.seconds // 60) }} min · ASIN {{ d.asins|join(' / ') }}</div></div>
+{% else %}<div class="card muted">Keine Doppelungen gefunden.</div>{% endfor %}
+</div>
+
+</div></div>
+<script>
+(function(){ const secs=[...document.querySelectorAll('.spanel > .sec')], links=[...document.querySelectorAll('.snav a')], nav=document.querySelector('.snav');
+ function show(id){ if(!secs.some(c=>c.dataset.sec===id)) id=secs[0].dataset.sec; secs.forEach(c=>c.classList.toggle('on', c.dataset.sec===id)); links.forEach(a=>a.classList.toggle('active', a.dataset.sec===id)); }
+ links.forEach(a=>a.addEventListener('click', e=>{ e.preventDefault(); history.replaceState(null,'','#'+a.dataset.sec); show(a.dataset.sec); nav.classList.remove('open'); }));
+ show(decodeURIComponent(location.hash.slice(1)));
+ window.addEventListener('hashchange', ()=>show(decodeURIComponent(location.hash.slice(1))));
+})();
+</script>{% endblock %}

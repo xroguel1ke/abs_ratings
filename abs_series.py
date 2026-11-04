@@ -137,11 +137,13 @@ LOOSE_NAME_RATIO = 0.8  # names this similar (or one inside the other) merge onl
 
 
 def loosely_similar(a, b):
-    """Names that are only loosely alike: ratio >= 0.8 or all words of one inside the other ('Realm Saga' / 'The Realm')."""
-    if not a.key or not b.key: return False
+    """'spelling' = names only loosely alike (ratio >= 0.8), 'contained' = all words of one inside the other (a sub-series like
+    'Discworld: Witches' / 'Discworld' - normally never merged), None = not similar."""
+    if not a.key or not b.key: return None
     wa, wb = set(a.key.split()), set(b.key.split())
-    if (wa <= wb or wb <= wa) and max(len(w) for w in (wa & wb or {''})) >= 4: return True
-    return difflib.SequenceMatcher(None, a.key, b.key).ratio() >= LOOSE_NAME_RATIO
+    if difflib.SequenceMatcher(None, a.key, b.key).ratio() >= LOOSE_NAME_RATIO: return 'spelling'
+    if (wa <= wb or wb <= wa) and max(len(w) for w in (wa & wb or {''})) >= 4: return 'contained'
+    return None
 
 
 def interleaved(g_seqs, c_seqs):
@@ -157,6 +159,18 @@ def interleaved(g_seqs, c_seqs):
 
 UNCERTAIN = ('not enough numbered books', "numbers don't complement", 'matches more than one series', "numbers don't interleave")
 
+def series_info(s):
+    """Titles (with number) and authors of a Series object, for the web UI."""
+    return {'titles': [f"#{q} {r['title']}" if q else r['title'] for r, q in sorted(s.entries, key=lambda e: parse_seq(e[1]) or 0)][:15],
+            'authors': sorted({a for r, _ in s.entries for a in r['authors']})[:4]}
+
+
+def pair_info(a, b):
+    ia, ib = series_info(a), series_info(b)
+    return {'series_books': fmt_seqs(a.seqs), 'other_books': fmt_seqs(b.seqs), 'series_titles': ia['titles'], 'other_titles': ib['titles'],
+            'series_authors': ia['authors'], 'other_authors': ib['authors']}
+
+
 def merge_id(kind, lib, member, target): return f"{kind}|{lib}|{member}->{target}"
 
 def merge_check(group, cand, decisions=None):
@@ -169,8 +183,9 @@ def merge_check(group, cand, decisions=None):
     if dec == 'merge': return True, 'your decision', 'ok'
     loose = False
     if not rel:
-        if not loosely_similar(target, cand): return False, None, 'names not similar'
-        rel, loose = 'similar (numbers interleave)', True
+        loose = loosely_similar(target, cand)
+        if not loose: return False, None, 'names not similar'
+        rel = 'similar (numbers interleave)'
     if target.variant != cand.variant:
         return False, rel, f"different edition ({', '.join(sorted(target.variant)) or 'plain'} vs {', '.join(sorted(cand.variant)) or 'plain'})"
     g_authors = set().union(*(s.authors for s in group))
@@ -188,7 +203,12 @@ def merge_check(group, cand, decisions=None):
     if overlap := g_seqs & c_seqs:
         return False, rel, f"book numbers overlap ({fmt_seqs(overlap)})"
     if loose:  # only loosely similar names: the numbers must interleave into one gapless run, otherwise it goes to the review list
-        if not interleaved(g_seqs, c_seqs): return False, rel, f"names only loosely similar and numbers don't interleave ({fmt_seqs(g_seqs)} vs {fmt_seqs(c_seqs)})"
+        if not interleaved(g_seqs, c_seqs):
+            # a sub-series (name inside the other) or a side without own numbers is no doubt case, it simply stays separate;
+            # only spelling variants with numbers on both sides go to the review list
+            if loose == 'contained' or len(g_seqs) < 2 or len(c_seqs) < 2:
+                return False, None, f"sub-series or no number evidence ({fmt_seqs(g_seqs)} vs {fmt_seqs(c_seqs)})"
+            return False, rel, f"numbers don't interleave ({fmt_seqs(g_seqs)} vs {fmt_seqs(c_seqs)}) and the names are only loosely similar"
         return True, rel, 'ok'
     if rel != 'exact':
         # Fuzzy names need the book numbers to complement each other (fill gaps or continue the series)
@@ -257,10 +277,10 @@ def find_merges(records, decisions=None, preferred_names=None):
             else:
                 if len(fits) > 1:
                     for g, _ in fits:  # one review entry per possible target
-                        rejected.append({'lib': lib, 'series': ser.name, 'other': g[0].name,
-                                         'reason': 'matches more than one series (ambiguous)'})
+                        rejected.append({'lib': lib, 'series': ser.name, 'other': g[0].name, 'reason': 'matches more than one series (ambiguous)',
+                                         **pair_info(ser, g[0])})
                 for tgt, reason in related:
-                    rejected.append({'lib': lib, 'series': ser.name, 'other': tgt.name, 'reason': reason})
+                    rejected.append({'lib': lib, 'series': ser.name, 'other': tgt.name, 'reason': reason, **pair_info(ser, tgt)})
                 groups.append([ser])
         for g in groups:
             if len(g) > 1:
@@ -286,8 +306,8 @@ def apply_merges(ctx, merges):
                      f"{' (alias saved)' if not dry else ''}")
         member_names = {s.name for s in m['members']}
         mid_of = {s.name: merge_id('series', m['lib'], s.name, tgt.name) for s in m['members']}
-        record_merge(ctx, 'series', m['lib'], tgt.name, [(s.name, fmt_seqs(s.seqs), len(s.entries), s.relation) for s in m['members']],
-                     fmt_seqs(tgt.seqs))
+        record_merge(ctx, 'series', m['lib'], tgt.name, [(s.name, fmt_seqs(s.seqs), len(s.entries), s.relation, series_info(s)) for s in m['members']],
+                     fmt_seqs(tgt.seqs), series_info(tgt))
         if not dry:
             for n in member_names: aliases.setdefault(m['lib'], {})[n] = tgt.name
         group_records = {r['id']: r for s in [tgt] + m['members'] for r, _ in s.entries}
@@ -322,16 +342,20 @@ def apply_merges(ctx, merges):
     return changed
 
 
-def record_merge(ctx, kind, lib, target, members, target_books):
-    """merges.json: every automatic or decided merge (shown in the web UI 'Merged' tab)."""
+def record_merge(ctx, kind, lib, target, members, target_books, target_info=None):
+    """merges.json: every automatic or decided merge (web UI review list). members: (name, books, count, relation[, info]);
+    info / target_info: {'titles': [...], 'authors': [...]} so the UI can show which books are meant."""
     hist, dec, now = ctx.setdefault('merge_history', {}), ctx.setdefault('decisions', {}), datetime.now().strftime('%Y-%m-%d %H:%M')
-    for name, books, count, relation in members:
+    for m_ in members:
+        name, books, count, relation = m_[:4]; info = m_[4] if len(m_) > 4 else {}
         mid = merge_id(kind, lib, name, target)
         old = hist.get(mid)
         if old and old.get('member_books') != books and dec.get(mid, {}).get('action') == 'confirmed' and not ctx['dry_run']:
             dec.pop(mid, None)  # new books were merged: show it again
         hist[mid] = {'id': mid, 'kind': kind, 'lib': lib, 'target': target, 'member': name, 'member_books': books,
                      'member_count': count, 'target_books': target_books, 'relation': relation,
+                     'member_titles': info.get('titles', []), 'member_authors': info.get('authors', []),
+                     'target_titles': (target_info or {}).get('titles', []), 'target_authors': (target_info or {}).get('authors', []),
                      'status': 'planned' if ctx['dry_run'] and (not old or old.get('status') == 'planned') else 'applied',
                      'first_seen': (old or {}).get('first_seen', now), 'last_seen': now}
 
@@ -339,8 +363,8 @@ def record_merge(ctx, kind, lib, target, members, target_books):
 # ================= AUTHORS =================
 
 def find_author_fixes(records, decisions=None, links=None):
-    """Spelling variants of the same author ('R. A. Salvatore' / 'R.A. Salvatore'): the spelling used
-    by more books wins (tie: alphabetical). Returns ({variant: canonical}, counts, review list).
+    """Spelling variants of the same author ('R. A. Salvatore' / 'R.A. Salvatore'): a spelling with accents wins over the same name
+    without them, otherwise the spelling used by more books (tie: alphabetical). Returns ({variant: canonical}, counts, review list).
     Uncertain pairs ('J. Smith' / 'John Smith') go to the review list; your decisions win."""
     decisions = decisions or {}
     count = defaultdict(lambda: defaultdict(int))
@@ -349,7 +373,8 @@ def find_author_fixes(records, decisions=None, links=None):
     fixes = {}
     for key, spellings in count.items():
         if len(spellings) < 2: continue
-        canon = sorted(spellings.items(), key=lambda x: (-x[1], 0 if fold_accents(x[0]) != x[0] else 1, x[0]))[0][0]
+        # the spelling WITH accents wins over the accent-less one ('Gablé' over 'Gable': the accent is information), then the most used one
+        canon = sorted(spellings.items(), key=lambda x: (0 if fold_accents(x[0]) != x[0] else 1, -x[1], x[0]))[0][0]
         for sp in spellings:
             if sp != canon and decisions.get(merge_id('author', '', sp, canon), {}).get('action') not in ('keep', 'undone'):
                 fixes[sp] = canon
@@ -360,7 +385,7 @@ def find_author_fixes(records, decisions=None, links=None):
     for asin, group in by_asin.items():
         present = [n for n in group if n in {sp for sps in count.values() for sp in sps}]
         if len({author_key(n) for n in present}) < 2: continue
-        canon = max(present, key=lambda n: (sum(count[author_key(n)].values()) if author_key(n) in count else 0, fold_accents(n) != n, n))
+        canon = max(present, key=lambda n: (fold_accents(n) != n, sum(count[author_key(n)].values()) if author_key(n) in count else 0, n))
         for n in present:
             if author_key(n) != author_key(canon) and n not in fixes and decisions.get(merge_id('author', '', n, canon), {}).get('action') not in ('keep', 'undone'):
                 fixes[n] = canon
@@ -405,7 +430,9 @@ def find_author_fixes(records, decisions=None, links=None):
                     for sp in count[small]: fixes[sp] = canon
                 elif act not in ('keep', 'undone'):
                     review.append({'id': mid, 'kind': 'author', 'lib': '', 'series': variant, 'other': canon,
-                                   'reason': 'first name vs. initial', 'series_books': total[small], 'other_books': total[big]})
+                                   'reason': 'first name vs. initial', 'series_books': total[small], 'other_books': total[big],
+                                   'series_titles': sorted({r['title'] for r in records if variant in r['authors']})[:15],
+                                   'other_titles': sorted({r['title'] for r in records if canon in r['authors']})[:15]})
     review = [r for r in review if r["series"] not in fixes]  # already resolved by proof
     return fixes, count, review
 
@@ -415,7 +442,8 @@ def apply_author_fixes(ctx, records, fixes, count):
     changed = 0
     for variant, canon in sorted(fixes.items()):
         logging.info(f"   ✍️ AUTHOR{' (DRY_RUN)' if dry else ''}: '{variant}' ({count[author_key(variant)][variant]} books) -> '{canon}' ({count[author_key(canon)][canon]} books)")
-        record_merge(ctx, 'author', '', canon, [(variant, '', count[author_key(variant)][variant], 'spelling')], '')
+        titles = lambda n: sorted({r['title'] for r in records if n in r['authors']})[:15]
+        record_merge(ctx, 'author', '', canon, [(variant, '', count[author_key(variant)][variant], 'spelling', {'titles': titles(variant)})], '', {'titles': titles(canon)})
     for r in records:
         if not any(a in fixes for a in r['authors']): continue
         if 'lock_authors' in r['tags']:

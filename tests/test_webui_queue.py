@@ -23,11 +23,11 @@ def client():
 
 def test_queue_tab_lists_open_items_and_decisions_hide_them():
     c = client()
-    html = c.get('/?tab=queue').get_data(as_text=True)
+    html = c.get('/review').get_data(as_text=True)
     assert 'Test Book One' in html and 'B0TEST0001' in html and 'Test Book Two' in html, html[:400]
     qid = core.open_queue()[0]['id']
     r = c.post(f'/queue/{qid}/reject'); assert r.status_code in (302, 303)
-    html = c.get('/?tab=queue').get_data(as_text=True)
+    html = c.get('/review').get_data(as_text=True)
     assert 'Test Book One' not in html and 'Test Book Two' in html
     assert qid in json.load(open(os.path.join(cfg, 'review_decisions.json')))
 

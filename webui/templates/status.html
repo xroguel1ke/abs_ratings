@@ -9,10 +9,10 @@
 
 <h3>Abdeckung der Bibliothek</h3>
 <div class="card tablewrap"><table><tr><th>Feld</th><th>vorhanden</th><th>Anteil</th><th>Verlauf</th><th></th></tr>
-{% for label, have, total, pct, titles in rows %}<tr><td>{{ label }}</td><td>{{ have }} / {{ total }}</td>
+{% for label, have, total, pct, titles in rows %}{% if pct is none %}<tr><td>{{ label }}</td><td colspan="4" class="muted small">wird ab dem nächsten Scan gezählt</td></tr>{% else %}<tr><td>{{ label }}</td><td>{{ have }} / {{ total }}</td>
 <td style="min-width:160px"><div style="background:var(--line);border-radius:6px;height:10px"><div style="width:{{ pct }}%;height:10px;border-radius:6px;background:{{ 'var(--ok)' if pct >= 95 else 'var(--warn)' if pct >= 80 else 'var(--err)' }}"></div></div><span class="small">{{ pct }} %</span></td>
 <td class="small">{% if label in first %}{% set d = pct - first[label] %}<span class="{{ 'badge ok' if d > 0.05 else ('badge err' if d < -0.05 else 'muted') }}">{{ '%+.1f'|format(d) }} %</span>{% else %}<span class="muted">–</span>{% endif %}</td>
-<td class="small">{% if titles %}<details><summary>{{ total - have }} ohne</summary>{{ titles | join(', ') }}{% if total - have > titles|length %} …{% endif %}</details>{% endif %}</td></tr>
+<td class="small">{% if titles %}<details><summary>{{ total - have }} ohne</summary>{{ titles | join(', ') }}{% if total - have > titles|length %} …{% endif %}</details>{% endif %}</td></tr>{% endif %}
 {% else %}<tr><td colspan="5" class="muted">Noch kein Bibliotheks-Report vorhanden (läuft beim Reihen-Task).</td></tr>{% endfor %}</table>
 {% if generated %}<p class="muted small">Stand: {{ generated }}{% if first_ts %} · Verlauf seit {{ first_ts }} ({{ points }} Messpunkte){% else %} · Verlauf erscheint ab dem zweiten Bericht{% endif %}</p>{% endif %}</div>
 

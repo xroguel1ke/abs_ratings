@@ -1,35 +1,45 @@
-{% extends 'base.html' %}{% block body %}
-<h1>Läufe</h1>
-<div class="card"><form method="post" class="row">
- <button class="primary" name="action" value="dry" {{ 'disabled' if running }}>▶ Testlauf (DRY_RUN)</button>
- <button name="action" value="run" {{ 'disabled' if running }} data-confirm="Echter Lauf: Änderungen werden in ABS geschrieben. Fortfahren?" data-confirm-ok="Echten Lauf starten">▶ Echter Lauf</button>
- <button name="action" value="series" {{ 'disabled' if running }}>Nur Reihen & Report</button>
- {% if running %}<button class="danger" name="action" value="stop">■ Abbrechen</button>{% endif %}
+{% extends 'base.html' %}{% block title %}Scans{% endblock %}{% block body %}
+<h1>Scans</h1>
+<div class="card">
+{% if running %}<form method="post" class="row" style="margin-bottom:10px"><span class="badge running">● läuft gerade</span><button class="danger" name="action" value="stop">■ Abbrechen</button></form>{% endif %}
+<form method="post" id="startform"><input type="hidden" name="action" value="start">
+ <div class="row" style="gap:10px">
+  <label class="badge"><input type="checkbox" name="task_meta" checked> Metadaten &amp; Bewertungen</label>
+  <label class="badge"><input type="checkbox" name="task_authors" {{ 'checked' if s.AUTHOR_NORMALIZE }}> Autoren vereinheitlichen</label>
+  <label class="badge"><input type="checkbox" name="task_series" {{ 'checked' if s.SERIES_MERGE }}> Reihen zusammenführen</label>
+  <span style="flex:1"></span>
+  <label class="badge"><input type="checkbox" name="dry" id="dry" checked onchange="dryToggle()"> Testlauf (nichts schreiben)</label>
+  <button class="primary" id="startbtn" {{ 'disabled' if running }}>▶ Scan starten</button>
+ </div>
+ <p class="muted small" id="drynote">Ein Testlauf plant nur; die geplanten Änderungen kannst du danach prüfen und gezielt übernehmen. Reihen und Autoren werden immer über die ganze Bibliothek geprüft.</p>
+ <details class="adv"><summary><b>Optionen nur für diesen Scan</b> <span class="muted small">– ändert keine gespeicherten Einstellungen</span></summary>
+  <input type="hidden" name="custom" value="1">
+  <label class="f"><span>Bücher pro Scan</span><input type="number" min="1" name="BATCH_SIZE" value="{{ s.BATCH_SIZE }}" style="max-width:140px"></label>
+  <label class="f"><span>Auffrischen nach (Tage)</span><input type="number" min="0" name="REFRESH_DAYS" value="{{ s.REFRESH_DAYS }}" style="max-width:140px"><span class="h">0 = alle Bücher sind fällig</span></label>
+  <div class="f" style="padding:9px 0;border-bottom:1px dashed var(--line)"><b>Quellen</b><div class="row" style="margin-top:6px">
+   <label class="badge"><input type="checkbox" name="HARDCOVER_ENABLED" {{ 'checked' if s.HARDCOVER_ENABLED }}> Hardcover</label>
+   <label class="badge"><input type="checkbox" name="GOODREADS_ENABLED" {{ 'checked' if s.GOODREADS_ENABLED }}> Goodreads (experimentell)</label></div></div>
+  <div class="f" style="padding:9px 0"><b>Welche Bücher</b> <span class="muted small">(für Metadaten &amp; Bewertungen)</span><div class="row" style="margin-top:6px">
+   <label class="badge"><input type="radio" name="selection" value="all" checked onchange="lst()"> alle fälligen</label>
+   <label class="badge"><input type="radio" name="selection" value="problems" onchange="lst()"> nur Probleme</label>
+   <label class="badge"><input type="radio" name="selection" value="new" onchange="lst()"> nur neue (nie geprüft)</label>
+   <label class="badge"><input type="radio" name="selection" value="list" onchange="lst()"> eigene Liste</label></div>
+   <textarea name="list" id="booklist" rows="4" placeholder="Ein Buch pro Zeile: Titel (wie in der Bücherliste), ABS-Item-ID oder Schlüssel" style="display:none;margin-top:8px"></textarea></div>
+ </details>
 </form>
-<details class="adv" style="margin-top:10px"><summary><b>Optionen nur für diesen Lauf</b> <span class="muted small">– ändert keine gespeicherten Einstellungen</span></summary>
-<form method="post" style="margin-top:10px"><input type="hidden" name="custom" value="1">
- <label class="f"><span>Bücher pro Lauf</span><input type="number" min="1" name="BATCH_SIZE" value="{{ s.BATCH_SIZE }}" style="max-width:140px"></label>
- <label class="f"><span>Auffrischen nach (Tage)</span><input type="number" min="0" name="REFRESH_DAYS" value="{{ s.REFRESH_DAYS }}" style="max-width:140px"><span class="h">0 = alle Bücher sind fällig</span></label>
- <div class="f" style="padding:9px 0;border-bottom:1px dashed var(--line)"><b>Quellen und Aufgaben</b><div class="row" style="margin-top:6px">
-  <label class="badge"><input type="checkbox" name="HARDCOVER_ENABLED" {{ 'checked' if s.HARDCOVER_ENABLED }}> Hardcover</label>
-  <label class="badge"><input type="checkbox" name="GOODREADS_ENABLED" {{ 'checked' if s.GOODREADS_ENABLED }}> Goodreads (experimentell)</label>
-  <label class="badge"><input type="checkbox" name="SERIES_MERGE" {{ 'checked' if s.SERIES_MERGE }}> Reihen zusammenführen</label></div>
-  <div class="muted small">Reihen werden nur bei „alle fälligen Bücher“ zusammengeführt (braucht die ganze Bibliothek).</div></div>
- <div class="f" style="padding:9px 0"><b>Welche Bücher</b><div class="row" style="margin-top:6px">
-  <label class="badge"><input type="radio" name="selection" value="all" checked onchange="lst()"> alle fälligen</label>
-  <label class="badge"><input type="radio" name="selection" value="problems" onchange="lst()"> nur Probleme</label>
-  <label class="badge"><input type="radio" name="selection" value="new" onchange="lst()"> nur neue (nie geprüft)</label>
-  <label class="badge"><input type="radio" name="selection" value="list" onchange="lst()"> eigene Liste</label></div>
-  <textarea name="list" id="booklist" rows="4" placeholder="Ein Buch pro Zeile: Titel (wie in der Bücherliste), ABS-Item-ID oder Schlüssel" style="display:none;margin-top:8px"></textarea></div>
- <div class="row" style="margin-top:8px"><button class="primary" name="action" value="dry" {{ 'disabled' if running }}>▶ Testlauf mit diesen Optionen</button>
-  <button name="action" value="run" {{ 'disabled' if running }} data-confirm="Echter Lauf mit diesen Optionen: Änderungen werden in ABS geschrieben. Fortfahren?" data-confirm-ok="Echten Lauf starten">▶ Echter Lauf mit diesen Optionen</button></div>
-</form></details>
-<script>function lst(){ document.getElementById('booklist').style.display = document.querySelector('input[name=selection]:checked').value==='list' ? '' : 'none'; }</script>
-</form><p class="muted small">Geplante Läufe nutzen die Einstellung „Testlauf“ aus den Einstellungen. Nächster geplanter Lauf: {{ next_run|dt if next_run else 'kein Zeitplan' }}.</p></div>
+<p class="muted small" style="margin-bottom:0">Geplante Scans (Zeitplan) nutzen die gespeicherten Einstellungen. Nächster geplanter Scan: {{ next_run|dt if next_run else 'kein Zeitplan' }}.</p>
+</div>
+<script>
+function lst(){ document.getElementById('booklist').style.display = document.querySelector('input[name=selection]:checked').value==='list' ? '' : 'none'; }
+function dryToggle(){ const f=document.getElementById('startform'), d=document.getElementById('dry').checked, b=document.getElementById('startbtn');
+ if(d){ f.removeAttribute('data-confirm'); b.textContent='▶ Scan starten'; b.classList.remove('danger-fill'); }
+ else { f.setAttribute('data-confirm','Echter Scan: die Änderungen werden in ABS geschrieben (vorher ABS-Backup). Fortfahren?'); f.setAttribute('data-confirm-ok','Echten Scan starten'); b.textContent='▶ Echten Scan starten'; } }
+dryToggle();
+</script>
 <div class="card tablewrap"><table><tr><th>Start</th><th>Art</th><th>Status</th><th>Ergebnis</th><th></th></tr>
 {% for r in runs %}<tr><td>{{ r.start|dt }}<div class="muted small">{{ 'geplant' if r.trigger=='schedule' else 'manuell' }}</div></td>
 <td>{{ r.label }}{% if r.dry_run %} <span class="badge">Testlauf</span>{% endif %}</td>
 <td><span class="badge {{ 'ok' if r.status=='ok' else ('running' if r.status=='running' else 'err') }}">{{ r.status }}</span></td>
 <td class="small">{{ r.summary }}</td><td><a href="{{ url_for('run_view', run_id=r.id) }}">Details</a></td></tr>
-{% else %}<tr><td colspan="5" class="muted">Noch keine Läufe.</td></tr>{% endfor %}</table></div>
+{% else %}<tr><td colspan="5" class="muted">Noch keine Scans.</td></tr>{% endfor %}</table></div>
 {% endblock %}

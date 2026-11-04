@@ -84,6 +84,8 @@ def password():
 @login_required
 def dashboard():
     tab = request.args.get('tab', 'problems')
+    if tab in ('queue', 'merged', 'review'):  # these moved to the review list page
+        return redirect(url_for('review_page') + {'queue': '#buecher', 'merged': '#reihen', 'review': '#reihen'}[tab])
     res = core.results()
     counts = Counter(r.get('status') for r in res.values())
     status_filter = request.args.get('status', '')
@@ -229,6 +231,31 @@ def history_undo(run_id):
     return redirect(url_for('run_view', run_id=run_id_u))
 
 
+
+
+@app.route('/review')
+@login_required
+def review_page():
+    """The ONE review list (left menu): books (ASIN/title/Hardcover proposals), series, authors, other (duplicates)."""
+    dec = core.decisions()
+    merged = [m for m in core.merges().values() if dec.get(m['id'], {}).get('action') not in ('confirmed', 'undone')]
+    merged.sort(key=lambda m: m.get('last_seen', ''), reverse=True)
+    rv = core.review()
+    queue = core.open_queue()
+    res_all = core.results()
+    for x in queue: x['res'] = res_all.get(x['key']) or {}
+    rep = core._load_json(os.path.join(core.REPORT_DIR, 'library_report.json'), {})
+    secs = {
+        'buecher': {'label': 'Bücher', 'entries': queue},
+        'reihen': {'label': 'Reihen', 'review': rv.get('series') or [], 'merged': [m for m in merged if m['kind'] == 'series']},
+        'autoren': {'label': 'Autoren', 'review': rv.get('authors') or [], 'merged': [m for m in merged if m['kind'] == 'author']},
+        'sonstiges': {'label': 'Sonstiges', 'dups': rep.get('duplicate_recordings') or []},
+    }
+    counts = {'buecher': len(queue), 'reihen': len(secs['reihen']['review']) + len(secs['reihen']['merged']),
+              'autoren': len(secs['autoren']['review']) + len(secs['autoren']['merged']), 'sonstiges': len(secs['sonstiges']['dups'])}
+    return render_template('review.html', secs=secs, counts=counts, generated=rv.get('generated'))
+
+
 @app.route('/merged/<path:mid>/<action>', methods=['POST'])
 @login_required
 def merged_action(mid, action):
@@ -236,17 +263,17 @@ def merged_action(mid, action):
     if not m: abort(404)
     if action == 'confirm':
         core.set_decision(mid, 'confirmed'); flash(f"'{m['member']}' → '{m['target']}' bestätigt.", 'ok')
-        return redirect(url_for('dashboard', tab='merged'))
+        return redirect(url_for('review_page') + ('#autoren' if m['kind'] == 'author' else '#reihen'))
     if action == 'undo':
         core.set_decision(mid, 'undone')
         if m['kind'] == 'series': core.remove_alias(m['lib'], m['member'])
         if m.get('status') == 'applied':
             run_id, err = core.RUNNER.start('undo', undo_args=['--merge-id', mid, '--apply'],
                                             label=f"Rückgängig: {m['member']} → {m['target']}")
-            if err: flash(err, 'error'); return redirect(url_for('dashboard', tab='merged'))
+            if err: flash(err, 'error'); return redirect(url_for('review_page') + ('#autoren' if m['kind'] == 'author' else '#reihen'))
             return redirect(url_for('run_view', run_id=run_id))
         flash('Zusammenführung verworfen (war nur geplant).', 'ok')
-    return redirect(url_for('dashboard', tab='merged'))
+    return redirect(url_for('review_page') + ('#autoren' if m['kind'] == 'author' else '#reihen'))
 
 
 @app.route('/queue/<path:qid>/<action>', methods=['POST'])
@@ -264,7 +291,7 @@ def queue_action(qid, action):
     else:
         flash('Vorschlag verworfen: das Buch bleibt unverändert.', 'ok')
     core.set_queue_decision(qid, action)
-    return redirect(url_for('dashboard', tab='queue'))
+    return redirect(url_for('review_page') + '#buecher')
 
 
 @app.route('/review/<path:mid>/<action>', methods=['POST'])
@@ -273,7 +300,7 @@ def review_action(mid, action):
     if action not in ('merge', 'keep'): abort(400)
     core.set_decision(mid, action)
     flash('Entscheidung gespeichert. Sie wird beim nächsten Lauf (oder "Nur Reihen & Report") angewendet.', 'ok')
-    return redirect(url_for('dashboard', tab='review'))
+    return redirect(url_for('review_page') + ('#autoren' if mid.startswith('author|') else '#reihen'))
 
 
 # ---------------------------------------------------------------- runs
@@ -284,18 +311,28 @@ def runs():
         a = request.form.get('action')
         if a == 'stop':
             core.RUNNER.stop(); flash('Lauf wird abgebrochen.', 'ok'); return redirect(url_for('runs'))
-        kind = {'run': 'full', 'dry': 'full', 'series': 'series'}.get(a)
-        if not kind: abort(400)
-        dry = True if a == 'dry' else (False if a == 'run' else None)
-        label = {'run': 'Lauf (echt)', 'dry': 'Testlauf', 'series': 'Nur Reihen & Report'}[a]
         rs, items = None, None
-        if request.form.get('custom') == '1' and kind == 'full':  # start dialog: settings for THIS run only
+        if a == 'start':  # scan page: tasks as checkboxes (metadata & ratings / authors / series) + test-run switch
+            meta, authors, series = (request.form.get(k) == 'on' for k in ('task_meta', 'task_authors', 'task_series'))
+            if not (meta or authors or series): flash('Bitte mindestens eine Aufgabe wählen.', 'error'); return redirect(url_for('runs'))
+            dry = request.form.get('dry') == 'on'
+            kind = 'full' if meta else 'series'  # without metadata only the series/author task runs (whole library)
+            tasks = [t for t, on in (('Metadaten', meta), ('Autoren', authors), ('Reihen', series)) if on]
+            label = f"{'Testlauf' if dry else 'Scan (echt)'}: {', '.join(tasks)}"
+            rs = {'SERIES_MERGE': series, 'AUTHOR_NORMALIZE': authors}
+        else:  # older buttons (kept for links / scripts)
+            kind = {'run': 'full', 'dry': 'full', 'series': 'series'}.get(a)
+            if not kind: abort(400)
+            dry = True if a == 'dry' else (False if a == 'run' else None)
+            label = {'run': 'Lauf (echt)', 'dry': 'Testlauf', 'series': 'Nur Reihen & Report'}[a]
+        if request.form.get('custom') == '1' and kind == 'full':  # options for THIS run only
             s = core.load_settings()
             def num(k):
                 try: return max(0, int(request.form.get(k, s.get(k))))
                 except (TypeError, ValueError): return s.get(k)
-            rs = {'BATCH_SIZE': num('BATCH_SIZE'), 'REFRESH_DAYS': num('REFRESH_DAYS')}
-            for k in ('HARDCOVER_ENABLED', 'GOODREADS_ENABLED', 'SERIES_MERGE'): rs[k] = request.form.get(k) == 'on'
+            rs = dict(rs or {}, BATCH_SIZE=num('BATCH_SIZE'), REFRESH_DAYS=num('REFRESH_DAYS'))
+            for k in ('HARDCOVER_ENABLED', 'GOODREADS_ENABLED'): rs[k] = request.form.get(k) == 'on'
+            if a != 'start': rs['SERIES_MERGE'] = request.form.get('SERIES_MERGE') == 'on'
             mode = request.form.get('selection', 'all')
             items, note = core.select_items(s, mode, request.form.get('list', ''), limit=min(rs['BATCH_SIZE'] or 300, 1500))
             if mode != 'all' and not items: flash(f'Keine Bücher für diese Auswahl ({note}).', 'error'); return redirect(url_for('runs'))

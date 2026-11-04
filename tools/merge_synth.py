@@ -192,6 +192,8 @@ def evaluate(batch, data):
         in_rev = any(r[0] == c['kind'] and {r[1], r[2]} == names for r in review)
         if c['expect'] == 'merge':
             good = any({m[1], m[2]} == names for m in hit)
+            if c['case'] == 'author_accent' and good and not any(m[2] == c['names'][0] for m in hit):  # direction: the accented name must be the target
+                wrong += 1; print('  WRONG direction', c['case'], c['names'], '->', hit); continue
             bad = [m for m in hit if {m[1], m[2]} != names]
             if bad: wrong += 1; print('  WRONG', c['case'], c['names'], '->', bad)
             elif good: ok += 1

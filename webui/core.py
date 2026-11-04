@@ -367,6 +367,10 @@ def coverage():
     for k, titles in (rep.get('missing') or {}).items():
         have = max(total - len(titles), 0)
         rows.append((FIELD_LABELS.get(k, k), have, total, round(100 * have / total, 1) if total else 0, sorted(titles)[:40]))
+    # every metadata field the tool works on; a field the last report does not know yet is shown as 'after the next scan'
+    have_keys = set((rep.get('missing') or {}).keys())
+    for k in ('asin', 'title', 'subtitle', 'authors', 'narrators', 'series', 'genres', 'publisher', 'year', 'isbn', 'language', 'description', 'cover'):
+        if k not in have_keys and k not in ('title', 'subtitle'): rows.append((FIELD_LABELS.get(k, k), None, total, None, []))
     # ratings per source from the last check of every book (results.json)
     res = results(); n = len(res)
     if n:
@@ -374,7 +378,7 @@ def coverage():
                             ('Hardcover', lambda r: bool(r.get('hardcover')))):
             miss = [r.get('title') or '?' for r in res.values() if not pred(r)]
             rows.append((label, n - len(miss), n, round(100 * (n - len(miss)) / n, 1), sorted(miss)[:40]))
-    rows.sort(key=lambda r: r[3])
+    rows.sort(key=lambda r: (r[3] is None, r[3] or 0))
     _coverage_trend(rows, rep.get('generated', '') or datetime.now().strftime('%Y-%m-%d'))
     return rows, rep.get('generated', '')
 
@@ -383,7 +387,7 @@ def _coverage_trend(rows, stamp):
     """Keep one coverage snapshot per report/day in coverage_history.json (for the trend on the status page)."""
     path = os.path.join(CONFIG_DIR, 'coverage_history.json')
     hist = _load_json(path, [])
-    snap = {'ts': stamp, 'pct': {r[0]: r[3] for r in rows}}
+    snap = {'ts': stamp, 'pct': {r[0]: r[3] for r in rows if r[3] is not None}}
     if not hist or hist[-1].get('ts') != stamp:
         hist.append(snap); _save_json(path, hist[-120:])
     elif hist[-1].get('pct') != snap['pct']:

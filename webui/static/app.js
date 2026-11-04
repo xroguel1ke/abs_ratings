@@ -29,11 +29,12 @@
 
   // ---- onboarding tour ----
   var STEPS = [
-    { sel: null, t: 'Willkommen bei ABS Ratings', p: 'Kurzer Rundgang in 8 Schritten. Du kannst ihn jederzeit überspringen und unter Einstellungen neu starten.' },
-    { sel: '[data-tour=dashboard]', t: 'Dashboard', p: 'Überblick nach jedem Lauf: Bücher mit Bewertungen, Probleme, die Prüfliste (Vorschläge, die du bestätigst) und zusammengeführte Reihen/Autoren.' },
+    { sel: null, t: 'Willkommen bei ABS Ratings', p: 'Kurzer Rundgang in 9 Schritten. Du kannst ihn jederzeit überspringen und unter Einstellungen neu starten.' },
+    { sel: '[data-tour=dashboard]', t: 'Übersicht', p: 'Überblick nach jedem Lauf: Bücher mit Bewertungen, Probleme, die Prüfliste (Vorschläge, die du bestätigst) und zusammengeführte Reihen/Autoren.' },
     { sel: '[data-tour=books]', t: 'Bücher', p: 'Alle geprüften Bücher, sortiert nach Sicherheit des Treffers. Mit Suche, Vergleich ABS ↔ Audible und der Begründung jeder Entscheidung.' },
+    { sel: '[data-tour=review]', t: 'Prüfliste', p: 'Alles, was deine Entscheidung braucht: unsichere Buch-Treffer, Reihen und Autoren (links nach Bereich), dazu automatisch zusammengeführte Reihen/Autoren zum Bestätigen oder Zurücknehmen.' },
     { sel: '[data-tour=status]', t: 'Status', p: 'Zustand der Quellen (Audible, Hardcover, Goodreads) und was gerade läuft.' },
-    { sel: '[data-tour=runs]', t: 'Läufe', p: 'Jeder Lauf mit Fortschritt und geplanten Änderungen. Starte neue Läufe immer zuerst als Testlauf: dann wird nichts geschrieben.' },
+    { sel: '[data-tour=runs]', t: 'Scans', p: 'Hier startest du einen Scan: Metadaten & Bewertungen, Autoren, Reihen per Häkchen. Zuerst als Testlauf – dann wird nichts geschrieben und du prüfst die Änderungen vorher.' },
     { sel: '[data-tour=history]', t: 'Verlauf', p: 'Alles, was wirklich in ABS geschrieben wurde - pro Lauf, Buch und Feld. Jede Änderung lässt sich einzeln, pro Buch oder für den ganzen Lauf rückgängig machen.' },
     { sel: '[data-tour=settings]', t: 'Einstellungen', p: 'ABS-Verbindung, Zeitplan, Quellen und Benachrichtigungen. Hier startest du auch diese Tour neu.' },
     { sel: '#theme-toggle', t: 'Design', p: 'Hell oder dunkel. Beim ersten Besuch gilt die Systemeinstellung, danach merkt sich der Browser deine Wahl.' }
