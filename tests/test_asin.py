@@ -75,6 +75,13 @@ def test_hardcover_audible_crosscheck():
     assert not A.hc_audible_crosscheck({'title': 'Completely Different Book', 'authors': ['Ben Scott']}, aud)[0]
 
 
+def test_series_prefix_with_colon_and_number_in_title_head():
+    m = A.parse_messy_title("Carl Weber's Kingpins: Queens 02 Kingdom")
+    assert m and m['title'] == 'Kingdom', m
+    assert A.parse_messy_title('Dune: Messiah') is None and A.parse_messy_title('Title: Subtitle') is None
+    assert A.search_match_score("A Beauty Queen's Gangster 2: A Gripping LitRPG Adventure", "A Beauty Queen's Gangster 2", None) >= 0.85
+
+
 def test_isbn_checks():
     assert A.isbn_bad_reason('B0D2LJ6SJ2') == 'value is an ASIN, not an ISBN'
     assert A.isbn_bad_reason('9780553580334') is None            # real ISBN-13 (House Corrino)

@@ -528,7 +528,7 @@ def isbn_bad_reason(v):
 RE_DUP_TITLE = re.compile(r'^\s*(.+?)\s*:\s*\1\s*(?::\s*(.+))?$', re.IGNORECASE)
 # 'The Book of the New Sun 05 The Urth of the New Sun': number directly between two names, separated by spaces only.
 # 'Casual Farming 3: A Slow Living LitRPG' / 'ANIMA, Vol. 4: Light Novel' (colon after the number) are normal titles.
-RE_SERIES_PREFIX = re.compile(r'^\s*([^:]{4,}?)\s+(0\d{1,2})\s+([^:].{2,})$')  # zero-padded like file names ('05')
+RE_SERIES_PREFIX = re.compile(r'^\s*(.{4,}?)\s+(0\d{1,2})\s+([^:].{2,})$')  # zero-padded like file names ('05'); the series name itself may contain a colon ('Carl Weber\'s Kingpins: Queens 02 Kingdom')
 
 RE_LEADING_NUM = re.compile(r'^\s*(0\d{1,2})\s*[-.:]?\s+(.{3,})$')  # '01 Nightside the Long Sun' (zero-padded only)
 
@@ -963,7 +963,7 @@ def search_match_score(abs_title, found_title, found_sub):
         if sep in (abs_title or ''):
             head, tail = abs_title.split(sep, 1)
             if normalize_title_text(head) == nf and set(normalize_title_text(tail).split()) & MARKETING_WORDS: score = max(score, 0.9)
-    if extract_volume(found_title) and not extract_volume(abs_title):
+    if extract_volume(found_title) and not (extract_volume(abs_title) | extract_volume(re.split(r'\s*[:\u2013-]\s+', abs_title or '')[0])):  # the number may sit in the title head ('Gangster 2: A Gripping LitRPG Adventure')
         score = min(score, 0.75)  # 'Hell Mode' vs 'Hell Mode, Volume 3': could be any volume
     return score
 
