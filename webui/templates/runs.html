@@ -2,7 +2,7 @@
 <h1>Läufe</h1>
 <div class="card"><form method="post" class="row">
  <button class="primary" name="action" value="dry" {{ 'disabled' if running }}>▶ Testlauf (DRY_RUN)</button>
- <button name="action" value="run" {{ 'disabled' if running }} onclick="return confirm('Echter Lauf: Änderungen werden in ABS geschrieben. Fortfahren?')">▶ Echter Lauf</button>
+ <button name="action" value="run" {{ 'disabled' if running }} data-confirm="Echter Lauf: Änderungen werden in ABS geschrieben. Fortfahren?" data-confirm-ok="Echten Lauf starten">▶ Echter Lauf</button>
  <button name="action" value="series" {{ 'disabled' if running }}>Nur Reihen & Report</button>
  {% if running %}<button class="danger" name="action" value="stop">■ Abbrechen</button>{% endif %}
 </form><p class="muted small">Geplante Läufe nutzen die Einstellung „Testlauf“ aus den Einstellungen. Nächster geplanter Lauf: {{ next_run|dt if next_run else 'kein Zeitplan' }}.</p></div>

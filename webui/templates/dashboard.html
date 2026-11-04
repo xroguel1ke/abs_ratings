@@ -43,7 +43,7 @@
 <td>→ {{ m.target }}{% if m.target_books %}<div class="muted small">#{{ m.target_books }}</div>{% endif %}</td>
 <td><span class="badge {{ 'ok' if m.status=='applied' else 'warn' }}">{{ 'übernommen' if m.status=='applied' else 'geplant (Testlauf)' }}</span><div class="muted small">{{ m.last_seen }}</div></td>
 <td class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('merged_action', mid=m.id, action='confirm') }}"><button>✓ Passt</button></form>
-<form method="post" action="{{ url_for('merged_action', mid=m.id, action='undo') }}" onsubmit="return confirm('Zusammenführung rückgängig machen?')"><button class="danger">↶ Rückgängig</button></form></td></tr>
+<form method="post" action="{{ url_for('merged_action', mid=m.id, action='undo') }}" data-confirm="Zusammenführung rückgängig machen?"><button class="danger">↶ Rückgängig</button></form></td></tr>
 {% else %}<tr><td colspan="5" class="muted">Nichts offen.</td></tr>{% endfor %}</table></div>
 
 {% elif tab=='queue' %}

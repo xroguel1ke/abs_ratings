@@ -71,3 +71,37 @@
   };
   window.ABSTour = Tour;
 })();
+
+// ---- confirmation dialog (replaces the browser's confirm()): forms or buttons with data-confirm="question" ----
+// data-confirm-ok="Button text" optional; dangerous actions (undo, real run, write) get a red confirm button automatically.
+(function () {
+  function dialog(msg, okText, danger) {
+    return new Promise(function (resolve) {
+      var back = document.createElement('div'); back.className = 'modal-back';
+      back.innerHTML = '<div class="modal" role="dialog" aria-modal="true"><h3>Bitte bestätigen</h3><p></p>' +
+        '<div class="row" style="justify-content:flex-end"><button type="button" data-a="no">Abbrechen</button>' +
+        '<button type="button" data-a="yes" class="' + (danger ? 'primary danger-fill' : 'primary') + '"></button></div></div>';
+      back.querySelector('p').textContent = msg;
+      back.querySelector('[data-a=yes]').textContent = okText || 'Bestätigen';
+      function close(v) { document.removeEventListener('keydown', key); back.remove(); resolve(v); }
+      function key(e) { if (e.key === 'Escape') close(false); if (e.key === 'Enter') close(true); }
+      back.addEventListener('click', function (e) { var a = e.target.getAttribute('data-a'); if (a) close(a === 'yes'); else if (e.target === back) close(false); });
+      document.addEventListener('keydown', key);
+      document.body.appendChild(back); back.querySelector('[data-a=no]').focus();
+    });
+  }
+  window.ABSConfirm = dialog;
+  document.addEventListener('submit', function (e) {
+    var f = e.target, b = e.submitter;
+    var msg = (b && b.getAttribute('data-confirm')) || f.getAttribute('data-confirm');
+    if (!msg || f.dataset.confirmed) return;
+    e.preventDefault();
+    var danger = /rückgängig|echter lauf|wirklich|löschen|schreiben/i.test(msg) || (b && b.classList.contains('danger'));
+    var ok = (b && b.getAttribute('data-confirm-ok')) || f.getAttribute('data-confirm-ok');
+    dialog(msg, ok, danger).then(function (yes) {
+      if (!yes) return;
+      f.dataset.confirmed = '1';
+      if (f.requestSubmit) f.requestSubmit(b || undefined); else f.submit();
+    });
+  });
+})();

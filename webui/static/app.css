@@ -94,3 +94,9 @@ details.adv{margin-top:8px}details.adv summary{padding:6px 0}details.adv[open] s
 @media (min-width:801px){.nav .links{display:flex;align-items:center;gap:2px;flex:1;flex-wrap:wrap}}
 header{position:sticky}.nav{position:relative}
 .nav .brand{white-space:nowrap}
+/* confirmation dialog */
+.modal-back{position:fixed;inset:0;z-index:60;background:rgba(20,18,14,.45);display:grid;place-items:center;padding:16px;animation:fade .12s ease-out}
+.modal{background:var(--card);color:var(--fg);border-radius:var(--radius);box-shadow:var(--shadow2);width:min(440px,100%);padding:20px 22px}
+.modal h3{margin:0 0 8px;font-size:1.1em}.modal p{margin:0 0 18px;white-space:pre-line}
+button.danger-fill{background:var(--err);border-color:var(--err);color:#fff}
+@keyframes fade{from{opacity:0}to{opacity:1}}
