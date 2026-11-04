@@ -47,7 +47,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [A] ABS backup before real runs | ✅ | run stops when it fails (user's ABS max backup size fixed) |
 | [A] Golden list + record/replay + evaluate + regress gate | ✅ | whole library + all synthetic batches |
 | [A] pytest suite | ❌ | tests are scripts run by tools/regress.sh, not bundled as pytest |
-| [A] Review list small, only real doubt cases | ❌ | 636 ISBN entries (re-measure after print-ISBN logic) |
+| [A] Review list small, only real doubt cases | ✅ | 8 entries for the whole library; wrong ISBNs without a replacement moved to reports/missing_isbn.json (status page), 529 offline - re-measure with Hardcover |
 | [U] Review list: accept for ISBN and title kinds | ❌ | only ASIN accept works |
 
 ## Web UI (task: 10 points, Playwright vs fake ABS, screenshots in docs/screenshots/)

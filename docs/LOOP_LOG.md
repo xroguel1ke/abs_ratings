@@ -446,3 +446,5 @@ ABS server backup (POST /api/backups) returned HTTP 500 twice - the run had cont
 
 ## Series/author merge WRITE path vs the fake ABS (tools/series_write_test.py): whole library, SERIES_ONLY, DRY_RUN=false
 33 changes in 33 books = 14 series merges + 5 author fixes (= hand-verified lib_check baseline), all with merge_id; undo of one merge ok, undo of the run ok; all 33 books equal the snapshot again. All 19 merges hand-checked: plausible (one ugly but official Audible name: "... Squire ♀ Light Novel"). Open: real-ABS behaviour (series objects, empty old series) needs a tiny real test with the user OK.
+
+## Review list = only real decisions (user OK): wrong ISBN without a replacement is no decision -> reports/missing_isbn.json + section on the status page; old entries hidden. Whole library now: 8 review entries (6 ASIN: duplicates/owned ASINs, 2 Hardcover), 529 in the ISBN report (offline, Hardcover not asked - re-measure).

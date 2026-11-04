@@ -392,7 +392,7 @@ def status():
     rows, generated = core.coverage()
     trend = core.coverage_trend()
     first = {k: v for k, v in (trend[0]['pct'] if len(trend) > 1 else {}).items()}
-    return render_template('status.html', rows=rows, generated=generated, api=core.api_status(), first=first, first_ts=(trend[0]['ts'] if len(trend) > 1 else ''), points=len(trend))
+    return render_template('status.html', rows=rows, generated=generated, api=core.api_status(), isbn_bad=core.isbn_report(), first=first, first_ts=(trend[0]['ts'] if len(trend) > 1 else ''), points=len(trend))
 
 
 @app.route('/report')

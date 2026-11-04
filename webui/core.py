@@ -423,7 +423,12 @@ def queue_id(x): return f"{x.get('kind')}|{x.get('key')}|{x.get('candidate')}"
 def open_queue():
     """Uncertain automatic decisions (ASIN / ISBN / title proposals) that wait for the user; decided ones are hidden."""
     d = queue_decisions()
-    return [dict(x, id=queue_id(x)) for x in review_queue() if queue_id(x) not in d and x.get('status', 'open') == 'open']
+    # ISBN entries WITHOUT a replacement are no decision (older runs put them here; they live in reports/missing_isbn.json now)
+    return [dict(x, id=queue_id(x)) for x in review_queue() if queue_id(x) not in d and x.get('status', 'open') == 'open'
+            and not (x.get('kind') == 'isbn' and 'no verified replacement' in (x.get('reason') or ''))]
+
+
+def isbn_report(): return _load_json(os.path.join(REPORT_DIR, 'missing_isbn.json'), [])
 def set_queue_decision(qid, action):
     with _lock:
         d = queue_decisions(); d[qid] = {'action': action, 'ts': datetime.now().isoformat(timespec='seconds')}

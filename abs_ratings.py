@@ -204,7 +204,7 @@ stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", 
 stats['aborted_ratelimit'] = False
 GR_STATE = {'blocked': False, 'cooldowns': 0, 'searches': 0}
 GR_CACHE = {}  # Filled in main()  # Set once Goodreads blocks us; GR is then skipped for the rest of the run
-reports = {"audible": {}, "goodreads": {}}
+reports = {"audible": {}, "goodreads": {}, "isbn": {}}
 AUTHOR_NOTES = []  # Author spelling differences between ABS and Audible (report only)
 SERIES_ALIASES, SERIES_INDEX = {}, {}  # Loaded in main()
 
@@ -2709,8 +2709,11 @@ def process_queue(work_queue, history, failed, recheck):
                             logging.info(f"        🔧 ISBN '{meta.get('isbn')}' is wrong ({bad_isbn}): replaced by {a_i} (no print ISBN found; audio edition, Audible){' (DRY_RUN, not saved)' if DRY_RUN else ''}")
                     isbn_written = bool(fix)
                     if not fix and bad_isbn and 'lock_isbn' not in tags:
-                        logging.info(f"        ℹ️ ISBN '{meta.get('isbn')}' looks wrong ({bad_isbn}); no verified replacement, left unchanged (review list)")
-                        add_review(key, title, 'isbn', meta.get('isbn'), f"ISBN looks wrong ({bad_isbn}); no verified replacement")
+                        # nothing to decide (no candidate): not on the review list but in the report missing_isbn.json (status page)
+                        logging.info(f"        ℹ️ ISBN '{meta.get('isbn')}' looks wrong ({bad_isbn}); no verified replacement, left unchanged (ISBN report)")
+                        reports['isbn'][key] = {'key': key, 'title': title, 'author': ', '.join(authors or []), 'isbn': meta.get('isbn'), 'reason': bad_isbn,
+                                                'hardcover_asked': bool(HARDCOVER_ENABLED and not HC_STATE.get('disabled')), 'ts': datetime.now().strftime('%Y-%m-%d')}
+                if not bad_isbn or isbn_written: reports['isbn'].pop(key, None)
                 gr_title = (aud_data or {}).get('title_raw') or search_title  # Audible's clean title searches best
                 cached_url = ov.get('goodreads') or (None if item.get('_manual_trigger') else GR_CACHE.get(key))
                 hc_gids = (hc_data or {}).get('gr_ids') or (hc_fetch_gr_ids(hc_data['id']) if hc_data and hc_data.get('id') and GOODREADS_ENABLED and not GR_STATE['blocked'] else [])
@@ -2963,6 +2966,7 @@ def main():
 
     reports['audible'] = {x['key']: x for x in rw_json(os.path.join(REPORT_DIR, "missing_audible.json"))}
     reports['goodreads'] = {x['key']: x for x in rw_json(os.path.join(REPORT_DIR, "missing_goodreads.json"))}
+    reports['isbn'] = {x['key']: x for x in rw_json(os.path.join(REPORT_DIR, "missing_isbn.json"))}  # wrong ISBN, no verified replacement
     
     logging.info("--- Start ---")
     history, failed, recheck = rw_json(HISTORY_FILE), rw_json(FAILED_FILE), rw_json(RECHECK_FILE)
