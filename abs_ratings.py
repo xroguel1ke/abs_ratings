@@ -528,7 +528,7 @@ def isbn_bad_reason(v):
 RE_DUP_TITLE = re.compile(r'^\s*(.+?)\s*:\s*\1\s*(?::\s*(.+))?$', re.IGNORECASE)
 # 'The Book of the New Sun 05 The Urth of the New Sun': number directly between two names, separated by spaces only.
 # 'Casual Farming 3: A Slow Living LitRPG' / 'ANIMA, Vol. 4: Light Novel' (colon after the number) are normal titles.
-RE_SERIES_PREFIX = re.compile(r'^\s*(.{4,}?)\s+(0\d{1,2})\s+([^:].{2,})$')  # zero-padded like file names ('05'); the series name itself may contain a colon ('Carl Weber\'s Kingpins: Queens 02 Kingdom')
+RE_SERIES_PREFIX = re.compile(r'^\s*(.{4,}?)\s+(0\d{1,2}(?:-\d{1,2})?)\s+([^:].{2,})$')  # zero-padded like file names ('05'); the series name itself may contain a colon ('Carl Weber\'s Kingpins: Queens 02 Kingdom')
 
 RE_LEADING_NUM = re.compile(r'^\s*(0\d{1,2})\s*[-.:]?\s+(.{3,})$')  # '01 Nightside the Long Sun' (zero-padded only)
 
@@ -545,7 +545,7 @@ def parse_messy_title(t):
         if re.search(r'(?i)\b(vol\.?|volume|book|band|teil|part|no\.?)$', series): return None  # 'X Vol. 4 Y' is a normal title
         # Guard against normal titles with numbers ("Catch 22 ..."): the series part needs at least 2 words
         if len(series.split()) >= 2 and (len(rest.split()) >= 2 or (len(rest) >= 5 and re.fullmatch(r"0\d", seq))):  # 'Prince of the Doomed City 01 Entranced'
-            return {'title': rest, 'series': series, 'sequence': str(float(seq)).rstrip('0').rstrip('.'), 'kind': 'series_prefix'}
+            return {'title': rest, 'series': series, 'sequence': None if '-' in seq else str(float(seq)).rstrip('0').rstrip('.'), 'kind': 'series_prefix'}  # '01-3' = a range (omnibus): no single volume number
     if m := RE_LEADING_NUM.match(t):
         rest_ = m.group(2).strip()
         if len(rest_.split()) >= 2 or (re.fullmatch(r'0[1-9]', m.group(1)) and len(rest_) >= 5):  # '03 Blutmale' yes, '007 Skyfall' no
