@@ -363,3 +363,6 @@ H1-H6 ran with library books only (no synthetic books). Counting rule v2 require
 ## Hardcover batch H7 (100 library + 60 EN + 20 DE synthetic, Hardcover ON, ~8 min, 0 errors) – CLEAN -> Hardcover streak 1 of 3 (H7)
 Library 100/100 = golden, synthetic 80/80 = expected, Hardcover found 151/180 (29 not found, no wrong hit), cross-check dropped 0, no rule change. Hand check of 10 random Hardcover hits (library + synthetic, incl. German "Das Schwert der Wahrheit 24", generic "Reborn" with author match): all same work.
 ## Hardcover batch H8 started (SYNTH=18)
+
+## Hardcover batch H8 (100 library + 60 EN + 20 DE synthetic, Hardcover ON, 0 errors) – CLEAN -> Hardcover streak 2 of 3 (H7, H8)
+Library 100/100, synthetic 80/80, Hardcover found 150/180, cross-check dropped 0, no rule change. (Loop idled ~3 h after H8 finished because nothing was queued; now batches are chained: H9 -> A15 -> A16 -> A17.)
