@@ -426,3 +426,4 @@ Found 6 deviations vs golden that the regress gate missed (it only covered round
 - series listing: relevance order instead of alphabetical before the request cap (14 -> 24); children cache per (store, series ASIN) - a series unknown on .de had hidden its children on .com. Both were REAL production risks (the series file grows with every product).
 - golden updated: Alice im Wunderland (.de listing), Shannara (.com listing, 9,900 ratings); synthetic expectations 29/30/32: listing with the most ratings (alt = old).
 Regress now covers the WHOLE library (wl00/wl01) + all synthetic batches: 100% green.
+Risky changes outside golden after the fixes: 3, all hand-verified correct (Casual Farming 3 Virtual-Voice ASIN -> narrated edition; Judicator Jane 7 new ASIN + language und -> English). Added to golden (1875).
