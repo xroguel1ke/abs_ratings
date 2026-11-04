@@ -377,3 +377,8 @@ Passing batches stay in golden / tests/synthetic; every fix is tested against th
 
 ## Batch A20 (100 EN + 80 DE synthetic, Audible-only, 0 errors) – CLEAN -> Audible streak 1 of 4 (A20)
 180/180 correct at the first run. Whole-library offline replay (2 halves, current code): golden 1870/1873; 3 deviations (Lies Weeping, Dragon's Kin 16, Renegades of Pern) probably missing series-listing recordings -> live single-book check queued; 1 new ASIN change outside golden (Casual Farming 3, B0GDRXB26Y -> B0BLRVZP6N) to verify by hand.
+## Batch A21 started (SYNTH=21, 100 EN + 80 DE, Audible-only): streak 1 of 4 so far
+
+## Batch A21 (100 EN + 80 DE synthetic, Audible-only, 0 errors) – NOT clean (1 fix) -> Audible streak back to 0 of 4
+179/180. "Das Schwert der Wahrheit 20" (German): got the audible.com mirror B00TWO6BJO instead of the audible.de ASIN B008AHIEHQ (same recording: 734 min, Audible Studios 2012). Not a wrong book, but the wrong store copy. Cause: 19 series-listing candidates came first; the cap on checked candidates (max(6, len(extra))) cut off the search-query hits appended after them, so the .de hit was never checked. Fix: cap = len(extra) + 6 (search hits get their own room). Regress: everything else unchanged. Live re-run as a21b.
+Live check of the 3 Pern deviations of the whole-library replay: 3/3 correct live -> offline deviations were missing recordings, not regressions.

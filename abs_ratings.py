@@ -1126,7 +1126,9 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 logging.warning(f"        🌐 Audible API search failed ({host}): {type(e).__name__}")
             if len(candidates) >= 4: break
         if not candidates and not only_extra: logging.info(f"        ↪️ No search results on {domain} ({len(queries)} queries)")
-        for cand in candidates[:max(6, len(extra_candidates or []), 12 if only_queries else 0)]:  # series-listing candidates are all checked (closest runtime first)
+        # series-listing candidates are all checked (closest runtime first); the hits of the search queries are appended AFTER them and get
+        # their own room (otherwise a long series listing cuts them off: the .de hit of a German volume was never looked at)
+        for cand in candidates[:len(extra_candidates or []) + max(6, 12 if only_queries else 0)]:
             p = get_audible_api(cand, domain)
             if not isinstance(p, dict): continue
             cand_lang = map_language((p.get('meta_raw') or {}).get('language'))
