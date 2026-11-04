@@ -6,7 +6,7 @@ REPLAY_DIR=<dir>  outside requests are answered from that folder; nothing leaves
                   returns HTTP 599 and is appended to <dir>/_misses.jsonl so the test can report it.
 ABS itself (ABS_URL host) is never touched here.
 """
-import hashlib, json, os, time, urllib.parse
+import base64, hashlib, json, os, time, urllib.parse
 import requests
 
 _LAST_LIVE = {}  # host -> monotonic time of the last live request
@@ -46,7 +46,8 @@ def install():
             if os.path.exists(path):
                 rec = json.load(open(path, encoding='utf-8'))
                 r = requests.Response()
-                r.status_code, r._content, r.url = rec['status'], rec['body'].encode('utf-8'), rec['url']
+                r.status_code, r.url = rec['status'], rec['url']
+                r._content = base64.b64decode(rec['body_b64']) if 'body_b64' in rec else rec['body'].encode('utf-8')  # images are stored as base64
                 r.headers['Content-Type'] = rec.get('content_type', 'text/html')
                 r.encoding = 'utf-8'
                 return r
@@ -63,7 +64,8 @@ def install():
         try:
             with open(path, 'w', encoding='utf-8') as f:
                 json.dump({'method': method, 'url': resp.url, 'params': kw.get('params'), 'status': resp.status_code,
-                           'content_type': resp.headers.get('Content-Type', ''), 'body': resp.text}, f, ensure_ascii=False, default=str)
+                           'content_type': resp.headers.get('Content-Type', ''),
+                           **({'body_b64': base64.b64encode(resp.content).decode('ascii')} if resp.headers.get('Content-Type', '').startswith('image/') else {'body': resp.text})}, f, ensure_ascii=False, default=str)
         except OSError:
             pass
         return resp

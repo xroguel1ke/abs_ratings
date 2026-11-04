@@ -43,7 +43,17 @@ def patch_media(iid):
 
 @app.post('/api/items/<iid>/cover')
 def cover(iid):
-    log_write('cover', iid, request.get_json(force=True, silent=True))
+    f = request.files.get('cover')  # undo uploads the backed-up file (multipart)
+    log_write('cover', iid, request.get_json(force=True, silent=True) or ({'file': f.filename, 'bytes': len(f.read())} if f else None))
+    return jsonify(success=True)
+
+@app.get('/api/items/<iid>/cover')
+def get_cover(iid):  # a small fake image, so the backup step of a cover replacement can be tested
+    return (b'\xff\xd8\xff\xe0FAKE-COVER-' + iid.encode() + b'\xff\xd9', 200, {'Content-Type': 'image/jpeg'})
+
+@app.delete('/api/items/<iid>/cover')
+def del_cover(iid):
+    log_write('cover_delete', iid, None)
     return jsonify(success=True)
 
 @app.post('/api/backups')

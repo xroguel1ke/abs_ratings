@@ -66,7 +66,13 @@ def main():
         print(f"  [{e['run']}] {e['title']}: {e['field']} -> {json.dumps(old_show, ensure_ascii=False)[:120]}")
         if not a.apply: continue
         try:
-            if e['field'] == 'cover':
+            if e['field'] == 'cover' and e.get('old') and os.path.isfile(str(e['old'])):  # replaced cover: upload the backup again
+                with open(e['old'], 'rb') as fh:
+                    r = requests.post(f"{url}/api/items/{e['item']}/cover", headers={"Authorization": f"Bearer {token}"},
+                                      files={'cover': (os.path.basename(e['old']), fh, 'image/jpeg')}, timeout=60)
+            elif e['field'] == 'cover' and e.get('old'):
+                print("     ❌ backup of the old cover is missing - skipped"); fail += 1; continue
+            elif e['field'] == 'cover':
                 r = sess.delete(f"{url}/api/items/{e['item']}/cover", timeout=30)
             elif e['field'] == 'tags':
                 r = sess.patch(f"{url}/api/items/{e['item']}/media", json={"tags": e['old'] or []}, timeout=30)
