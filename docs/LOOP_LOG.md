@@ -366,3 +366,4 @@ Library 100/100 = golden, synthetic 80/80 = expected, Hardcover found 151/180 (2
 
 ## Hardcover batch H8 (100 library + 60 EN + 20 DE synthetic, Hardcover ON, 0 errors) – CLEAN -> Hardcover streak 2 of 3 (H7, H8)
 Library 100/100, synthetic 80/80, Hardcover found 150/180, cross-check dropped 0, no rule change. (Loop idled ~3 h after H8 finished because nothing was queued; now batches are chained: H9 -> A15 -> A16 -> A17.)
+Audible chain changed: A20-A22 = 100 random verified library books + 60 EN + 20 DE synthetic (Audible-only), per counting rule v2.
