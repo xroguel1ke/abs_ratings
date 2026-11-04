@@ -15,7 +15,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [A] Hardcover matching + cross-check against Audible | ⏳ 70 % | streak 0 of 3 with the final mix (H10 clean, then fixes reset it); daily limit; every HC hit auto cross-checked |
 | [A] Phase C: 3 rounds with EVERY Hardcover hit hand-checked | ❌ | needs Hardcover quota |
 | [A] Phase C: full-library check incl. Hardcover cross-check | ⚠️ 60 % | Audible part done (6 real bugs found + fixed); Hardcover part open |
-| [A] Series merge / author normalisation: every planned merge hand-checked, 0 wrong | ⚠️ 85 % | 19 merges hand-checked; write + undo vs fake ABS ok (33 books restored exactly); real-ABS test (series objects) needs user OK |
+| [A] Series merge / author normalisation: every planned merge hand-checked, 0 wrong | ⏳ 85 % | 19 merges hand-checked; write + undo vs fake ABS ok; REAL test (1 series merge + 1 author fix, then undo) running - user OK 2026-11-04 |
 | [A] Fake-ABS edge cases for series/authors (articles, Saga, Light Novel, translations, initials, two real authors) | ⚠️ | only synthetic unit tests (test_series/test_authors), no fake-ABS books |
 | [A] Negative cache for not-on-Audible books (re-check after ~90 days) | ⚠️ check | failed_history parks books after N attempts until REFRESH_DAYS – verify it matches the task |
 | [U] Group confirmation (same-title books of one series) | ✅ | Realms of War = Spider Queen 1-6 |
@@ -66,6 +66,11 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | – | Review list page | ✅ | see accept gap above |
 | – | [U] Design (Material light/dark), onboarding tour, settings with left sections + save per section, confirm dialog | ✅ | |
 | – | Screenshots in docs/screenshots/ (no private titles, public repo) | ⚠️ | settings only |
+
+## Web UI language
+| Item | State | Note |
+|---|---|---|
+| [U] English web UI, English as DEFAULT, German selectable | ❌ | next after the real series-merge test |
 
 ## Finish (Phase C end)
 | Item | State |

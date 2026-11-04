@@ -18,6 +18,16 @@ case "$MODE" in
   diff)    run python -I tools/item_backup.py diff /data/keys.txt /data/backup ;;
   restore) run python -I tools/item_backup.py restore /data/keys.txt /data/backup ;;
   restore-apply) run python -I tools/item_backup.py restore /data/keys.txt /data/backup --apply ;;
+  series-dry|series-real)  # series merge + author fix only (whole library; merge_decisions.json in the pilot dir limits which merges run)
+    DRY=true; [ "$MODE" = series-real ] && DRY=false
+    run python -I -c "
+import os, subprocess, sys
+sys.path.insert(0, '/src')
+from webui import core
+s = core.load_settings()
+env = core.script_env(s, {'DATA_DIR': '/data', 'SERIES_ONLY': 'true', 'SERIES_MERGE': 'true', 'AUTHOR_NORMALIZE': 'true', 'LIBRARY_REPORT': 'true',
+                          'DRY_RUN': '$DRY', 'GOODREADS_ENABLED': 'false', 'ABS_BACKUP': 'true' if '$DRY' == 'false' else 'false'})
+sys.exit(subprocess.call([sys.executable, '-u', '/src/abs_ratings.py'], env=env, cwd='/src'))" ;;
   dry|real)
     DRY=true; [ "$MODE" = real ] && DRY=false
     [ "$MODE" = real ] && [ ! -s "$P/backup/$(head -1 "$KEYS" | cut -d_ -f2).json" ] && { echo "no backup - run 'backup' first"; exit 2; }
