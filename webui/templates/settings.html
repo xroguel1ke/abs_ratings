@@ -38,6 +38,10 @@
  <label class="f"><span>Benachrichtigen bei</span><select name="notify_on"><option value="errors" {{ 'selected' if s.notify_on=='errors' }}>nur Fehlern</option><option value="always" {{ 'selected' if s.notify_on=='always' }}>jedem Lauf</option></select></label>
  <p class="small" id="test_notify"></p>
 </div>
+<div class="card"><h2 style="margin-top:0">Oberfläche</h2>
+ <div class="row"><button type="button" onclick="window.ABSTour && ABSTour.start()">Einführungstour neu starten</button>
+ <span class="muted small">Design (hell / dunkel / automatisch) wechselst du oben rechts mit ◐.</span></div>
+</div>
 <p><button class="primary">Speichern</button></p></form>
 <script>
 function cronToggle(){ const c=document.getElementById('cronmode').checked; document.getElementById('cron').style.display=c?'':'none'; document.getElementById('simple').style.display=c?'none':''; }

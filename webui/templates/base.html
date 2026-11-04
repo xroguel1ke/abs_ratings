@@ -1,14 +1,16 @@
 <!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}ABS Ratings{% endblock %}</title><link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}"></head><body>
+<title>{% block title %}ABS Ratings{% endblock %}</title><link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+<script src="{{ url_for('static', filename='app.js') }}"></script></head><body>
 {% if session.auth %}<header><div class="nav"><span class="brand">⭐ ABS Ratings</span>
 {% set ep = request.endpoint %}
-<a href="{{ url_for('dashboard') }}" class="{{ 'active' if ep in ('dashboard','problem') }}">Dashboard</a>
-<a href="{{ url_for('books') }}" class="{{ 'active' if ep=='books' }}">Bücher</a>
-<a href="{{ url_for('status') }}" class="{{ 'active' if ep=='status' }}">Status</a>
-<a href="{{ url_for('runs') }}" class="{{ 'active' if ep in ('runs','run_view') }}">Läufe</a>
+<a data-tour="dashboard" href="{{ url_for('dashboard') }}" class="{{ 'active' if ep in ('dashboard','problem') }}">Dashboard</a>
+<a data-tour="books" href="{{ url_for('books') }}" class="{{ 'active' if ep=='books' }}">Bücher</a>
+<a data-tour="status" href="{{ url_for('status') }}" class="{{ 'active' if ep=='status' }}">Status</a>
+<a data-tour="runs" href="{{ url_for('runs') }}" class="{{ 'active' if ep in ('runs','run_view') }}">Läufe</a>
 <a href="{{ url_for('logs') }}" class="{{ 'active' if ep in ('logs','log_view') }}">Logs</a>
-<a href="{{ url_for('settings') }}" class="{{ 'active' if ep=='settings' }}">Einstellungen</a>
+<a data-tour="settings" href="{{ url_for('settings') }}" class="{{ 'active' if ep=='settings' }}">Einstellungen</a>
 <span class="right">{% if running %}<a href="{{ url_for('run_view', run_id=current_run.id) }}"><span class="badge running">● läuft: {{ current_run.label }}</span></a>{% elif next_run %}nächster Lauf: {{ next_run|dt }}{% endif %}
+<button type="button" class="iconbtn" id="theme-toggle" title="Design">◐</button>
 <a href="{{ url_for('password') }}">Passwort</a><a href="{{ url_for('logout') }}">Abmelden</a></span></div></header>{% endif %}
 <main>{% with msgs = get_flashed_messages(with_categories=true) %}{% for c, m in msgs %}<div class="flash {{ c }}">{{ m }}</div>{% endfor %}{% endwith %}
 {% block body %}{% endblock %}</main></body></html>

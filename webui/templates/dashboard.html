@@ -42,7 +42,7 @@
 <td>{{ m.member }}{% if m.member_books %}<div class="muted small">#{{ m.member_books }} · {{ m.member_count }} Bücher · {{ m.relation }}</div>{% else %}<div class="muted small">{{ m.member_count }} Bücher</div>{% endif %}</td>
 <td>→ {{ m.target }}{% if m.target_books %}<div class="muted small">#{{ m.target_books }}</div>{% endif %}</td>
 <td><span class="badge {{ 'ok' if m.status=='applied' else 'warn' }}">{{ 'übernommen' if m.status=='applied' else 'geplant (Testlauf)' }}</span><div class="muted small">{{ m.last_seen }}</div></td>
-<td class="row"><form method="post" action="{{ url_for('merged_action', mid=m.id, action='confirm') }}"><button>✓ Passt</button></form>
+<td class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('merged_action', mid=m.id, action='confirm') }}"><button>✓ Passt</button></form>
 <form method="post" action="{{ url_for('merged_action', mid=m.id, action='undo') }}" onsubmit="return confirm('Zusammenführung rückgängig machen?')"><button class="danger">↶ Rückgängig</button></form></td></tr>
 {% else %}<tr><td colspan="5" class="muted">Nichts offen.</td></tr>{% endfor %}</table></div>
 
@@ -52,7 +52,7 @@
 {% for x in queue %}<tr><td>{{ {'asin': 'ASIN', 'isbn': 'ISBN', 'title': 'Titel'}.get(x.kind, x.kind) }}</td>
 <td><a href="{{ url_for('problem', key=x.key) }}">{{ x.title }}</a></td><td><code>{{ x.candidate }}</code></td>
 <td class="small">{{ x.reason }}{% if x.evidence %}<div class="muted">{{ x.evidence | join(', ') }}</div>{% endif %}</td>
-<td class="row"><form method="post" action="{{ url_for('queue_action', qid=x.id, action='accept') }}"><button class="primary">Übernehmen</button></form>
+<td class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('queue_action', qid=x.id, action='accept') }}"><button class="primary">Übernehmen</button></form>
 <form method="post" action="{{ url_for('queue_action', qid=x.id, action='reject') }}"><button>Verwerfen</button></form></td></tr>
 {% else %}<tr><td colspan="5" class="muted">Die Prüfliste ist leer.</td></tr>{% endfor %}</table></div>
 
@@ -61,7 +61,7 @@
 <div class="card tablewrap"><table><tr><th>Art</th><th>Kandidat</th><th>Ziel</th><th>Grund</th><th></th></tr>
 {% for x in (review.series or []) + (review.authors or []) %}<tr><td>{{ 'Reihe' if x.kind=='series' else 'Autor' }}</td><td>{{ x.series }}{% if x.series_books %}<div class="muted small">{{ x.series_books }} Bücher</div>{% endif %}</td>
 <td>{{ x.other }}{% if x.other_books %}<div class="muted small">{{ x.other_books }} Bücher</div>{% endif %}</td><td class="small">{{ x.reason }}</td>
-<td class="row"><form method="post" action="{{ url_for('review_action', mid=x.id, action='merge') }}"><button class="primary">Zusammenführen</button></form>
+<td class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('review_action', mid=x.id, action='merge') }}"><button class="primary">Zusammenführen</button></form>
 <form method="post" action="{{ url_for('review_action', mid=x.id, action='keep') }}"><button>Getrennt lassen</button></form></td></tr>
 {% else %}<tr><td colspan="5" class="muted">Keine offenen Fälle.</td></tr>{% endfor %}</table>
 {% if review.generated %}<p class="muted small">Stand: {{ review.generated }}</p>{% endif %}</div>
