@@ -1,5 +1,5 @@
 """ABS Ratings web UI (Flask). Start: python -m webui.app (port 47823, data folder /config)."""
-import os, re, functools
+import json, os, re, functools
 from collections import Counter
 from datetime import datetime
 
@@ -151,9 +151,45 @@ def run_apply(run_id):
     if not run.get('dry_run') or run.get('kind') not in ('full', 'item') or not re.fullmatch(r'[\w-]+', run_id): abort(400)
     really = request.form.get('mode') == 'apply'
     args = ['--run', run_id] + (['--apply'] if really else [])
-    new_id, err = core.RUNNER.start('apply', undo_args=args, label=f"{'Testlauf übernehmen' if really else 'Testlauf prüfen'}: {run.get('label')} ({run_id})")
+    ids = request.form.getlist('sel')
+    if request.form.get('selection') == '1':  # from the review page: only the ticked changes
+        nums = sorted({int(x) for x in ids if x.isdigit()})
+        if not nums: flash('Nichts ausgewählt.', 'error'); return redirect(url_for('run_review', run_id=run_id))
+        sel_path = os.path.join(core.REPORT_DIR, f'apply_select_{run_id}.json')
+        with open(sel_path, 'w', encoding='utf-8') as f: json.dump(nums, f)
+        args += ['--select', sel_path]
+    n = f" ({len(ids)} ausgewählt)" if request.form.get('selection') == '1' else ''
+    new_id, err = core.RUNNER.start('apply', undo_args=args, label=f"{'Testlauf übernehmen' if really else 'Testlauf prüfen'}{n}: {run.get('label')} ({run_id})")
     if err: flash(err, 'error'); return redirect(url_for('run_view', run_id=run_id))
     return redirect(url_for('run_view', run_id=new_id))
+
+
+RISKY = {'asin': 'ASIN', 'title': 'Titel', 'language': 'Sprache', 'series': 'Reihe', 'authors': 'Autoren', 'isbn': 'ISBN'}
+
+
+@app.route('/run/<run_id>/review')
+@login_required
+def run_review(run_id):
+    """Review page of a dry run: planned changes grouped by field, risky ones first, checkboxes for applying a selection."""
+    run = core.RUNNER.get(run_id) or abort(404)
+    if not run.get('dry_run') or not re.fullmatch(r'[\w-]+', run_id): abort(400)
+    q, only = request.args.get('q', '').lower(), request.args.get('field', '')
+    plan = []
+    try:
+        with open(os.path.join(core.REPORT_DIR, f'planned_changes_{run_id}.jsonl'), encoding='utf-8') as f:
+            for n, l in enumerate(f):
+                if not l.strip(): continue
+                e = json.loads(l); e['n'] = n
+                # risky = can change WHICH book the entry points to or what it is called (CLAUDE.md "riskant")
+                e['risky'] = e['field'] in RISKY and not (e['field'] == 'isbn' and not e.get('old')) and not (e['field'] == 'series' and e.get('old'))
+                if (q and q not in (e.get('title') or '').lower()) or (only and e['field'] != only): continue
+                plan.append(e)
+    except OSError: abort(404)
+    groups = {}
+    for e in plan: groups.setdefault(e['field'], []).append(e)
+    order = sorted(groups, key=lambda f: (f not in RISKY, -len(groups[f])))
+    return render_template('run_review.html', run=run, groups=[(f, groups[f]) for f in order], q=q, field=only,
+                           risky=[e for e in plan if e['risky']], total=len(plan), risky_labels=RISKY)
 
 
 @app.route('/history')
@@ -351,7 +387,11 @@ def report():
 def settings():
     s = core.load_settings()
     if request.method == 'POST':
+        # one section per form: only the fields of THIS section are read (an unticked box elsewhere must not become "off")
+        sec = request.form.get('section', '')
+        groups_in = set(core.SECTIONS.get(sec, ()))
         for key, label, ftype, default, help_, group in core.FIELDS:
+            if group not in groups_in: continue
             if ftype == 'secret':
                 v = request.form.get(key, '')
                 if v.strip(): s[key] = v.strip()
@@ -363,21 +403,24 @@ def settings():
             else:
                 try: s[key] = core.coerce(ftype, request.form.get(key, default))
                 except ValueError: flash(f"{label}: ungültiger Wert", 'error')
-        s['schedule_enabled'] = request.form.get('schedule_enabled') == 'on'
-        s['schedule_mode'] = 'cron' if request.form.get('schedule_mode') == 'on' else 'simple'
-        s['schedule_days'] = [int(d) for d in request.form.getlist('schedule_days')]
-        s['schedule_time'] = request.form.get('schedule_time') or '02:30'
-        s['schedule_cron'] = (request.form.get('schedule_cron') or '').strip() or '30 2 * * *'
-        s['apprise_url'] = (request.form.get('apprise_url') or '').strip()
-        s['notify_on'] = request.form.get('notify_on', 'errors')
+        if sec == 'Zeitplan':
+            s['schedule_enabled'] = request.form.get('schedule_enabled') == 'on'
+            s['schedule_mode'] = 'cron' if request.form.get('schedule_mode') == 'on' else 'simple'
+            s['schedule_days'] = [int(d) for d in request.form.getlist('schedule_days')]
+            s['schedule_time'] = request.form.get('schedule_time') or '02:30'
+            s['schedule_cron'] = (request.form.get('schedule_cron') or '').strip() or '30 2 * * *'
+        if sec == 'Benachrichtigungen':
+            s['apprise_url'] = (request.form.get('apprise_url') or '').strip()
+            s['notify_on'] = request.form.get('notify_on', 'errors')
+        if sec not in core.SECTIONS: flash('Unbekannter Bereich.', 'error'); return redirect(url_for('settings'))
         core.save_settings(s)
-        flash('Einstellungen gespeichert.', 'ok')
-        return redirect(url_for('settings'))
+        flash(f'{sec}: gespeichert.', 'ok')
+        return redirect(url_for('settings') + '#' + core.section_slug(sec))
     libs = core.abs_libraries(s) if s.get('ABS_URL') and s.get('API_TOKEN') else []
     groups = {}
     for f in core.FIELDS: groups.setdefault(f[5], []).append(f)
-    return render_template('settings.html', s=s, groups=groups, adv=core.ADVANCED, providers=core.PROVIDERS, libs=libs, selected=set((s.get('LIBRARY_IDS') or '').split(',')),
-                           next_run=core.next_run_time(s))
+    return render_template('settings.html', s=s, groups=groups, sections=core.SECTIONS, slug=core.section_slug, adv=core.ADVANCED, providers=core.PROVIDERS,
+                           libs=libs, selected=set((s.get('LIBRARY_IDS') or '').split(',')), next_run=core.next_run_time(s))
 
 
 @app.route('/api/test/<what>', methods=['POST'])

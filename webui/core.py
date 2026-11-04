@@ -31,8 +31,8 @@ FIELDS = [
     ('ABS_BACKUP', 'ABS-Backup vor echten Läufen', 'bool', True, 'Legt vor jedem Lauf ohne DRY_RUN ein ABS-Backup an; schlägt es fehl, wird nichts geschrieben', 'Lauf'),
     ('SLEEP_TIMER', 'Zusätzliche Pause zwischen Büchern (s)', 'float', 0, 'Jede Quelle hat ihren eigenen Mindestabstand, 0 ist daher sicher und am schnellsten', 'Lauf'),
     ('NO_RATINGS_RECHECK_DAYS', 'Neu prüfen ohne Bewertungen (Tage)', 'int', 7, '', 'Lauf'),
-    ('LOG_LEVEL', 'Log-Level', 'choice:INFO|DEBUG', 'INFO', '', 'Lauf'),
-    ('LOG_RETENTION_DAYS', 'Logs aufbewahren (Tage)', 'int', 30, '', 'Lauf'),
+    ('LOG_LEVEL', 'Log-Level', 'choice:INFO|DEBUG', 'INFO', 'DEBUG nur zur Fehlersuche (viel größere Logs)', 'Logs'),
+    ('LOG_RETENTION_DAYS', 'Logs aufbewahren (Tage)', 'int', 30, 'Ältere Logs und Planungsdateien werden gelöscht', 'Logs'),
 
     ('AUDIBLE_MARKETPLACES', 'Audible-Shops', 'str', 'com,co.uk,ca,com.au,de,fr,it,es', 'In diesen Shops wird eine ASIN gesucht', 'Audible'),
     ('USE_AUDIBLE_API', 'Audible-API nutzen', 'bool', True, 'Aus = nur Webseiten auslesen (nicht empfohlen)', 'Audible'),
@@ -63,9 +63,13 @@ FIELDS = [
     ('SERIES_LOCK_AFTER_MERGE', 'Nach Zusammenführung lock_series setzen', 'bool', False, 'Alte Variante, nicht empfohlen', 'Reihen & Autoren'),
 ]
 # rarely changed: shown folded ("Erweitert") inside their card
-ADVANCED = {'ABS_TIMEOUT', 'SLEEP_TIMER', 'NO_RATINGS_RECHECK_DAYS', 'LOG_LEVEL', 'LOG_RETENTION_DAYS', 'USE_AUDIBLE_API', 'AUDIBLE_API_INTERVAL',
+ADVANCED = {'ABS_TIMEOUT', 'SLEEP_TIMER', 'NO_RATINGS_RECHECK_DAYS', 'USE_AUDIBLE_API', 'AUDIBLE_API_INTERVAL',
             'AUDIBLE_WEB_INTERVAL', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'HARDCOVER_INTERVAL', 'GOODREADS_INTERVAL', 'GR_BLOCK_COOLDOWN',
             'GR_MAX_COOLDOWNS', 'GR_MISSING_RECHECK_DAYS', 'SERIES_LOCK_AFTER_MERGE'}
+# settings sections (left list, one form + save button each) -> the field groups (cards) they contain
+SECTIONS = {'Verbindung': ['Verbindung'], 'Lauf': ['Lauf'], 'Quellen': ['Audible', 'Hardcover', 'Goodreads'], 'Metadaten': ['Metadaten'],
+            'Reihen & Autoren': ['Reihen & Autoren'], 'Logs': ['Logs'], 'Zeitplan': [], 'Benachrichtigungen': [], 'Onboarding': []}
+def section_slug(name): return re.sub(r'[^a-z0-9]+', '-', name.lower().replace('&', 'und')).strip('-')
 # cards that belong to a data source: icon + colour stripe
 PROVIDERS = {'Audible': ('🎧', '#e8913a', 'Hauptquelle: ASIN, Bewertungen, Metadaten, Cover'),
              'Hardcover': ('📘', '#7d6bd6', 'Bewertungen und Print-ISBN'),
