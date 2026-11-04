@@ -4,29 +4,29 @@
 {% if running %}<form method="post" class="row" style="margin-bottom:10px"><span class="badge running">● {{ _('running') }}</span><button class="danger" name="action" value="stop">■ {{ _('Cancel') }}</button></form>{% endif %}
 <form method="post" id="startform"><input type="hidden" name="action" value="start">
  <div class="row" style="gap:10px">
-  <label class="badge"><input type="checkbox" name="task_meta" checked> {{ _('Metadata & ratings') }}</label>
-  <label class="badge"><input type="checkbox" name="task_authors" {{ 'checked' if s.AUTHOR_NORMALIZE }}> {{ _('Normalize authors') }}</label>
-  <label class="badge"><input type="checkbox" name="task_series" {{ 'checked' if s.SERIES_MERGE }}> {{ _('Merge series') }}</label>
-  <label class="badge" title="{{ _('Remove illustrators, translators, editors, forewords … from the author field (only when a real author remains)') }}"><input type="checkbox" name="task_roles" {{ 'checked' if s.REMOVE_ROLE_CREDITS }}> {{ _('Only real authors') }}</label>
-  <label class="badge" title="{{ _('Delete ABS authors without a single book') }}"><input type="checkbox" name="task_empty" {{ 'checked' if s.REMOVE_EMPTY_AUTHORS }}> {{ _('Remove empty authors') }}</label>
+  <label class="badge"><input type="checkbox" name="task_meta" {{ 'checked' if f.task_meta }}> {{ _('Metadata & ratings') }}</label>
+  <label class="badge"><input type="checkbox" name="task_authors" {{ 'checked' if f.task_authors }}> {{ _('Normalize authors') }}</label>
+  <label class="badge"><input type="checkbox" name="task_series" {{ 'checked' if f.task_series }}> {{ _('Merge series') }}</label>
+  <label class="badge" title="{{ _('Remove illustrators, translators, editors, forewords … from the author field (only when a real author remains)') }}"><input type="checkbox" name="task_roles" {{ 'checked' if f.task_roles }}> {{ _('Only real authors') }}</label>
+  <label class="badge" title="{{ _('Delete ABS authors without a single book') }}"><input type="checkbox" name="task_empty" {{ 'checked' if f.task_empty }}> {{ _('Remove empty authors') }}</label>
   <span style="flex:1"></span>
-  <label class="badge"><input type="checkbox" name="dry" id="dry" checked onchange="dryToggle()"> {{ _('Test run (write nothing)') }}</label>
+  <label class="badge"><input type="checkbox" name="dry" id="dry" {{ 'checked' if f.dry }} onchange="dryToggle()"> {{ _('Test run (write nothing)') }}</label>
   <button class="primary" id="startbtn" {{ 'disabled' if running }}>▶ {{ _('Start scan') }}</button>
  </div>
  <p class="muted small" id="drynote">{{ _('A test run only plans; afterwards you can review the planned changes and apply them selectively. Series and authors are always checked across the whole library.') }}</p>
- <details class="adv"><summary><b>{{ _('Options for this scan only') }}</b> <span class="muted small">– {{ _('does not change saved settings') }}</span></summary>
-  <input type="hidden" name="custom" value="1">
-  <label class="f"><span>{{ _('Books per scan') }}</span><input type="number" min="1" name="BATCH_SIZE" value="{{ s.BATCH_SIZE }}" style="max-width:140px"></label>
-  <label class="f"><span>{{ _('Refresh after (days)') }}</span><input type="number" min="0" name="REFRESH_DAYS" value="{{ s.REFRESH_DAYS }}" style="max-width:140px"><span class="h">{{ _('0 = all books are due') }}</span></label>
+ <details class="adv" id="advopts" {{ 'open' if f.adv_open }}><summary><b>{{ _('Options for this scan only') }}</b> <span class="muted small">– {{ _('does not change saved settings') }}</span></summary>
+  <input type="hidden" name="custom" value="1"><input type="hidden" name="adv_open" id="adv_open" value="{{ '1' if f.adv_open else '0' }}">
+  <label class="f"><span>{{ _('Books per scan') }}</span><input type="number" min="1" name="BATCH_SIZE" value="{{ f.BATCH_SIZE }}" style="max-width:140px"></label>
+  <label class="f"><span>{{ _('Refresh after (days)') }}</span><input type="number" min="0" name="REFRESH_DAYS" value="{{ f.REFRESH_DAYS }}" style="max-width:140px"><span class="h">{{ _('0 = all books are due') }}</span></label>
   <div class="f" style="padding:9px 0;border-bottom:1px dashed var(--line)"><b>{{ _('Sources') }}</b><div class="row" style="margin-top:6px">
-   <label class="badge"><input type="checkbox" name="HARDCOVER_ENABLED" {{ 'checked' if s.HARDCOVER_ENABLED }}> Hardcover</label>
-   <label class="badge"><input type="checkbox" name="GOODREADS_ENABLED" {{ 'checked' if s.GOODREADS_ENABLED }}> Goodreads ({{ _('experimental') }})</label></div></div>
+   <label class="badge"><input type="checkbox" name="HARDCOVER_ENABLED" {{ 'checked' if f.HARDCOVER_ENABLED }}> Hardcover</label>
+   <label class="badge"><input type="checkbox" name="GOODREADS_ENABLED" {{ 'checked' if f.GOODREADS_ENABLED }}> Goodreads ({{ _('experimental') }})</label></div></div>
   <div class="f" style="padding:9px 0"><b>{{ _('Which books') }}</b> <span class="muted small">({{ _('for metadata & ratings') }})</span><div class="row" style="margin-top:6px">
-   <label class="badge"><input type="radio" name="selection" value="all" checked onchange="lst()"> {{ _('all due') }}</label>
-   <label class="badge"><input type="radio" name="selection" value="problems" onchange="lst()"> {{ _('problems only') }}</label>
-   <label class="badge"><input type="radio" name="selection" value="new" onchange="lst()"> {{ _('new only (never checked)') }}</label>
-   <label class="badge"><input type="radio" name="selection" value="list" onchange="lst()"> {{ _('own list') }}</label></div>
-   <textarea name="list" id="booklist" rows="4" placeholder="{{ _('One book per line: title (as in the book list), ABS item id or key') }}" style="display:none;margin-top:8px"></textarea></div>
+   <label class="badge"><input type="radio" name="selection" value="all" {{ 'checked' if f.selection == 'all' }} onchange="lst()"> {{ _('all due') }}</label>
+   <label class="badge"><input type="radio" name="selection" value="problems" {{ 'checked' if f.selection == 'problems' }} onchange="lst()"> {{ _('problems only') }}</label>
+   <label class="badge"><input type="radio" name="selection" value="new" {{ 'checked' if f.selection == 'new' }} onchange="lst()"> {{ _('new only (never checked)') }}</label>
+   <label class="badge"><input type="radio" name="selection" value="list" {{ 'checked' if f.selection == 'list' }} onchange="lst()"> {{ _('own list') }}</label></div>
+   <textarea name="list" id="booklist" rows="4" placeholder="{{ _('One book per line: title (as in the book list), ABS item id or key') }}" style="display:none;margin-top:8px">{{ f.list }}</textarea></div>
  </details>
 </form>
 <p class="muted small" style="margin-bottom:0">{{ _('Scheduled scans use the saved settings. Next scheduled scan:') }} {{ next_run|dt if next_run else _('no schedule') }}.</p>
@@ -36,7 +36,14 @@ function lst(){ document.getElementById('booklist').style.display = document.que
 function dryToggle(){ const f=document.getElementById('startform'), d=document.getElementById('dry').checked, b=document.getElementById('startbtn');
  if(d){ f.removeAttribute('data-confirm'); b.textContent='▶ '+T('Start scan'); b.classList.remove('danger-fill'); }
  else { f.setAttribute('data-confirm',T('Real scan: the changes are written to ABS (ABS backup first). Continue?')); f.setAttribute('data-confirm-ok',T('Start real scan')); b.textContent='▶ '+T('Start real scan'); } }
-dryToggle();
+dryToggle(); lst();
+// every change is saved at once (also kept when leaving the page); a scan never changes the settings
+(function(){ const f=document.getElementById('startform'), adv=document.getElementById('advopts'); let t=null;
+ function save(){ const fd=new FormData(f); fd.delete('action'); fetch("{{ url_for('api_scan_form') }}",{method:'POST',body:fd,keepalive:true}).catch(()=>{}); }
+ function later(){ clearTimeout(t); t=setTimeout(save, 400); }
+ f.addEventListener('change', save); f.addEventListener('input', later);
+ adv.addEventListener('toggle', ()=>{ document.getElementById('adv_open').value=adv.open?'1':'0'; save(); });
+})();
 </script>
 <div class="card tablewrap"><table><tr><th>{{ _('Start') }}</th><th>{{ _('Kind') }}</th><th>{{ _('Status') }}</th><th>{{ _('Result') }}</th><th></th></tr>
 {% for r in runs %}<tr><td>{{ r.start|dt }}<div class="muted small">{{ _('scheduled') if r.trigger=='schedule' else _('manual') }}</div></td>

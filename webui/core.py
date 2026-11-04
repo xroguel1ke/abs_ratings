@@ -112,6 +112,35 @@ def save_settings(s):
         os.replace(tmp, SETTINGS_FILE)
 
 
+SCAN_FORM_BOOL = ('task_meta', 'task_authors', 'task_series', 'task_roles', 'task_empty', 'dry', 'HARDCOVER_ENABLED', 'GOODREADS_ENABLED')
+SCAN_FORM_INT = ('BATCH_SIZE', 'REFRESH_DAYS')
+
+
+def scan_form(s):
+    """Last choices on the scan page; defaults from the saved settings (a choice there never changes a setting)."""
+    f = {'task_meta': True, 'task_authors': bool(s.get('AUTHOR_NORMALIZE')), 'task_series': bool(s.get('SERIES_MERGE')),
+         'task_roles': bool(s.get('REMOVE_ROLE_CREDITS')), 'task_empty': bool(s.get('REMOVE_EMPTY_AUTHORS')), 'dry': True,
+         'BATCH_SIZE': s.get('BATCH_SIZE'), 'REFRESH_DAYS': s.get('REFRESH_DAYS'), 'HARDCOVER_ENABLED': bool(s.get('HARDCOVER_ENABLED')),
+         'GOODREADS_ENABLED': bool(s.get('GOODREADS_ENABLED')), 'selection': 'all', 'list': '', 'adv_open': False}
+    f.update({k: v for k, v in (s.get('scan_form') or {}).items() if k in f})
+    return f
+
+
+def save_scan_form(form):
+    """form: request.form of the scan page (checkbox missing = off)."""
+    s = load_settings()
+    f = {k: form.get(k) == 'on' for k in SCAN_FORM_BOOL}
+    for k in SCAN_FORM_INT:
+        try: f[k] = max(0, int(form.get(k)))
+        except (TypeError, ValueError): f[k] = s.get(k)
+    f['selection'] = form.get('selection') if form.get('selection') in ('all', 'problems', 'new', 'list') else 'all'
+    f['list'] = (form.get('list') or '')[:20000]
+    f['adv_open'] = form.get('adv_open') == '1'
+    s['scan_form'] = f
+    save_settings(s)
+    return f
+
+
 def check_password(s, pw): return check_password_hash(s['password_hash'], pw or '')
 
 

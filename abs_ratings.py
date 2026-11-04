@@ -5,10 +5,90 @@ import requests
 from bs4 import BeautifulSoup
 import re, json, random, difflib, logging, urllib.parse, unicodedata
 import html as html_lib
-import recorder; recorder.install()  # no-op unless RECORD_DIR / REPLAY_DIR is set (offline tests)
+import recorder
+import source_state as SST; recorder.install()
+import threading, queue as _queue_mod
 import atexit
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
+
+# ================= PARALLEL BOOKS (thread safety) =================
+WORKERS = max(1, int(os.getenv('WORKERS', 3)))  # books processed at the same time; requests stay 1 per host
+IO_LOCK = threading.RLock()       # every read-modify-write of a shared state file / dict that is also dumped
+_TL = threading.local()           # per-thread: current item log, last search evidence, lookup hit counts, stats, log buffer
+_HOST_LOCKS, _THROTTLE_LOCKS = {}, {}
+
+class _TLDict:
+    """A dict that is separate for every thread (LAST_MATCH, LOOKUP_HITS): code keeps using it like the old global dict."""
+    def __init__(self, name, default=None): self._n, self._d = name, default or {}
+    def _get(self):
+        d = getattr(_TL, self._n, None)
+        if d is None: d = dict(self._d); setattr(_TL, self._n, d)
+        return d
+    def __getitem__(self, k): return self._get()[k]
+    def __setitem__(self, k, v): self._get()[k] = v
+    def __contains__(self, k): return k in self._get()
+    def __iter__(self): return iter(self._get())
+    def __len__(self): return len(self._get())
+    def __bool__(self): return bool(self._get())
+    def get(self, k, d=None): return self._get().get(k, d)
+    def clear(self): self._get().clear()
+    def update(self, *a, **kw): self._get().update(*a, **kw)
+    def keys(self): return self._get().keys()
+    def items(self): return self._get().items()
+    def copy(self): return dict(self._get())
+
+class _Stats(dict):
+    """Run counters: every worker counts in its own dict (no lost '+= 1'), merge() adds them up after the workers finished.
+    Flags shared by all workers (aborted_ratelimit) live in the main dict."""
+    SHARED = {'aborted_ratelimit'}
+    def _local(self):
+        return getattr(_TL, 'stats', None)
+    def __getitem__(self, k):
+        loc = self._local()
+        if loc is None or k in self.SHARED: return dict.__getitem__(self, k)
+        return loc.get(k, 0)
+    def __setitem__(self, k, v):
+        loc = self._local()
+        if loc is None or k in self.SHARED: dict.__setitem__(self, k, v)
+        else: loc[k] = v
+    def get(self, k, d=None):
+        loc = self._local()
+        if loc is None or k in self.SHARED: return dict.get(self, k, d)
+        return loc.get(k, d if d is not None else 0)
+    def merge(self, loc):
+        with IO_LOCK:
+            for k, v in loc.items():
+                if isinstance(v, (int, float)) and not isinstance(v, bool): dict.__setitem__(self, k, dict.get(self, k, 0) + v)
+
+def _host_serialized(orig):
+    """At most ONE request in flight per host, whatever thread sends it (wraps requests.Session.request)."""
+    def request(self, method, url, *a, **kw):
+        host = urllib.parse.urlsplit(str(url)).hostname or ''
+        lock = _HOST_LOCKS.setdefault(host, threading.Lock())
+        with lock: return orig(self, method, url, *a, **kw)
+    request._host_serialized = True
+    return request
+if not getattr(requests.Session.request, '_host_serialized', False):
+    requests.Session.request = _host_serialized(requests.Session.request)
+
+class _BookLogRouter(logging.Handler):
+    """Forwards records to the real handlers; inside a worker the records of one book are buffered and written as one block."""
+    def __init__(self, handlers):
+        super().__init__(); self.real = handlers
+    def emit(self, record):
+        buf = getattr(_TL, 'logbuf', None)
+        if buf is not None: buf.append(record); return
+        for h in self.real: h.handle(record)
+    def flush_book(self):
+        buf = getattr(_TL, 'logbuf', None)
+        if not buf: return
+        _TL.logbuf = []
+        with IO_LOCK:
+            for r in buf:
+                for h in self.real: h.handle(r)
+LOG_ROUTER = None
+
 
 # ================= CONFIGURATION =================
 def clean_env(value, allowed):
@@ -69,6 +149,9 @@ HARDCOVER_ENABLED = os.getenv('HARDCOVER_ENABLED', 'true').lower() == 'true' and
 # own daily budget (counted locally, persisted): free plan 5000/day, paid plan 50000/day. Both 60 requests/min.
 HARDCOVER_PAID = os.getenv('HARDCOVER_PAID', 'false').lower() == 'true'
 HC_DAILY_LIMIT = int(os.getenv('HARDCOVER_DAILY_LIMIT') or (50000 if HARDCOVER_PAID else 5000))
+SOURCE_STATE_FILE = os.path.join(SCRIPT_DIR, 'source_state.json')  # per book + source: found / missing / paused (source_state.py)
+SOURCE_STATE = {}
+LOOKUP_HITS = _TLDict('lookup_hits', {'hardcover': None, 'goodreads': None})  # result count of the last lookup (0 = no such book at all), per thread
 HC_USAGE_FILE = os.path.join(SCRIPT_DIR, 'hardcover_usage.json')  # {'day': 'YYYY-MM-DD' (UTC), 'requests': n}
 HC_CACHE_FILE = os.path.join(SCRIPT_DIR, "hardcover_cache.json")  # key -> {'id': Hardcover book id, 'slug': ...}
 # Order of the sources in the rating block (unknown names are ignored, missing ones are appended)
@@ -210,7 +293,7 @@ RE_RAW_PERFORMANCE = re.compile(r'performance-value="([0-9.]+)"')
 RE_RAW_OVERALL = re.compile(r'value="([0-9.]+)"') 
 RE_RAW_COUNT = re.compile(r'count="(\d+)"')
 
-stats = {k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred", "cover_added", "desc_filled", "series_merged", "other_edition", "hc_found", "hc_missing"]}
+stats = _Stats({k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred", "cover_added", "desc_filled", "series_merged", "other_edition", "hc_found", "hc_missing", "rating_only"]})
 stats['aborted_ratelimit'] = False
 GR_STATE = {'blocked': False, 'cooldowns': 0, 'searches': 0}
 GR_CACHE = {}  # Filled in main()  # Set once Goodreads blocks us; GR is then skipped for the rest of the run
@@ -360,9 +443,10 @@ _last_request = {}
 def throttle(source):
     """Wait until MIN_INTERVAL[source] seconds have passed since the last request to that source."""
     if recorder.REPLAY_DIR or recorder.RECORD_DIR: return  # test mode: recorder.py waits only before LIVE requests
-    wait = MIN_INTERVAL.get(source, 0) - (time.monotonic() - _last_request.get(source, 0))
-    if wait > 0: time.sleep(wait + random.uniform(0, 0.5))
-    _last_request[source] = time.monotonic()
+    with _THROTTLE_LOCKS.setdefault(source, threading.Lock()):  # parallel books: the spacing holds across all threads
+        wait = MIN_INTERVAL.get(source, 0) - (time.monotonic() - _last_request.get(source, 0))
+        if wait > 0: time.sleep(wait + random.uniform(0, 0.5))
+        _last_request[source] = time.monotonic()
 
 def map_language(raw):
     if not raw: return None
@@ -374,8 +458,14 @@ def setup_logging():
     f = os.path.join(LOG_DIR, f"run_{RUN_ID}.log" if os.getenv('RUN_ID') else f"run_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
     logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO), format='%(asctime)s - %(levelname)s - %(message)s',
                         handlers=[logging.FileHandler(f, encoding='utf-8'), logging.StreamHandler()])
+    global LOG_ROUTER
+    root = logging.getLogger()
+    LOG_ROUTER = _BookLogRouter(list(root.handlers))
+    root.handlers = [LOG_ROUTER]
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     return f
+
+
 
 # ================= CHANGE JOURNAL =================
 
@@ -393,7 +483,7 @@ def journal_change(iid, key, title, field, old, new, source, extra=None):
     path = PLANNED_FILE if DRY_RUN else CHANGES_FILE
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, 'a', encoding='utf-8') as f: f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        with IO_LOCK, open(path, 'a', encoding='utf-8') as f: f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except OSError as e: logging.error(f"Journal write failed: {e}")
 
 def abs_update(iid, key, title, updates, old_meta, source, tags=None, old_tags=None, extra=None):
@@ -456,12 +546,17 @@ def rw_json(path, data=None):
             return json.load(open(path, 'r', encoding='utf-8')) if os.path.exists(path) else {}
         else:
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            tmp_path = path + ".tmp"
-            with open(tmp_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=4, ensure_ascii=False)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_path, path)
+            with IO_LOCK:  # parallel books: one writer at a time, and a dict changed by another thread is dumped again
+                for _try in range(5):
+                    try: payload = json.dumps(data, indent=4, ensure_ascii=False); break
+                    except RuntimeError: time.sleep(0.01)
+                else: return None
+                tmp_path = path + f".tmp{threading.get_ident()}"
+                with open(tmp_path, 'w', encoding='utf-8') as f:
+                    f.write(payload)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp_path, path)
     except: return {} if data is None else None
 
 def update_report(src, key, title, author, ident, reason, success):
@@ -1082,7 +1177,7 @@ def series_candidates(abs_series, authors_list, duration, domain):
     keys = [series_key(x.get('name') or '') for x in (abs_series or []) if x.get('name')]
     exact, ranked = [], []
     words = lambda s: {w for w in s.split() if len(w) >= 4}
-    for title, asins in SERIES_ASINS.items():
+    for title, asins in list(SERIES_ASINS.items()):  # copy: another worker may add a series meanwhile
         sk = series_key(title)
         if any(k and (sk == k or sk.startswith(k + ' ')) for k in keys): exact.append((sk != (keys[0] if keys else ''), len(sk), sorted(asins))); continue
         # looser: ABS 'Dune Universe' vs Audible 'DUNE: Prelude to Dune' share a significant word (candidates are filtered hard afterwards)
@@ -1123,8 +1218,8 @@ def same_person_name(a, b):
     tok = lambda s: sorted(re.sub(r"[^a-z ]", " ", fold_accents(s or "").lower()).split())
     return bool(tok(a)) and tok(a) == tok(b)
 
-LAST_MATCH = {}  # evidence of the last accepted search hit: {asin, confirmed, evidence[]}
-SEARCH_CTX = {}  # {'old_title','old_authors'}: what the current ASIN in ABS points to (set by the caller)
+LAST_MATCH = _TLDict('last_match')  # evidence of the last accepted search hit: {asin, confirmed, evidence[]} (per thread)
+SEARCH_CTX = _TLDict('search_ctx')  # {'old_title','old_authors',...}: what the current ASIN in ABS points to (set by the caller, per thread)
 
 
 def preferred_twin(lang, key):
@@ -1171,6 +1266,9 @@ REVIEW_FILE = os.path.join(SCRIPT_DIR, 'review_queue.json')
 
 def add_review(key, title, kind, candidate, reason, evidence=None, ctx=None):
     """Uncertain automatic decision: nothing is written, the user decides in the review list (review_queue.json)."""
+    with IO_LOCK: return _add_review(key, title, kind, candidate, reason, evidence, ctx)
+
+def _add_review(key, title, kind, candidate, reason, evidence=None, ctx=None):
     decided = rw_json(os.path.join(SCRIPT_DIR, 'review_decisions.json')) or {}
     if f"{kind}|{key}|{candidate}" in decided: return  # user already decided (accepted or rejected)
     q = rw_json(REVIEW_FILE) or []
@@ -1676,6 +1774,33 @@ def parse_gr_search_results(soup):
         add(link, auth.get_text(" ", strip=True) if auth else "")
     return results
 
+RE_GR_NEXT_BOOK = re.compile(r'"__typename":"Book",')
+
+def _unjs(s):
+    try: return json.loads(f'"{s}"')
+    except ValueError: return s
+
+def parse_gr_next_results(html):
+    """New Goodreads search layout (Next.js, seen 2026-11-04): the result books are embedded as JSON inside JS strings.
+    Returns [(title, url, author, (rating, count) or None)] like parse_gr_search_results. work.stats = all editions,
+    the same number the classic list shows."""
+    if '"__typename' not in html and '\\"__typename' not in html: return []
+    text = html.replace('\\"', '"')
+    out, seen = [], set()
+    for chunk in RE_GR_NEXT_BOOK.split(text)[1:]:
+        chunk = chunk[:6000]  # one book object
+        m_url = re.search(r'"webUrl":"(https://www\.goodreads\.com/book/show/\d+[^"]*)"', chunk)
+        m_title = re.search(r'"legacyId":\d+,"title":"((?:[^"\\]|\\.)*)"', chunk)
+        if not (m_url and m_title): continue
+        url = m_url.group(1).split('?')[0]
+        if url in seen: continue
+        seen.add(url)
+        m_auth = re.search(r'"primaryContributorEdge":\{.*?"name":"((?:[^"\\]|\\.)*)"', chunk)
+        m_st = re.search(r'"averageRating":([\d.]+),"ratingsCount":(\d+)', chunk)
+        rating = (m_st.group(1), int(m_st.group(2))) if m_st and int(m_st.group(2)) > 0 and is_valid_rating(m_st.group(1)) else None
+        out.append((_unjs(m_title.group(1)), url, _unjs(m_auth.group(1)) if m_auth else '', rating))
+    return out
+
 _gr_sample_saved = {'done': False}
 def save_gr_sample(html, q):
     """Store the first unparseable search page per run so the layout can be inspected."""
@@ -1690,6 +1815,7 @@ def save_gr_sample(html, q):
 def _search_goodreads(isbn, title, authors, prim_auth, known_ids=None, list_only=False):
     """list_only: never load a book page (an ISBN lookup and a direct search hit both redirect to one) - only the result list."""
     known_ids = known_ids or set()
+    LOOKUP_HITS['goodreads'] = 0
     # Audible ASINs practically never resolve on Goodreads, so only the ISBN is tried
     for q_id, src in [(normalize_isbn(isbn), 'ISBN Lookup')]:
         if q_id and not list_only:
@@ -1708,8 +1834,9 @@ def _search_goodreads(isbn, title, authors, prim_auth, known_ids=None, list_only
 
     for q in searches:
         r, soup = fetch_url(f"https://www.goodreads.com/search", params={"q": q}, source='goodreads')
-        if not soup: continue
+        if not soup: LOOKUP_HITS['goodreads'] = None; continue  # no answer: unknown, never 'absent'
         if "/book/show/" in r.url:
+            if LOOKUP_HITS['goodreads'] is not None: LOOKUP_HITS['goodreads'] += 1
             if list_only:  # redirected to a book page: read it (it is loaded anyway), but this is what Goodreads blocks
                 logging.info(f"        ↪️ GR search '{q}' redirected to a book page")
             if d := scrape_gr_details(r.url): 
@@ -1718,7 +1845,9 @@ def _search_goodreads(isbn, title, authors, prim_auth, known_ids=None, list_only
                 return d
         else:
             best_url, best_score, best_rating = None, 0.0, None
-            results = parse_gr_search_results(soup)
+            results = parse_gr_next_results(r.text) or parse_gr_search_results(soup)  # new (Next.js) and classic layout
+            if LOOKUP_HITS['goodreads'] is not None: LOOKUP_HITS['goodreads'] += len(results)
+            if not results and 'No results' not in r.text and 'noResults' not in r.text: LOOKUP_HITS['goodreads'] = None  # unparseable, not empty
             if not results:
                 logging.info(f"        🔍 GR search '{q}': no results parsed (title: '{page_title(soup)}', {len(r.text)} bytes)")
                 if len(r.text) > 50000: save_gr_sample(r.text, q)
@@ -1791,8 +1920,9 @@ def hc_query(query, variables=None):
         logging.info(f"        ⚠️ Hardcover request failed: {e}")
         return None
     if not simulated or recorder._LAST_LIVE.get('api.hardcover.app') != live_before:  # only real (live) requests use the budget
-        hc_usage_today(); HC_USAGE['requests'] += 1
-        if HC_USAGE['requests'] % 50 == 0: rw_json(HC_USAGE_FILE, HC_USAGE)
+        with IO_LOCK:
+            hc_usage_today(); HC_USAGE['requests'] += 1
+            if HC_USAGE['requests'] % 50 == 0: rw_json(HC_USAGE_FILE, HC_USAGE)
     left = r.headers.get('X-Ratelimit-Daily-Remaining') or ''
     if left.isdigit(): HC_STATE['daily_left'] = int(left)
     rst = next((v for k, v in r.headers.items() if 'reset' in k.lower() and 'ratelimit' in k.lower()), None)  # when the daily limit renews (if Hardcover tells)
@@ -1852,6 +1982,21 @@ def hc_audible_crosscheck(hc, aud):
 def hc_goodreads_ids(book):
     """Goodreads book IDs Hardcover knows for this book (one per edition; the rating belongs to the work, any edition page shows it)."""
     return [m["external_id"] for m in (book or {}).get("book_mappings") or [] if str(m.get("external_id", "")).isdigit()]
+
+def hc_target_titles(aud, search_title, title, abs_subtitle=None):
+    """Titles a Hardcover hit is compared with. The first one is also the search query (unchanged).
+    Added for comparison only: 'Title: Subtitle' (Hardcover search documents store the subtitle inside the title:
+    'A Book Forged in Hell: Spinoza's Scandalous Treatise ...') and the book title after a numbered series prefix
+    ('The Princess Diaries, Volume VII: Party Princess' -> 'Party Princess', how Hardcover lists it)."""
+    aud = aud or {}
+    out = [aud.get('title_raw'), search_title, title]
+    if aud.get('title_raw') and aud.get('subtitle_raw'): out.append(f"{aud['title_raw']}: {aud['subtitle_raw']}")
+    if title and abs_subtitle: out.append(f"{title}: {abs_subtitle}")
+    for t in (aud.get('title_raw'), title):
+        m = re.match(r'^(.+?):\s*(.+)$', t or '')
+        if m and extract_volume(m.group(1)) and len(m.group(2).strip()) >= 6 and not extract_volume(m.group(2)):
+            out.append(m.group(2).strip())
+    return list(dict.fromkeys(t for t in out if t))
 
 def hc_result(book, source):
     return {'gr_ids': hc_goodreads_ids(book), 'id': book.get('id'), 'slug': book.get('slug'), 'url': f"https://hardcover.app/books/{book.get('slug')}",
@@ -1968,6 +2113,7 @@ def get_hardcover_data(key, targets, authors, asin, isbn, manual_url=None, use_c
             return None, 'blocked'
 
 def _hardcover_lookup(key, targets, authors, asin, isbn, manual_url, use_cache, abs_series):
+    LOOKUP_HITS['hardcover'] = 0
     if manual_url and (m := RE_HC_SLUG.search(manual_url)):
         data = hc_query(f"query($s:String!){{ books(where:{{slug:{{_eq:$s}}}}, limit:1){{ {HC_BOOK_FIELDS} }} }}", {'s': m.group(1)})
         if books := (data or {}).get('books'): return hc_result(books[0], 'manual link')
@@ -1988,6 +2134,8 @@ def _hardcover_lookup(key, targets, authors, asin, isbn, manual_url, use_cache, 
     if conds:
         data = hc_query(f"query($w:editions_bool_exp!){{ editions(where:$w, limit:5){{ title asin isbn_13 isbn_10 book{{ {HC_BOOK_FIELDS} }} }} }}", {'w': {'_or': conds}})
         best = None
+        if data is None: LOOKUP_HITS['hardcover'] = None
+        elif LOOKUP_HITS['hardcover'] is not None: LOOKUP_HITS['hardcover'] += len(data.get('editions') or [])
         for ed in (data or {}).get('editions') or []:
             book = ed.get('book') or {}
             ok, score, why = hc_acceptable(targets, authors, book, 0.6, abs_series, [ed.get('title')])
@@ -2005,6 +2153,8 @@ def _hardcover_lookup(key, targets, authors, asin, isbn, manual_url, use_cache, 
     for q in queries[:3]:
         data = hc_query("query($q:String!){ search(query:$q, query_type:\"Book\", per_page:8, page:1){ results } }", {'q': q})
         hits = (((data or {}).get('search') or {}).get('results') or {}).get('hits') or []
+        if data is None: LOOKUP_HITS['hardcover'] = None
+        elif LOOKUP_HITS['hardcover'] is not None: LOOKUP_HITS['hardcover'] += len(hits)
         cands = []
         for h in hits:
             doc = h.get('document') or {}
@@ -2020,6 +2170,23 @@ def _hardcover_lookup(key, targets, authors, asin, isbn, manual_url, use_cache, 
             logging.info(f"        🔍 Hardcover search '{q}': '{doc.get('title')}' accepted (score {score:.2f}, {len(hits)} hits)")
             return hc_result(doc, 'search')
         logging.info(f"        🔍 Hardcover search '{q}': no matching hit ({len(hits)} hits)")
+    eds = list(dict.fromkeys(clean_title(t) for t in targets[:3] if t and clean_title(t)))[:3]
+    if eds:
+        data = hc_query(f"query($t:[String!]){{ editions(where:{{title:{{_in:$t}}}}, limit:10){{ title book{{ {HC_BOOK_FIELDS} }} }} }}", {'t': eds})
+        if data is None: LOOKUP_HITS['hardcover'] = None
+        elif LOOKUP_HITS['hardcover'] is not None: LOOKUP_HITS['hardcover'] += len(data.get('editions') or [])
+        best = None
+        for ed in (data or {}).get('editions') or []:
+            book = ed.get('book') or {}
+            if not book.get('id'): continue
+            ok, score, why = hc_acceptable(targets, authors, book, 0.85, abs_series, [ed.get('title')], pure=True)
+            if not ok: logging.debug(f"        ✖ HC edition '{ed.get('title')}' -> '{book.get('title')}' rejected: {why}"); continue
+            if not best or (book.get('ratings_count') or 0) > (best[0].get('ratings_count') or 0): best = (book, ed.get('title'))
+        if best:
+            d = hc_result(best[0], 'edition title')
+            d['alts'] = list(dict.fromkeys([*d['alts'], best[1]]))  # the edition title IS a title of this book (cross-check)
+            logging.info(f"        🔍 Hardcover edition '{best[1]}' -> book '{best[0].get('title')}' accepted")
+            return d
     return None
 
 def hc_audio_asin(hc, abs_dur, authors, targets, narrators, lang):
@@ -2114,8 +2281,14 @@ def build_description(current_desc, fresh, old):
 RESULTS, OVERRIDES = {}, {}  # loaded in main()
 
 class ItemCapture(logging.Handler):
-    """Collects the log lines of the book that is being processed (shown in the web UI problem view)."""
-    def __init__(self): super().__init__(); self.lines = []
+    """Collects the log lines of the book that is being processed (shown in the web UI problem view) - per thread."""
+    def __init__(self): super().__init__()
+    @property
+    def lines(self):
+        if not hasattr(_TL, 'item_lines'): _TL.item_lines = []
+        return _TL.item_lines
+    @lines.setter
+    def lines(self, v): _TL.item_lines = v
     def emit(self, record):
         if len(self.lines) < 80: self.lines.append(record.getMessage().strip())
 ITEM_LOG = ItemCapture()
@@ -2146,6 +2319,9 @@ def set_result(key, lib_id, iid, title, authors, asin, status, reason, extra=Non
                     'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'log': list(ITEM_LOG.lines), **(extra or {})}
 
 def record_attempt(key, history, failed, recheck, complete=False, recheck_days=None):
+    with IO_LOCK: return _record_attempt(key, history, failed, recheck, complete, recheck_days)
+
+def _record_attempt(key, history, failed, recheck, complete=False, recheck_days=None):
     """Track the result of one item. Nothing is persisted in DRY_RUN mode.
     - complete: done, next run after REFRESH_DAYS
     - recheck_days: counts as processed (no strike), but re-check early after N days
@@ -2172,6 +2348,7 @@ def record_attempt(key, history, failed, recheck, complete=False, recheck_days=N
     rw_json(RECHECK_FILE, recheck)
     rw_json(GR_CACHE_FILE, GR_CACHE)
     rw_json(HC_CACHE_FILE, HC_CACHE)
+    rw_json(SOURCE_STATE_FILE, SOURCE_STATE)
 
 def item_tags(item):
     """Collect tags from all places ABS may put them (root, media, media.metadata)."""
@@ -2188,10 +2365,11 @@ def process_library(lib_id, history, failed, recheck):
 def run_libraries(history, failed, recheck):
     """Collect the due books of ALL libraries into one pool, shuffle it and process BATCH_SIZE random books."""
     if ONLY_ITEMS:  # single-book mode (web UI fix / single book): exactly these books, due or not
-        batch = []
+        batch, listed = [], {}
         for lib_id in {k.partition('_')[0] for k in ONLY_ITEMS}:  # duplicate-ASIN guard needs the whole library, also in single-book mode
             try:
                 for it in abs_session.get(f"{ABS_URL}/api/libraries/{lib_id}/items").json()['results']:
+                    listed[f"{lib_id}_{it['id']}"] = it  # author for the parallel lanes
                     a = ((it.get('media') or {}).get('metadata') or {}).get('asin')
                     if a: ASIN_OWNERS.setdefault(a, set()).add(f"{lib_id}_{it['id']}")
                     KEY_DUR[f"{lib_id}_{it['id']}"] = (it.get('media') or {}).get('duration')
@@ -2200,7 +2378,7 @@ def run_libraries(history, failed, recheck):
             except Exception as e: logging.warning(f"Could not load ASIN owners for {lib_id}: {e}")
         for k in ONLY_ITEMS:
             lib, _, iid = k.partition('_')
-            batch.append({'id': iid, '_lib': lib, 'media': {}})
+            batch.append(dict(listed.get(k) or {'id': iid, 'media': {}}, _lib=lib))
         logging.info(f"Single-book mode: {', '.join(ONLY_ITEMS)}")
         return process_queue(batch, history, failed, recheck)
     pool = []
@@ -2224,7 +2402,7 @@ def build_queue(lib_id, history, recheck):
 
     # --- NEW QUEUE LOGIC (UTC ONLY) ---
     work_queue = []
-    count_new, count_due, count_manual, count_recheck, count_locked = 0, 0, 0, 0, 0
+    count_new, count_due, count_manual, count_recheck, count_locked, count_rating = 0, 0, 0, 0, 0, 0
     now = datetime.now()
     now_utc = datetime.now(timezone.utc)
 
@@ -2285,6 +2463,8 @@ def build_queue(lib_id, history, recheck):
             try: recheck_due = now_utc >= datetime.fromisoformat(recheck[key])
             except ValueError: recheck_due = True
 
+        SST.seed(SOURCE_STATE, key, last_run_dt.isoformat(timespec='seconds'), audible_ok=(RESULTS.get(key) or {}).get('status') in ('ok', 'other_edition'),
+                 gr_known=key in GR_CACHE, hc_known=key in HC_CACHE)  # first run with source_state.json: take over what is known
         if is_manual_update:
             item['_manual_trigger'] = True
             work_queue.append(item); count_manual += 1
@@ -2293,13 +2473,90 @@ def build_queue(lib_id, history, recheck):
         elif recheck_due:
             item['_recheck'] = True
             work_queue.append(item); count_recheck += 1
+        elif due := [s_ for s_ in SST.due_sources(SOURCE_STATE, key, enabled_sources(), REFRESH_DAYS) if s_ != 'audible']:
+            item['_rating_only'] = due  # Audible is fresh: only the missing rating sources are asked
+            work_queue.append(item); count_rating += 1
 
     count_fresh = len(items) - count_locked - len(work_queue)
-    logging.info(f"Due: {count_new} New, {count_manual} Manual Updates, {count_due} Due, {count_recheck} Re-checks ({count_locked} locked via lock_all). "
+    logging.info(f"Due: {count_new} New, {count_manual} Manual Updates, {count_due} Due, {count_recheck} Re-checks, {count_rating} only missing ratings ({count_locked} locked via lock_all). "
                  f"{count_fresh} books are up to date (refreshed within the last {REFRESH_DAYS} days).")
     stats['skipped'] += count_locked
     for it in work_queue: it['_lib'] = lib_id
     return work_queue
+
+def enabled_sources():
+    return ['audible'] + (['hardcover'] if HARDCOVER_ENABLED else []) + (['goodreads'] if GOODREADS_ENABLED else [])
+
+def sst_record(key, source, status, hits=None, aud_facts=None):
+    """Remember what a source gave for this book (real runs only, like history)."""
+    if DRY_RUN: return
+    with IO_LOCK:
+        e = SST.record(SOURCE_STATE, key, source, 'found' if status == 'found' else SST.outcome_of(status, hits))
+        if aud_facts: SOURCE_STATE[key]['aud'] = SST.audible_facts(aud_facts)
+    if e and e.get('st') == 'paused' and status != 'found':
+        logging.info(f"        ⏸️ {source.capitalize()}: {e.get('why')} - paused for {REFRESH_DAYS} days")
+
+def source_note(key, source):
+    e = (SOURCE_STATE.get(key) or {}).get(source) or {}
+    return f"{'found' if e.get('st') == 'found' else e.get('why') or e.get('st')} on {str(e.get('ts', ''))[:10]}, next check after {REFRESH_DAYS} days"
+
+def rating_only_pass(item, key, idx, total):
+    """Audible is fresh for this book, only some rating sources are due (user rule): no Audible request, no metadata change -
+    just the missing ratings, added to the existing rating block. Returns True if a source was asked."""
+    due = item['_rating_only']
+    iid = item['id']
+    item_data = abs_session.get(f"{ABS_URL}/api/items/{iid}", params={"expanded": 1}).json()
+    from abs_series import expand_locks
+    tags = expand_locks(item_tags(item_data))
+    meta = item_data['media']['metadata']
+    title = meta.get('title')
+    if 'lock_all' in tags: stats['skipped'] += 1; return False
+    authors = [a.get('name') if isinstance(a, dict) else a for a in meta.get('authors', [])]
+    ov = OVERRIDES.get(key) or {}
+    aud = (SOURCE_STATE.get(key) or {}).get('aud') or {}
+    ITEM_LOG.lines = []
+    logging.info("-" * 50)
+    logging.info(f"({idx+1}/{total}) {title} [ASIN: {meta.get('asin')}] [Only missing ratings: {', '.join(due)}]")
+    stats['processed'] += 1; stats['rating_only'] += 1
+    hc_data = gr_data = None
+    if 'hardcover' in due:
+        targets = hc_target_titles(aud, title, title, meta.get('subtitle'))
+        hc_data, hc_status = get_hardcover_data(key, targets, list(dict.fromkeys([*authors, *(aud.get('authors_raw') or [])])), meta.get('asin'), meta.get('isbn'),
+                                                ov.get('hardcover'), use_cache=True, abs_series=[(x.get('name'), x.get('sequence')) for x in (meta.get('series') or [])])
+        if hc_data and aud.get('title_raw'):  # the same cross-check as in a full pass, against the remembered Audible product
+            cc_ok, cc_why = hc_audible_crosscheck(hc_data, aud)
+            if not cc_ok:
+                logging.info(f"        ⚠️ Hardcover '{hc_data.get('title')}' does not look like Audible '{aud.get('title_raw')}' ({cc_why}): Hardcover ratings are NOT used (review list)")
+                add_review(key, title, 'hardcover', hc_data.get('url'), f"Hardcover book differs from the Audible product ({cc_why})")
+                hc_data, LOOKUP_HITS['hardcover'] = None, None
+            else: logging.info(f"        ✓ Hardcover cross-check against Audible: {cc_why}")
+        elif hc_data:  # nothing to cross-check against: not used
+            logging.info("        ⚠️ No remembered Audible product to cross-check the Hardcover hit: not used (next full check)")
+            hc_data, LOOKUP_HITS['hardcover'] = None, None
+        if HARDCOVER_ENABLED: stats['hc_found' if hc_data else 'hc_missing'] += 1
+        sst_record(key, 'hardcover', 'found' if hc_data else hc_status, LOOKUP_HITS['hardcover'])
+        if hc_data and hc_data.get('id') and not DRY_RUN: HC_CACHE[key] = {'id': hc_data['id'], 'slug': hc_data.get('slug')}
+    if 'goodreads' in due:
+        hc_gids = (hc_data or {}).get('gr_ids') or (hc_fetch_gr_ids(hc_data['id']) if hc_data and hc_data.get('id') and not GR_STATE['blocked'] else [])
+        gr_data, gr_status = get_goodreads_data(meta.get('isbn'), aud.get('title_raw') or title, authors, authors[0] if authors else "",
+                                                ov.get('goodreads') or GR_CACHE.get(key), hc_gids)
+        if not gr_data and gr_status not in ('deferred', 'blocked', 'disabled'): stats['gr_missing'] += 1
+        sst_record(key, 'goodreads', gr_status, LOOKUP_HITS['goodreads'])
+        if gr_data and gr_data.get('url') and not DRY_RUN: GR_CACHE[key] = gr_data['url']
+    if (hc_data or gr_data) and 'lock_description' not in tags:
+        cur = meta.get('description') or ''
+        final = build_description(cur, {'Goodreads': gr_data, 'Hardcover': hc_data}, parse_rating_block(cur))  # Audible line stays as it is
+        if normalize_desc(final) != normalize_desc(cur) and abs_update(iid, key, title, {'description': final}, meta, 'ratings'):
+            logging.info(f"      -> ✅ {'WOULD UPDATE (DRY_RUN)' if DRY_RUN else 'SUCCESS'}: ratings block (+{', '.join(n for n, d in (('Goodreads', gr_data), ('Hardcover', hc_data)) if d)})")
+            stats['success'] += 1
+        else: logging.info("      -> ✅ Description already up to date")
+    elif not (hc_data or gr_data): logging.info("      -> ℹ️ No new rating found")
+    if r := RESULTS.get(key):
+        if gr_data: r['goodreads'] = gr_data.get('url')
+        if hc_data: r['hardcover'] = hc_data.get('url')
+    if not DRY_RUN:
+        rw_json(SOURCE_STATE_FILE, SOURCE_STATE); rw_json(GR_CACHE_FILE, GR_CACHE); rw_json(HC_CACHE_FILE, HC_CACHE)
+    return True
 
 def process_queue(work_queue, history, failed, recheck):
     total = len(work_queue)
@@ -2307,8 +2564,9 @@ def process_queue(work_queue, history, failed, recheck):
     start = datetime.now()
     consecutive_rl = 0
 
-    for idx, item in enumerate(work_queue):
-        if stats['aborted_ratelimit']: break
+    def one(idx, item):
+        nonlocal consecutive_rl
+        if stats['aborted_ratelimit']: return
         lib_id = item['_lib']
         
         elapsed = (datetime.now() - start).total_seconds()
@@ -2325,6 +2583,9 @@ def process_queue(work_queue, history, failed, recheck):
         while True: 
             try:
                 iid, key = item['id'], f"{lib_id}_{item['id']}"
+                if item.get('_rating_only') and not ONLY_ITEMS:
+                    needs_sleep = rating_only_pass(item, key, idx, total)
+                    break
                 item_data = abs_session.get(f"{ABS_URL}/api/items/{iid}", params={"expanded": 1}).json()  # expanded: includes media.duration (also in single-book mode)
                 from abs_series import expand_locks
                 tags = expand_locks(item_tags(item_data))
@@ -2365,6 +2626,7 @@ def process_queue(work_queue, history, failed, recheck):
                 asin_from_search = False
                 skip_meta = False
                 abs_dur = (item_data.get('media') or {}).get('duration') or (item.get('media') or {}).get('duration')
+                src_due = set((SST.SOURCES if (item.get('_manual_trigger') or ONLY_ITEMS) else SST.due_sources(SOURCE_STATE, key, list(SST.SOURCES), REFRESH_DAYS)))
 
                 asin_hint_note = None
                 if not asin and 'lock_asin' not in tags and isbn_bad_reason(meta.get('isbn')) == 'value is an ASIN, not an ISBN':
@@ -2712,20 +2974,25 @@ def process_queue(work_queue, history, failed, recheck):
                             logging.info(f"        🖼️ Cover {'would be ' if DRY_RUN else ''}{'replaced (verified book)' if has_cover else 'set'} from Audible: {aud_data['cover_url']}")
 
                 # Hardcover: ratings only. Audible's clean title first, the ABS title as second comparison.
-                hc_targets = list(dict.fromkeys(t for t in [(aud_data or {}).get('title_raw') if not skip_meta else None, search_title, title] if t))
-                hc_data, hc_status = get_hardcover_data(key, hc_targets, list(dict.fromkeys([*authors, *((aud_data or {}).get('authors_raw') or [])])),  # ABS and Audible authors (ABS sometimes lists the translator)
-                                                         asin, meta.get('isbn'), ov.get('hardcover'),
-                                                        use_cache=not item.get('_manual_trigger'),
-                                                        abs_series=[(x.get('name'), x.get('sequence')) for x in (meta.get('series') or [])])
+                hc_targets = hc_target_titles(aud_data if not skip_meta else None, search_title, title, meta.get('subtitle'))
+                if 'hardcover' in src_due or not HARDCOVER_ENABLED:
+                    hc_data, hc_status = get_hardcover_data(key, hc_targets, list(dict.fromkeys([*authors, *((aud_data or {}).get('authors_raw') or [])])),  # ABS and Audible authors (ABS sometimes lists the translator)
+                                                             asin, meta.get('isbn'), ov.get('hardcover'),
+                                                            use_cache=not item.get('_manual_trigger'),
+                                                            abs_series=[(x.get('name'), x.get('sequence')) for x in (meta.get('series') or [])])
+                else:
+                    hc_data, hc_status = None, 'fresh'
+                    logging.info(f"      -> ⏭️ Hardcover not asked: {source_note(key, 'hardcover')}")
                 if hc_data and hc_data.get('id') and not DRY_RUN: HC_CACHE[key] = {'id': hc_data['id'], 'slug': hc_data.get('slug')}
                 if hc_data and aud_data and aud_data.get('title_raw') and not aud_data.get('related_edition') and not skip_meta:  # every Hardcover hit is cross-checked against the Audible product
                     cc_ok, cc_why = hc_audible_crosscheck(hc_data, aud_data)
                     if not cc_ok:
                         logging.info(f"        ⚠️ Hardcover '{hc_data.get('title')}' does not look like Audible '{aud_data.get('title_raw')}' ({cc_why}): Hardcover ratings are NOT used (review list)")
                         add_review(key, title, 'hardcover', hc_data.get('url'), f"Hardcover book differs from the Audible product ({cc_why})")
-                        hc_data = None
+                        hc_data = None; LOOKUP_HITS['hardcover'] = None
                     else: logging.info(f"        ✓ Hardcover cross-check against Audible: {cc_why}")
-                if HARDCOVER_ENABLED: stats['hc_found' if hc_data else 'hc_missing'] += 1
+                if HARDCOVER_ENABLED and hc_status != 'fresh': stats['hc_found' if hc_data else 'hc_missing'] += 1
+                sst_record(key, 'hardcover', 'found' if hc_data else hc_status, LOOKUP_HITS['hardcover'])
                 if hc_data and (not aud_data or aud_data.get('related_edition')) and 'lock_asin' not in tags:
                     via = hc_audio_asin(hc_data, abs_dur, authors, hc_targets, meta.get('narrators') or [], lang)
                     if via and via[0] != asin:
@@ -2774,9 +3041,14 @@ def process_queue(work_queue, history, failed, recheck):
                 if not bad_isbn or isbn_written: reports['isbn'].pop(key, None)
                 gr_title = (aud_data or {}).get('title_raw') or search_title  # Audible's clean title searches best
                 cached_url = ov.get('goodreads') or (None if item.get('_manual_trigger') else GR_CACHE.get(key))
-                hc_gids = (hc_data or {}).get('gr_ids') or (hc_fetch_gr_ids(hc_data['id']) if hc_data and hc_data.get('id') and GOODREADS_ENABLED and not GR_STATE['blocked'] else [])
-                gr_data, gr_status = get_goodreads_data(meta.get('isbn'), gr_title, authors, authors[0] if authors else "", cached_url, hc_gids,
-                                                        force=bool(item.get('_manual_trigger') or ONLY_ITEMS))
+                hc_gids = (hc_data or {}).get('gr_ids') or (hc_fetch_gr_ids(hc_data['id']) if hc_data and hc_data.get('id') and GOODREADS_ENABLED and not GR_STATE['blocked'] and 'goodreads' in src_due else [])
+                if 'goodreads' in src_due or not GOODREADS_ENABLED:
+                    gr_data, gr_status = get_goodreads_data(meta.get('isbn'), gr_title, authors, authors[0] if authors else "", cached_url, hc_gids,
+                                                            force=bool(item.get('_manual_trigger') or ONLY_ITEMS))
+                else:
+                    gr_data, gr_status = None, 'fresh'
+                    logging.info(f"      -> ⏭️ Goodreads not asked: {source_note(key, 'goodreads')}")
+                sst_record(key, 'goodreads', gr_status, LOOKUP_HITS['goodreads'])
                 if gr_data and gr_data.get('url') and not DRY_RUN: GR_CACHE[key] = gr_data['url']
                 
                 if gr_data and not meta.get('isbn') and not isbn_written:
@@ -2827,18 +3099,17 @@ def process_queue(work_queue, history, failed, recheck):
                 update_report("goodreads", key, title, authors[0] if authors else "", meta.get('isbn'), "Not found", has_gr)
                 
                 no_ratings_yet = bool(aud_data and aud_data.get('page_ok') and not has_aud)
-                if has_aud and has_gr:
+                # per-source state (source_state.json): Audible found -> the book is done for Audible; a missing Goodreads/Hardcover
+                # rating is asked again on its own (next day, 5 misses -> pause), see the rating-only passes in build_queue
+                if has_aud:
+                    sst_record(key, 'audible', 'found', aud_facts=aud_data)
+                    if GOODREADS_ENABLED and not has_gr and gr_status != 'fresh':
+                        stats['gr_missing'] += 1; logging.info(f"      -> ℹ️ Audible OK, Goodreads {gr_status.replace('_', ' ')}.")
                     record_attempt(key, history, failed, recheck, complete=True)
-                elif has_aud:
-                    # Audible worked. Missing Goodreads is no strike, just re-check earlier.
-                    stats['gr_missing'] += 1
-                    days = GR_BLOCKED_RECHECK_DAYS if gr_status in ('blocked', 'deferred', 'disabled') else GR_MISSING_RECHECK_DAYS
-                    logging.info(f"      -> ℹ️ Audible OK, Goodreads {gr_status.replace('_', ' ')}.")
-                    record_attempt(key, history, failed, recheck, recheck_days=days)
-                elif no_ratings_yet:
+                elif no_ratings_yet:  # on Audible, no ratings yet: asked again next day, after 5 tries paused until REFRESH_DAYS
                     stats['no_ratings_yet'] += 1
-                    days = GR_BLOCKED_RECHECK_DAYS if gr_status in ('blocked', 'deferred', 'disabled') else NO_RATINGS_RECHECK_DAYS
-                    record_attempt(key, history, failed, recheck, recheck_days=days)
+                    sst_record(key, 'audible', 'not_found', None)
+                    record_attempt(key, history, failed, recheck)
                 else:
                     logging.warning(f"      -> ⚠️ No Audible data (Audible: {has_aud}, GR: {has_gr})")
                     record_attempt(key, history, failed, recheck)
@@ -2853,15 +3124,15 @@ def process_queue(work_queue, history, failed, recheck):
                 else: status, reason = 'not_found', 'No ratings found on Audible'
                 notes = []
                 if skip_meta: notes.append('metadata skipped (Audible data does not fit this book)')
-                if GOODREADS_ENABLED and not has_gr and gr_status != 'deferred': notes.append(f"Goodreads {gr_status.replace('_', ' ')}")
-                if HARDCOVER_ENABLED and not hc_data: notes.append(f"Hardcover {hc_status.replace('_', ' ')}")
+                if GOODREADS_ENABLED and not has_gr and gr_status not in ('deferred', 'fresh'): notes.append(f"Goodreads {gr_status.replace('_', ' ')}")
+                if HARDCOVER_ENABLED and not hc_data and hc_status != 'fresh': notes.append(f"Hardcover {hc_status.replace('_', ' ')}")
                 if ov.get('ignore'): status = 'ignored'
                 cert, cert_parts = certainty_score(search_title, authors, meta.get('narrators') or [], abs_dur, meta.get('publisher'), meta.get('publishedYear'),
                                                    meta.get('series') or [], aud_data, hc_data, asin_from_search,
                                                    any(x.get('key') == key and x.get('status', 'open') == 'open' for x in (rw_json(REVIEW_FILE) or []) if isinstance(x, dict)))
                 set_result(key, lib_id, iid, title, authors, asin, status, reason,
-                           {'notes': notes, 'certainty': cert, 'certainty_parts': cert_parts, 'domain': (aud_data or {}).get('domain'), 'goodreads': (gr_data or {}).get('url'),
-                            'hardcover': (hc_data or {}).get('url'), 'compare': compare_view(title, authors, meta, abs_dur, aud_data, hc_data),
+                           {'notes': notes, 'certainty': cert, 'certainty_parts': cert_parts, 'domain': (aud_data or {}).get('domain'), 'goodreads': (gr_data or {}).get('url') or (RESULTS.get(key) or {}).get('goodreads') if gr_status == 'fresh' else (gr_data or {}).get('url'),
+                            'hardcover': ((hc_data or {}).get('url') or (RESULTS.get(key) or {}).get('hardcover')) if hc_status == 'fresh' else (hc_data or {}).get('url'), 'compare': compare_view(title, authors, meta, abs_dur, aud_data, hc_data),
                             'asin_source': 'manuell' if ov.get('asin') else ('Suche' if asin_from_search else ('ABS (bestätigt)' if asin else '')), 'hc_source': (hc_data or {}).get('source'),
                             'evidence': (LAST_MATCH.get('evidence') or []) if asin_from_search else []})
 
@@ -2882,12 +3153,53 @@ def process_queue(work_queue, history, failed, recheck):
                            [], None, 'error', f"{type(e).__name__}: {e}")
                 break
         
-        if stats['aborted_ratelimit']: break
-        if not needs_sleep: continue
+        if stats['aborted_ratelimit']: return
+        if not needs_sleep: return
         # Requests are throttled per source (MIN_INTERVAL); this pause is only an optional extra.
         sleep_dur = BASE_SLEEP + (random.uniform(0, min(1.0, BASE_SLEEP / 2)) if BASE_SLEEP else 0)
         if search_penalty: sleep_dur += SEARCH_PENALTY_SLEEP
         if sleep_dur > 0: time.sleep(sleep_dur)
+
+    run_books(work_queue, one)
+
+def _author_lane(item):
+    """Books of the same primary author always go through the same worker, one after another: two copies of one book
+    can never pass the duplicate-ASIN/ISBN guard at the same moment."""
+    md = (item.get('media') or {}).get('metadata') or {}
+    a = md.get('authorName') or ', '.join(x.get('name', '') if isinstance(x, dict) else str(x) for x in (md.get('authors') or []))
+    a = re.sub(r'[^a-z]', '', unicodedata.normalize('NFKD', (a or '').split(',')[0]).lower())
+    return a or f"_{item.get('id')}"
+
+def run_books(work_queue, one):
+    """Run one(idx, item) for every book: WORKERS threads; groups of the same author stay in one thread, in queue order."""
+    if WORKERS <= 1 or len(work_queue) < 2:
+        for idx, item in enumerate(work_queue):
+            one(idx, item)
+            if stats['aborted_ratelimit']: break
+        return
+    groups = {}
+    for idx, item in enumerate(work_queue): groups.setdefault(_author_lane(item), []).append((idx, item))
+    jobs = _queue_mod.Queue()
+    for g in sorted(groups.values(), key=lambda g: g[0][0]): jobs.put(g)  # keep the (random) queue order as far as possible
+    def worker():
+        _TL.stats = {}
+        try:
+            while not stats['aborted_ratelimit']:
+                try: g = jobs.get_nowait()
+                except _queue_mod.Empty: break
+                for idx, item in g:
+                    _TL.logbuf = []
+                    try: one(idx, item)
+                    finally:
+                        if LOG_ROUTER: LOG_ROUTER.flush_book()
+                        _TL.logbuf = None
+                    if stats['aborted_ratelimit']: break
+        finally:
+            stats.merge(_TL.stats); _TL.stats = None
+    threads = [threading.Thread(target=worker, name=f"book-worker-{i+1}", daemon=True) for i in range(min(WORKERS, len(groups)))]
+    logging.info(f"Parallel: {len(threads)} workers for {len(work_queue)} books ({len(groups)} author groups); max. 1 request at a time per host")
+    for t in threads: t.start()
+    for t in threads: t.join()
 
 def log_run_header():
     logging.info("=" * 60)
@@ -2950,7 +3262,7 @@ DEBUG_ENV_KEYS = ['ABS_URL', 'LIBRARY_IDS', 'GOODREADS_ENABLED', 'BATCH_SIZE', '
                   'GR_BLOCK_COOLDOWN', 'GR_MAX_COOLDOWNS', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'FILL_COVERS', 'GENRE_LANGUAGE',
                   'SERIES_MERGE', 'SERIES_LOCK_AFTER_MERGE', 'AUTHOR_NORMALIZE', 'LIBRARY_REPORT', 'NO_RATINGS_RECHECK_DAYS',
                   'GR_MISSING_RECHECK_DAYS', 'SEARCH_PENALTY_SLEEP', 'ABS_TIMEOUT',
-                  'HARDCOVER_ENABLED', 'HARDCOVER_INTERVAL', 'HARDCOVER_PAID', 'GR_BOOK_PAGES', 'RATING_ORDER']  # never API_TOKEN
+                  'HARDCOVER_ENABLED', 'HARDCOVER_INTERVAL', 'HARDCOVER_PAID', 'GR_BOOK_PAGES', 'WORKERS', 'RATING_ORDER']  # never API_TOKEN
 
 def write_debug_bundle(log_file):
     """One file with everything needed for troubleshooting: settings (no token), the run log, all changes
@@ -3038,6 +3350,7 @@ def main():
     COVER_STATE.update(rw_json(COVER_STATE_FILE))
     ROLE_NAMES.update(rw_json(ROLE_NAMES_FILE) or [])
     HC_USAGE.update(rw_json(HC_USAGE_FILE) or {})
+    SOURCE_STATE.update(rw_json(SOURCE_STATE_FILE) or {})
     FILLED_NARR.update(rw_json(FILLED_NARR_FILE) or [])
     try:  # also every narrator fill already in the journal (runs before this file existed)
         with open(CHANGES_FILE, encoding='utf-8') as f_:

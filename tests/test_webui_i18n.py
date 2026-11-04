@@ -85,6 +85,20 @@ def test_language_saved_in_interface_section():
     assert core.load_settings()['UI_LANGUAGE'] == 'en'
 
 
+def test_scan_page_remembers_choices_without_changing_settings():
+    c = client()
+    before = {k: core.load_settings().get(k) for k in ('AUTHOR_NORMALIZE', 'SERIES_MERGE', 'BATCH_SIZE')}
+    r = c.post('/api/scan_form', data={'task_meta': 'on', 'task_series': 'on', 'BATCH_SIZE': '42', 'REFRESH_DAYS': '0',
+                                         'selection': 'list', 'list': 'Book A\nBook B', 'adv_open': '1'})  # dry + authors unticked
+    assert r.status_code == 200
+    h = c.get('/runs').get_data(as_text=True)  # e.g. after a visit to the settings
+    assert 'name="task_authors" >' in h and 'name="task_series" checked' in h, 'task choices kept'
+    assert 'name="dry" id="dry"  onchange' in h, 'test-run switch kept (off)'
+    assert 'name="BATCH_SIZE" value="42"' in h and 'Book A\nBook B</textarea>' in h and 'id="advopts" open' in h
+    assert 'value="list" checked' in h
+    assert {k: core.load_settings().get(k) for k in before} == before, 'saved settings untouched'
+
+
 if __name__ == '__main__':
     for n, f in sorted(globals().items()):
         if n.startswith('test_'): f(); print('ok', n)

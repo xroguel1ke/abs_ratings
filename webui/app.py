@@ -339,6 +339,7 @@ def runs():
             core.RUNNER.stop(); flash(T('The scan is being stopped.'), 'ok'); return redirect(url_for('runs'))
         rs, items = None, None
         if a == 'start':  # scan page: tasks as checkboxes (metadata & ratings / authors / series) + test-run switch
+            core.save_scan_form(request.form)  # remembered for the next visit (never changes the settings)
             meta, authors, series, roles, empty = (request.form.get(k) == 'on' for k in ('task_meta', 'task_authors', 'task_series', 'task_roles', 'task_empty'))
             if not (meta or authors or series or roles or empty): flash(T('Please choose at least one task.'), 'error'); return redirect(url_for('runs'))
             dry = request.form.get('dry') == 'on'
@@ -366,7 +367,16 @@ def runs():
         run_id, err = core.RUNNER.start(kind, dry_run=dry, label=label, only_items=items, run_settings=rs)
         if err: flash(T(err), 'error'); return redirect(url_for('runs'))
         return redirect(url_for('run_view', run_id=run_id))
-    return render_template('runs.html', runs=core.RUNNER.runs()[:100], s=core.load_settings())
+    s = core.load_settings()
+    return render_template('runs.html', runs=core.RUNNER.runs()[:100], s=s, f=core.scan_form(s))
+
+
+@app.route('/api/scan_form', methods=['POST'])
+@login_required
+def api_scan_form():
+    """Scan page: every change is saved at once, so leaving the page (e.g. to the settings) keeps the choices."""
+    core.save_scan_form(request.form)
+    return jsonify(ok=True)
 
 
 @app.route('/run/<run_id>')
