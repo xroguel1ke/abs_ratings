@@ -1,4 +1,4 @@
-// ABS Ratings web UI: theme toggle (auto / light / dark) and the onboarding tour. No external libraries.
+// ABS Ratings web UI: theme switch (light / dark) and the onboarding tour. No external libraries.
 (function () {
   var store = {
     get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -6,20 +6,22 @@
   };
 
   // ---- theme ----
-  var THEMES = ['auto', 'light', 'dark'], ICON = { auto: '◐', light: '☀', dark: '☾' }, LABEL = { auto: 'Design: automatisch', light: 'Design: hell', dark: 'Design: dunkel' };
+  // first visit: follow the system setting (not stored); the switch toggles light <-> dark and remembers the choice in this browser
+  var ICON = { light: '☾', dark: '☀' }, LABEL = { light: 'Zu dunkel wechseln', dark: 'Zu hell wechseln' };
+  function systemTheme() { try { return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch (e) { return 'light'; } }
   function applyTheme(t) {
-    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
-    else document.documentElement.removeAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', t);
     var b = document.getElementById('theme-toggle');
-    if (b) { b.textContent = ICON[t] || ICON.auto; b.title = LABEL[t] || LABEL.auto; }
+    if (b) { b.textContent = ICON[t]; b.title = LABEL[t]; b.setAttribute('aria-label', LABEL[t]); }
   }
-  var theme = store.get('abs_theme') || 'auto';
+  var saved = store.get('abs_theme');
+  var theme = (saved === 'light' || saved === 'dark') ? saved : systemTheme();  // an old 'auto' value counts as not set
   applyTheme(theme);
   document.addEventListener('DOMContentLoaded', function () {
     applyTheme(theme);
     var b = document.getElementById('theme-toggle');
     if (b) b.addEventListener('click', function () {
-      theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
+      theme = theme === 'dark' ? 'light' : 'dark';
       store.set('abs_theme', theme); applyTheme(theme);
     });
     if (document.querySelector('[data-tour]') && !store.get('abs_tour_done')) setTimeout(function () { Tour.start(); }, 400);
@@ -34,7 +36,7 @@
     { sel: '[data-tour=runs]', t: 'Läufe', p: 'Jeder Lauf mit Fortschritt und geplanten Änderungen. Starte neue Läufe immer zuerst als Testlauf: dann wird nichts geschrieben.' },
     { sel: '[data-tour=history]', t: 'Verlauf', p: 'Alles, was wirklich in ABS geschrieben wurde - pro Lauf, Buch und Feld. Jede Änderung lässt sich einzeln, pro Buch oder für den ganzen Lauf rückgängig machen.' },
     { sel: '[data-tour=settings]', t: 'Einstellungen', p: 'ABS-Verbindung, Zeitplan, Quellen und Benachrichtigungen. Hier startest du auch diese Tour neu.' },
-    { sel: '#theme-toggle', t: 'Design', p: 'Hell, dunkel oder automatisch nach System. Ein Klick wechselt.' }
+    { sel: '#theme-toggle', t: 'Design', p: 'Hell oder dunkel. Beim ersten Besuch gilt die Systemeinstellung, danach merkt sich der Browser deine Wahl.' }
   ];
   var i = 0, dim = null, box = null, hl = null;
   function clear() { if (hl) hl.classList.remove('tour-hl'); hl = null; }

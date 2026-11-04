@@ -102,3 +102,4 @@ button.danger-fill{background:var(--err);border-color:var(--err);color:#fff}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 tr.risky td{background:color-mix(in srgb,var(--warn) 9%,transparent)}
 .links{display:flex;gap:10px;flex-wrap:wrap;margin-top:3px}
+#theme-toggle{width:36px;height:36px;padding:0;display:inline-grid;place-items:center;font-size:16px;line-height:1;flex:none}

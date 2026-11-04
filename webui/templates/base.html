@@ -14,7 +14,7 @@
 <form action="{{ url_for('books') }}" method="get" style="margin:0 8px"><input type="search" name="q" placeholder="Buch suchen…" style="width:180px;padding:6px 12px;border-radius:99px"></form>
 </div>
 <span class="right">{% if running %}<a href="{{ url_for('run_view', run_id=current_run.id) }}"><span class="badge running">● läuft: {{ current_run.label }}</span></a>{% elif next_run %}nächster Lauf: {{ next_run|dt }}{% endif %}
-<button type="button" class="iconbtn" id="theme-toggle" title="Design">◐</button>
+<button type="button" class="iconbtn" id="theme-toggle" title="Hell / dunkel">☾</button>
 <a href="{{ url_for('password') }}">Passwort</a><a href="{{ url_for('logout') }}">Abmelden</a></span></div></header>{% endif %}
 <main>{% with msgs = get_flashed_messages(with_categories=true) %}{% for c, m in msgs %}<div class="flash {{ c }}">{{ m }}</div>{% endfor %}{% endwith %}
 {% block body %}{% endblock %}</main></body></html>
