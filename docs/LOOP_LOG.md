@@ -413,3 +413,7 @@ Fix 8: preferred_twin() - after an accepted hit, one targeted query (title+autho
 ## Chain 3: a33 CLEAN | h34 CLEAN | a35 179/180 (miss: "The Four Horsemen [Thalassa] 02 War") | h36 CLEAN. No wrong match.
 Fix 10: series prefix with a one-word rest of 3-4 letters when the prefix IS the ABS series. Test, regress green. Streaks reset by the fix: Audible 0 of 4, Hardcover 0 of 3.
 ## Chain 4 started: a37, h38, a39, h40
+
+## Chain 4: a37 CLEAN | h38 CLEAN* | a39 CLEAN | h40 CLEAN* (all 180/180). *Hardcover daily limit reached (23 left, reserve 25) -> h38/h40 ran Audible-only.
+Audible streak: a37, h38, a39, h40 = 4 clean batches in a row with fresh 100 EN + 80 DE and frozen code (h38/h40 counted as Audible batches since Hardcover was off) -> AUDIBLE STREAK REACHED (user informed; if only A-batches count: 2 of 4).
+Hardcover streak 0 of 3: next Hardcover batches after the daily limit resets. Meanwhile Phase C (Audible part): full-library dry run with current code, every risky change checked by hand.
