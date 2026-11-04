@@ -417,3 +417,12 @@ Fix 10: series prefix with a one-word rest of 3-4 letters when the prefix IS the
 ## Chain 4: a37 CLEAN | h38 CLEAN* | a39 CLEAN | h40 CLEAN* (all 180/180). *Hardcover daily limit reached (23 left, reserve 25) -> h38/h40 ran Audible-only.
 Audible streak: a37, h38, a39, h40 = 4 clean batches in a row with fresh 100 EN + 80 DE and frozen code (h38/h40 counted as Audible batches since Hardcover was off) -> AUDIBLE STREAK REACHED (user informed; if only A-batches count: 2 of 4).
 Hardcover streak 0 of 3: next Hardcover batches after the daily limit resets. Meanwhile Phase C (Audible part): full-library dry run with current code, every risky change checked by hand.
+
+## Phase C, Audible part: full-library dry run (1920 books, Audible live where not recorded)
+Found 6 deviations vs golden that the regress gate missed (it only covered rounds 1-8): fixed with 5 changes, all re-checked against the whole library:
+- twin rule: a twin needs AT LEAST as many ratings as the hit (UK listings with 94/22 ratings had replaced US ones with 8,275/979); preferred store from the PRODUCT language (German product -> .de)
+- the prepended exact-title query no longer ends the query loop alone (Renegades/Dragon's Kin)
+- ASINs owned by another library book are skipped INSIDE the search unless the owner has the same runtime (= duplicate recording, then refused as before: Throne)
+- series listing: relevance order instead of alphabetical before the request cap (14 -> 24); children cache per (store, series ASIN) - a series unknown on .de had hidden its children on .com. Both were REAL production risks (the series file grows with every product).
+- golden updated: Alice im Wunderland (.de listing), Shannara (.com listing, 9,900 ratings); synthetic expectations 29/30/32: listing with the most ratings (alt = old).
+Regress now covers the WHOLE library (wl00/wl01) + all synthetic batches: 100% green.

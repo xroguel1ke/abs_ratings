@@ -296,6 +296,7 @@ def is_boxset_title(t): return bool(t and BOXSET_RE.search(t))
 
 ASIN_OWNERS = {}  # asin -> set of item keys (ABS library + ASINs planned in this run); an ASIN is never given to a second book
 ISBN_OWNERS = {}  # isbn -> set of item keys (an ISBN is never given to a second book)
+KEY_DUR = {}  # item key -> ABS duration (s): tells a duplicate (owner = same recording) from an owner with a wrong ASIN
 
 def _seq_num(v):
     m = re.search(r"\d+(?:\.\d+)?", str(v or ""))
@@ -990,7 +991,7 @@ LAST_SEARCH = {'related': None}  # best same-title/same-author candidate of the 
 # ---------------- Audible series listing path (finds products the catalog search does not return) ----------------
 SERIES_ASIN_FILE = os.path.join(SCRIPT_DIR, 'audible_series.json')  # {series title: [series asin]}, filled from every product we load
 SERIES_ASINS = {}      # raw series title -> set(series asin)
-_SERIES_CHILDREN = {}  # series asin -> [child asin]
+_SERIES_CHILDREN = {}  # (api host, series asin) -> [child asin]  (per store: a series ASIN unknown on .de must not hide its children on .com)
 try:
     for _t, _a in (json.load(open(SERIES_ASIN_FILE, encoding='utf-8')) if os.path.exists(SERIES_ASIN_FILE) else {}).items():
         SERIES_ASINS[_t] = set(_a)
@@ -1030,27 +1031,29 @@ def series_candidates(abs_series, authors_list, duration, domain):
     listing does not. Children are prefiltered with ONE bulk request: runtime within 10 min and matching author."""
     from abs_series import series_key
     keys = [series_key(x.get('name') or '') for x in (abs_series or []) if x.get('name')]
-    wanted, ranked = set(), []
+    exact, ranked = [], []
     words = lambda s: {w for w in s.split() if len(w) >= 4}
     for title, asins in SERIES_ASINS.items():
         sk = series_key(title)
-        if any(k and (sk == k or sk.startswith(k + ' ')) for k in keys): wanted |= asins; continue
+        if any(k and (sk == k or sk.startswith(k + ' ')) for k in keys): exact.append((sk != (keys[0] if keys else ''), len(sk), sorted(asins))); continue
         # looser: ABS 'Dune Universe' vs Audible 'DUNE: Prelude to Dune' share a significant word (candidates are filtered hard afterwards)
         shared = max((len(words(sk) & words(k)) for k in keys if k), default=0)
         if shared: ranked.append((-shared, len(sk), sorted(asins)))
-    for _, _, asins in sorted(ranked)[:10]: wanted |= set(asins)
+    # most relevant first (exact name, then most shared words, then shorter name): the request cap below must never drop the right
+    # series just because its ASIN sorts late (the series file grows with every product loaded)
+    wanted = list(dict.fromkeys(a for _, _, asins in sorted(exact) + sorted(ranked)[:10] for a in asins))
     if not wanted or not duration: return []
     host, hdr = AUDIBLE_API_HOSTS[domain], {"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}
     children = []
-    for sa in sorted(wanted)[:14]:
-        if sa not in _SERIES_CHILDREN:
+    for sa in wanted[:24]:  # one request per series ASIN, cached for the whole run
+        if (host, sa) not in _SERIES_CHILDREN:
             throttle('audible_api')
             try:
                 r = requests.get(f"https://{host}/1.0/catalog/products/{sa}", params={"response_groups": "relationships"}, headers=hdr, timeout=15)
-                rel = (r.json().get('product') or {}).get('relationships') or [] if r.status_code == 200 else []
+                rel = ((r.json().get('product') or {}).get('relationships') or []) if r.status_code == 200 else []
             except (requests.RequestException, ValueError): rel = []
-            _SERIES_CHILDREN[sa] = [x['asin'] for x in rel if x.get('relationship_to_product') == 'child' and x.get('asin')]
-        children += [c for c in _SERIES_CHILDREN[sa] if c not in children]
+            _SERIES_CHILDREN[(host, sa)] = [x['asin'] for x in rel if x.get('relationship_to_product') == 'child' and x.get('asin')]
+        children += [c for c in _SERIES_CHILDREN[(host, sa)] if c not in children]
     out = []
     for i in range(0, len(children), 50):
         throttle('audible_api')
@@ -1072,12 +1075,15 @@ SEARCH_CTX = {}  # {'old_title','old_authors'}: what the current ASIN in ABS poi
 
 def preferred_twin(lang, key):
     """After an accepted search hit: the SAME recording as another listing that fits better - in the preferred store of the
-    book language (English -> .com) when the hit came from another store, or with ABS's publisher+year when the hit lacks them.
+    PRODUCT language (English -> .com, German -> .de) when the hit came from another store, or with ABS's publisher+year when
+    the hit lacks them. The ratings are the point of the tool: a twin is only taken with AT LEAST as many ratings as the hit
+    (a UK publisher listing with 94 ratings never replaces the US one with 8,275).
     Twin = same narrators, matching authors, runtime within 2 min of the hit, title score >= 0.85 vs the hit, not owned by
     another book. One targeted query (title + author + narrator of the hit). Returns (asin, why) or None."""
     m = LAST_MATCH
     if not (m.get('asin') and m.get('confirmed') and m.get('narrators') and m.get('authors') and m.get('runtime')): return None
-    pref = PREFERRED_STORE.get(map_language(lang)) if lang else None
+    plang = map_language(m.get('lang')) if m.get('lang') else (map_language(lang) if lang else None)
+    pref = PREFERRED_STORE.get(plang) if plang else None
     other_store = bool(pref and m.get('domain') != pref)
     want_pub = bool(not m.get('pub_year') and SEARCH_CTX.get('pub') and SEARCH_CTX.get('year'))
     if not (other_store or want_pub): return None
@@ -1102,7 +1108,9 @@ def preferred_twin(lang, key):
         yr = str(parse_release_year((p.get('meta_raw') or {}).get('releaseDate')) or '')
         pub_ok = bool(SEARCH_CTX.get('pub') and re.sub(r'[^a-z0-9]', '', pub.lower()) == re.sub(r'[^a-z0-9]', '', str(SEARCH_CTX['pub']).lower()) and yr == str(SEARCH_CTX.get('year')))
         if want_pub and not pub_ok and not other_store: continue  # same store: only a publisher+year match is a better listing
-        if best is None or pub_ok > best[2]: best = (c, p.get('title_raw'), pub_ok)
+        cnt = int(p.get('count') or 0)
+        if cnt < m.get('count', 0): continue  # fewer ratings than the hit: never a better listing
+        if best is None or (cnt, pub_ok) > (best[3], best[2]): best = (c, p.get('title_raw'), pub_ok, cnt)
     if not best: return None
     return best[0], f"same recording as {m['asin']} ({m.get('domain')}): {'preferred store ' + domain if other_store else ''}{' + ' if other_store and best[2] else ''}{'ABS publisher+year' if best[2] else ''}"
 REVIEW_FILE = os.path.join(SCRIPT_DIR, 'review_queue.json')
@@ -1192,7 +1200,8 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
     prim_auth = authors_list[0] if authors_list else ""
     short = re.split(r'\s*[:(]\s*|\s+-\s+', title)[0].strip()  # 'Dragon's Kin: Dragonriders of Pern, Book 16' -> 'Dragon's Kin'
     queries = [{"keywords": f"{title} {prim_auth}".strip()}]
-    if extract_volume(title): queries.insert(0, {"title": title})  # numbered title: the exact-title query first (keyword queries return the OTHER volumes and the loop stops after 4 candidates)
+    title_first = bool(extract_volume(title))
+    if title_first: queries.insert(0, {"title": title})  # numbered title: the exact-title query first (keyword queries return the OTHER volumes and the loop stops after 4 candidates)
     if prim_auth: queries.append({"title": title, "author": prim_auth})
     if short and short != title and len(short) >= 4:
         queries.append({"title": short, "author": prim_auth} if prim_auth else {"keywords": short})
@@ -1201,7 +1210,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
     if narrators and narrators[0]: queries.append({"keywords": f"{title} {prim_auth} {narrators[0]}".strip()})  # generic titles ('The Prince'): the narrator surfaces the right recording
     nq = {"author": prim_auth, "narrator": narrators[0], "num_results": 20} if (narrators and narrators[0] and prim_auth) else None  # last resort only (see end of function)
     nq2 = {"keywords": title, "narrator": narrators[0], "num_results": 20} if (narrators and narrators[0]) else None
-    if only_queries: queries = list(only_queries)
+    if only_queries: queries, title_first = list(only_queries), False
     LAST_SEARCH['related'] = None
     if not only_queries: LAST_SEARCH['weak'] = None
     api_ok = False
@@ -1213,7 +1222,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
     if only_extra: domains = domains[:1]
     for domain in domains:
         host, candidates = AUDIBLE_API_HOSTS[domain], list(extra_candidates or [])
-        for q in queries:
+        for qi, q in enumerate(queries):
             throttle('audible_api')
             try:
                 r = requests.get(f"https://{host}/1.0/catalog/products", params={"num_results": 5, **q, "response_groups": "product_attrs"},
@@ -1227,12 +1236,17 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                     if prod.get('asin') and prod['asin'] not in candidates: candidates.append(prod['asin'])
             except (requests.RequestException, ValueError) as e:
                 logging.warning(f"        🌐 Audible API search failed ({host}): {type(e).__name__}")
-            if len(candidates) >= 4: break
+            if len(candidates) >= 4 and not (title_first and qi == 0): break  # the prepended exact-title query never ends the loop alone (it returns other volumes for 'Renegades of Pern: ..., Book 10')
         if not candidates and not only_extra: logging.info(f"        ↪️ No search results on {domain} ({len(queries)} queries)")
         # series-listing candidates are all checked (closest runtime first); the hits of the search queries are appended AFTER them and get
         # their own room (otherwise a long series listing cuts them off: the .de hit of a German volume was never looked at)
         for cand in candidates[:len(extra_candidates or []) + max(6, 12 if only_queries else 0)]:
             p = get_audible_api(cand, domain)
+            owners_ = (ASIN_OWNERS.get(cand, set()) - {SEARCH_CTX['key']}) if SEARCH_CTX.get('key') else set()
+            if owners_ and isinstance(p, dict) and p.get('runtime_sec') and not any(KEY_DUR.get(o) and abs(KEY_DUR[o] - p['runtime_sec']) <= 120 for o in owners_):
+                # another library book owns it but does NOT match its runtime (that owner's ASIN is probably wrong): keep searching.
+                # An owner WITH the same runtime = duplicate recording in the library: the candidate goes on and the caller refuses it (review list).
+                logging.info(f"        ↪️ Skipped [{cand}] (ASIN belongs to another library book whose runtime differs)"); continue
             if not isinstance(p, dict): continue
             cand_lang = map_language((p.get('meta_raw') or {}).get('language'))
             if required_lang and cand_lang and cand_lang != required_lang:
@@ -1334,7 +1348,8 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 confirmed = auth_ok and t_score >= 0.85 and ((dur_ok and extra >= 1) or (dur_near_n and not dur_ok and extra + ser_loose >= 2) or extra >= 2)
                 ev_txt = ", ".join(evidence)
                 LAST_MATCH.clear(); LAST_MATCH.update({'asin': cand, 'confirmed': confirmed, 'evidence': evidence, 'title': found_title, 'domain': domain,
-                                   'runtime': p.get('runtime_sec'), 'narrators': p.get('narrators_raw') or [], 'authors': p.get('authors_raw') or [], 'pub_year': pub_year})
+                                   'runtime': p.get('runtime_sec'), 'narrators': p.get('narrators_raw') or [], 'authors': p.get('authors_raw') or [], 'pub_year': pub_year,
+                                   'count': int(p.get('count') or 0), 'lang': (p.get('meta_raw') or {}).get('language')})
                 msg = (f"        ✅ API match on {domain}: '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, "
                        f"runtime {'✓' if dur_ok else '≈ (same narrator, inside tolerance)'}) evidence: {ev_txt}")
                 if strict and not dur_ok and dur_near_n:  # keep looking: a candidate with exact runtime beats an approximate one
@@ -2067,6 +2082,7 @@ def run_libraries(history, failed, recheck):
                 for it in abs_session.get(f"{ABS_URL}/api/libraries/{lib_id}/items").json()['results']:
                     a = ((it.get('media') or {}).get('metadata') or {}).get('asin')
                     if a: ASIN_OWNERS.setdefault(a, set()).add(f"{lib_id}_{it['id']}")
+                    KEY_DUR[f"{lib_id}_{it['id']}"] = (it.get('media') or {}).get('duration')
                     i_ = normalize_isbn(((it.get('media') or {}).get('metadata') or {}).get('isbn'))
                     if i_: ISBN_OWNERS.setdefault(i_, set()).add(f"{lib_id}_{it['id']}")
             except Exception as e: logging.warning(f"Could not load ASIN owners for {lib_id}: {e}")
@@ -2103,6 +2119,7 @@ def build_queue(lib_id, history, recheck):
     for it in items:  # remember who owns which ASIN (duplicate-ASIN guard)
         a = ((it.get('media') or {}).get('metadata') or {}).get('asin')
         if a: ASIN_OWNERS.setdefault(a, set()).add(f"{lib_id}_{it['id']}")
+        KEY_DUR[f"{lib_id}_{it['id']}"] = (it.get('media') or {}).get('duration')
         i_ = normalize_isbn(((it.get('media') or {}).get('metadata') or {}).get('isbn'))
         if i_: ISBN_OWNERS.setdefault(i_, set()).add(f"{lib_id}_{it['id']}")
 
@@ -2339,6 +2356,7 @@ def process_queue(work_queue, history, failed, recheck):
                     search_narr = [] if plaus == "wrong" else (meta.get("narrators") or [])
                     SEARCH_CTX['dup_claim'] = bool(asin and (ASIN_OWNERS.get(asin, set()) - {key}))  # another ABS book has the same ASIN
                     SEARCH_CTX['pub'], SEARCH_CTX['year'] = meta.get('publisher'), meta.get('publishedYear')
+                    SEARCH_CTX['key'] = key
                     if asin and aud_data and aud_data.get('title_raw'):
                         SEARCH_CTX.update({'old_title': aud_data['title_raw'], 'old_authors': ', '.join(aud_data.get('authors_raw') or [])})
                     if not found: found = find_missing_asin(search_title, authors, abs_dur, lang, raw_title=title,

@@ -12,7 +12,7 @@ echo "== 2 unit tests"; py tests/test_authors.py | tail -1 || fail=1; py tests/t
 echo "== 3 library-wide series/author decisions"; py tools/lib_check.py || fail=1
 echo "== 4 golden rounds"
 i=0
-for k in tests/private/round*_keys.txt; do
+for k in tests/private/round*_keys.txt tests/private/wl0*_keys.txt; do
   i=$((i+1)); r=reg_$(basename $k _keys.txt)
   rm -rf /mnt/user/appdata/abs_scripts_test/$r
   ( RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com REUSE=1 FAKE_PORT=$((18950+i)) tools/run_round.sh $r $k record > /tmp/claude-0/regress_$r.out 2>&1 ) &
@@ -25,7 +25,7 @@ for sf in tests/synthetic/batch_*.json; do
   ( RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com SYNTH=$n HARDCOVER_OFF=1 REUSE=1 FAKE_PORT=$((18950+i)) tools/run_round.sh $r tests/private/none_keys.txt record > /tmp/claude-0/regress_$r.out 2>&1 ) &
 done
 wait
-for k in tests/private/round*_keys.txt; do
+for k in tests/private/round*_keys.txt tests/private/wl0*_keys.txt; do
   r=reg_$(basename $k _keys.txt); echo "-- $r"; grep -cE "Traceback|ERROR" /tmp/claude-0/regress_$r.out | sed 's/^/errors: /'
   tools/check_round.sh $r $k || fail=1
 done
