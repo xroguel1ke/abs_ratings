@@ -67,9 +67,11 @@ def main():
         if not a.apply: continue
         try:
             if e['field'] == 'cover' and e.get('old') and os.path.isfile(str(e['old'])):  # replaced cover: upload the backup again
-                with open(e['old'], 'rb') as fh:
-                    r = requests.post(f"{url}/api/items/{e['item']}/cover", headers={"Authorization": f"Bearer {token}"},
-                                      files={'cover': (os.path.basename(e['old']), fh, 'image/jpeg')}, timeout=60)
+                data = open(e['old'], 'rb').read()
+                ext = 'png' if data[:8] == b'\x89PNG\r\n\x1a\n' else 'webp' if data[:4] == b'RIFF' and data[8:12] == b'WEBP' else 'jpg'
+                # ABS accepts only png/jpg/jpeg/webp file names (older backups were saved as .img)
+                r = requests.post(f"{url}/api/items/{e['item']}/cover", headers={"Authorization": f"Bearer {token}"},
+                                  files={'cover': (f"cover.{ext}", data, 'image/png' if ext == 'png' else f'image/{ext}' if ext == 'webp' else 'image/jpeg')}, timeout=60)
             elif e['field'] == 'cover' and e.get('old'):
                 print("     ❌ backup of the old cover is missing - skipped"); fail += 1; continue
             elif e['field'] == 'cover':

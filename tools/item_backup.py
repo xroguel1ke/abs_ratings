@@ -52,7 +52,8 @@ elif mode in ('diff', 'restore'):
                 r = S.patch(f'{URL}/api/items/{iid}/media', json={'metadata': diff, 'tags': old_tags}, timeout=30)
                 print('   metadata/tags restored' if r.status_code == 200 else f'   ❌ HTTP {r.status_code}: {r.text[:150]}')
             if cover_changed:
-                with open(f'{out}/{iid}.cover', 'rb') as fh:
-                    r = S.post(f'{URL}/api/items/{iid}/cover', files={'cover': ('cover.jpg', fh, 'image/jpeg')}, timeout=60)
+                data = open(f'{out}/{iid}.cover', 'rb').read()
+                ext = 'png' if data[:8] == b'\x89PNG\r\n\x1a\n' else 'webp' if data[:4] == b'RIFF' and data[8:12] == b'WEBP' else 'jpg'
+                r = S.post(f'{URL}/api/items/{iid}/cover', files={'cover': (f'cover.{ext}', data, f'image/{"jpeg" if ext == "jpg" else ext}')}, timeout=60)
                 print('   cover restored' if r.status_code == 200 else f'   ❌ cover HTTP {r.status_code}: {r.text[:150]}')
     if mode == 'restore' and not apply: print('(nothing written - add --apply)')

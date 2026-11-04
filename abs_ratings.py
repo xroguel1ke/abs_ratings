@@ -86,6 +86,8 @@ FILL_COVERS = os.getenv('FILL_COVERS', 'true').lower() == 'true'      # Set Audi
 UPDATE_COVERS = os.getenv('UPDATE_COVERS', 'true').lower() == 'true'  # Replace an existing cover by the Audible cover when the book is VERIFIED (same recording); old cover backed up for undo
 COVER_STATE_FILE = os.path.join(SCRIPT_DIR, "cover_state.json")  # item id -> ASIN whose Audible cover was set (no re-upload every run)
 COVER_STATE = {}
+FILLED_NARR_FILE = os.path.join(SCRIPT_DIR, "filled_narrators.json")  # item keys whose narrators WE copied from Audible (no self-confirmation)
+FILLED_NARR = set()
 GENRE_LANGUAGE = os.getenv('GENRE_LANGUAGE', 'en').lower()            # 'en' = translate audible.de genres, 'keep' = as delivered
 SERIES_MERGE = os.getenv('SERIES_MERGE', 'true').lower() == 'true'    # ABS-only series merge task at the end
 LIBRARY_REPORT = os.getenv('LIBRARY_REPORT', 'true').lower() == 'true'
@@ -401,6 +403,13 @@ def abs_update(iid, key, title, updates, old_meta, source, tags=None, old_tags=N
     if tags is not None: journal_change(iid, key, title, 'tags', old_tags, tags, source, extra)
     return True
 
+def image_ext(data):
+    """File extension from the image bytes (magic numbers)."""
+    if data[:3] == b'\xff\xd8\xff': return 'jpg'
+    if data[:8] == b'\x89PNG\r\n\x1a\n': return 'png'
+    if data[:4] == b'RIFF' and data[8:12] == b'WEBP': return 'webp'
+    return 'jpg'
+
 def abs_set_cover(iid, key, title, url, source, replace=False):
     """Set a cover from URL. replace=True: ABS already has a cover -> it is backed up first (cover_backup/<item>_<run>.img) and the
     journal's 'old' holds the backup path, so undo uploads it again. Without a backup nothing is replaced. Undo of a new cover removes it."""
@@ -411,7 +420,8 @@ def abs_set_cover(iid, key, title, url, source, replace=False):
                 rb = abs_session.get(f"{ABS_URL}/api/items/{iid}/cover", params={'raw': 1}, timeout=60)
                 if rb.status_code != 200 or not rb.content: raise OSError(f"HTTP {rb.status_code}")
                 os.makedirs(os.path.join(SCRIPT_DIR, 'cover_backup'), exist_ok=True)
-                old = os.path.join(SCRIPT_DIR, 'cover_backup', f"{iid}_{RUN_ID}.img")
+                ext = image_ext(rb.content)  # ABS accepts only png, jpg, jpeg, webp file names on upload (undo)
+                old = os.path.join(SCRIPT_DIR, 'cover_backup', f"{iid}_{RUN_ID}.{ext}")
                 with open(old, 'wb') as f: f.write(rb.content)
             except Exception as e:
                 logging.warning(f"        ⚠️ Old cover of '{title}' could not be backed up ({e}): cover NOT replaced")
@@ -2598,6 +2608,7 @@ def process_queue(work_queue, history, failed, recheck):
                         if 'lock_narrators' in tags: logging.info(f"        🔒 Narrators Update Skipped (Locked): {aud_narr}")
                         else:
                             abs_updates['narrators'] = aud_narr
+                            FILLED_NARR.add(key)  # copied from Audible: never evidence for Audible later (cover check)
                             log_updates.append(f"Narrators: -> {aud_narr}")
                     if not aud_data.get('related_edition'): note_author_links(authors, aud_data)
                     aud_auth = aud_data.get('authors_raw') or []
@@ -2629,7 +2640,7 @@ def process_queue(work_queue, history, failed, recheck):
                     # or an ASIN confirmed by this run's search + runtime ±2 min). cover_state.json avoids re-uploading the same cover every run.
                     has_cover = bool((item_data.get('media') or {}).get('coverPath'))
                     rt_exact = bool(abs_dur and aud_data.get('runtime_sec') and abs(abs_dur - aud_data['runtime_sec']) <= 120)
-                    cover_verified = same_recording(abs_dur, meta.get('narrators'), aud_data) or (asin_from_search and rt_exact)
+                    cover_verified = (same_recording(abs_dur, meta.get('narrators'), aud_data) and key not in FILLED_NARR) or (asin_from_search and rt_exact)
                     if aud_data.get('cover_url') and not lang_conflict and cover_verified and ((FILL_COVERS and not has_cover) or  # user rule: covers only for a VERIFIED ASIN
                                                                                                (UPDATE_COVERS and has_cover and COVER_STATE.get(iid) != asin)):
                         if 'lock_cover' in tags: logging.info("        🔒 Cover Update Skipped (Locked)")
@@ -2850,13 +2861,15 @@ def log_run_summary(start_time, series_result):
     logging.debug(f"Raw stats: {stats}")
 
 def create_abs_backup():
-    """Ask ABS to create a backup before a real run (ABS: Settings -> Backups). Failure is logged, the run continues."""
+    """Ask ABS to create a backup before a real run (ABS: Settings -> Backups). Returns True on success. A failed backup STOPS the
+    real run (it was requested, so nothing is written without it); set ABS_BACKUP=false to run consciously without one."""
     try:
         r = abs_session.post(f"{ABS_URL}/api/backups", timeout=600)
-        if r.status_code == 200: logging.info("💾 ABS backup created before this run.")
-        else: logging.warning(f"💾 ABS backup failed (HTTP {r.status_code}): {r.text[:150]}")
+        if r.status_code == 200: logging.info("💾 ABS backup created before this run."); return True
+        logging.error(f"💾 ABS backup failed (HTTP {r.status_code}): {r.text[:150]}")
     except requests.RequestException as e:
-        logging.warning(f"💾 ABS backup failed: {e}")
+        logging.error(f"💾 ABS backup failed: {e}")
+    return False
 
 def fail_early(log_file, start_time, msg):
     """Log a fatal start-up error and hand it to the Unraid notification."""
@@ -2956,8 +2969,14 @@ def main():
         logging.info(f"Series aliases: {sum(len(v) for v in SERIES_ALIASES.values())} | Known series: {sum(len(v) for v in SERIES_INDEX.values())}")
     RESULTS.update(rw_json(RESULTS_FILE)); OVERRIDES.update(rw_json(OVERRIDES_FILE))
     COVER_STATE.update(rw_json(COVER_STATE_FILE))
+    FILLED_NARR.update(rw_json(FILLED_NARR_FILE) or [])
+    try:  # also every narrator fill already in the journal (runs before this file existed)
+        with open(CHANGES_FILE, encoding='utf-8') as f_:
+            FILLED_NARR.update(json.loads(l)['key'] for l in f_ if '"field": "narrators"' in l and json.loads(l).get('source') == 'audible_meta')
+    except (OSError, ValueError, KeyError): pass
     logging.getLogger().addHandler(ITEM_LOG)
-    if ABS_BACKUP and not DRY_RUN: create_abs_backup()
+    if ABS_BACKUP and not DRY_RUN and not create_abs_backup():
+        return fail_early(log_file, start_time, "ABS backup failed - nothing was written. Check ABS: Settings -> Backups (backup path, disk space) or set ABS_BACKUP=false to run without a backup.")
     if not SERIES_ONLY:
         run_libraries(history, failed, recheck)
         group_confirm()
@@ -2966,6 +2985,7 @@ def main():
         if AUTHOR_NOTES: rw_json(os.path.join(REPORT_DIR, "author_variants.json"), AUTHOR_NOTES)
         rw_json(RESULTS_FILE, RESULTS)  # also in DRY_RUN: it is the web UI's view of the last check
         if not DRY_RUN: rw_json(COVER_STATE_FILE, COVER_STATE)
+        if not DRY_RUN: rw_json(FILLED_NARR_FILE, sorted(FILLED_NARR))
 
     series_result = {}
     if (SERIES_MERGE or LIBRARY_REPORT) and not ONLY_ITEMS:

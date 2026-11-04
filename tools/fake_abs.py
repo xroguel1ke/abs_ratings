@@ -44,6 +44,8 @@ def patch_media(iid):
 @app.post('/api/items/<iid>/cover')
 def cover(iid):
     f = request.files.get('cover')  # undo uploads the backed-up file (multipart)
+    if f and not f.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):  # like the real ABS
+        return ('Invalid image type (Supported: png,jpg,jpeg,webp)', 400)
     log_write('cover', iid, request.get_json(force=True, silent=True) or ({'file': f.filename, 'bytes': len(f.read())} if f else None))
     return jsonify(success=True)
 
