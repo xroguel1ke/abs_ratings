@@ -50,7 +50,12 @@
 <p class="muted small">Hier landen Treffer, bei denen die Belege für eine automatische Änderung nicht reichen (neue ASIN, Titelvorschlag, ISBN). Nichts wird ohne dich geschrieben. „Verwerfen“ lässt das Buch unverändert und der Vorschlag kommt nicht wieder.</p>
 <div class="card tablewrap"><table><tr><th>Art</th><th>Buch</th><th>Vorschlag</th><th>Grund / Belege</th><th></th></tr>
 {% for x in queue %}<tr><td>{{ {'asin': 'ASIN', 'isbn': 'ISBN', 'title': 'Titel'}.get(x.kind, x.kind) }}</td>
-<td><a href="{{ url_for('problem', key=x.key) }}">{{ x.title }}</a></td><td><code>{{ x.candidate }}</code></td>
+{% set r = x.res %}{% set store = r.domain or 'www.audible.com' %}
+<td><a href="{{ url_for('problem', key=x.key) }}">{{ x.title }}</a>
+ <div class="links small">{% if r.asin %}<a href="https://{{ store }}/pd/{{ r.asin }}" target="_blank" title="aktuelle ASIN in ABS">Audible (aktuell) ↗</a>{% endif %}
+ {% if r.goodreads %}<a href="{{ r.goodreads }}" target="_blank">Goodreads ↗</a>{% endif %}{% if r.hardcover %}<a href="{{ r.hardcover }}" target="_blank">Hardcover ↗</a>{% endif %}
+ {% if abs_base and r.id %}<a href="{{ abs_base }}/item/{{ r.id }}" target="_blank">ABS ↗</a>{% endif %}</div></td>
+<td><code>{{ x.candidate }}</code>{% if x.kind == 'asin' and x.candidate %}<div class="links small"><a href="https://{{ store }}/pd/{{ x.candidate }}" target="_blank">Vorschlag auf Audible ↗</a>{% if '.de' not in store %}<a href="https://www.audible.de/pd/{{ x.candidate }}" target="_blank">.de ↗</a>{% endif %}</div>{% endif %}</td>
 <td class="small">{{ x.reason }}{% if x.evidence %}<div class="muted">{{ x.evidence | join(', ') }}</div>{% endif %}</td>
 <td class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('queue_action', qid=x.id, action='accept') }}"><button class="primary">Übernehmen</button></form>
 <form method="post" action="{{ url_for('queue_action', qid=x.id, action='reject') }}"><button>Verwerfen</button></form></td></tr>

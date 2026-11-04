@@ -101,3 +101,4 @@ header{position:sticky}.nav{position:relative}
 button.danger-fill{background:var(--err);border-color:var(--err);color:#fff}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 tr.risky td{background:color-mix(in srgb,var(--warn) 9%,transparent)}
+.links{display:flex;gap:10px;flex-wrap:wrap;margin-top:3px}

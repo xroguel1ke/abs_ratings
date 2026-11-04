@@ -97,6 +97,8 @@ def dashboard():
     merged.sort(key=lambda m: m.get('last_seen', ''), reverse=True)
     rv = core.review()
     queue = core.open_queue()
+    res_all = core.results()
+    for x in queue: x['res'] = res_all.get(x['key']) or {}  # links to Audible / Goodreads / Hardcover / ABS for comparing
     runs = core.RUNNER.runs()
     last = next((r for r in runs if r['kind'] in ('full', 'series') and r['status'] != 'running'), None)
     gr_note = ''
