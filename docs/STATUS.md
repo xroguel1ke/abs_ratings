@@ -20,6 +20,9 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [U] Synthetic series/author merge batches (real Audible series, not in the library): must-merge, must-not-merge, uncertain cases; 3 clean batches in a row | ⏳ | started 2026-11-04 |
 | [U] Unsure series/author merges on the ONE review list; review list with a left menu (books, series merge, author merge, other) | ❌ | after the synthetic merge tests |
 | [new] "Other" review cases: book in a series of another author (e.g. Bury Our Bones in "The Age of Madness") | ❌ | |
+| [U] Remove empty authors (0 books) in ABS - only empty author objects, re-checked right before deleting, never books; web UI checkbox "remove empty authors" | ⏳ | building now |
+| [U] Illustrators / role credits (" - illustrator", translator, ...): never taken from Audible as authors; removed in ABS when another real author remains; web UI checkbox "remove illustrators" | ⏳ | building now (library + Audible analysed first) |
+| [U] Series merge blocked by lock_series -> on the review list (user decides) | ⏳ | |
 | [A] Negative cache for not-on-Audible books (re-check after ~90 days) | ⚠️ check | failed_history parks books after N attempts until REFRESH_DAYS – verify it matches the task |
 | [U] Group confirmation (same-title books of one series) | ✅ | Realms of War = Spider Queen 1-6 |
 | [U] Covers: Audible cover for verified ASINs, also replacing, backup + undo | ✅ | real ABS undo tested (byte-identical) |
