@@ -1620,9 +1620,15 @@ def hc_audible_crosscheck(hc, aud):
     contained = bool(hw and aw and (hw <= aw or aw <= hw) and min(len(hw), len(aw)) >= 2)  # 'Ascendant Insanity' in 'An Outcast in Another World: Ascendant Insanity'
     non_english = str((aud.get('meta_raw') or {}).get('language') or 'english').lower() not in ('english', 'en', 'eng')
     tied = hc.get('source') in ('ISBN', 'ASIN', 'manual link') and non_english  # identifier + non-English edition: a different title is a translation ('Shadow\'s Edge' = 'Am Rande der Schatten')
+    same_series = False
+    for sn, sp in hc.get('series') or []:  # same series name AND same number on Hardcover and Audible ('Home Sweet Home' = 'Jake\'s Magical Market 3')
+        for cs in (aud.get('meta_raw') or {}).get('series') or []:
+            m_ = re.search(r'\d+(?:\.\d+)?', str(cs.get('part') or ''))
+            if sn and sp is not None and m_ and float(m_.group(0)) == float(sp) and title_similarity(sn, cs.get('name') or '') >= 0.85: same_series = True
+    if same_series: why += ', same series and number'
     if tied: why += ', tied by ' + hc['source']
     elif contained and t < 0.7: why += ', title words contained'
-    return (a is not False and (t >= 0.7 or contained or tied)), why
+    return (a is not False and (t >= 0.7 or contained or tied or same_series)), why
 
 def hc_goodreads_ids(book):
     """Goodreads book IDs Hardcover knows for this book (one per edition; the rating belongs to the work, any edition page shows it)."""
@@ -1631,7 +1637,9 @@ def hc_goodreads_ids(book):
 def hc_result(book, source):
     return {'gr_ids': hc_goodreads_ids(book), 'id': book.get('id'), 'slug': book.get('slug'), 'url': f"https://hardcover.app/books/{book.get('slug')}",
             'val': book.get('rating'), 'count': int(book.get('ratings_count') or 0), 'source': source, 'title': book.get('title'),
-            'authors': [a for a in hc_authors(book) if a]}
+            'authors': [a for a in hc_authors(book) if a],
+            'series': [(re.sub(r'\s*\([^)]*\)\s*$', '', ((book.get('featured_series') or book.get('cached_featured_series') or {}).get('series') or {}).get('name') or ''),
+                        (book.get('featured_series') or book.get('cached_featured_series') or {}).get('position'))]}
 
 def hc_authors(book):
     return [((c or {}).get('author') or {}).get('name') for c in (book.get('contributions') or [])] or book.get('author_names') or []

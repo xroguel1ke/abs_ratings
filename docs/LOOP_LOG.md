@@ -331,3 +331,7 @@ Hardcover found 91 (95 after the fixes), every hit cross-checked against Audible
 ISBN repair: 23 planned, 16 only "any other edition" incl. foreign-language ISBNs (a Polish ISBN for House of Sky and Breath) -> "other edition" now requires the SAME language (21 fixes remain: 6 audio edition with matching length, 1 edition with our ASIN, 14 same-language edition; 18 left for the review list).
 Hardcover not found 5 (box set/collection, translator-as-author fixed, others).
 ## Hardcover batch H2 started
+
+## Hardcover batch H2 (100 other verified library books, Hardcover ON, 2:40 min, 0 errors) – NOT clean (1 refinement), Hardcover streak 0
+Found 96/100; first run the cross-check dropped 2 harmless cases ("Home Sweet Home" = Jake's Magical Market 3, "Stone Will" = Dragon Heart 1: Hardcover lists the book under its subtitle, Audible under the series name). Refinement: same series name AND same number on Hardcover and Audible counts as confirmation (test: other number = other book). Then 96 ok, 0 dropped. ASIN results with Hardcover ON equal the golden list 100/100 (H1 and H2).
+## Hardcover batch H3 started

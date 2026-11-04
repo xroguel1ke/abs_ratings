@@ -86,6 +86,12 @@ def test_series_prefix_with_colon_and_number_in_title_head():
     assert A.search_match_score("A Beauty Queen's Gangster 2: A Gripping LitRPG Adventure", "A Beauty Queen's Gangster 2", None) >= 0.85
 
 
+def test_crosscheck_same_series_and_number():
+    aud = {'title_raw': "Jake's Magical Market 3", 'authors_raw': ['J R'], 'meta_raw': {'language': 'english', 'series': [{'name': "Jake's Magical Market", 'part': '3'}]}}
+    assert A.hc_audible_crosscheck({'title': 'Home Sweet Home', 'authors': ['J R'], 'source': 'search', 'series': [("Jake's Magical Market", 3.0)]}, aud)[0]
+    assert not A.hc_audible_crosscheck({'title': 'Home Sweet Home', 'authors': ['J R'], 'source': 'search', 'series': [("Jake's Magical Market", 2.0)]}, aud)[0], 'other number = other book'
+
+
 def test_isbn_checks():
     assert A.isbn_bad_reason('B0D2LJ6SJ2') == 'value is an ASIN, not an ISBN'
     assert A.isbn_bad_reason('9780553580334') is None            # real ISBN-13 (House Corrino)
