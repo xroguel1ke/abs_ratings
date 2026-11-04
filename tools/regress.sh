@@ -15,14 +15,14 @@ i=0
 for k in tests/private/round*_keys.txt tests/private/wl0*_keys.txt; do
   i=$((i+1)); r=reg_$(basename $k _keys.txt)
   rm -rf /mnt/user/appdata/abs_scripts_test/$r
-  ( RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com REUSE=1 FAKE_PORT=$((18950+i)) tools/run_round.sh $r $k record > /tmp/claude-0/regress_$r.out 2>&1 ) &
+  ( RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com REUSE=1 FAKE_PORT=$((19100+i)) tools/run_round.sh $r $k record > /tmp/claude-0/regress_$r.out 2>&1 ) &
 done
 # synthetic batches (books NOT in the library, EN + DE): replayed from recordings, expected ASIN known
 for sf in tests/synthetic/batch_*.json; do
   n=$(basename $sf .json | sed 's/batch_//'); i=$((i+1)); r=reg_syn_$n
   jq '{books: (.expected|map_values(del(.case)))}' $sf > /tmp/claude-0/syn_golden_$n.json; jq -r '.expected|keys[]' $sf > /tmp/claude-0/syn_keys_$n.txt
   rm -rf /mnt/user/appdata/abs_scripts_test/$r
-  ( RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com SYNTH=$n HARDCOVER_OFF=1 REUSE=1 FAKE_PORT=$((18950+i)) tools/run_round.sh $r tests/private/none_keys.txt record > /tmp/claude-0/regress_$r.out 2>&1 ) &
+  ( RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com SYNTH=$n HARDCOVER_OFF=1 REUSE=1 FAKE_PORT=$((19100+i)) tools/run_round.sh $r tests/private/none_keys.txt record > /tmp/claude-0/regress_$r.out 2>&1 ) &
 done
 wait
 for k in tests/private/round*_keys.txt tests/private/wl0*_keys.txt; do

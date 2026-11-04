@@ -728,6 +728,21 @@ def web_domains(language):
     """The web scraper fallback only knows audible.com and audible.de."""
     return ["www.audible.de", "www.audible.com"] if map_language(language) == 'German' else ["www.audible.com", "www.audible.de"]
 
+_AUD_ISBN = {}
+def audible_isbn(asin, domain):
+    """ISBN of THIS audio edition (Audible response group product_details) - own small request, only for books whose ISBN is empty or
+    wrong (the main product request stays unchanged). Cached per run. Returns the cleaned string or None."""
+    if not asin or not domain or domain not in AUDIBLE_API_HOSTS: return None
+    if (domain, asin) not in _AUD_ISBN:
+        throttle('audible_api')
+        try:
+            r = requests.get(f"https://{AUDIBLE_API_HOSTS[domain]}/1.0/catalog/products/{asin}", params={"response_groups": "product_details"},
+                             headers={"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}, timeout=15)
+            v = ((r.json().get('product') or {}).get('isbn') if r.status_code == 200 else None)
+        except (requests.RequestException, ValueError): v = None
+        _AUD_ISBN[(domain, asin)] = re.sub(r'[^0-9Xx]', '', str(v)).upper() if v else None
+    return _AUD_ISBN[(domain, asin)]
+
 def get_audible_api(asin, domain):
     """Query the Audible catalog API for one marketplace.
     Returns a result dict in the same shape as the web scraper, 'missing' if the product
@@ -2274,6 +2289,7 @@ def process_queue(work_queue, history, failed, recheck):
                     logging.info(f"      -> 🧹 Title '{search_title}' is the author's name; searching with the series name '{meta['series'][0].get('name')}' instead")
                     search_title = meta['series'][0].get('name') or search_title
                 asin_from_search = False
+                aud_isbn_set = False  # ISBN filled from Audible in this item (then Goodreads does not add another one)
                 skip_meta = False
                 abs_dur = (item_data.get('media') or {}).get('duration') or (item.get('media') or {}).get('duration')
 
@@ -2490,6 +2506,14 @@ def process_queue(work_queue, history, failed, recheck):
                     else:
                         new_year = parse_release_year(md_raw.get('releaseDate'))
                         if new_year and not meta.get('publishedYear'): logging.info(f"        🔒 Year Update Skipped (Locked): '{new_year}'")
+
+                    # ISBN: only when empty, from the Audible product itself (ISBN of THIS audio edition), valid checksum, never one another book owns
+                    a_isbn = normalize_isbn(audible_isbn(aud_data.get('asin') or asin, aud_data.get('domain'))) if (not meta.get('isbn') and abs_dur and aud_data.get('runtime_sec') and abs(abs_dur - aud_data['runtime_sec']) <= 120) else None  # same recording only
+                    if a_isbn and not meta.get('isbn') and isbn_checksum_ok(a_isbn) and a_isbn != str(aud_data.get('asin') or asin or '').upper() and not (ISBN_OWNERS.get(a_isbn, set()) - {key}):
+                        if 'lock_isbn' in tags: logging.info(f"        🔒 ISBN Update Skipped (Locked): '{a_isbn}'")
+                        else:
+                            abs_updates['isbn'] = a_isbn; aud_isbn_set = True; ISBN_OWNERS.setdefault(a_isbn, set()).add(key)
+                            log_updates.append(f"ISBN: '' -> '{a_isbn}' (audio edition)")
                     
                     if not new_lang_detected and meta.get('language'):
                         norm = map_language(meta['language'])  # e.g. 'eng' -> 'English'
@@ -2644,7 +2668,17 @@ def process_queue(work_queue, history, failed, recheck):
                 if bad_isbn:
                     verified = bool(hc_data and hc_data.get('id') and hc_data.get('source') in ('ASIN', 'search', 'cache', 'manual link') and asin and aud_data and not skip_meta)
                     fix = None
+                    # 1st choice: the ISBN of the verified Audible audio edition itself (same recording: runtime +-2 min + narrator, or search-confirmed ASIN)
+                    aud_fix = normalize_isbn(audible_isbn(aud_data.get('asin') or asin, aud_data.get('domain'))) if (asin and aud_data and not skip_meta and 'lock_isbn' not in tags) else None
+                    aud_ok = bool(aud_fix and isbn_checksum_ok(aud_fix) and aud_fix != str(asin or '').upper() and aud_fix != normalize_isbn(meta.get('isbn')) and abs_dur and aud_data.get('runtime_sec')
+                                  and abs(abs_dur - aud_data['runtime_sec']) <= 120 and (same_recording(abs_dur, meta.get('narrators'), aud_data) or asin_from_search)
+                                  and not (ISBN_OWNERS.get(aud_fix, set()) - {key}))
                     if 'lock_isbn' in tags: logging.info(f"        🔒 ISBN '{meta.get('isbn')}' looks wrong ({bad_isbn}) but is locked")
+                    elif aud_ok:
+                        fix = (aud_fix, 'audio edition ISBN of the verified Audible product'); ISBN_OWNERS.setdefault(aud_fix, set()).add(key)
+                        if abs_update(iid, key, title, {'isbn': aud_fix}, meta, 'isbn_fix_audible'):
+                            logging.info(f"        🔧 ISBN '{meta.get('isbn')}' is wrong ({bad_isbn}): replaced by {aud_fix} ({fix[1]}){' (DRY_RUN, not saved)' if DRY_RUN else ''}")
+                            stats['isbn_repaired'] += 1
                     elif verified:
                         try: fix = hc_replacement_isbn(hc_data, asin, abs_dur, map_language(meta.get('language')) if meta.get('language') else 'English')
                         except SourceBlockedException: fix = None
@@ -2665,7 +2699,7 @@ def process_queue(work_queue, history, failed, recheck):
                                                         force=bool(item.get('_manual_trigger') or ONLY_ITEMS))
                 if gr_data and gr_data.get('url') and not DRY_RUN: GR_CACHE[key] = gr_data['url']
                 
-                if gr_data and not meta.get('isbn'):
+                if gr_data and not meta.get('isbn') and not aud_isbn_set:
                     # Only fill an empty ISBN, and only with a real ISBN (never an ASIN). Goodreads has the print
                     # edition's ISBN, so an existing ISBN is never overwritten.
                     new_id = normalize_isbn(gr_data.get('isbn'))

@@ -191,7 +191,7 @@ def collect_records(ctx):
             records.append({
                 'id': d['id'], 'lib': lib, 'title': md.get('title') or '?',
                 'authors': [a.get('name') if isinstance(a, dict) else a for a in (md.get('authors') or []) if a],
-                'narrators': md.get('narrators') or [], 'asin': md.get('asin'), 'isbn': md.get('isbn'),
+                'narrators': md.get('narrators') or [], 'asin': md.get('asin'), 'isbn': md.get('isbn'), 'publisher': md.get('publisher'), 'year': md.get('publishedYear'), 'subtitle': md.get('subtitle'),
                 'series': [{'name': s.get('name'), 'sequence': s.get('sequence')} for s in (md.get('series') or []) if s.get('name')],
                 'media_tags': list(media.get('tags') or []), 'tags': expand_locks({t.strip() for t in raw_tags if isinstance(t, str)}),
                 'description': md.get('description') or '', 'language': md.get('language'), 'genres': md.get('genres') or [],
@@ -487,6 +487,8 @@ def build_report(ctx, records, merges, rejected, extra):
             'description': missing(lambda r: not re.sub(r'<[^>]+>|\s', '', no_desc_re.sub('', r['description']))),
             'narrators': missing(lambda r: not r['narrators']), 'language': missing(lambda r: not r['language']),
             'genres': missing(lambda r: not r['genres']), 'authors': missing(lambda r: not r['authors']),
+            'publisher': missing(lambda r: not r.get('publisher')), 'year': missing(lambda r: not r.get('year')), 'isbn': missing(lambda r: not r.get('isbn')),
+            'series': missing(lambda r: not r.get('series')),
         },
     })
     os.makedirs(ctx['report_dir'], exist_ok=True)
