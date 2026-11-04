@@ -209,6 +209,7 @@ def parse_env_summary():
     return out
 
 
+RUN_OVERRIDABLE = {'BATCH_SIZE', 'REFRESH_DAYS', 'HARDCOVER_ENABLED', 'GOODREADS_ENABLED', 'SERIES_MERGE', 'AUTHOR_NORMALIZE', 'UPDATE_COVERS'}  # start dialog
 KIND_LABELS = {'full': 'Lauf', 'series': 'Nur Reihen & Report', 'item': 'Einzelbuch', 'undo': 'Rückgängig', 'apply': 'Testlauf übernehmen'}
 
 
@@ -231,17 +232,19 @@ class RunManager:
             runs.insert(0, run)
             _save_json(RUNS_FILE, runs[:300])
 
-    def start(self, kind='full', dry_run=None, only_items=None, trigger='manual', label=None, undo_args=None):
+    def start(self, kind='full', dry_run=None, only_items=None, trigger='manual', label=None, undo_args=None, run_settings=None):
+        """run_settings: values for THIS run only (start dialog), applied on top of the saved settings, never saved."""
         with self.lock:
             if self.running(): return None, 'Es läuft bereits ein Lauf.'
             s = load_settings()
+            if run_settings: s = {**s, **{k: v for k, v in run_settings.items() if k in RUN_OVERRIDABLE}}
             if not s.get('ABS_URL') or not s.get('API_TOKEN'): return None, 'ABS-URL und Token fehlen (Einstellungen).'
             run_id = datetime.now().strftime('%Y%m%d-%H%M%S')
             dry = s['DRY_RUN'] if dry_run is None else dry_run
             if kind == 'apply': dry = False
             extra = {'RUN_ID': run_id, 'DRY_RUN': 'true' if dry else 'false'}
             if kind == 'series': extra['SERIES_ONLY'] = 'true'
-            if kind == 'item': extra['ONLY_ITEMS'] = ','.join(only_items or [])
+            if kind == 'item' or (kind == 'full' and only_items): extra['ONLY_ITEMS'] = ','.join(only_items or [])
             env = script_env(s, extra)
             os.makedirs(LOG_DIR, exist_ok=True)
             if kind == 'undo':
@@ -258,7 +261,7 @@ class RunManager:
             self.proc = subprocess.Popen(cmd, cwd=APP_DIR, env=env, stdout=out, stderr=subprocess.STDOUT,
                                          start_new_session=True)
             run = {'id': run_id, 'kind': kind, 'label': label or KIND_LABELS.get(kind, kind), 'dry_run': dry,
-                   'trigger': trigger, 'items': only_items or [], 'start': datetime.now().isoformat(timespec='seconds'),
+                   'trigger': trigger, 'items': (only_items or [])[:50], 'n_items': len(only_items or []), 'run_settings': run_settings or {}, 'start': datetime.now().isoformat(timespec='seconds'),
                    'end': None, 'status': 'running', 'log': os.path.basename(log_path),
                    'console': f"console_{run_id}.log", 'summary': ''}
             self.current = run
@@ -592,3 +595,39 @@ def parse_fix_input(text):
         m = re.search(r'hardcover\.app/books/([\w-]+)', t)
         if m: return {'hardcover': f"https://hardcover.app/books/{m.group(1)}"}
     return {'error': 'Nicht erkannt. Erwartet: ASIN, Audible-, Goodreads- oder Hardcover-Link.'}
+
+
+PROBLEM_STATUSES = ('not_found', 'other_edition', 'no_ratings_yet', 'error')
+
+
+def select_items(s, mode, text='', limit=300):
+    """Book keys for the start dialog: 'problems' (last result not ok), 'new' (never checked), 'list' (keys, item ids or titles,
+    one per line). Returns (keys, note). 'all' = None (the script picks the due books itself)."""
+    res = results()
+    if mode == 'problems':
+        keys = [k for k, r in res.items() if r.get('status') in PROBLEM_STATUSES]
+        return keys[:limit], f"{len(keys)} Problem-Bücher" + (f", die ersten {limit}" if len(keys) > limit else '')
+    libs = [l for l in (s.get('LIBRARY_IDS') or '').replace(';', ',').split(',') if l.strip()]
+    if mode == 'new':
+        keys = []
+        for lib in libs:
+            try:
+                for it in abs_get(s, f'/api/libraries/{lib.strip()}/items', timeout=60).json().get('results') or []:
+                    k = f"{lib.strip()}_{it['id']}"
+                    if k not in res: keys.append(k)
+            except (requests.RequestException, ValueError): pass
+        return keys[:limit], f"{len(keys)} noch nie geprüfte Bücher" + (f", die ersten {limit}" if len(keys) > limit else '')
+    if mode == 'list':
+        by_title = {}
+        for k, r in res.items(): by_title.setdefault((r.get('title') or '').strip().lower(), []).append(k)
+        keys, unknown = [], []
+        for line in (text or '').splitlines():
+            t = line.strip()
+            if not t: continue
+            if '_' in t and t.split('_', 1)[0] in libs: keys.append(t)
+            elif re.fullmatch(r'[0-9a-f-]{36}', t) and libs: keys.append(f"{libs[0].strip()}_{t}")
+            elif t.lower() in by_title: keys += by_title[t.lower()]
+            else: unknown.append(t)
+        keys = list(dict.fromkeys(keys))
+        return keys[:limit], f"{len(keys)} Bücher aus der Liste" + (f"; nicht gefunden: {', '.join(unknown[:5])}" if unknown else '')
+    return None, 'alle fälligen Bücher'

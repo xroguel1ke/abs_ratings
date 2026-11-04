@@ -53,7 +53,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 ## Web UI (task: 10 points, Playwright vs fake ABS, screenshots in docs/screenshots/)
 | # | Item | State | Note |
 |---|---|---|---|
-| 1 | Start dialog with per-run settings (books, refresh days, sources, selection all / problems / new / list) | ❌ | |
+| 1 | Start dialog with per-run settings (books, refresh days, sources, selection all / problems / new / list) | ✅ | runs page "Optionen nur für diesen Lauf"; saved settings untouched (tested) |
 | 3 | Live progress (bar, ETA, book, counters) | ✅ | |
 | 4 | Apply dry run: grouped by kind, filterable, checkboxes, no new Audible requests | ✅ | review page: groups, filter, checkboxes, check/apply selection; e2e tested (untick a group -> exactly those skipped) |
 | 5 | Mark suspicious changes (title, ASIN change, language, new series, other edition) on top | ✅ | ⚠️ section on top of the review page (language code -> name is not risky) |

@@ -5,6 +5,26 @@
  <button name="action" value="run" {{ 'disabled' if running }} data-confirm="Echter Lauf: Änderungen werden in ABS geschrieben. Fortfahren?" data-confirm-ok="Echten Lauf starten">▶ Echter Lauf</button>
  <button name="action" value="series" {{ 'disabled' if running }}>Nur Reihen & Report</button>
  {% if running %}<button class="danger" name="action" value="stop">■ Abbrechen</button>{% endif %}
+</form>
+<details class="adv" style="margin-top:10px"><summary><b>Optionen nur für diesen Lauf</b> <span class="muted small">– ändert keine gespeicherten Einstellungen</span></summary>
+<form method="post" style="margin-top:10px"><input type="hidden" name="custom" value="1">
+ <label class="f"><span>Bücher pro Lauf</span><input type="number" min="1" name="BATCH_SIZE" value="{{ s.BATCH_SIZE }}" style="max-width:140px"></label>
+ <label class="f"><span>Auffrischen nach (Tage)</span><input type="number" min="0" name="REFRESH_DAYS" value="{{ s.REFRESH_DAYS }}" style="max-width:140px"><span class="h">0 = alle Bücher sind fällig</span></label>
+ <div class="f" style="padding:9px 0;border-bottom:1px dashed var(--line)"><b>Quellen und Aufgaben</b><div class="row" style="margin-top:6px">
+  <label class="badge"><input type="checkbox" name="HARDCOVER_ENABLED" {{ 'checked' if s.HARDCOVER_ENABLED }}> Hardcover</label>
+  <label class="badge"><input type="checkbox" name="GOODREADS_ENABLED" {{ 'checked' if s.GOODREADS_ENABLED }}> Goodreads (experimentell)</label>
+  <label class="badge"><input type="checkbox" name="SERIES_MERGE" {{ 'checked' if s.SERIES_MERGE }}> Reihen zusammenführen</label></div>
+  <div class="muted small">Reihen werden nur bei „alle fälligen Bücher“ zusammengeführt (braucht die ganze Bibliothek).</div></div>
+ <div class="f" style="padding:9px 0"><b>Welche Bücher</b><div class="row" style="margin-top:6px">
+  <label class="badge"><input type="radio" name="selection" value="all" checked onchange="lst()"> alle fälligen</label>
+  <label class="badge"><input type="radio" name="selection" value="problems" onchange="lst()"> nur Probleme</label>
+  <label class="badge"><input type="radio" name="selection" value="new" onchange="lst()"> nur neue (nie geprüft)</label>
+  <label class="badge"><input type="radio" name="selection" value="list" onchange="lst()"> eigene Liste</label></div>
+  <textarea name="list" id="booklist" rows="4" placeholder="Ein Buch pro Zeile: Titel (wie in der Bücherliste), ABS-Item-ID oder Schlüssel" style="display:none;margin-top:8px"></textarea></div>
+ <div class="row" style="margin-top:8px"><button class="primary" name="action" value="dry" {{ 'disabled' if running }}>▶ Testlauf mit diesen Optionen</button>
+  <button name="action" value="run" {{ 'disabled' if running }} data-confirm="Echter Lauf mit diesen Optionen: Änderungen werden in ABS geschrieben. Fortfahren?" data-confirm-ok="Echten Lauf starten">▶ Echter Lauf mit diesen Optionen</button></div>
+</form></details>
+<script>function lst(){ document.getElementById('booklist').style.display = document.querySelector('input[name=selection]:checked').value==='list' ? '' : 'none'; }</script>
 </form><p class="muted small">Geplante Läufe nutzen die Einstellung „Testlauf“ aus den Einstellungen. Nächster geplanter Lauf: {{ next_run|dt if next_run else 'kein Zeitplan' }}.</p></div>
 <div class="card tablewrap"><table><tr><th>Start</th><th>Art</th><th>Status</th><th>Ergebnis</th><th></th></tr>
 {% for r in runs %}<tr><td>{{ r.start|dt }}<div class="muted small">{{ 'geplant' if r.trigger=='schedule' else 'manuell' }}</div></td>

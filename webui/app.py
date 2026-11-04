@@ -285,10 +285,23 @@ def runs():
         kind = {'run': 'full', 'dry': 'full', 'series': 'series'}.get(a)
         if not kind: abort(400)
         dry = True if a == 'dry' else (False if a == 'run' else None)
-        run_id, err = core.RUNNER.start(kind, dry_run=dry, label={'run': 'Lauf (echt)', 'dry': 'Testlauf', 'series': 'Nur Reihen & Report'}[a])
+        label = {'run': 'Lauf (echt)', 'dry': 'Testlauf', 'series': 'Nur Reihen & Report'}[a]
+        rs, items = None, None
+        if request.form.get('custom') == '1' and kind == 'full':  # start dialog: settings for THIS run only
+            s = core.load_settings()
+            def num(k):
+                try: return max(0, int(request.form.get(k, s.get(k))))
+                except (TypeError, ValueError): return s.get(k)
+            rs = {'BATCH_SIZE': num('BATCH_SIZE'), 'REFRESH_DAYS': num('REFRESH_DAYS')}
+            for k in ('HARDCOVER_ENABLED', 'GOODREADS_ENABLED', 'SERIES_MERGE'): rs[k] = request.form.get(k) == 'on'
+            mode = request.form.get('selection', 'all')
+            items, note = core.select_items(s, mode, request.form.get('list', ''), limit=min(rs['BATCH_SIZE'] or 300, 1500))
+            if mode != 'all' and not items: flash(f'Keine Bücher für diese Auswahl ({note}).', 'error'); return redirect(url_for('runs'))
+            label += f" – {note}"
+        run_id, err = core.RUNNER.start(kind, dry_run=dry, label=label, only_items=items, run_settings=rs)
         if err: flash(err, 'error'); return redirect(url_for('runs'))
         return redirect(url_for('run_view', run_id=run_id))
-    return render_template('runs.html', runs=core.RUNNER.runs()[:100])
+    return render_template('runs.html', runs=core.RUNNER.runs()[:100], s=core.load_settings())
 
 
 @app.route('/run/<run_id>')
