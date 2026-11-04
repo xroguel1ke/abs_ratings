@@ -64,6 +64,8 @@ def test_messy_number_prefix_single_word():
 
 def test_messy_series_prefix_single_word():
     assert (A.parse_messy_title('Prince of the Doomed City 01 Entranced') or {}).get('title') == 'Entranced'
+    assert (A.parse_messy_title('Heist 01 Heist', ['Heist']) or {}).get('title') == 'Heist' and A.parse_messy_title('Heist 01 Heist') is None and (A.parse_messy_title('Planetside 03 Colonyside', ['Planetside']) or {}).get('title') == 'Colonyside'
+    assert A.search_match_score('Fate Hollow Academy: Term 1: A Gripping LitRPG Adventure', 'Fate Hollow Academy: Term 1', None) >= 0.85 and A.search_match_score('Fate Hollow Academy: Term 1: A Gripping LitRPG Adventure', 'Fate Hollow Academy: Term 2', None) < 0.85
     assert (A.parse_messy_title('Robots 00.1 I, Robot') or {}).get('title') == 'I, Robot' and A.parse_messy_title('Robots 00.1 I, Robot')['sequence'] == '0.1' and A.parse_messy_title('Robots 5 Foo Bar') is None
     assert (A.parse_messy_title('Shadow Country Trilogy 01-3 Shadow Country') or {}).get('title') == 'Shadow Country' and A.parse_messy_title('Shadow Country Trilogy 01-3 Shadow Country')['sequence'] is None  # range = omnibus
     assert A.parse_messy_title('Catch 22 Heller') is None and A.parse_messy_title('The Book of the New Sun 05 The Urth of the New Sun')

@@ -400,3 +400,8 @@ Cover audit (partial, read-only, 288 verified books compared by image hash befor
 ## H10 (h24, seed 24, 100 EN + 80 DE, Hardcover ON): CLEAN 180/180, HC hits 107, drops 0 -> Hardcover streak 1 of 3. Audible streak 1 of 4 (A23).
 Loop mode from now (user, token saving): chains of 4 batches (A/H alternating), compact evaluation tools/eval_batch.sh, short log entries.
 ## Chain 1 started: a25 (Audible), h26 (HC), a27 (Audible), h28 (HC)
+
+## Chain 1: a25 CLEAN 180/180 | h26 179/180 (Heist 01 Heist) | a27 179/180 (Fate Hollow Academy: Term 1: A Gripping LitRPG Adventure) | h28 179/180 (Planetside 03 Colonyside). No wrong match. Streaks -> Audible 0 of 4, Hardcover 0 of 3.
+Fix 6: one-word series prefix counts when it equals the ABS series name. Fix 7: marketing tail after the LAST colon; volume number may sit before the last colon. Tests added, regress green (batches 26-28 now 180/180 offline).
+bookbot (github.com/itsbryanman/bookbot) reviewed: weighted fuzzy score with auto-accept >= 0.75, runtime only as bonus/penalty, no hard rejects -> looser than ours. Only candidate idea: ambiguous top-2 flag. Not adopted: our gate needs author + title + runtime/narrator/number evidence at once, and 0 wrong matches in ~1870 library + >3500 synthetic books show no such case.
+## Chain 2 started: a29, h30, a31, h32

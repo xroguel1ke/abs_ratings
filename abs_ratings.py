@@ -548,7 +548,7 @@ RE_SERIES_PREFIX = re.compile(r'^\s*(.{4,}?)\s+(0\d{1,2}(?:-\d{1,2}|\.\d{1,2})?)
 
 RE_LEADING_NUM = re.compile(r'^\s*(0\d{1,2})\s*[-.:]?\s+(.{3,})$')  # '01 Nightside the Long Sun' (zero-padded only)
 
-def parse_messy_title(t):
+def parse_messy_title(t, abs_series_names=None):
     """Detect broken (file name style) titles.
     'Series 05 Title' -> title='Title', series='Series', sequence='5'
     'X: X: Subtitle'  -> title='X', subtitle='Subtitle'
@@ -560,7 +560,7 @@ def parse_messy_title(t):
         series, seq, rest = m.group(1).strip(' -:,'), m.group(2), m.group(3).strip()
         if re.search(r'(?i)\b(vol\.?|volume|book|band|teil|part|no\.?)$', series): return None  # 'X Vol. 4 Y' is a normal title
         # Guard against normal titles with numbers ("Catch 22 ..."): the series part needs at least 2 words
-        if (len(series.split()) >= 2 or re.fullmatch(r"0\d\.\d{1,2}", seq)) and (len(rest.split()) >= 2 or (len(rest) >= 5 and re.fullmatch(r"0\d", seq))):  # 'Prince of the Doomed City 01 Entranced'
+        if (len(series.split()) >= 2 or re.fullmatch(r"0\d\.\d{1,2}", seq) or normalize_title_text(series) in {normalize_title_text(n) for n in abs_series_names or [] if n}) and (len(rest.split()) >= 2 or (len(rest) >= 5 and re.fullmatch(r"0\d", seq))):  # 'Prince of the Doomed City 01 Entranced'
             return {'title': rest, 'series': series, 'sequence': None if '-' in seq else str(float(seq)).rstrip('0').rstrip('.'), 'kind': 'series_prefix'}  # '01-3' = a range (omnibus): no single volume number
     if m := RE_LEADING_NUM.match(t):
         rest_ = m.group(2).strip()
@@ -977,9 +977,10 @@ def search_match_score(abs_title, found_title, found_sub):
     if len(na.split()) >= 3 and nf.endswith(" " + na): score = max(score, 0.85)  # 'Vainqueur the Dragon II: The Year of the Rogues'
     for sep in (':', ' - '):  # 'Robot Swarms: A Gripping LitRPG Adventure' vs 'Robot Swarms': the tail is marketing (needs a marketing word, so 'Dune: Messiah' never equals 'Dune')
         if sep in (abs_title or ''):
-            head, tail = abs_title.split(sep, 1)
-            if normalize_title_text(head) == nf and set(normalize_title_text(tail).split()) & MARKETING_WORDS: score = max(score, 0.9)
-    if extract_volume(found_title) and not (extract_volume(abs_title) | extract_volume(re.split(r'\s*[:\u2013-]\s+', abs_title or '')[0])):  # the number may sit in the title head ('Gangster 2: A Gripping LitRPG Adventure')
+            for head, tail in {tuple(abs_title.split(sep, 1)), tuple(abs_title.rsplit(sep, 1))}:  # first AND last separator ('Fate Hollow Academy: Term 1: A Gripping LitRPG Adventure')
+                if normalize_title_text(head) == nf and set(normalize_title_text(tail).split()) & MARKETING_WORDS: score = max(score, 0.9)
+    head_last = (abs_title or '').rsplit(':', 1)[0] if ':' in (abs_title or '') else ''  # everything before the LAST colon ('Fate Hollow Academy: Term 1')
+    if extract_volume(found_title) and not (extract_volume(abs_title) | extract_volume(re.split(r'\s*[:\u2013-]\s+', abs_title or '')[0]) | extract_volume(head_last)):  # the number may sit in the title head ('Gangster 2: A Gripping LitRPG Adventure')
         score = min(score, 0.75)  # 'Hell Mode' vs 'Hell Mode, Volume 3': could be any volume
     return score
 
@@ -2186,7 +2187,7 @@ def process_queue(work_queue, history, failed, recheck):
 
                 logging.info(f"({idx+1}/{total}) [ETA: {eta_str}] {title} [ASIN: {asin}]{reason_str} (Try {failed.get(key,0)+1}/{MAX_FAIL_ATTEMPTS})")
                 stats['processed'] += 1
-                messy = parse_messy_title(title)
+                messy = parse_messy_title(title, [s_.get('name') for s_ in (meta.get('series') or [])])  # a one-word series prefix counts when it IS the ABS series ('Heist 01 Heist')
                 search_title = messy['title'] if messy else title
                 if messy: logging.info(f"      -> 🧹 Messy title detected ({messy['kind']}), searching as '{search_title}'")
                 if not messy and authors and meta.get('series') and normalize_title_text(search_title) in {normalize_title_text(a_) for a_ in authors}:
