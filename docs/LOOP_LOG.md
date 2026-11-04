@@ -392,3 +392,7 @@ Fix 5 (user idea): group confirmation. 6 library books titled "Realms of War" = 
 Covers (user decision): Audible cover only for a VERIFIED ASIN (same recording: runtime ±2 min + narrator, or search-confirmed ASIN + runtime ±2 min) – then also REPLACING an existing ABS cover (UPDATE_COVERS=true), old cover backed up to cover_backup/ (no backup -> no replacement), cover_state.json avoids re-uploads, lock_cover respected; empty covers are no longer filled from an unverified ASIN. Undo uploads the backup. Golden rounds: 84-88 of 100 books would get the Audible cover once. Regress green. New tools/write_undo_test.sh: real write + undo against the fake ABS (recordings only): 20 changes written (3 covers replaced, 3 backups), 20 undone, 0 failed, covers restored from the backup files.
 Cover audit (partial, read-only, 288 verified books compared by image hash before the user chose "always update when verified"): 193 near-identical (distance <= 10 of 256), 47 clearly different (> 60) = ~16 % wrong/other covers in ABS. Audit stopped (no longer needed).
 ## Batch A23 started (SYNTH=23, 100 EN + 80 DE, Audible-only, code frozen after fixes 1-5 + covers): Audible streak 0 of 4
+
+## Batch A23 (100 EN + 80 DE synthetic, Audible-only, frozen code, 0 errors) – CLEAN -> Audible streak 1 of 4 (A23)
+180/180 at the first run. Covers: 164 planned (all books without cover and a verified ASIN).
+## Hardcover batch H10 started (SYNTH=24, 100 EN + 80 DE, Hardcover ON): Hardcover streak 0 of 3
