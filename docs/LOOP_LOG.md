@@ -409,3 +409,7 @@ bookbot (github.com/itsbryanman/bookbot) reviewed: weighted fuzzy score with aut
 ## Chain 2: a29 179 | h30 179 | a31 CLEAN 180 | h32 178. No wrong book: 3x a worse listing of the SAME recording (The Heist, The Wild Robot Protects, The Thief), 1 miss ("06 Rick").
 Fix 8: preferred_twin() - after an accepted hit, one targeted query (title+author+narrator of the hit) for the same recording (narrators equal, runtime +-2 min, title >= 0.85) in the preferred store (hit from another store) or with ABS publisher+year (hit without them). Fix 9: "0N" file-name prefix with a one-word rest of >= 3 letters. Live re-runs a29b/h30b 180/180, h32b 180/180 after fix 9 (regress offline); regress green. Streaks: Audible 0 of 4, Hardcover 0 of 3.
 ## Chain 3 started: a33, h34, a35, h36
+
+## Chain 3: a33 CLEAN | h34 CLEAN | a35 179/180 (miss: "The Four Horsemen [Thalassa] 02 War") | h36 CLEAN. No wrong match.
+Fix 10: series prefix with a one-word rest of 3-4 letters when the prefix IS the ABS series. Test, regress green. Streaks reset by the fix: Audible 0 of 4, Hardcover 0 of 3.
+## Chain 4 started: a37, h38, a39, h40

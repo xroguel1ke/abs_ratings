@@ -560,7 +560,8 @@ def parse_messy_title(t, abs_series_names=None):
         series, seq, rest = m.group(1).strip(' -:,'), m.group(2), m.group(3).strip()
         if re.search(r'(?i)\b(vol\.?|volume|book|band|teil|part|no\.?)$', series): return None  # 'X Vol. 4 Y' is a normal title
         # Guard against normal titles with numbers ("Catch 22 ..."): the series part needs at least 2 words
-        if (len(series.split()) >= 2 or re.fullmatch(r"0\d\.\d{1,2}", seq) or normalize_title_text(series) in {normalize_title_text(n) for n in abs_series_names or [] if n}) and (len(rest.split()) >= 2 or (len(rest) >= 5 and re.fullmatch(r"0\d", seq))):  # 'Prince of the Doomed City 01 Entranced'
+        is_abs_series = normalize_title_text(series) in {normalize_title_text(n) for n in abs_series_names or [] if n}  # the prefix IS the ABS series
+        if (len(series.split()) >= 2 or re.fullmatch(r"0\d\.\d{1,2}", seq) or is_abs_series) and (len(rest.split()) >= 2 or (re.fullmatch(r"0\d", seq) and (len(rest) >= 5 or (is_abs_series and len(rest) >= 3)))):  # 'The Four Horsemen [Thalassa] 02 War'  # 'Prince of the Doomed City 01 Entranced'
             return {'title': rest, 'series': series, 'sequence': None if '-' in seq else str(float(seq)).rstrip('0').rstrip('.'), 'kind': 'series_prefix'}  # '01-3' = a range (omnibus): no single volume number
     if m := RE_LEADING_NUM.match(t):
         rest_ = m.group(2).strip()
