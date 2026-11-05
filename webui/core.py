@@ -497,9 +497,12 @@ def coverage():
     total = rep.get('books')
     if isinstance(total, (list, dict)): total = len(total)
     total = int(total or 0); rows = []
+    by_title = {}
+    for k_, r_ in results().items(): by_title.setdefault((r_.get('title') or '').strip(), k_)
+    linked = lambda titles: [(t, by_title.get((t or '').strip())) for t in sorted(titles)]  # (title, book key) - the status page links them
     for k, titles in (rep.get('missing') or {}).items():
         have = max(total - len(titles), 0)
-        rows.append((FIELD_LABELS.get(k, k), have, total, round(100 * have / total, 1) if total else 0, sorted(titles)[:40]))
+        rows.append((FIELD_LABELS.get(k, k), have, total, round(100 * have / total, 1) if total else 0, linked(titles)[:300]))
     # every metadata field the tool works on; a field the last report does not know yet is shown as 'after the next scan'
     have_keys = set((rep.get('missing') or {}).keys())
     for k in ('asin', 'title', 'subtitle', 'authors', 'narrators', 'series', 'genres', 'publisher', 'year', 'isbn', 'language', 'description', 'cover'):
@@ -509,8 +512,8 @@ def coverage():
     if n:
         for label, pred in (('Audible ratings', lambda r: r.get('status') == 'ok'), ('Goodreads ratings', lambda r: bool(r.get('goodreads'))),
                             ('Hardcover', lambda r: bool(r.get('hardcover')))):
-            miss = [r.get('title') or '?' for r in res.values() if not pred(r)]
-            rows.append((label, n - len(miss), n, round(100 * (n - len(miss)) / n, 1), sorted(miss)[:40]))
+            miss = sorted(((r.get('title') or '?'), k_) for k_, r in res.items() if not pred(r))
+            rows.append((label, n - len(miss), n, round(100 * (n - len(miss)) / n, 1), miss[:300]))
     rows.sort(key=lambda r: (r[3] is None, r[3] or 0))
     _coverage_trend(rows, rep.get('generated', '') or datetime.now().strftime('%Y-%m-%d'))
     return rows, rep.get('generated', '')

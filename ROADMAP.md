@@ -54,7 +54,7 @@ Status: ✅ done (branch `claude/web-ui`) · 🔜 next · ⏳ later
 
 ## 13. Report & history
 - ✅ Library report opens from the dashboard
-- 🔜 Report inside the UI with links to ABS items and "process again" buttons
+- ✅ Report inside the UI: status page gaps link to the books (ABS link + test/real there) with a "check these books again" button
 - ✅ Change history per book / per run with undo per change, book or whole run; removed parts red, added parts green
 
 ## 14. Rules

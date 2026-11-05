@@ -12,7 +12,12 @@
 {% for label, have, total, pct, titles in rows %}{% if pct is none %}<tr><td>{{ _(label) }}</td><td colspan="4" class="muted small">{{ _('counted from the next scan on') }}</td></tr>{% else %}<tr><td>{{ _(label) }}</td><td>{{ have }} / {{ total }}</td>
 <td style="min-width:160px"><div style="background:var(--line);border-radius:6px;height:10px"><div style="width:{{ pct }}%;height:10px;border-radius:6px;background:{{ 'var(--ok)' if pct >= 95 else 'var(--warn)' if pct >= 80 else 'var(--err)' }}"></div></div><span class="small">{{ pct }} %</span></td>
 <td class="small">{% if label in first %}{% set d = pct - first[label] %}<span class="{{ 'badge ok' if d > 0.05 else ('badge err' if d < -0.05 else 'muted') }}">{{ '%+.1f'|format(d) }} %</span>{% else %}<span class="muted">–</span>{% endif %}</td>
-<td class="small">{% if titles %}<details><summary>{{ _('%(n)s without', n=total - have) }}</summary>{{ titles | join(', ') }}{% if total - have > titles|length %} …{% endif %}</details>{% endif %}</td></tr>{% endif %}
+<td class="small">{% if titles %}<details><summary>{{ _('%(n)s without', n=total - have) }}</summary>
+ {% for t, k in titles %}{% if k %}<a href="{{ url_for('problem', key=k) }}">{{ t }}</a>{% else %}{{ t }}{% endif %}{{ ', ' if not loop.last }}{% endfor %}{% if total - have > titles|length %} …{% endif %}
+ {% set ks = titles|map(attribute=1)|select|list %}{% if ks %}<form method="post" action="{{ url_for('runs') }}" style="margin-top:6px"><input type="hidden" name="action" value="start">
+  <input type="hidden" name="task_meta" value="on"><input type="hidden" name="dry" value="on"><input type="hidden" name="custom" value="1"><input type="hidden" name="selection" value="list">
+  <input type="hidden" name="REFRESH_DAYS" value="0"><input type="hidden" name="BATCH_SIZE" value="{{ ks|length }}"><input type="hidden" name="list" value="{{ ks|join('\n') }}">
+  <button>{{ _('Check these %(n)s books again (test run)', n=ks|length) }}</button></form>{% endif %}</details>{% endif %}</td></tr>{% endif %}
 {% else %}<tr><td colspan="5" class="muted">{{ _('No library report yet (made by the series task).') }}</td></tr>{% endfor %}</table>
 {% if generated %}<p class="muted small">{{ _('As of') }}: {{ generated }}{% if first_ts %} · {{ _('trend since %(t)s (%(n)s data points)', t=first_ts, n=points) }}{% else %} · {{ _('the trend appears from the second report on') }}{% endif %}</p>{% endif %}</div>
 
