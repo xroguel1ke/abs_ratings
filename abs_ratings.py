@@ -1171,7 +1171,10 @@ def note_author_links(abs_authors, aud_data):
     """Only for single-author books: the ABS author and the Audible author of the SAME verified product are the same person."""
     aa = (aud_data or {}).get('authors_asin') or []
     names = [a for a in (abs_authors or []) if a]
-    if len(names) == 1 and len(aa) == 1 and aa[0].get('asin'): AUTHOR_LINKS.setdefault(names[0], set()).add(aa[0]['asin'])
+    if len(names) == 1 and len(aa) == 1 and aa[0].get('asin'):
+        from abs_series import plausible_same_person
+        if plausible_same_person(names[0], aa[0].get('name') or ''):  # ABS lists the translator sometimes: that is no second spelling
+            AUTHOR_LINKS.setdefault(names[0], set()).add(aa[0]['asin'])
 
 def save_author_links():
     try:

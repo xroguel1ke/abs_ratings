@@ -100,6 +100,18 @@ def fold_accents(s):
 def is_latin(name):
     return not re.search(r"[^\x00-\u024F]", name or "")
 
+def plausible_same_person(a, b):
+    """Could two author names be ONE person written differently? Same surname, the same name parts in another order
+    ('Baba Okina'), a near-identical spelling, or one of them in a non-Latin script (romanisation). A translator and the
+    author ('Caitlin Kelly' / 'Okina Baba') are not: an Audible author record seen behind both is no proof then."""
+    if not a or not b: return False
+    if not is_latin(a) or not is_latin(b): return True
+    ta = [t for t in re.sub(r'[^a-z ]', ' ', fold_accents(a).lower()).split() if len(t) > 1]
+    tb = [t for t in re.sub(r'[^a-z ]', ' ', fold_accents(b).lower()).split() if len(t) > 1]
+    if not ta or not tb: return False
+    if ta[-1] == tb[-1] or set(ta) == set(tb): return True
+    return difflib.SequenceMatcher(None, ' '.join(ta), ' '.join(tb)).ratio() >= 0.85
+
 def author_key(name):
     """'Chambers, Becky' / 'Becky Chambers' / 'J.M. Clarke' / 'JM Clarke' / 'Kurmaić' -> comparable key (accents ignored)."""
     n = fold_accents(name).lower().strip()
@@ -371,7 +383,7 @@ def record_merge(ctx, kind, lib, target, members, target_books, target_info=None
 
 # ================= AUTHORS =================
 
-def find_author_fixes(records, decisions=None, links=None):
+def find_author_fixes(records, decisions=None, links=None, role_names=()):
     """Spelling variants of the same author ('R. A. Salvatore' / 'R.A. Salvatore'): a spelling with accents wins over the same name
     without them, otherwise the spelling used by more books (tie: alphabetical). Returns ({variant: canonical}, counts, review list).
     Uncertain pairs ('J. Smith' / 'John Smith') go to the review list; your decisions win."""
@@ -395,7 +407,11 @@ def find_author_fixes(records, decisions=None, links=None):
         present = [n for n in group if n in {sp for sps in count.values() for sp in sps}]
         if len({author_key(n) for n in present}) < 2: continue
         canon = max(present, key=lambda n: (fold_accents(n) != n, sum(count[author_key(n)].values()) if author_key(n) in count else 0, n))
+        roles = {author_key(x) for x in role_names or ()}
         for n in present:
+            if not plausible_same_person(n, canon) or author_key(n) in roles or author_key(canon) in roles:
+                logging.info(f"   Audible author record {asin} behind '{n}' and '{canon}', but they do not look like one person (translator?): not merged")
+                continue
             if author_key(n) != author_key(canon) and n not in fixes and decisions.get(merge_id('author', '', n, canon), {}).get('action') not in ('keep', 'undone'):
                 fixes[n] = canon
                 logging.info(f"   Same Audible author record ({asin}): '{n}' -> '{canon}'")
@@ -691,7 +707,7 @@ def run(ctx):
     write_series_index(ctx, records, merges if ctx['merge'] else [])
     fixes, author_review = {}, []
     if ctx.get('author_normalize'):
-        fixes, count, author_review = find_author_fixes(records, ctx['decisions'], ctx.get('author_links'))
+        fixes, count, author_review = find_author_fixes(records, ctx['decisions'], ctx.get('author_links'), ctx.get('role_names') or ())
         logging.info(f"   Author spelling variants: {len(fixes)} (review: {len(author_review)})")
         authors_changed = apply_author_fixes(ctx, records, fixes, count)
     if ctx.get('remove_role_credits'):

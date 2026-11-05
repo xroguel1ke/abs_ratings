@@ -48,6 +48,17 @@ def test_audible_author_record_is_proof():
     assert fixes(r, {'S.A. Chakraborty': {'X1'}, 'Shannon Chakraborty': {'X2'}}) == {}, 'different Audible records'
 
 
+def test_translator_behind_an_audible_record_is_no_proof():
+    # real case 2026-11-05: ABS listed the translator 'Caitlin Kelly'; her single-author book linked her name to Okina Baba's record,
+    # another one linked 'Anemone' to it -> chain Anemone -> Caitlin Kelly -> Okina Baba. Different people are never merged that way.
+    r = [rec(1, 'Spider 9', ['Caitlin Kelly']), rec(2, 'Nowhere Stars 2', ['Caitlin Kelly']), rec(3, 'Nowhere Stars', ['Anemone']),
+         rec(4, 'Spider 1', ['Okina Baba']), rec(5, 'Spider 2', ['Okina Baba'])]
+    links = {'Caitlin Kelly': {'B074NP39QM', 'B0D38HC7V3'}, 'Okina Baba': {'B074NP39QM'}, 'Anemone': {'B0D38HC7V3'}}
+    assert fixes(r, links) == {}, fixes(r, links)
+    assert S.plausible_same_person('Okina Baba', 'Baba Okina') and S.plausible_same_person('J.R.R. Tolkien', 'John Ronald Reuel Tolkien')
+    assert S.plausible_same_person('馬場翁', 'Okina Baba') and not S.plausible_same_person('Edelyn Okano', 'Mizuki Tsujimura')
+
+
 if __name__ == '__main__':
     n = 0
     for name, fn in sorted(globals().items()):
