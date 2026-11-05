@@ -2242,6 +2242,10 @@ def _hardcover_lookup(key, targets, authors, asin, isbn, manual_url, use_cache, 
             if ok: cands.append((score, doc))
             else: logging.debug(f"        ✖ HC '{doc.get('title')}' rejected: {why}")
         if cands:
+            # a hit whose MAIN title fits beats hits that fit only via an alternative title (Hardcover lists 'Queen Takes Rose' as an
+            # alternative title of the other book 'Queen'); translations are unaffected (there is no main-title hit then)
+            main_fit = [(s_, d) for s_, d in cands if hc_title_score(targets, {**d, 'alternative_titles': []}, (), True) >= 0.85]
+            if main_fit and len(main_fit) < len(cands): cands = main_fit
             top = max(s for s, _ in cands)
             # Several near-equal titles (duplicates on Hardcover): take the one with the most ratings
             score, doc = max((c for c in cands if c[0] >= top - 0.05), key=lambda c: (c[1].get('ratings_count') or 0, c[0]))
