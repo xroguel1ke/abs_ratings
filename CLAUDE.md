@@ -57,6 +57,19 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   `lock_genres`, `lock_publisher`, `lock_year`, `lock_narrators`, `lock_authors`, `lock_cover`, `lock_explicit`,
   `lock_abridged`, `lock_isbn`, `lock_description`.
 
+- **Per-source search state** (user rule 2026-11-04, source_state.json): found -> REFRESH_DAYS; nothing found -> next day, 5 misses -> pause;
+  surely not listed (0 hits) -> pause at once; blocked/deferred = no miss. Rating-only passes ask only the missing sources (no Audible request).
+- **Parallel books** (WORKERS=3): every per-book global must be thread-local (_TLDict: LAST_MATCH, LAST_SEARCH, SEARCH_CTX, LOOKUP_HITS, GR_CTX,
+  HC_CTX, stats per worker). A shared one produced wrong ASINs/ratings twice (2026-11-04/05) - never add a new module-level per-book dict.
+  Max 1 request in flight per host; same author in one worker. Regress must be identical with 1 and 3 workers.
+- **Hardcover:** a main-title hit beats an alternative-title hit; number rules (only numbers < 1000, Hardcover MAIN title, ABS title vs Hardcover
+  title, Hardcover title = series name without number, 'Part N', alternative-title hit of another volume for English books). Hardcover counts
+  every search FIELD of a request against its limits - never combine lookup steps in one request. Contributors with a role are learned as role names.
+- **ISBN:** registration group must fit the book language (978-0/1, 979-8 English; 978-3 German ...).
+- **Goodreads:** search list only (GR_BOOK_PAGES=false); max 25 searches per run (block after ~100-150 in a row); series name + number + author confirm.
+- **Change monitoring:** a field the script wrote that shows the OLD value again is written again; a NEW value is the user's: never overwritten.
+- **Narrator = author** in ABS is replaced by Audible's narrators of the same recording (runtime 2 min) only.
+
 ## Testing
 - **pytest:** `tools/pytest_all.sh` (one process per test file; also step 2a of the gate).
 - **Regression gate (mandatory):** every change to matching, series or author logic runs `tools/regress.sh` before it is kept (12 s: syntax, synthetic unit tests `tests/test_authors.py`/`tests/test_series.py`,
@@ -77,8 +90,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
 - Script without UI: env vars as in `userscript.sh` / README, `DATA_DIR=/path/to/data python abs_ratings.py`.
 
 ## Open work
-See `ROADMAP.md`. Next most valuable: Hardcover source (need a real API response first), rating block settings
-(sources/order/format), apply-a-dry-run, report/history/undo pages.
+All ROADMAP / STATUS items are done (2026-11-05). See docs/STATUS.md and docs/CHANGES.md (merge overview). Next: the user's first real
+full run (test run first, apply selectively), then the merge into claude/web-ui / main.
 
 ## Counting batches (user rule – do not weaken, do not change without the user's explicit OK)
 - Every counting batch = **100 NEW library books** (never in an earlier counting batch) + **60 EN + 20 DE synthetic books** (real Audible products NOT in the library, fresh seed each batch). **When no new library books remain (since 2026-11-04): 100 EN + 80 DE synthetic books** (user decision; reusing library books is pointless). Hardcover batches use the same mix (Hardcover ON).

@@ -1,8 +1,7 @@
 # Status (live) – single source for ALL open items
 
-Updated: 2026-11-04 23:30 – per-source search state, parallel books, Goodreads search-list mode (+ Next.js parser, series), Hardcover
-one request per book, human-readable UI values. Overall ≈ 78 %.
-Next: Hardcover streak (H12 clean = 1/3), Goodreads live measurements, real-run test of the source state on the fake ABS, Phase C remainder, final report.
+Updated: 2026-11-05 – ALL items done (matching, Hardcover, Goodreads rhythm, web UI, roadmap, docs). Overall 100 % of the list.
+Next: the user's first real full run (test run first), then the merge (docs/CHANGES.md).
 Rule: update this file after every batch/chain and whenever an item changes (task requirement). Items come from the task
 (`/mnt/user/appdata/abs_prompt_matching_loop.md`) [A] and from user requests in chat [U].
 
@@ -45,7 +44,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 |---|---|---|
 | [A] Sparse sampling (GOODREADS_SAMPLE), stop at first block, never bypass | ✅ | |
 | [U] Hardcover Goodreads-ID path first | ✅ | correct 5/5; /book/show may be guarded more strictly than search |
-| [U] Limit measurement until a reliable requests/hour + per night value | ⏳ | test 4: blocked after ~3 book pages; test 5: block on the 7th BOOK page; test 6 (search only): ~75 searches, NO block |
+| [U] Limit measurement until a reliable requests/hour + per night value | ✅ | book pages: block after ~3-7; search list: ~100-150 searches in a row, then blocked for hours (test 8) -> 25 per night |
 | [U] Open Library fallback for the Goodreads ID / ISBN | ✅ not needed | the search list gives the rating in one request; series rows/pages cover volumes |
 | [new] Search-list-only mode: rating from the SEARCH result row, never a /book/show page (GR_BOOK_PAGES=false) | ✅ | new Next.js search layout parser (work.stats); test 6 replay 21/25 found, all hand-checked correct |
 | [U] Goodreads series: series name + number + author confirm a row; series page for other volumes (1 request) | ✅ | test 7 live: 25/25 found, no block |
@@ -101,6 +100,6 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | Item | State |
 |---|---|
 | README for the new UI functions | ✅ |
-| Change overview for a later merge (to web-ui/main) | ❌ |
-| Final report in LOOP_LOG + to the user (numbers, changes, limits, first-run recommendation) | ❌ |
-| CLAUDE.md / ROADMAP.md up to date with all learned rules | ⚠️ |
+| Change overview for a later merge (to web-ui/main) | ✅ docs/CHANGES.md |
+| Final report in LOOP_LOG + to the user (numbers, changes, limits, first-run recommendation) | ✅ 2026-11-05 |
+| CLAUDE.md / ROADMAP.md up to date with all learned rules | ✅ |

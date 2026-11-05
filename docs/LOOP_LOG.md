@@ -523,3 +523,12 @@ ABS backup ok; written: Emily Wilde -> Emily Wilde Series (1 book), V.E. Schwab 
 - Roadmap items built: description replacement (85 books), narrator=author hygiene, run mode + change monitoring (integration test), review-list
   accept for ISBN/Hardcover, same-ASIN duplicates, lock report, version + update hint, settings export/import, rating block format
   (sources/order/icons/labels/position/min count), CSV export, genre rules, quick mode, "merge as" target name, linked report with re-check.
+
+## 2026-11-05 – final report
+- Matching: Audible 4 clean chains + whole library 1904/1906; Hardcover streak 3/3 (H14-H16) + Phase C hand-check of 331 matches + full-library
+  check (1854/1913 on Hardcover, 7 wrong found and fixed); series/author: no pending decision on the current library; Goodreads: search list,
+  25 per night.
+- Real runs on the user's ABS found 3 bug classes (shared per-book state in parallel workers -> wrong ratings / review proposal; translator author
+  links), all fixed and repaired in ABS with the user's OK (15 descriptions, 2 authors, 1 review proposal, state of 12 books).
+- All ROADMAP/STATUS items done; README, screenshots, docs/CHANGES.md written. Regress gate covers everything (incl. pytest, integration tests,
+  Hardcover golden). Open risk: rare non-reproducible interpreter crashes on the host (one in a regress run without file edits).
