@@ -1976,11 +1976,12 @@ def hc_query(query, variables=None):
         with IO_LOCK:
             hc_usage_today(); HC_USAGE['requests'] += 1
             if HC_USAGE['requests'] % 50 == 0: rw_json(HC_USAGE_FILE, HC_USAGE)
+    burst = r.headers.get('X-Ratelimit-Remaining') or ''
+    if burst.isdigit() and int(burst) <= 3: time.sleep(3)  # minute budget nearly used (e.g. another tool on the same token): let it refill
     left = r.headers.get('X-Ratelimit-Daily-Remaining') or ''
     if left.isdigit(): HC_STATE['daily_left'] = int(left)
     rst = next((v for k, v in r.headers.items() if 'reset' in k.lower() and 'ratelimit' in k.lower()), None)  # when the daily limit renews (if Hardcover tells)
     if rst: HC_STATE['reset'] = rst
-    _TL.hc_last_status = r.status_code  # per thread (test-mode fallback)
     if r.status_code == 429: raise SourceBlockedException('HTTP 429')
     if r.status_code in (401, 403):
         HC_STATE['disabled'] = f"token rejected (HTTP {r.status_code})"
@@ -2158,10 +2159,14 @@ def get_hardcover_data(key, targets, authors, asin, isbn, manual_url=None, use_c
                 return d, 'found'
             return None, ('blocked' if HC_STATE['disabled'] else 'not_found')
         except SourceBlockedException as e:
-            if HC_STATE['cooldowns'] < 2:
-                HC_STATE['cooldowns'] += 1
-                logging.warning(f"        ⏸️ Hardcover rate limit ({e}). Waiting 60s ({HC_STATE['cooldowns']}/2)...")
-                time.sleep(60); continue
+            with IO_LOCK:  # parallel books: a 429 seen by several workers at once is ONE cool-down, not several
+                fresh = time.monotonic() - HC_STATE.get('cool_ts', -1e9) > 60
+                if fresh and HC_STATE['cooldowns'] < 2: HC_STATE['cooldowns'] += 1; HC_STATE['cool_ts'] = time.monotonic()
+                go_on = not fresh or HC_STATE['cooldowns'] <= 2 and HC_STATE.get('cool_ts', 0) > time.monotonic() - 1
+            if go_on and not HC_STATE['disabled']:
+                wait = max(1, 60 - (time.monotonic() - HC_STATE['cool_ts']))
+                logging.warning(f"        ⏸️ Hardcover rate limit ({e}). Waiting {wait:.0f}s ({HC_STATE['cooldowns']}/2)...")
+                time.sleep(wait); continue
             HC_STATE['disabled'] = 'rate limit'
             logging.warning("        🛑 Hardcover still rate limited. Skipping Hardcover for the rest of this run.")
             return None, 'blocked'
@@ -2193,15 +2198,9 @@ def _hardcover_lookup(key, targets, authors, asin, isbn, manual_url, use_cache, 
         if q and q not in queries: queries.append(q)
     queries = queries[:3]
     eds = list(dict.fromkeys(clean_title(t) for t in targets[:3] if t and clean_title(t)))[:3]
-    # ONE request for every step (GraphQL aliases); the steps are evaluated in the same order as single requests were
-    combined = hc_combined(conds, queries, eds)
-    single = combined is None and bool(recorder.RECORD_DIR or recorder.REPLAY_DIR) and getattr(_TL, 'hc_last_status', None) == 599  # test mode, no recording
-    if combined is None and not single:
-        LOOKUP_HITS['hardcover'] = None
-        return None
-    def step(alias, q_single, vars_single, field):
-        if not single: return {field: combined.get(alias)} if alias in combined else None
-        return hc_query(q_single, vars_single)
+    # One request per step, stopping at the first hit. (Measured 2026-11-05: Hardcover counts every search field of a request
+    # against the minute AND daily limit, so combining steps in one request saves nothing and always pays for all steps.)
+    def step(alias, q_single, vars_single, field): return hc_query(q_single, vars_single)
     if conds:
         data = step('ids', f"query($w:editions_bool_exp!){{ editions(where:$w, limit:5){{ title asin isbn_13 isbn_10 book{{ {HC_BOOK_FIELDS} }} }} }}", {'w': {'_or': conds}}, 'editions')
         best = None
@@ -2252,21 +2251,6 @@ def _hardcover_lookup(key, targets, authors, asin, isbn, manual_url, use_cache, 
             logging.info(f"        🔍 Hardcover edition '{best[1]}' -> book '{best[0].get('title')}' accepted")
             return d
     return None
-
-def hc_combined(conds, queries, eds):
-    """All lookup steps of one book in ONE Hardcover request. Returns {alias: data} or None (request failed)."""
-    parts, decl, var = [], [], {}
-    if conds:
-        decl.append('$w:editions_bool_exp!'); var['w'] = {'_or': conds}
-        parts.append(f"ids: editions(where:$w, limit:5){{ title asin isbn_13 isbn_10 book{{ {HC_BOOK_FIELDS} }} }}")
-    for qi, q in enumerate(queries):
-        decl.append(f'$q{qi}:String!'); var[f'q{qi}'] = q
-        parts.append(f's{qi}: search(query:$q{qi}, query_type:"Book", per_page:8, page:1){{ results }}')
-    if eds:
-        decl.append('$t:[String!]'); var['t'] = eds
-        parts.append(f"ted: editions(where:{{title:{{_in:$t}}}}, limit:10){{ title book{{ {HC_BOOK_FIELDS} }} }}")
-    if not parts: return {}
-    return hc_query(f"query({','.join(decl)}){{ {' '.join(parts)} }}", var)
 
 def hc_audio_asin(hc, abs_dur, authors, targets, narrators, lang):
     """Second-source path: Hardcover lists the Audible ASIN (+ audio length) of the audio edition. A candidate is taken only if the
