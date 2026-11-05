@@ -12,7 +12,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | Item | State | Note |
 |---|---|---|
 | [A] Audible matching (ASIN repair/search, store, other edition, language, titles) | ✅ 100 % | 4 clean chains of 180 fresh books (100 EN + 80 DE), 0 wrong matches ever; whole library 1904/1906 existing books correct (99.9 %) |
-| [A] Hardcover matching + cross-check against Audible | ⏳ 80 % | streak restarted after the core change (parallel/source state): H12 (seed 46) 180/180 clean = 1 of 3; H11 (seed 45) clean before the change. Hit rate EN ~78 %, DE ~25 % (most German titles are not on Hardcover; edition-title lookup finds translations) |
+| [A] Hardcover matching + cross-check against Audible | ⏳ 80 % | H11/H12/H13 clean (180/180 each), but the LAST_SEARCH + author fixes reset the streak -> 0 of 3; EN ~75 %, DE ~25 % hit rate |
 | [U] Hardcover request minimising | ✅ | combined requests tried and REVERTED (Hardcover charges every search field; caused 429 in H13); one request per step with early stop, shared cool-down, burst guard |
 | [U] Hardcover: title+subtitle and 'Series, Volume N: Title' comparison titles; edition-title lookup (translations) | ✅ | no wrong hits in H12; cross-check unchanged |
 | [A] Phase C: 3 rounds with EVERY Hardcover hit hand-checked | ❌ | quota now available (50k) |
@@ -50,6 +50,15 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [new] Search-list-only mode: rating from the SEARCH result row, never a /book/show page (GR_BOOK_PAGES=false) | ✅ | new Next.js search layout parser (work.stats); test 6 replay 21/25 found, all hand-checked correct |
 | [U] Goodreads series: series name + number + author confirm a row; series page for other volumes (1 request) | ✅ | test 7 live: 25/25 found, no block |
 | [U] Production rhythm (≈25 per night?) | ❌ | after the measurements |
+
+## User findings 2026-11-05
+| Item | State | Note |
+|---|---|---|
+| [U] Remove-ratings button (choose sources / all) | ✅ | scan-page task + book page; journaled, undo; source paused until refresh |
+| [U] Progress numbering / bar jumping | ✅ | numbered by finished books |
+| [U] Backup checkbox on the scan page; no backup when applying from the review list | ✅ | |
+| [U] Check the user's run logs (Hardcover 'limit', Dragonsteel Prime) | ✅ | 2 real bugs (shared LAST_SEARCH, translator author links) fixed + ABS repaired with OK |
+| [U] .com first for English, .de for German | ✅ | already so (measured in the user's run) |
 
 ## Safety & tests
 | Item | State | Note |

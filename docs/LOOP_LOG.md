@@ -475,3 +475,18 @@ ABS backup ok; written: Emily Wilde -> Emily Wilde Series (1 book), V.E. Schwab 
 - Combined GraphQL request per book was a mistake: Hardcover charges every search field against the minute + daily limit (measured:
   3 searches = 3 points) -> H13 (seed 47) got HTTP 429 after 18 books, Hardcover off for the rest (results still 180/180, but the batch does
   not count). Reverted to one request per step with early stop; shared cool-down across workers; burst guard. H13 re-run with seed 48.
+
+## 2026-11-05 – user findings from real runs on the own ABS
+- WRONG ratings (real runs 22:30-00:17, parallel workers): LAST_SEARCH (other-edition candidate) was shared between workers -> 11 books got
+  the Audible ratings of another book ('Dragonsteel Prime' <- 'Lies Weeping', 'Homeland' <- 'Sunrise on the Reaping', ...). Fixed (per thread)
+  + safety net (other edition only with title >= 0.8 and matching author). With the user's OK: ABS backup, item backup, 15 description changes
+  undone from the journal (only the description differed afterwards, verified against the item backup).
+- WRONG authors (real run 00:17): an Audible author record seen behind a single-author book linked the TRANSLATOR in ABS to the real author
+  -> chain Anemone -> Caitlin Kelly -> Okina Baba. Fixed: links/merges only for plausibly the same person, never role-credit names.
+  With the user's OK: 'Nowhere Stars' undone (Anemone), 'Nowhere Stars, Vol. 02' set to Anemone (journaled, source manual_fix_user_ok).
+- Hardcover 'API limit' in the user's runs: the per-MINUTE limit (combined requests + my H13 test on the same token at the same time),
+  not the daily one. Message now says so.
+- Progress numbers jumped (queue index of parallel workers) -> numbered by finished books (960/960 in order in the regress replay).
+- Scan page: ABS-backup checkbox; review-list apply without backup; remove-ratings task (scan page + book page), tested write + undo on the fake ABS.
+- Store preference: already .com first for English (1798 of ~1860), .de for German; .co.uk only where .com has no matching edition.
+- Hardcover H13 (seed 48, after the revert): 180/180, 93 HC hits, no 429. Streak restarts after the LAST_SEARCH/author fixes (0/3).
