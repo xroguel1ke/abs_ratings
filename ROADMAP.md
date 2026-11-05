@@ -17,11 +17,11 @@ Status: ✅ done (branch `claude/web-ui`) · 🔜 next · ⏳ later
 
 ## 4. Ratings
 - ✅ Hardcover on/off, `RATING_ORDER` (text field, e.g. `audible,goodreads,hardcover`)
-- 🔜 Sources on/off + drag & drop order in the UI
+- ✅ Sources shown + order in the UI (tick + up/down)
 - ✅ Hardcover module: manual link → cached id (bulk refresh, 100 per request) → ASIN/ISBN edition → title search (strict:
   author, pure title ratio ≥0.85, volume numbers, no box sets/compilations/manga; series number confirms or rejects weak titles).
   Library: 1854/1913 found, Phase C hand-checked; limits 60/min, own daily budget 5000 (free) / 50000 (paid checkbox).
-- 🔜 Format: moons/stars, counts, DE/EN labels, block top/bottom, live preview; minimum rating count; optional `rating:4.5+` tag
+- ✅ Format: moons/stars, DE/EN labels, block top/bottom, minimum rating count (live preview and a rating tag: not built)
 
 ## 5. Schedule
 - ✅ Simple (weekdays + time) or cron toggle with "next run" check, never two runs at once

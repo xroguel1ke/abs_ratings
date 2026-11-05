@@ -57,7 +57,11 @@ FIELDS = [
     ('GR_BOOK_PAGES', 'Also load Goodreads book pages', 'bool', False, 'Off = read the rating from the search list only (book pages trigger the bot block much sooner)', 'Goodreads'),
     ('GR_MISSING_RECHECK_DAYS', 'Re-check books without Goodreads (days)', 'int', 30, '', 'Goodreads'),
 
-    ('RATING_ORDER', 'Order in the rating block', 'str', 'audible,goodreads,hardcover', 'Comma separated, e.g. audible,hardcover,goodreads', 'Metadata'),
+    ('RATING_ORDER', 'Sources in the rating block', 'order:audible|goodreads|hardcover', 'audible,goodreads,hardcover', 'Ticked sources are shown, top to bottom (all enabled sources are still asked)', 'Metadata'),
+    ('RATING_ICONS', 'Rating symbols', 'choice:moons|stars', 'moons', '🌕🌕🌕🌕🌗 or ★★★★★', 'Metadata'),
+    ('RATING_LABELS', 'Rating block language', 'choice:en|de', 'en', 'Overall / Performance / Story or Gesamt / Sprecher / Geschichte', 'Metadata'),
+    ('RATING_POSITION', 'Rating block position', 'choice:top|bottom', 'top', 'Above or below the book description', 'Metadata'),
+    ('RATING_MIN_COUNT', 'Minimum number of ratings', 'int', 0, 'A source with fewer ratings is not shown (0 = all)', 'Metadata'),
     ('FILL_COVERS', 'Set missing covers', 'bool', True, 'Only for a verified ASIN', 'Metadata'),
     ('UPDATE_COVERS', 'Replace existing covers', 'bool', True, 'Only for a verified ASIN (same recording); the old cover is backed up and can be restored', 'Metadata'),
     ('GENRE_LANGUAGE', 'Genre language', 'choice:en|keep', 'en', 'en = translate German Audible genres, keep = unchanged', 'Metadata'),

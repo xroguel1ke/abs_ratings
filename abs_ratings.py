@@ -172,7 +172,13 @@ HC_CACHE_FILE = os.path.join(SCRIPT_DIR, "hardcover_cache.json")  # key -> {'id'
 # Order of the sources in the rating block (unknown names are ignored, missing ones are appended)
 RATING_SOURCES = ['Audible', 'Goodreads', 'Hardcover']
 RATING_ORDER = [s for s in (x.strip().capitalize() for x in os.getenv('RATING_ORDER', 'audible,goodreads,hardcover').split(',')) if s in RATING_SOURCES]
-RATING_ORDER = list(dict.fromkeys(RATING_ORDER + RATING_SOURCES))
+RATING_ORDER = RATING_ORDER or list(RATING_SOURCES)  # only the listed sources are SHOWN in the block (all enabled ones are still asked)
+RATING_ICONS = os.getenv('RATING_ICONS', 'moons').lower()        # moons | stars
+RATING_LABELS = os.getenv('RATING_LABELS', 'en').lower()         # en | de
+RATING_POSITION = os.getenv('RATING_POSITION', 'top').lower()    # top | bottom of the description
+RATING_MIN_COUNT = int(os.getenv('RATING_MIN_COUNT', 0) or 0)    # a source with fewer ratings is not shown
+LABELS = {'en': {'head': 'Ratings & Infos', 'overall': 'Overall', 'performance': 'Performance', 'story': 'Story', 'rating': 'Rating'},
+          'de': {'head': 'Bewertungen & Infos', 'overall': 'Gesamt', 'performance': 'Sprecher', 'story': 'Geschichte', 'rating': 'Bewertung'}}
 # Audible marketplaces. ABS may have matched a book in any of them (e.g. audible.co.uk), so all are checked
 # before an ASIN counts as broken. AUDIBLE_MARKETPLACES limits/orders them.
 ALL_MARKETS = ['com', 'co.uk', 'ca', 'com.au', 'de', 'fr', 'it', 'es']
@@ -292,7 +298,7 @@ RE_ASIN_JSON = re.compile(r'"asin"\s*:\s*"([A-Z0-9]{10})"')
 RE_URL_ASIN = re.compile(r'(?:creativeASIN|asin)=([A-Z0-9]{10})')
 # Old blocks are searched only inside our rating block. ABS stores '<br />' and '&amp;'.
 RE_BLOCK_HEAD = re.compile(r'^(Audible|Goodreads|Hardcover) \(')  # first line of one source inside the rating block
-RE_RATING_BLOCK = re.compile(r'(?s)⭐\s*Ratings.*?⭐(?:\s|<br\s*/?>)*')
+RE_RATING_BLOCK = re.compile(r'(?s)(?:<br\s*/?>\s*)*⭐\s*(?:Ratings|Bewertungen).*?⭐(?:\s|<br\s*/?>)*')  # top or bottom, EN or DE head
 RE_CLEAN_TITLE = re.compile(r'(?i)\b(unabridged|abridged|audiobook|graphic audio|dramatized adaptation)\b|[\(\[].*?[\)\]]')
 RE_VOL = re.compile(r'(?i)(?:\b(?:book|vol\.?|volume|part|no\.?)|#)\s*(\d+)')
 RE_TEXT_RATING = re.compile(r'([0-9]+[.,]?[0-9]*)\s*(?:out of|von)\s*5\s*(?:stars|Sternen)', re.IGNORECASE)
@@ -644,6 +650,9 @@ def normalize_title_text(t):
     return re.sub(r'\s+', ' ', t).strip()
 
 def moon_rating(v):
+    if RATING_ICONS == 'stars':
+        n = int(round(safe_float(v)))
+        return '★' * min(n, 5) + '☆' * (5 - min(n, 5))
     v = safe_float(v)
     if v == 0: return "🌑" * 5
     full, decimal = int(v), v - int(v)
@@ -2413,22 +2422,24 @@ def parse_rating_block(desc):
 def source_lines(src, d):
     """Rating lines of one source, or None if it has no usable rating."""
     if not d: return None
+    L = LABELS.get(RATING_LABELS, LABELS['en'])
+    if RATING_MIN_COUNT and int(d.get('count', 0) or 0) < RATING_MIN_COUNT: return None
     if src == 'Audible':
         if int(d.get('count', 0) or 0) <= 0: return None
         lines = [f"Audible ({d.get('count')}):"]
-        if v := d.get('overall'): lines.append(f"🏆 {moon_rating(v)} {round(safe_float(v), 1)} / 5 - Overall")
-        if v := d.get('performance'): lines.append(f"🎙️ {moon_rating(v)} {round(safe_float(v), 1)} / 5 - Performance")
-        if v := d.get('story'): lines.append(f"📖 {moon_rating(v)} {round(safe_float(v), 1)} / 5 - Story")
+        if v := d.get('overall'): lines.append(f"🏆 {moon_rating(v)} {round(safe_float(v), 1)} / 5 - {L['overall']}")
+        if v := d.get('performance'): lines.append(f"🎙️ {moon_rating(v)} {round(safe_float(v), 1)} / 5 - {L['performance']}")
+        if v := d.get('story'): lines.append(f"📖 {moon_rating(v)} {round(safe_float(v), 1)} / 5 - {L['story']}")
         return lines
     if src == 'Hardcover' and (not d.get('count') or not is_valid_rating(d.get('val'))): return None
     lines = [f"{src} ({d.get('count', 0)}):"]
-    if (v := d.get('val')) and is_valid_rating(v): lines.append(f"🏆 {moon_rating(v)} {round(safe_float(v), 1)} / 5 - Rating")
+    if (v := d.get('val')) and is_valid_rating(v): lines.append(f"🏆 {moon_rating(v)} {round(safe_float(v), 1)} / 5 - {L['rating']}")
     return lines
 
 def build_description(current_desc, fresh, old):
     """fresh: {source: data from this run}, old: {source: text from the existing block} (kept if nothing new).
     Sources appear in RATING_ORDER."""
-    lines = ["⭐ Ratings & Infos"]
+    lines = [f"⭐ {LABELS.get(RATING_LABELS, LABELS['en'])['head']}"]
     for src in RATING_ORDER:
         if new := source_lines(src, fresh.get(src)): lines += new
         elif old.get(src):
@@ -2439,6 +2450,9 @@ def build_description(current_desc, fresh, old):
     clean_d = re.sub(r'^(?:\s|<br\s*/?>)+', '', clean_d, flags=re.I).strip()
     if len(lines) == 1: return clean_d  # No ratings at all: don't write an empty rating block
     lines.append("⭐")
+    if RATING_POSITION == 'bottom':
+        clean_d = re.sub(r'(?:\s|<br\s*/?>)+$', '', clean_d, flags=re.I).strip()
+        return (clean_d + "<br><br>" if clean_d else "") + "<br>".join(lines)
     return "<br>".join(lines) + "<br>" + clean_d
 
 RESULTS, OVERRIDES = {}, {}  # loaded in main()
@@ -3532,7 +3546,7 @@ DEBUG_ENV_KEYS = ['ABS_URL', 'LIBRARY_IDS', 'GOODREADS_ENABLED', 'BATCH_SIZE', '
                   'GR_BLOCK_COOLDOWN', 'GR_MAX_COOLDOWNS', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'FILL_COVERS', 'GENRE_LANGUAGE',
                   'SERIES_MERGE', 'SERIES_LOCK_AFTER_MERGE', 'AUTHOR_NORMALIZE', 'LIBRARY_REPORT', 'NO_RATINGS_RECHECK_DAYS',
                   'GR_MISSING_RECHECK_DAYS', 'SEARCH_PENALTY_SLEEP', 'ABS_TIMEOUT',
-                  'HARDCOVER_ENABLED', 'HARDCOVER_INTERVAL', 'HARDCOVER_PAID', 'GR_BOOK_PAGES', 'WORKERS', 'REMOVE_RATINGS', 'RUN_MODE', 'MAINTAIN_SAMPLE', 'MANUAL_LOCK_TAG', 'RATING_ORDER']  # never API_TOKEN
+                  'HARDCOVER_ENABLED', 'HARDCOVER_INTERVAL', 'HARDCOVER_PAID', 'GR_BOOK_PAGES', 'WORKERS', 'REMOVE_RATINGS', 'RATING_ICONS', 'RATING_LABELS', 'RATING_POSITION', 'RATING_MIN_COUNT', 'RUN_MODE', 'MAINTAIN_SAMPLE', 'MANUAL_LOCK_TAG', 'RATING_ORDER']  # never API_TOKEN
 
 def write_debug_bundle(log_file):
     """One file with everything needed for troubleshooting: settings (no token), the run log, all changes

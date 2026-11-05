@@ -513,3 +513,6 @@ ABS backup ok; written: Emily Wilde -> Emily Wilde Series (1 book), V.E. Schwab 
 - ISBN live test (library, Hardcover live): 227 wrong ISBNs replaced + 60 empty filled with print ISBNs of the verified Hardcover book;
   409 without a safe replacement stay (ISBN report). Registration group vs book language: 2 wrong (Russian 978-5 for 'Assassin's Quest',
   Serbian 978-86 for 'The Rise of Endymion': Hardcover marked them English) -> group check added; replay: both now English print ISBNs, nothing else changed.
+- 2026-11-05: one regress run crashed inside difflib ("'int' object has no attribute 'bjunk'" - an object of the wrong type inside the
+  interpreter) WITHOUT any file edit during the run; the identical re-run was all green. Same class as the earlier unexplained crashes.
+  Not a logic error of the code (not reproducible); possible host-level cause (memory/CPU stability) - reported to the user.

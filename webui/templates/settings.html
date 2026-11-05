@@ -10,6 +10,11 @@
   {% if ftype == 'bool' %}<span><input type="checkbox" name="{{ key }}" {{ 'checked' if s[key] }}></span>
   {% elif ftype == 'secret' %}<span class="row"><input type="password" name="{{ key }}" id="{{ key }}" placeholder="{{ _('•••••••• saved - leave empty = unchanged') if s[key] else _('not set') }}" autocomplete="new-password" style="flex:1">
      {% if key=='API_TOKEN' %}<button type="button" onclick="test('abs')">{{ _('Test connection') }}</button>{% elif key=='HARDCOVER_TOKEN' %}<button type="button" onclick="test('hardcover')">{{ _('Test') }}</button>{% endif %}</span>
+  {% elif ftype.startswith('order:') %}{% set cur = (s[key] or '').split(',') %}{% set allsrc = ftype[6:].split('|') %}
+   <span><input type="hidden" name="{{ key }}" id="{{ key }}" value="{{ s[key] }}">
+   <span class="orderlist" data-target="{{ key }}">{% for src in (cur|select('in', allsrc)|list) + (allsrc|reject('in', cur)|list) %}
+    <span class="row orderitem" data-src="{{ src }}" style="gap:6px;margin:3px 0"><input type="checkbox" {{ 'checked' if src in cur }}><b style="min-width:90px">{{ src|capitalize }}</b>
+     <button type="button" class="iconbtn" data-mv="-1">▲</button><button type="button" class="iconbtn" data-mv="1">▼</button></span>{% endfor %}</span></span>
   {% elif ftype.startswith('choice:') %}<select name="{{ key }}">{% for o in ftype[7:].split('|') %}<option value="{{ o }}" {{ 'selected' if s[key]==o }}>{{ {'en': 'English', 'de': 'Deutsch'}.get(o, o) }}</option>{% endfor %}</select>
   {% else %}<input type="{{ 'number' if ftype in ('int','float') else 'text' }}" {{ 'step=any' if ftype=='float' }} name="{{ key }}" id="{{ key }}" value="{{ s[key] }}">{% endif %}
   {% if help_ %}<span class="h">{{ _(help_) }}</span>{% endif %}</label>
@@ -83,4 +88,11 @@ async function test(what){ const fd=new FormData(); const out=document.getElemen
  if(what==='cron'){ fd.append('cron', document.getElementById('cronexpr').value); }
  const r=await fetch('/api/test/'+what,{method:'POST',body:fd}); const j=await r.json();
  out.textContent=(j.ok?'✅ ':'❌ ')+j.msg; out.style.color=j.ok?'var(--ok)':'var(--err)'; }
+
+document.querySelectorAll('.orderlist').forEach(function(list){ const out=document.getElementById(list.dataset.target);
+ function save(){ out.value=[...list.querySelectorAll('.orderitem')].filter(x=>x.querySelector('input').checked).map(x=>x.dataset.src).join(','); }
+ list.addEventListener('click', e=>{ const b=e.target.closest('button[data-mv]'); if(!b) return; const it=b.closest('.orderitem');
+  if(b.dataset.mv==='-1' && it.previousElementSibling) it.parentNode.insertBefore(it, it.previousElementSibling);
+  if(b.dataset.mv==='1' && it.nextElementSibling) it.parentNode.insertBefore(it.nextElementSibling, it); save(); });
+ list.addEventListener('change', save); });
 </script>{% endblock %}
