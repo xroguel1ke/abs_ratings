@@ -2856,6 +2856,10 @@ def process_queue(work_queue, history, failed, recheck):
                         add_review(key, title, "asin", asin, "ASIN belongs to another book and no safe replacement was found", plaus_why)
                         aud_data, skip_meta = None, True
                     rel = LAST_SEARCH.get('related')
+                    if rel and not (max(title_similarity(search_title, rel.get('title_raw') or ''), title_similarity(title, rel.get('title_raw') or '')) >= 0.8
+                                    and match_author(authors, ', '.join(rel.get('authors_raw') or []))):  # safety net: never the ratings of ANOTHER book
+                        logging.warning(f"        ⛔ Other-edition candidate '{rel.get('title_raw')}' does not fit '{title}' (title/author): not used")
+                        rel = None
                     if not found and rel and not search_only and (not aud_data or int(aud_data.get('count', 0)) == 0):
                         aud_data = dict(rel, related_edition=True)
                         skip_meta = True
