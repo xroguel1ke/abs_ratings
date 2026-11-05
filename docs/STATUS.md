@@ -33,8 +33,8 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [U] Group confirmation (same-title books of one series) | ✅ | Realms of War = Spider Queen 1-6 |
 | [U] Covers: Audible cover for verified ASINs, also replacing, backup + undo | ✅ | real ABS undo tested (byte-identical) |
 | [U] ISBN = print edition (HC/Goodreads), Audible audio ISBN last fallback, ASIN never | ✅ | live library test: 227 fixes + 60 fills, 2 wrong (foreign group) fixed by a registration-group check; 409 without safe replacement in the ISBN report |
-| [U] Description update when ABS text is truncated/very short and Audible's is clearly complete | ❌ | |
-| [U] Narrator == author hygiene (remove the wrong ABS narrator) | ❌ | search already ignores it |
+| [U] Description update when ABS text is truncated/very short and Audible's is clearly complete | ✅ | 85 library books (chapter names, placeholders, truncated texts), own texts kept |
+| [U] Narrator == author hygiene (remove the wrong ABS narrator) | ✅ | only for the same recording (runtime 2 min) when Audible names other narrators; 2 library books |
 | [U] Duplicate books report (same recording twice) in the UI | ❌ | data exists (library_report duplicate_recordings) |
 | [U] Build-up / maintenance mode (~30 random books per day) + change monitoring (respect manual edits) | ❌ | |
 | [U] Lock feature kept but de-emphasised; lock report | ⚠️ | locks respected everywhere; no report/UI |

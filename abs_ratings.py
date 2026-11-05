@@ -2343,6 +2343,9 @@ def isbn_group_fits(isbn13, lang):
     groups = ISBN_GROUPS.get(str(lang or '').lower())
     return not groups or str(isbn13 or '').startswith(groups)
 
+def fold_accents_s(t):
+    return ''.join(c for c in unicodedata.normalize('NFKD', t or '') if not unicodedata.combining(c))
+
 def _plain_text(html_text):
     t = re.sub(r'<[^>]+>', ' ', html_lib.unescape(html_text or ''))
     return re.sub(r'\s+', ' ', t).strip()
@@ -3109,6 +3112,16 @@ def process_queue(work_queue, history, failed, recheck):
                             abs_updates['narrators'] = aud_narr
                             FILLED_NARR.add(key)  # copied from Audible: never evidence for Audible later (cover check)
                             log_updates.append(f"Narrators: -> {aud_narr}")
+                    elif aud_narr and meta.get('narrators') and same_rec_rt and abs_dur and aud_data.get('runtime_sec') \
+                            and abs(abs_dur - aud_data['runtime_sec']) <= 120:  # same recording (runtime to 2 min)
+                        # hygiene: ABS lists the AUTHOR as narrator (file tags) while the same recording on Audible has other narrators
+                        k_ = lambda xs: {re.sub(r'[^a-z]', '', fold_accents_s(x).lower()) for x in xs if x}
+                        if k_(meta['narrators']) and k_(meta['narrators']) <= k_(authors) and not (k_(aud_narr) & k_(authors)):
+                            if 'lock_narrators' in tags: logging.info(f"        🔒 Narrators Update Skipped (Locked): {aud_narr}")
+                            else:
+                                abs_updates['narrators'] = aud_narr
+                                FILLED_NARR.add(key)
+                                log_updates.append(f"Narrators: {meta['narrators']} (= author) -> {aud_narr}")
                     if not aud_data.get('related_edition'): note_author_links(authors, aud_data)
                     aud_auth = aud_data.get('authors_raw') or []
                     from abs_series import is_role_credit, author_key as _ak
