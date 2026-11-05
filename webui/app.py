@@ -383,16 +383,26 @@ def queue_action(qid, action):
     if action == 'accept' and item.get('kind') == 'asin' and item.get('candidate'):
         core.save_override(item['key'], {'asin': item['candidate']})
         flash(T('ASIN %(a)s saved: it is written for this book with the next scan (and locked). Use "Test run first" on the book page to check it before.', a=item['candidate']), 'ok')
-    elif action == 'accept' and item.get('kind') == 'title' and item.get('candidate'):
-        # write the title through abs_apply.py (value check against ABS, journal, undo) - no new Audible request
+    elif action == 'accept' and item.get('kind') == 'hardcover' and item.get('candidate'):
+        core.save_override(item['key'], {'hardcover': item['candidate']})
+        flash(T('Hardcover link saved: it is used for this book from the next scan on.'), 'ok')
+    elif action == 'accept' and item.get('kind') in ('title', 'isbn') and item.get('candidate'):
+        # write through abs_apply.py (value check against ABS, journal, undo) - no new Audible request
+        field = item['kind']
         rid = 'review-' + datetime.now().strftime('%Y%m%d-%H%M%S')
         iid = item['key'].split('_', 1)[1]
+        if field == 'isbn':
+            if not core.isbn_valid(item['candidate']):
+                flash(T('%(c)s is no valid ISBN - nothing written.', c=item['candidate']), 'error'); return redirect(url_for('review_page') + '#buecher')
+            try: old = ((core.abs_get(core.load_settings(), f'/api/items/{iid}').json().get('media') or {}).get('metadata') or {}).get('isbn')
+            except Exception: flash(T('ABS not reachable.'), 'error'); return redirect(url_for('review_page') + '#buecher')
+        else: old = item.get('title')
         os.makedirs(core.REPORT_DIR, exist_ok=True)
         with open(os.path.join(core.REPORT_DIR, f'planned_changes_{rid}.jsonl'), 'w', encoding='utf-8') as f:
             f.write(json.dumps({'run': rid, 'ts': datetime.now().isoformat(timespec='seconds'), 'item': iid, 'key': item['key'], 'title': item.get('title'),
-                                'field': 'title', 'old': item.get('title'), 'new': item['candidate'], 'source': 'review_list', 'dry_run': True}, ensure_ascii=False) + '\n')
+                                'field': field, 'old': old, 'new': item['candidate'], 'source': 'review_list', 'dry_run': True}, ensure_ascii=False) + '\n')
         core.set_queue_decision(qid, action)
-        new_id, err = core.RUNNER.start('apply', undo_args=['--run', rid, '--apply'], label=f"Title from the review list: {item.get('title')}",
+        new_id, err = core.RUNNER.start('apply', undo_args=['--run', rid, '--apply'], label=f"{field.capitalize()} from the review list: {item.get('title')}",
                                              run_settings={'ABS_BACKUP': False})  # the user checked it himself: no 3-minute ABS backup (undo stays possible)
         if err: flash(T(err), 'error'); return redirect(url_for('review_page') + '#buecher')
         return redirect(url_for('run_view', run_id=new_id))

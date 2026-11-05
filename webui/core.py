@@ -144,6 +144,14 @@ def save_scan_form(form):
     return f
 
 
+def isbn_valid(v):
+    """ISBN-10 / ISBN-13 checksum (an ASIN is never an ISBN)."""
+    v = re.sub(r'[\s-]', '', str(v or '')).upper()
+    if re.fullmatch(r'\d{13}', v): return sum(int(c) * (3 if i % 2 else 1) for i, c in enumerate(v)) % 10 == 0
+    if re.fullmatch(r'\d{9}[\dX]', v): return sum((10 - i) * (10 if c == 'X' else int(c)) for i, c in enumerate(v)) % 11 == 0
+    return False
+
+
 def manual_fields():
     """Fields the user changed in ABS after our last write (change monitoring): never overwritten again. Newest first."""
     d = _load_json(os.path.join(CONFIG_DIR, 'manual_fields.json'), {})

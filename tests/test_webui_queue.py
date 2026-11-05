@@ -60,6 +60,10 @@ def test_status_page_coverage_and_api():
     assert '80.0' in html and '100.0' in html and '4321' in html and 'blocked' in html, html[-900:]
 
 
+def test_isbn_checksum():
+    assert core.isbn_valid("9780007370443") and core.isbn_valid("0-306-40615-2") and not core.isbn_valid("B0TEST0002") and not core.isbn_valid("9780007370444")
+
+
 def test_run_progress_parser():
     log = os.path.join(cfg, 'logs', 'prog.log'); os.makedirs(os.path.dirname(log), exist_ok=True)
     open(log, 'w').write('2026 - INFO - (3/10) [ETA: 1m 5s] Some Book [ASIN: B0X]\n  SUCCESS on www.audible.com\n  ✅ Hardcover via ISBN: x\n  NEW ASIN Found: B0Y\n  No Audible data\n')
