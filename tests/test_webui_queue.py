@@ -60,6 +60,11 @@ def test_status_page_coverage_and_api():
     assert '80.0' in html and '100.0' in html and '4321' in html and 'blocked' in html, html[-900:]
 
 
+def test_csv_export():
+    h = client().get("/export.csv").get_data(as_text=True)
+    assert h.splitlines()[0].startswith("title,author,status,asin") and "Test Book" in h or "Low" in h
+
+
 def test_isbn_checksum():
     assert core.isbn_valid("9780007370443") and core.isbn_valid("0-306-40615-2") and not core.isbn_valid("B0TEST0002") and not core.isbn_valid("9780007370444")
 

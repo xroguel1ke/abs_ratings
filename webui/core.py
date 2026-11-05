@@ -65,6 +65,7 @@ FIELDS = [
     ('FILL_COVERS', 'Set missing covers', 'bool', True, 'Only for a verified ASIN', 'Metadata'),
     ('UPDATE_COVERS', 'Replace existing covers', 'bool', True, 'Only for a verified ASIN (same recording); the old cover is backed up and can be restored', 'Metadata'),
     ('GENRE_LANGUAGE', 'Genre language', 'choice:en|keep', 'en', 'en = translate German Audible genres, keep = unchanged', 'Metadata'),
+    ('GENRE_RULES', 'Genre rules', 'text', '', 'One per line: "Old => New" renames, "Old => -" never adds that genre (only genres coming from Audible)', 'Metadata'),
 
     ('SERIES_MERGE', 'Merge series automatically', 'bool', True, 'Only safe cases; uncertain ones go to the review list', 'Series & authors'),
     ('AUTHOR_NORMALIZE', 'Unify author spellings', 'bool', True, '', 'Series & authors'),

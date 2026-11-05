@@ -25,6 +25,13 @@ def test_equal_or_longer_is_kept():
     assert A.description_replaceable(AUD, AUD) is None and A.description_replaceable(AUD + ' extra', AUD) is None
 
 
+def test_genre_rules():
+    A.GENRE_RULES = {'movie, tv & video game tie-ins': '-', 'sci-fi': 'Science Fiction'}
+    assert A.map_genre('Movie, TV & Video Game Tie-Ins', 'www.audible.com') is None
+    assert A.map_genre('Sci-Fi', 'www.audible.com') == 'Science Fiction' and A.map_genre('Fantasy', 'www.audible.com') == 'Fantasy'
+    A.GENRE_RULES = {}
+
+
 if __name__ == '__main__':
     for n, f in sorted(globals().items()):
         if n.startswith('test_'): f(); print('ok', n)

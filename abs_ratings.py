@@ -262,8 +262,27 @@ GENRE_MAP_DE = {
 }
 UNMAPPED_GENRES = set()
 
+def _genre_rules():
+    """GENRE_RULES (settings, one per line): 'Old => New' renames, 'Old => -' blocks a genre coming from Audible."""
+    out = {}
+    for line in os.getenv('GENRE_RULES', '').replace('\\n', '\n').splitlines():
+        if '=>' in line:
+            a, b = (x.strip() for x in line.split('=>', 1))
+            if a: out[a.lower()] = b
+    return out
+GENRE_RULES = _genre_rules()
+
+def apply_genre_rules(name):
+    """None = blocked."""
+    r = GENRE_RULES.get((name or '').strip().lower())
+    if r is None: return name
+    return None if r in ('', '-') else r
+
 def map_genre(name, domain):
-    """Translate audible.de genre names to English (GENRE_LANGUAGE=en)."""
+    """Translate audible.de genre names to English (GENRE_LANGUAGE=en); own rules (GENRE_RULES) afterwards."""
+    return apply_genre_rules(_map_genre(name, domain))
+
+def _map_genre(name, domain):
     if GENRE_LANGUAGE != 'en' or 'audible.de' not in str(domain): return name
     mapped = GENRE_MAP_DE.get(name.strip().lower())
     if mapped: return mapped
@@ -3133,14 +3152,14 @@ def process_queue(work_queue, history, failed, recheck):
 
                     if 'lock_genres' not in tags:
                         current_genres = meta.get('genres') or []
-                        new_genres_list = list(dict.fromkeys(map_genre(c.get('name'), aud_data.get('domain')) for c in (md_raw.get('categories') or []) if c.get('name')))
+                        new_genres_list = [g for g in dict.fromkeys(map_genre(c.get('name'), aud_data.get('domain')) for c in (md_raw.get('categories') or []) if c.get('name')) if g]
                         added_genres = [g for g in new_genres_list if g not in current_genres]
                         if added_genres:
                             abs_updates['genres'] = current_genres + added_genres
                             log_updates.append(f"Genres: +{added_genres}")
                     else:
                         current_genres = meta.get('genres') or []
-                        new_genres_list = list(dict.fromkeys(map_genre(c.get('name'), aud_data.get('domain')) for c in (md_raw.get('categories') or []) if c.get('name')))
+                        new_genres_list = [g for g in dict.fromkeys(map_genre(c.get('name'), aud_data.get('domain')) for c in (md_raw.get('categories') or []) if c.get('name')) if g]
                         added_genres = [g for g in new_genres_list if g not in current_genres]
                         if added_genres: logging.info(f"        🔒 Genre Update Skipped (Locked): +{added_genres}")
 
@@ -3546,7 +3565,7 @@ DEBUG_ENV_KEYS = ['ABS_URL', 'LIBRARY_IDS', 'GOODREADS_ENABLED', 'BATCH_SIZE', '
                   'GR_BLOCK_COOLDOWN', 'GR_MAX_COOLDOWNS', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'FILL_COVERS', 'GENRE_LANGUAGE',
                   'SERIES_MERGE', 'SERIES_LOCK_AFTER_MERGE', 'AUTHOR_NORMALIZE', 'LIBRARY_REPORT', 'NO_RATINGS_RECHECK_DAYS',
                   'GR_MISSING_RECHECK_DAYS', 'SEARCH_PENALTY_SLEEP', 'ABS_TIMEOUT',
-                  'HARDCOVER_ENABLED', 'HARDCOVER_INTERVAL', 'HARDCOVER_PAID', 'GR_BOOK_PAGES', 'WORKERS', 'REMOVE_RATINGS', 'RATING_ICONS', 'RATING_LABELS', 'RATING_POSITION', 'RATING_MIN_COUNT', 'RUN_MODE', 'MAINTAIN_SAMPLE', 'MANUAL_LOCK_TAG', 'RATING_ORDER']  # never API_TOKEN
+                  'HARDCOVER_ENABLED', 'HARDCOVER_INTERVAL', 'HARDCOVER_PAID', 'GR_BOOK_PAGES', 'WORKERS', 'REMOVE_RATINGS', 'RATING_ICONS', 'RATING_LABELS', 'RATING_POSITION', 'RATING_MIN_COUNT', 'GENRE_RULES', 'RUN_MODE', 'MAINTAIN_SAMPLE', 'MANUAL_LOCK_TAG', 'RATING_ORDER']  # never API_TOKEN
 
 def write_debug_bundle(log_file):
     """One file with everything needed for troubleshooting: settings (no token), the run log, all changes

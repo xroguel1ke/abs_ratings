@@ -58,12 +58,12 @@ Status: ✅ done (branch `claude/web-ui`) · 🔜 next · ⏳ later
 - ✅ Change history per book / per run with undo per change, book or whole run; removed parts red, added parts green
 
 ## 14. Rules
-- ⏳ Genre rules (rename / block, e.g. "Movie, TV & Video Game Tie-Ins"), editable DE→EN genre map
+- ✅ Genre rules (rename / block) in the settings (DE→EN map stays built in)
 - ⏳ Author exceptions (similar names that are different people) – partly covered by review "keep separate"
 - ✅ Duplicates (same recording / same ASIN twice), show only: review list Other
 
 ## 15. Statistics
-- ⏳ CSV export of the library with ratings, rating distribution, coverage per source, history
+- ✅ CSV export of all books (status page); coverage per source + trend on the status page
 
 ## 16. Notifications & UI
 - ✅ Apprise URL (ntfy, Discord, Telegram, mail …), test button, errors only / every run

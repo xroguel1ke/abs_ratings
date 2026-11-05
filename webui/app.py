@@ -626,6 +626,20 @@ def settings():
                            libs=libs, selected=set((s.get('LIBRARY_IDS') or '').split(',')), next_run=core.next_run_time(s))
 
 
+@app.route('/export.csv')
+@login_required
+def export_csv():
+    """All checked books with status, ASIN, sources and certainty (from the last check) as CSV."""
+    import csv, io
+    from flask import Response
+    buf = io.StringIO(); w = csv.writer(buf)
+    w.writerow(['title', 'author', 'status', 'asin', 'audible_store', 'goodreads', 'hardcover', 'certainty', 'checked', 'reason'])
+    for k, r in sorted(core.results().items(), key=lambda x: (x[1].get('title') or '').lower()):
+        w.writerow([r.get('title'), r.get('author'), r.get('status'), r.get('asin'), r.get('domain'), r.get('goodreads'), r.get('hardcover'),
+                    r.get('certainty'), r.get('ts'), r.get('reason')])
+    return Response(buf.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment; filename=abs_ratings_books.csv'})
+
+
 @app.route('/settings/export')
 @login_required
 def settings_export():

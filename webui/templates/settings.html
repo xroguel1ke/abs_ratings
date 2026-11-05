@@ -10,6 +10,7 @@
   {% if ftype == 'bool' %}<span><input type="checkbox" name="{{ key }}" {{ 'checked' if s[key] }}></span>
   {% elif ftype == 'secret' %}<span class="row"><input type="password" name="{{ key }}" id="{{ key }}" placeholder="{{ _('•••••••• saved - leave empty = unchanged') if s[key] else _('not set') }}" autocomplete="new-password" style="flex:1">
      {% if key=='API_TOKEN' %}<button type="button" onclick="test('abs')">{{ _('Test connection') }}</button>{% elif key=='HARDCOVER_TOKEN' %}<button type="button" onclick="test('hardcover')">{{ _('Test') }}</button>{% endif %}</span>
+  {% elif ftype == 'text' %}<textarea name="{{ key }}" id="{{ key }}" rows="4" placeholder="Movie, TV &amp; Video Game Tie-Ins => -">{{ s[key] }}</textarea>
   {% elif ftype.startswith('order:') %}{% set cur = (s[key] or '').split(',') %}{% set allsrc = ftype[6:].split('|') %}
    <span><input type="hidden" name="{{ key }}" id="{{ key }}" value="{{ s[key] }}">
    <span class="orderlist" data-target="{{ key }}">{% for src in (cur|select('in', allsrc)|list) + (allsrc|reject('in', cur)|list) %}

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}{% block title %}{{ _('Status') }}{% endblock %}{% block body %}
-<h1>{{ _('Status') }}</h1>
+<div class="row" style="justify-content:space-between"><h1>{{ _('Status') }}</h1><a class="btn" href="{{ url_for('export_csv') }}">⬇ {{ _('All books as CSV') }}</a></div>
 <div class="tiles">
  <div class="tile"><div class="v">{% if api.hc_left is not none %}{{ api.hc_left }}{% else %}–{% endif %}</div><div class="l">{{ _('Hardcover requests left (account)') }}{% if api.hc_when %} ({{ _('as of') }} {{ api.hc_when }}){% endif %}<br>{{ _('Own budget: %(n)s of %(m)s used today (UTC)', n=api.hc_used, m=api.hc_limit) }}<br>{{ _('Reset') }}: {{ api.hc_reset or _('daily (Hardcover does not report the time)') }}</div></div>
  <div class="tile"><div class="v" style="font-size:1.1em">{{ _(api.gr) }}</div><div class="l">Goodreads</div></div>
