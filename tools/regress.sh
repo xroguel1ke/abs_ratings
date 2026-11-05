@@ -10,6 +10,7 @@ py() { timeout 600 docker run --rm --name "abs_ratings_test_regress_$$" -e PYTHO
 echo "== 1 syntax";  py -c 'import sys; [compile(open(f).read(), f, "exec") for f in ("abs_ratings.py","abs_series.py","abs_undo.py","recorder.py","source_state.py")]; print("ok")' || fail=1
 echo "== 2 unit tests"; py tests/test_authors.py | tail -1 || fail=1; py tests/test_series.py | tail -1 || fail=1; py tests/test_asin.py | tail -1 || fail=1; py tests/test_webui_queue.py | tail -1 || fail=1; py tests/test_webui_i18n.py | tail -1 || fail=1; py tests/test_source_state.py | tail -1 || fail=1
 echo "== 2b per-source search state (real-run mode vs fake ABS, offline)"; tools/source_state_test.sh tests/private/sst_keys.txt > /tmp/claude-0/sst_it.out 2>&1 || fail=1; tail -1 /tmp/claude-0/sst_it.out
+echo "== 2c Hardcover matches of the hand-checked batches"; tools/hc_golden_check.sh || fail=1
 echo "== 3 library-wide series/author decisions"; py tools/lib_check.py || fail=1
 echo "== 4 golden rounds"
 i=0

@@ -15,7 +15,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [A] Hardcover matching + cross-check against Audible | ✅ 100 % | streak 3 of 3: H14/H15/H16 (seeds 49-51) 180/180 each, 105/119/109 HC hits, 0 cross-check drops, no 429 |
 | [U] Hardcover request minimising | ✅ | combined requests tried and REVERTED (Hardcover charges every search field; caused 429 in H13); one request per step with early stop, shared cool-down, burst guard |
 | [U] Hardcover: title+subtitle and 'Series, Volume N: Title' comparison titles; edition-title lookup (translations) | ✅ | no wrong hits in H12; cross-check unchanged |
-| [A] Phase C: 3 rounds with EVERY Hardcover hit hand-checked | ❌ | quota now available (50k) |
+| [A] Phase C: 3 rounds with EVERY Hardcover hit hand-checked | ✅ | H14-H16: 331 matches, 1 wrong (Queen Takes Rose -> Queen) fixed; hand-checked matches = Hardcover golden in the regress gate |
 | [U] Hardcover 'paid plan' checkbox: own daily budget 5000 (free) / 50000 (paid), counted locally (hardcover_usage.json); production default = free | ✅ | status page shows account rest + own budget |
 | [U] Runtime tolerance default lower than 15 % / 20 min | ✅ | measured: 5 %/10 min loses 16, 10 %/15 min 6 of 1920 verified ASINs -> same-BOOK tolerance stays 15/20 (labelled so in the UI); recording details (narrators, publisher, year, abridged) now need runtime within 10 min (74 library books affected) |
 | [U] Per-source search state: found -> REFRESH_DAYS, missing -> next day, 5 misses or 'not listed' -> pause REFRESH_DAYS; blocked = no miss; rating-only passes ask only the missing sources (no Audible request) | ✅ built | source_state.py + 10 unit tests; seeded from history/caches; real-run test on the fake ABS (state persisted only in real runs) open |

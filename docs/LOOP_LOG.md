@@ -497,3 +497,8 @@ ABS backup ok; written: Emily Wilde -> Emily Wilde Series (1 book), V.E. Schwab 
   (stored Audible facts of the wrong book) so the next scan checks them fully (state files backed up first).
 - Hardcover streak COMPLETE: H14 (seed 49) 180/180, 105 HC hits; H15 (seed 50) 180/180, 119 HC hits; H16 (seed 51) 180/180, 109 HC hits;
   0 cross-check drops, no HTTP 429, ~10 min per batch with 3 workers (was ~22). All three after the last core fixes.
+- Phase C Hardcover hand-check: all 331 Hardcover matches of H14-H16 listed; every match whose title differs from ABS (~200: translations,
+  subtitles, marketing suffixes, series titles) checked with author + series/number. 1 WRONG: 'Queen Takes Rose' (Katee Robert) -> her other
+  book 'Queen' (Hardcover lists the title as an alternative title; would also have written that book's print ISBN). Fixed (main-title hits
+  beat alternative-title hits; a stricter volume rule was tried and dropped - it lost 7 correct translations). Hand-checked matches are now
+  a Hardcover golden list (tests/synthetic/hc_golden.json) replayed in the regress gate (step 2c).
