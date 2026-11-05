@@ -144,6 +144,22 @@ def save_scan_form(form):
     return f
 
 
+def lock_report():
+    """Lock tags per book (from the last check): {tag: [(key, title)]} - the locks are respected everywhere, this only shows them."""
+    out = {}
+    for k, r in results().items():
+        for t in r.get('locks') or []: out.setdefault(t, []).append((k, r.get('title')))
+    return dict(sorted(out.items()))
+
+
+def same_asin_groups():
+    """Books that share ONE ASIN (last results): usually the same book twice in the library. Show only."""
+    by = {}
+    for k, r in results().items():
+        if r.get('asin') and r.get('status') != 'ignored': by.setdefault(r['asin'], []).append({'key': k, 'title': r.get('title'), 'author': r.get('author')})
+    return sorted(([a, v] for a, v in by.items() if len(v) > 1), key=lambda x: x[1][0]['title'] or '')
+
+
 def isbn_valid(v):
     """ISBN-10 / ISBN-13 checksum (an ASIN is never an ISBN)."""
     v = re.sub(r'[\s-]', '', str(v or '')).upper()

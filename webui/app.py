@@ -346,7 +346,7 @@ def review_page():
         'buecher': {'label': T('Books'), 'entries': queue},
         'reihen': {'label': T('Series'), 'review': rv.get('series') or [], 'merged': [m for m in merged if m['kind'] == 'series']},
         'autoren': {'label': T('Authors'), 'review': rv.get('authors') or [], 'merged': [m for m in merged if m['kind'] == 'author']},
-        'sonstiges': {'label': T('Other'), 'dups': rep.get('duplicate_recordings') or [], 'manual': core.manual_fields()},
+        'sonstiges': {'label': T('Other'), 'dups': rep.get('duplicate_recordings') or [], 'manual': core.manual_fields(), 'same_asin': core.same_asin_groups()},
     }
     counts = {'buecher': len(queue), 'reihen': len(secs['reihen']['review']) + len(secs['reihen']['merged']),
               'autoren': len(secs['autoren']['review']) + len(secs['autoren']['merged']), 'sonstiges': len(secs['sonstiges']['dups'])}
@@ -574,7 +574,7 @@ def status():
     rows, generated = core.coverage()
     trend = core.coverage_trend()
     first = {k: v for k, v in (trend[0]['pct'] if len(trend) > 1 else {}).items()}
-    return render_template('status.html', rows=rows, generated=generated, api=core.api_status(), isbn_bad=core.isbn_report(), first=first, first_ts=(trend[0]['ts'] if len(trend) > 1 else ''), points=len(trend))
+    return render_template('status.html', rows=rows, generated=generated, api=core.api_status(), isbn_bad=core.isbn_report(), locks=core.lock_report(), first=first, first_ts=(trend[0]['ts'] if len(trend) > 1 else ''), points=len(trend))
 
 
 @app.route('/report')

@@ -20,6 +20,11 @@
 <div class="card tablewrap"><p class="muted small" style="margin-top:0">{{ _('The ISBN field holds e.g. an ASIN. It is only replaced with a verified ISBN (print edition via Hardcover, otherwise the audiobook ISBN from Audible); if there is none, the value stays. Nothing to decide - the next scan tries again') }}{% if isbn_bad and not isbn_bad[0].hardcover_asked %} ({{ _('Hardcover was not available in the last scan') }}){% endif %}.</p>
 {% if isbn_bad %}<details><summary>{{ _('Show %(n)s books', n=isbn_bad|length) }}</summary><table><tr><th>{{ _('Book') }}</th><th>{{ _('ISBN field') }}</th><th>{{ _('Reason') }}</th></tr>{% for x in isbn_bad[:500] %}<tr><td><a href="{{ url_for('problem', key=x.key) }}">{{ x.title }}</a><div class="muted small">{{ x.author }}</div></td><td><code>{{ x.isbn }}</code></td><td class="small">{{ x.reason|de }}</td></tr>{% endfor %}</table></details>{% else %}<p class="muted">{{ _('None.') }}</p>{% endif %}</div>
 
+<h3>{{ _('Locked books') }} ({{ locks.values()|map('length')|sum }})</h3>
+<div class="card tablewrap"><p class="muted small" style="margin-top:0">{{ _('Lock tags in ABS (lock_all, lock_title, ...) stop the script from changing these fields. Counted from the last check of each book.') }}</p>
+{% if locks %}<table><tr><th>{{ _('Tag') }}</th><th>{{ _('Books') }}</th></tr>{% for t, books in locks.items() %}<tr><td><code>{{ t }}</code></td><td class="small"><details><summary>{{ books|length }}</summary>{% for k, title in books[:300] %}<a href="{{ url_for('problem', key=k) }}">{{ title }}</a>{{ ', ' if not loop.last }}{% endfor %}</details></td></tr>{% endfor %}</table>
+{% else %}<p class="muted">{{ _('None.') }}</p>{% endif %}</div>
+
 <h3>{{ _('Caches') }}</h3>
 <div class="card tablewrap"><table>{% for k, v in api.caches.items() %}<tr><td>{{ _(k) }}</td><td>{{ _('%(n)s entries', n=v) }}</td></tr>{% endfor %}</table></div>
 {% endblock %}

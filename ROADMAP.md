@@ -60,7 +60,7 @@ Status: ✅ done (branch `claude/web-ui`) · 🔜 next · ⏳ later
 ## 14. Rules
 - ⏳ Genre rules (rename / block, e.g. "Movie, TV & Video Game Tie-Ins"), editable DE→EN genre map
 - ⏳ Author exceptions (similar names that are different people) – partly covered by review "keep separate"
-- ⏳ Duplicates page (same ASIN twice), show only
+- ✅ Duplicates (same recording / same ASIN twice), show only: review list Other
 
 ## 15. Statistics
 - ⏳ CSV export of the library with ratings, rating distribution, coverage per source, history

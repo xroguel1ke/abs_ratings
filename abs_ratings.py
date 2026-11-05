@@ -2592,6 +2592,9 @@ def build_queue(lib_id, history, recheck):
         # lock_all items never enter the queue (no batch slot, no sleep)
         if 'lock_all' in item_tags(item):
             count_locked += 1
+            r_ = RESULTS.setdefault(key, {'lib': lib_id, 'id': item['id'], 'title': ((item.get('media') or {}).get('metadata') or {}).get('title'),
+                                          'status': 'ignored', 'reason': 'lock_all'})
+            r_['locks'] = sorted(t for t in item_tags(item) if t.startswith('lock_'))  # lock report (status page)
             continue
         
         if key not in history:
@@ -3399,7 +3402,8 @@ def process_queue(work_queue, history, failed, recheck):
                            {'notes': notes, 'certainty': cert, 'certainty_parts': cert_parts, 'domain': (aud_data or {}).get('domain'), 'goodreads': (gr_data or {}).get('url') or (RESULTS.get(key) or {}).get('goodreads') if gr_status == 'fresh' else (gr_data or {}).get('url'),
                             'hardcover': ((hc_data or {}).get('url') or (RESULTS.get(key) or {}).get('hardcover')) if hc_status == 'fresh' else (hc_data or {}).get('url'), 'compare': compare_view(title, authors, meta, abs_dur, aud_data, hc_data),
                             'asin_source': 'manuell' if ov.get('asin') else ('Suche' if asin_from_search else ('ABS (bestätigt)' if asin else '')), 'hc_source': (hc_data or {}).get('source'),
-                            'evidence': (LAST_MATCH.get('evidence') or []) if asin_from_search else []})
+                            'evidence': (LAST_MATCH.get('evidence') or []) if asin_from_search else [],
+                            'locks': sorted(t for t in item_tags(item_data) if t.startswith('lock_'))})
 
                 consecutive_rl = 0
                 break 
