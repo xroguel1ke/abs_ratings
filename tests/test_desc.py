@@ -32,6 +32,15 @@ def test_genre_rules():
     A.GENRE_RULES = {}
 
 
+def test_hardcover_roles_are_learned_authors_kept():
+    book = {'contributions': [{'contribution': 'Author', 'author': {'name': 'Okina Baba'}}, {'contribution': 'Contributor', 'author': {'name': 'Tsukasa Kiryu'}},
+                              {'contribution': 'Translator', 'author': {'name': 'Jenny McKeon'}}, {'author': {'name': 'Old Format Author'}}]}
+    A.ROLE_NAMES.clear(); A.hc_learn_roles(book)
+    assert A.ROLE_NAMES == {'Tsukasa Kiryu', 'Jenny McKeon'}, A.ROLE_NAMES
+    assert A.hc_authors(book) == ['Okina Baba', 'Old Format Author'], 'contributors are no authors; entries without a role (recordings) count as authors'
+    A.ROLE_NAMES.clear()
+
+
 if __name__ == '__main__':
     for n, f in sorted(globals().items()):
         if n.startswith('test_'): f(); print('ok', n)

@@ -27,7 +27,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [new] "Other" review cases: book in a series of another author (e.g. Bury Our Bones in "The Age of Madness") | ✅ | review list Other: remove from series (journal, undo) / keep; 11 in the library |
 | [U] Remove empty authors (0 books) - re-checked before delete, never books; checkbox on the scan page + setting | ✅ | tested vs fake ABS (refuses deleting authors with books) |
 | [U] Only real authors: role credits removed / never taken from Audible; learned plain illustrators; checkbox + setting | ✅ | 26 library books cleaned in the dry run |
-| [new] Plain illustrators never seen with a suffix (e.g. only "Kurone Mishima") -> Hardcover contribution roles | ❌ | needs Hardcover quota |
+| [new] Plain illustrators never seen with a suffix (e.g. only "Kurone Mishima") -> Hardcover contribution roles | ✅ | contributors of a verified Hardcover book (Illustrator, Translator, Contributor) are learned as role names; live probe: Kureta, David Musto, Tsukasa Kiryu, Jenny McKeon |
 | [U] Series merge blocked by lock_series -> on the review list (user decides) | ✅ | 3 cases in the library |
 | [A] Negative cache for not-on-Audible books (re-check after ~90 days) | ✅ | no product in any store -> parked until REFRESH_DAYS at once; other misses: 5 daily tries, then REFRESH_DAYS |
 | [U] Group confirmation (same-title books of one series) | ✅ | Realms of War = Spider Queen 1-6 |

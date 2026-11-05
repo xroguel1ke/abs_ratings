@@ -2018,6 +2018,8 @@ def hc_usage_today():
 HC_CACHE, HC_PREFETCH = {}, {}  # key -> {'id', 'slug'} (persisted) | book id -> book (bulk refresh of cached books)
 HC_DAILY_RESERVE = 25  # stop before the daily limit is used up completely
 HC_BOOK_FIELDS = "id title subtitle slug rating ratings_count compilation cached_featured_series contributions { author { name } } book_mappings(where:{platform_id:{_eq:1}}, limit:8){ external_id }"
+if not (recorder.RECORD_DIR or recorder.REPLAY_DIR):  # live: also the role of every contributor (illustrator, translator, ...); recordings keep the old query
+    HC_BOOK_FIELDS = HC_BOOK_FIELDS.replace("contributions { author { name } }", "contributions { contribution author { name } }")
 # Hits that are not the book itself (unless the ABS title says so too)
 RE_HC_SPECIAL = re.compile(r'(?i)\b(graphic novel|comic|manga|coloring|colouring|adventure module|sourcebook|summary of|study guide|'
                            r'sparknotes|cliffsnotes|box(?:ed)? set|boxset|omnibus|collection|collector\W?s edition|books? \d+\s*[-–&]\s*\d+|summary|workbook)\b')
@@ -2127,13 +2129,28 @@ def hc_target_titles(aud, search_title, title, abs_subtitle=None):
 def hc_result(book, source):
     return {'gr_ids': hc_goodreads_ids(book), 'id': book.get('id'), 'slug': book.get('slug'), 'url': f"https://hardcover.app/books/{book.get('slug')}",
             'val': book.get('rating'), 'count': int(book.get('ratings_count') or 0), 'source': source, 'title': book.get('title'),
-            'authors': [a for a in hc_authors(book) if a],
+            'authors': [a for a in hc_authors(book) if a], 'contributions': book.get('contributions') or [],
             'alts': [t for t in (book.get('alternative_titles') or []) if t],
             'series': [(re.sub(r'\s*\([^)]*\)\s*$', '', ((book.get('featured_series') or book.get('cached_featured_series') or {}).get('series') or {}).get('name') or ''),
                         (book.get('featured_series') or book.get('cached_featured_series') or {}).get('position'))]}
 
 def hc_authors(book):
-    return [((c or {}).get('author') or {}).get('name') for c in (book.get('contributions') or [])] or book.get('author_names') or []
+    """Hardcover's AUTHORS of a book (contributors with another role - illustrator, translator, 'Contributor' - are left out)."""
+    cs = [c for c in (book.get('contributions') or []) if (c or {}).get('contribution') in (None, '', 'Author')]
+    return [((c or {}).get('author') or {}).get('name') for c in cs] or book.get('author_names') or []
+
+def hc_learn_roles(book):
+    """Names Hardcover lists with ANOTHER role than author on a verified book -> role names (REMOVE_ROLE_CREDITS removes them from the ABS
+    author field when a real author remains; a name that is somewhere the first author is never removed)."""
+    authors = {author_key_s(a) for a in hc_authors(book) if a}
+    for c in book.get('contributions') or []:
+        role, name = (c or {}).get('contribution'), ((c or {}).get('author') or {}).get('name')
+        if name and role and role != 'Author' and author_key_s(name) not in authors:
+            ROLE_NAMES.add(name)
+
+def author_key_s(n):
+    from abs_series import author_key
+    return author_key(n)
 
 def hc_prefetch(keys):
     """Refresh all cached books of this run in bulk (100 per request) instead of one request per book."""
@@ -2812,7 +2829,9 @@ def rating_only_pass(item, key, idx, total):
                 logging.info(f"        ⚠️ Hardcover '{hc_data.get('title')}' does not look like Audible '{aud.get('title_raw')}' ({cc_why}): Hardcover ratings are NOT used (review list)")
                 add_review(key, title, 'hardcover', hc_data.get('url'), f"Hardcover book differs from the Audible product ({cc_why})")
                 hc_data, LOOKUP_HITS['hardcover'] = None, None
-            else: logging.info(f"        ✓ Hardcover cross-check against Audible: {cc_why}")
+            else:
+                logging.info(f"        ✓ Hardcover cross-check against Audible: {cc_why}")
+                hc_learn_roles(hc_data)
         elif hc_data:  # nothing to cross-check against: not used
             logging.info("        ⚠️ No remembered Audible product to cross-check the Hardcover hit: not used (next full check)")
             hc_data, LOOKUP_HITS['hardcover'] = None, None
@@ -3289,7 +3308,9 @@ def process_queue(work_queue, history, failed, recheck):
                         logging.info(f"        ⚠️ Hardcover '{hc_data.get('title')}' does not look like Audible '{aud_data.get('title_raw')}' ({cc_why}): Hardcover ratings are NOT used (review list)")
                         add_review(key, title, 'hardcover', hc_data.get('url'), f"Hardcover book differs from the Audible product ({cc_why})")
                         hc_data = None; LOOKUP_HITS['hardcover'] = None
-                    else: logging.info(f"        ✓ Hardcover cross-check against Audible: {cc_why}")
+                    else:
+                        logging.info(f"        ✓ Hardcover cross-check against Audible: {cc_why}")
+                        hc_learn_roles(hc_data)
                 if HARDCOVER_ENABLED and hc_status != 'fresh': stats['hc_found' if hc_data else 'hc_missing'] += 1
                 sst_record(key, 'hardcover', 'found' if hc_data else hc_status, LOOKUP_HITS['hardcover'])
                 if hc_data and (not aud_data or aud_data.get('related_edition')) and 'lock_asin' not in tags:
