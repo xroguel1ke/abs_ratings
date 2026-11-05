@@ -37,6 +37,10 @@
  <p class="small">{{ _('The tour explains the pages of the app in a few steps. It starts automatically on the first visit.') }}</p>
  <div class="row"><button type="button" class="primary" onclick="window.ABSTour && ABSTour.start()">{{ _('Start the tour') }}</button>
  <span class="muted small">{{ _('Switch between light and dark at the top right with ☾ / ☀ (on the first visit the system setting applies, afterwards your choice in this browser).') }}</span></div></div>
+<div class="card"><h2 style="margin-top:0">{{ _('Export / import') }}</h2>
+ <p class="small">{{ _('All settings as a file - without tokens, password and notification URL.') }}</p>
+ <div class="row"><a class="btn" href="{{ url_for('settings_export') }}">⬇ {{ _('Export') }}</a>
+  <input type="file" name="file" accept=".json,application/json" form="importform" style="max-width:260px"><button form="importform" type="submit">⬆ {{ _('Import') }}</button></div></div>
 <div class="card"><h2 style="margin-top:0">{{ _('Password') }}</h2><p><a class="btn" href="{{ url_for('password') }}">{{ _('Change password') }} →</a></p></div>{% endif %}{{ save(sec) }}</form>
 {% endfor %}
 
@@ -58,6 +62,7 @@
 </div>{{ save('Notifications') }}</form>
 
 </div></div>
+<form id="importform" method="post" action="{{ url_for('settings_import') }}" enctype="multipart/form-data" data-confirm="{{ _('Overwrite the settings with this file? Tokens and password stay as they are.') }}"></form>
 <script>
 (function(){
  const secs=[...document.querySelectorAll('.spanel > .sec')], links=[...document.querySelectorAll('.snav a')], nav=document.querySelector('.snav');

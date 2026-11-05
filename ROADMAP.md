@@ -6,14 +6,14 @@ Status: ✅ done (branch `claude/web-ui`) · 🔜 next · ⏳ later
 - ✅ Dockerfile (python 3.11-slim, pinned deps), healthcheck (`/health` → ABS `/ping`)
 - ✅ GitHub Action → `ghcr.io/xroguel1ke/abs_ratings:web-ui` / `:latest` (main) + `:<tag>-<sha>`
 - ✅ Unraid template `unraid/abs-ratings.xml` (port 47823, `/config` = existing abs_scripts folder)
-- ⏳ Version display + "newer image available" hint (`APP_VERSION` env is already set)
+- ✅ Version display (footer) + "Update available" hint (GitHub, at most every 6 h)
 
 ## 2. Login
 - ✅ Password `admin`, forced change on first login, hash only
 
 ## 3. Settings
 - ✅ All script options with help texts, ABS connection test, library picker from ABS, Hardcover token + test
-- ⏳ Settings export/import (without tokens)
+- ✅ Settings export/import (without tokens, password, notification URL)
 
 ## 4. Ratings
 - ✅ Hardcover on/off, `RATING_ORDER` (text field, e.g. `audible,goodreads,hardcover`)

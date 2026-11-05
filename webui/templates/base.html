@@ -20,4 +20,5 @@
 <button type="button" class="iconbtn" id="theme-toggle" title="{{ _('Light / dark') }}">☾</button>
 <a class="iconbtn" href="{{ url_for('logout') }}" title="{{ _('Log out') }}" aria-label="{{ _('Log out') }}">⏻</a></span></div></header>{% endif %}
 <main>{% with msgs = get_flashed_messages(with_categories=true) %}{% for c, m in msgs %}<div class="flash {{ c }}">{{ m }}</div>{% endfor %}{% endwith %}
-{% block body %}{% endblock %}</main></body></html>
+{% block body %}{% endblock %}</main>
+{% if session.auth %}<footer class="muted small" style="text-align:center;padding:18px 0 26px">ABS Ratings {{ app_version }}{% if update_available %} · <span class="badge warn">{{ _('Update available') }}</span>{% endif %}</footer>{% endif %}</body></html>

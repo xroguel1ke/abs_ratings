@@ -105,6 +105,16 @@ def test_values_are_human_readable():
     assert 'The Legend of Drizzt #1' in h and 'Legend of Drizzt #1' in h and "[{&#39;name" not in h and "{'name'" not in h, h[-1500:]
 
 
+def test_settings_export_import_without_secrets():
+    s = core.load_settings(); s["API_TOKEN"] = "secret-token"; s["apprise_url"] = "ntfy://x"; s["BATCH_SIZE"] = 123; core.save_settings(s)
+    c = client(); r = c.get("/settings/export"); d = json.loads(r.get_data(as_text=True))
+    assert "API_TOKEN" not in d and "apprise_url" not in d and "password_hash" not in d and d["BATCH_SIZE"] == 123
+    import io
+    d["BATCH_SIZE"] = 77; d["API_TOKEN"] = "evil"
+    c.post("/settings/import", data={"file": (io.BytesIO(json.dumps(d).encode()), "s.json")}, content_type="multipart/form-data")
+    s = core.load_settings(); assert s["BATCH_SIZE"] == 77 and s["API_TOKEN"] == "secret-token"
+
+
 def test_scan_page_remembers_choices_without_changing_settings():
     c = client()
     before = {k: core.load_settings().get(k) for k in ('AUTHOR_NORMALIZE', 'SERIES_MERGE', 'BATCH_SIZE')}

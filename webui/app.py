@@ -135,7 +135,7 @@ def inject():
     s = core.load_settings()
     nxt = core.next_run_time(s)
     return {'running': core.RUNNER.running(), 'current_run': core.RUNNER.current, 'next_run': nxt,
-            'status_label': {k: T(v) for k, v in STATUS_LABEL.items()}, 'abs_base': (s.get('ABS_URL') or '').rstrip('/'), 'lang': lang(), 'js_i18n': i18n.DE if lang() == 'de' else {}}
+            'status_label': {k: T(v) for k, v in STATUS_LABEL.items()}, 'app_version': core.APP_VERSION, 'update_available': core.update_available(), 'abs_base': (s.get('ABS_URL') or '').rstrip('/'), 'lang': lang(), 'js_i18n': i18n.DE if lang() == 'de' else {}}
 
 
 # ---------------------------------------------------------------- auth
@@ -624,6 +624,24 @@ def settings():
     for f in core.FIELDS: groups.setdefault(f[5], []).append(f)
     return render_template('settings.html', s=s, groups=groups, sections=core.SECTIONS, slug=core.section_slug, adv=core.ADVANCED, providers=core.PROVIDERS,
                            libs=libs, selected=set((s.get('LIBRARY_IDS') or '').split(',')), next_run=core.next_run_time(s))
+
+
+@app.route('/settings/export')
+@login_required
+def settings_export():
+    from flask import Response
+    return Response(json.dumps(core.settings_export(), indent=2, ensure_ascii=False), mimetype='application/json',
+                    headers={'Content-Disposition': 'attachment; filename=abs_ratings_settings.json'})
+
+
+@app.route('/settings/import', methods=['POST'])
+@login_required
+def settings_import():
+    f = request.files.get('file')
+    try: n = core.settings_import(json.load(f))
+    except Exception: flash(T('This is no settings file.'), 'error'); return redirect(url_for('settings') + '#interface')
+    flash(T('%(n)s settings imported (tokens and password are never part of an export).', n=n), 'ok')
+    return redirect(url_for('settings') + '#interface')
 
 
 @app.route('/api/test/<what>', methods=['POST'])

@@ -144,6 +144,41 @@ def save_scan_form(form):
     return f
 
 
+APP_VERSION = os.getenv('APP_VERSION', 'dev')
+_UPDATE = {'ts': 0, 'newer': False}
+
+
+def update_available():
+    """'branch@sha' image: is there a newer commit on that branch? Asked at most every 6 h (GitHub API, no token, nothing sent)."""
+    if '@' not in APP_VERSION: return False
+    if time.time() - _UPDATE['ts'] < 6 * 3600: return _UPDATE['newer']
+    _UPDATE['ts'] = time.time()
+    branch, sha = APP_VERSION.split('@', 1)
+    try:
+        r = requests.get(f"https://api.github.com/repos/xroguel1ke/abs_ratings/commits/{branch}", timeout=10,
+                         headers={'Accept': 'application/vnd.github+json', 'User-Agent': 'abs-ratings'})
+        if r.status_code == 200: _UPDATE['newer'] = not str(r.json().get('sha', '')).startswith(sha[:7])
+    except (requests.RequestException, ValueError): pass
+    return _UPDATE['newer']
+
+
+EXPORT_SKIP = {'password_hash', 'secret_key', 'must_change_password', 'apprise_url'} | {f[0] for f in FIELDS if f[2] == 'secret'}
+
+
+def settings_export():
+    return {k: v for k, v in load_settings().items() if k not in EXPORT_SKIP}
+
+
+def settings_import(data):
+    """Known keys only; tokens, password and notification URL are never imported. Returns the number of values taken."""
+    known = {f[0] for f in FIELDS} | {'schedule_enabled', 'schedule_mode', 'schedule_days', 'schedule_time', 'schedule_cron', 'notify_on', 'scan_form'}
+    s = load_settings(); n = 0
+    for k, v in (data or {}).items():
+        if k in known and k not in EXPORT_SKIP: s[k] = v; n += 1
+    save_settings(s)
+    return n
+
+
 def lock_report():
     """Lock tags per book (from the last check): {tag: [(key, title)]} - the locks are respected everywhere, this only shows them."""
     out = {}
