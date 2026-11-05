@@ -34,7 +34,8 @@
 {% for x in s.review %}<div class="card mcard">
  <div class="mpair">{{ side(x.series, x.series_books if k == 'reihen' else '', x.series_titles, x.series_authors, _('Candidate')) }}<div class="marrow">→</div>{{ side(x.other, x.other_books if k == 'reihen' else '', x.other_titles, x.other_authors, _('Target')) }}</div>
  <div class="row" style="justify-content:space-between;margin-top:8px"><span class="small"><b>{{ _('Why uncertain') }}:</b> {{ x.reason|de }}</span>
-  <span class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('review_action', mid=x.id, action='merge') }}"><button class="primary">{{ _('Merge') }}</button></form>
+  <span class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('review_action', mid=x.id, action='merge') }}"><button class="primary" title="{{ _('Target name') }}: {{ x.other }}">{{ _('Merge') }}</button></form>
+  <form method="post" action="{{ url_for('review_action', mid=x.id, action='merge_as') }}"><button title="{{ _('Merge, but keep this name') }}">{{ _('Merge as') }} „{{ x.series|truncate(28) }}“</button></form>
   <form method="post" action="{{ url_for('review_action', mid=x.id, action='keep') }}"><button>{{ _('Keep separate') }}</button></form></span></div>
 </div>{% else %}<div class="card muted">{{ _('No uncertain cases.') }}</div>{% endfor %}
 <h3>{{ _('Merged automatically') }} ({{ s.merged|length }})</h3>

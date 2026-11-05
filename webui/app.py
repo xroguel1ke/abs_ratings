@@ -417,8 +417,12 @@ def queue_action(qid, action):
 @app.route('/review/<path:mid>/<action>', methods=['POST'])
 @login_required
 def review_action(mid, action):
-    if action not in ('merge', 'keep'): abort(400)
-    core.set_decision(mid, action)
+    if action not in ('merge', 'keep', 'merge_as'): abort(400)
+    if action == 'merge_as':  # merge, but the candidate's name becomes the target ('choose the target name')
+        x = next((r for k in ('series', 'authors') for r in core.review().get(k, []) if r.get('id') == mid), None)
+        if not x: abort(404)
+        core.set_decision(mid, 'merge', target=x.get('series'))
+    else: core.set_decision(mid, action)
     flash(T('Decision saved. It is applied with the next scan.'), 'ok')
     return redirect(url_for('review_page') + ('#autoren' if mid.startswith('author|') else '#reihen'))
 

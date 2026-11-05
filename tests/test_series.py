@@ -51,6 +51,13 @@ def test_audible_name_becomes_target():
     assert names(r, {'Realm of Fire'})[0] == [('Realm of Fire', ['Realms of Fire'])]
 
 
+def test_your_target_name_wins():  # review list 'merge as ...' (choose the target name)
+    r = [rec(1, 'a', 'X', 'The Big Saga', '1'), rec(2, 'b', 'X', 'The Big Saga', '2'), rec(3, 'c', 'X', 'Big Series', '3')]
+    mid = S.merge_id('series', 'l', 'Big Series', 'The Big Saga')
+    merges, _ = S.find_merges(r, {mid: {'action': 'merge', 'target': 'Big Series'}}, None)
+    assert [(m['target'].name, [x.name for x in m['members']]) for m in merges] == [('Big Series', ['The Big Saga'])]
+
+
 def test_duplicate_recordings_in_report():
     r1 = rec(1, 'Throne', 'Phil Tucker', 'Throne Hunters', '5'); r2 = rec(2, 'Throne Hunters 5', 'Phil Tucker', 'Throne Hunters', '5'); r3 = rec(3, 'Other', 'Phil Tucker', 'Throne Hunters', '6')
     for r, d in ((r1, 65834), (r2, 65835), (r3, 70000)): r.update({'duration': d, 'asin': None, 'cover': None, 'description': '', 'language': 'English', 'genres': [], 'isbn': None, 'media_tags': []})

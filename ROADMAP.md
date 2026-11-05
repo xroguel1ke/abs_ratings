@@ -44,7 +44,7 @@ Status: ✅ done (branch `claude/web-ui`) · 🔜 next · ⏳ later
   (undo via journal `merge_id`, removes alias, remembered as "undone")
 - ✅ Review tab: uncertain series (not enough numbers, ambiguous target, numbers don't complement) and authors
   (first name vs initial) → merge / keep separate; decisions honored by the series task
-- ⏳ Choose the target name in the review (currently: the series with more books, as agreed)
+- ✅ Choose the target name in the review ("Merge as ...")
 
 ## 11. Single book
 - ✅ Search any book (books page, header search) and run test/real for it
@@ -59,7 +59,7 @@ Status: ✅ done (branch `claude/web-ui`) · 🔜 next · ⏳ later
 
 ## 14. Rules
 - ✅ Genre rules (rename / block) in the settings (DE→EN map stays built in)
-- ⏳ Author exceptions (similar names that are different people) – partly covered by review "keep separate"
+- ✅ Author exceptions: "keep separate" in the review list + same-person check for Audible author records
 - ✅ Duplicates (same recording / same ASIN twice), show only: review list Other
 
 ## 15. Statistics

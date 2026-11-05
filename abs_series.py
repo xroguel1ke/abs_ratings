@@ -308,6 +308,10 @@ def find_merges(records, decisions=None, preferred_names=None):
                 hits = [s for s in g if s.name in (preferred_names or ())]
                 if len(hits) == 1 and hits[0] is not g[0]:  # Audible's own name wins
                     g.remove(hits[0]); g.insert(0, hits[0])
+                # the name YOU chose in the review list ('merge as ...') wins over everything
+                wanted = {d.get('target') for k, d in (decisions or {}).items() if d.get('action') == 'merge' and d.get('target') and k.startswith(f'series|{lib}|')}
+                mine = [s for s in g if s.name in wanted]
+                if len(mine) == 1 and mine[0] is not g[0]: g.remove(mine[0]); g.insert(0, mine[0])
                 merges.append({'lib': lib, 'target': g[0], 'members': g[1:]})
     return merges, rejected
 
@@ -451,7 +455,9 @@ def find_author_fixes(records, decisions=None, links=None, role_names=()):
                 canon = max(count[big], key=count[big].get); variant = max(count[small], key=count[small].get)
                 mid = merge_id('author', '', variant, canon)
                 act = decisions.get(mid, {}).get('action')
-                if act == 'merge':
+                if act == 'merge' and decisions[mid].get('target') == variant:  # 'merge as <variant>': the other direction
+                    for sp in count[big]: fixes[sp] = variant
+                elif act == 'merge':
                     for sp in count[small]: fixes[sp] = canon
                 elif act not in ('keep', 'undone'):
                     review.append({'id': mid, 'kind': 'author', 'lib': '', 'series': variant, 'other': canon,
