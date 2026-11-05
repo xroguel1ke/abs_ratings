@@ -2343,6 +2343,21 @@ def isbn_group_fits(isbn13, lang):
     groups = ISBN_GROUPS.get(str(lang or '').lower())
     return not groups or str(isbn13 or '').startswith(groups)
 
+def _plain_text(html_text):
+    t = re.sub(r'<[^>]+>', ' ', html_lib.unescape(html_text or ''))
+    return re.sub(r'\s+', ' ', t).strip()
+
+def description_replaceable(own, audible):
+    """Is the ABS description (without our rating block) provably not the user's own text, so Audible's complete summary may
+    replace it? (a) it is a truncated beginning of Audible's text, or (b) very short (< 30 % of Audible's and < 300 characters).
+    Returns the reason or None. A long own text is never replaced."""
+    a, b = _plain_text(own), _plain_text(audible)
+    if not a or not b or len(b) <= len(a): return None
+    core_a = re.sub(r'(\.\.\.|…|\[more\]|read more)$', '', a, flags=re.I).strip()
+    if len(core_a) >= 40 and b.lower().startswith(core_a.lower()[:max(40, len(core_a) - 3)]): return f"ABS text is a truncated beginning ({len(a)} of {len(b)} characters)"
+    if len(a) < 300 and len(a) < 0.3 * len(b): return f"ABS text very short ({len(a)} vs {len(b)} characters)"
+    return None
+
 def normalize_desc(d):
     """Compare descriptions independent of how ABS stores them ('<br />' vs '<br>', '&amp;' vs '&')."""
     d = html_lib.unescape(d or '')
@@ -3240,6 +3255,10 @@ def process_queue(work_queue, history, failed, recheck):
                         base_desc = summary
                         stats['desc_filled'] += 1
                         logging.info("        📝 Empty description filled with Audible summary")
+                    elif summary and (why_d := description_replaceable(strip_rating_block(cur_desc), summary)):
+                        base_desc = summary  # user rule 2026-11-03: only a provably truncated / very short text, never an own long one
+                        stats['desc_filled'] += 1
+                        logging.info(f"        📝 Description replaced by Audible's complete summary ({why_d})")
                     final_desc = build_description(base_desc, {'Audible': aud_data, 'Goodreads': gr_data, 'Hardcover': hc_data}, old_blocks)
 
                     has_aud = bool(aud_data and int(aud_data.get('count', 0)) > 0)
