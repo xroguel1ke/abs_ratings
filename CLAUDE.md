@@ -60,6 +60,7 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
 - **Regression gate (mandatory):** every change to matching, series or author logic runs `tools/regress.sh` before it is kept (12 s: syntax, synthetic unit tests `tests/test_authors.py`/`tests/test_series.py`,
   whole-library series+author decisions vs hand-verified baseline `tools/lib_check.py`, all golden rounds replayed from recordings). A deviation is judged by hand:
   wrong -> fix the rule; better -> update golden/baseline with a note. Private data (snapshot, recordings, golden) lives in git-ignored `tests/private/` (repo is public).
+- Live batches: always `REUSE=1` (tools/run_round.sh): without it live answers OVERWRITE existing recordings and the golden replays drift (2026-11-05: batch 13 broke because Audible changed a runtime).
 - Always start with `DRY_RUN=true`. The single best debugging artefact is `logs/debug_latest.log`
   (settings, full log, all planned changes, report summary, state file sizes).
 - Single book: `ONLY_ITEMS=<libraryId>_<itemId>` (web UI: problem page → "Erst als Testlauf").
