@@ -1130,7 +1130,7 @@ def search_match_score(abs_title, found_title, found_sub):
         score = min(score, 0.75)  # 'Hell Mode' vs 'Hell Mode, Volume 3': could be any volume
     return score
 
-LAST_SEARCH = {'related': None}  # best same-title/same-author candidate of the last search (other edition)
+LAST_SEARCH = _TLDict('last_search', {'related': None})  # best same-title/same-author candidate of the last search (other edition), per thread
 
 # ---------------- Audible series listing path (finds products the catalog search does not return) ----------------
 SERIES_ASIN_FILE = os.path.join(SCRIPT_DIR, 'audible_series.json')  # {series title: [series asin]}, filled from every product we load
