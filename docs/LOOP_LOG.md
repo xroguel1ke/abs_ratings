@@ -490,3 +490,8 @@ ABS backup ok; written: Emily Wilde -> Emily Wilde Series (1 book), V.E. Schwab 
 - Scan page: ABS-backup checkbox; review-list apply without backup; remove-ratings task (scan page + book page), tested write + undo on the fake ABS.
 - Store preference: already .com first for English (1798 of ~1860), .de for German; .co.uk only where .com has no matching edition.
 - Hardcover H13 (seed 48, after the revert): 180/180, 93 HC hits, no 429. Streak restarts after the LAST_SEARCH/author fixes (0/3).
+- Full review of the big real run 20261105-001739 (1915 books): 110 ASIN changes all checked (title/author/runtime/narrator fit;
+  'Spice and Wolf, Vol. 8' -> Vol. 9 ASIN is RIGHT: the file is volume 9, 312 min, ABS series #9 - only the ABS title is wrong, left to the user),
+  titles/subtitles/series/publisher/explicit/language/genres/covers fine. Consequences of the shared-LAST_SEARCH bug cleaned with the user's OK:
+  wrong review-list proposal 'Dune' -> 'Dissolution' discarded; the 12 affected items removed from rating_history/source_state
+  (stored Audible facts of the wrong book) so the next scan checks them fully (state files backed up first).
