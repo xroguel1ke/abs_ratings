@@ -193,6 +193,33 @@ def pair_info(a, b):
 
 def merge_id(kind, lib, member, target): return f"{kind}|{lib}|{member}->{target}"
 
+def foreign_series_books(records, decisions=None):
+    """Review list 'Other': a book in a series (>= 3 books) whose authors share NOBODY with the other books, while those all share the
+    series' main author ('Bury Our Bones in the Midnight Soil' (Schwab) in 'The Age of Madness' (Abercrombie)). Often a wrong series - or
+    the narrator stands as author. Nothing is changed automatically; you decide (remove the series from the book / keep)."""
+    decisions = decisions or {}
+    by = defaultdict(list)
+    for r in records:
+        for s in r['series']: by[(r['lib'], s['name'])].append((r, s.get('sequence')))
+    out = []
+    for (lib, name), books in by.items():
+        if len(books) < 3: continue
+        cnt = defaultdict(int)
+        for r, _ in books:
+            for a in {author_key(x) for x in r['authors']}: cnt[a] += 1
+        for r, seq in books:
+            mine = {author_key(x) for x in r['authors']}
+            others = [b for b, _ in books if b is not r]
+            if not mine or any(mine & {author_key(x) for x in b['authors']} for b in others): continue
+            if not all(any(cnt[author_key(x)] >= 0.8 * len(others) for x in b['authors']) for b in others): continue  # the rest has ONE main author
+            main = max((a for b in others for a in b['authors']), key=lambda a: cnt[author_key(a)])
+            mid = f"other|{lib}|{r['id']}|{name}"
+            if decisions.get(mid, {}).get('action') in ('keep', 'removed'): continue
+            reason = ('the book\'s authors look like its narrators' if mine <= {author_key(x) for x in r.get('narrators') or []} else 'book of another author in this series')
+            out.append({'id': mid, 'kind': 'other', 'lib': lib, 'key': f"{lib}_{r['id']}", 'item': r['id'], 'title': r['title'], 'series': name, 'sequence': seq,
+                        'authors': r['authors'], 'main_author': main, 'reason': reason, 'series_books': len(books)})
+    return sorted(out, key=lambda x: (x['series'].lower(), x['title'].lower()))
+
 def merge_check(group, cand, decisions=None):
     """Can 'cand' be merged into 'group' (list of Series, first = target)? Returns (ok, relation, reason).
     Your decisions from the web UI (merge / keep separate / undone) win over the rules."""
@@ -727,8 +754,9 @@ def run(ctx):
             mid = merge_id('series', r['lib'], r['series'], r['other'])
             if ctx['decisions'].get(mid, {}).get('action') in ('keep', 'undone'): continue
             series_review.append(dict(r, id=mid, kind='series'))
+    other_review = foreign_series_books(records, ctx['decisions'])
     _save(ctx.get('merges_file'), ctx['merge_history'])
-    _save(ctx.get('review_file'), {'series': series_review, 'authors': author_review,
+    _save(ctx.get('review_file'), {'series': series_review, 'authors': author_review, 'other': other_review,
                                    'generated': datetime.now().strftime('%Y-%m-%d %H:%M')})
     if not ctx['dry_run']: _save(ctx.get('decisions_file'), ctx['decisions'])
     if ctx['report']:

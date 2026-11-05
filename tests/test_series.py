@@ -58,6 +58,16 @@ def test_your_target_name_wins():  # review list 'merge as ...' (choose the targ
     assert [(m['target'].name, [x.name for x in m['members']]) for m in merges] == [('Big Series', ['The Big Saga'])]
 
 
+def test_book_of_another_author_in_a_series_goes_to_review():
+    r = [rec(1, 'Best Served Cold', 'Joe Abercrombie', 'The Age of Madness', '1'), rec(2, 'A Little Hatred', 'Joe Abercrombie', 'The Age of Madness', '2'),
+         rec(3, 'The Trouble with Peace', 'Joe Abercrombie', 'The Age of Madness', '3'), rec(4, 'Bury Our Bones', 'V. E. Schwab', 'The Age of Madness', None)]
+    out = S.foreign_series_books(r)
+    assert [(x['title'], x['main_author']) for x in out] == [('Bury Our Bones', 'Joe Abercrombie')], out
+    assert S.foreign_series_books(r, {out[0]['id']: {'action': 'keep'}}) == [], 'your decision hides it'
+    r2 = [rec(1, 'a', 'A', 'Shared World', '1'), rec(2, 'b', 'B', 'Shared World', '2'), rec(3, 'c', 'C', 'Shared World', '3')]
+    assert S.foreign_series_books(r2) == [], 'a series of several authors is no case'
+
+
 def test_duplicate_recordings_in_report():
     r1 = rec(1, 'Throne', 'Phil Tucker', 'Throne Hunters', '5'); r2 = rec(2, 'Throne Hunters 5', 'Phil Tucker', 'Throne Hunters', '5'); r3 = rec(3, 'Other', 'Phil Tucker', 'Throne Hunters', '6')
     for r, d in ((r1, 65834), (r2, 65835), (r3, 70000)): r.update({'duration': d, 'asin': None, 'cover': None, 'description': '', 'language': 'English', 'genres': [], 'isbn': None, 'media_tags': []})

@@ -9,8 +9,9 @@ logging.disable(logging.CRITICAL)
 import abs_series as S
 
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'tests', 'private')
-snap = json.load(open(os.path.join(root, 'abs_snapshot.json'), encoding='utf-8'))
-links_file = os.path.join(root, 'audible_authors.json')
+# env overrides (check against a fresh snapshot of the real library): SNAPSHOT, LINKS, SERIES_NAMES, ROLES, DECISIONS, BASELINE; --show prints everything
+snap = json.load(open(os.environ.get('SNAPSHOT') or os.path.join(root, 'abs_snapshot.json'), encoding='utf-8'))
+links_file = os.environ.get('LINKS') or os.path.join(root, 'audible_authors.json')
 links = {n: set(a) for n, a in json.load(open(links_file, encoding='utf-8')).items()} if os.path.exists(links_file) else None
 recs = []
 for lib, lst in snap['lists'].items():
@@ -22,9 +23,12 @@ for lib, lst in snap['lists'].items():
                      'series': [{'name': s['name'], 'sequence': s.get('sequence')} for s in md.get('series') or [] if s.get('name')],
                      'media_tags': list(d['media'].get('tags') or []), 'tags': S.expand_locks({t.strip() for t in raw if isinstance(t, str)}),
                      'description': '', 'language': md.get('language'), 'genres': md.get('genres') or [], 'cover': None, 'duration': d['media'].get('duration')})
-series_names = set(json.load(open(os.path.join(root, 'audible_series.json'), encoding='utf-8'))) if os.path.exists(os.path.join(root, 'audible_series.json')) else None
-merges, rejected = S.find_merges(recs, {}, series_names)
-fixes, _, a_review = S.find_author_fixes(recs, {}, links)
+sn_file = os.environ.get('SERIES_NAMES') or os.path.join(root, 'audible_series.json')
+series_names = set(json.load(open(sn_file, encoding='utf-8'))) if os.path.exists(sn_file) else None
+roles = json.load(open(os.environ['ROLES'], encoding='utf-8')) if os.environ.get('ROLES') and os.path.exists(os.environ['ROLES']) else ()
+decisions = json.load(open(os.environ['DECISIONS'], encoding='utf-8')) if os.environ.get('DECISIONS') and os.path.exists(os.environ['DECISIONS']) else {}
+merges, rejected = S.find_merges(recs, decisions, series_names)
+fixes, _, a_review = S.find_author_fixes(recs, decisions, links, roles)
 def msum(m):  # stable, readable: library, target series name, member names (+ book counts)
     nm = lambda s: f"{s.name} [{len(s.entries)} books]"
     return f"{m['lib'][:8]} | {nm(m['target'])} <- {'; '.join(sorted(nm(s) for s in m['members']))}"
@@ -32,7 +36,11 @@ cur = {'merges': sorted(msum(m) for m in merges),
        'uncertain': sorted(f"{r.get('series')} | {r.get('other')} | {r.get('reason')}" for r in rejected if str(r.get('reason', '')).startswith(S.UNCERTAIN)),
        'author_fixes': {k: v for k, v in sorted(fixes.items())},
        'author_review': sorted(f"{r['series']} | {r['other']}" for r in a_review)}
-path = os.path.join(root, 'lib_baseline.json')
+path = os.environ.get('BASELINE') or os.path.join(root, 'lib_baseline.json')
+if '--show' in sys.argv:
+    for k, v in cur.items():
+        print(f'== {k}')
+        for x in (v.items() if isinstance(v, dict) else v): print('  ', x if isinstance(x, str) else f'{x[0]} -> {x[1]}')
 print(f"merges {len(cur['merges'])} | uncertain {len(cur['uncertain'])} | author fixes {len(cur['author_fixes'])} | author review {len(cur['author_review'])}")
 if '--accept' in sys.argv or not os.path.exists(path):
     json.dump(cur, open(path, 'w', encoding='utf-8'), indent=1, ensure_ascii=False); print('baseline written:', path); sys.exit(0)

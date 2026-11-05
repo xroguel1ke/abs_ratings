@@ -346,10 +346,10 @@ def review_page():
         'buecher': {'label': T('Books'), 'entries': queue},
         'reihen': {'label': T('Series'), 'review': rv.get('series') or [], 'merged': [m for m in merged if m['kind'] == 'series']},
         'autoren': {'label': T('Authors'), 'review': rv.get('authors') or [], 'merged': [m for m in merged if m['kind'] == 'author']},
-        'sonstiges': {'label': T('Other'), 'dups': rep.get('duplicate_recordings') or [], 'manual': core.manual_fields(), 'same_asin': core.same_asin_groups()},
+        'sonstiges': {'label': T('Other'), 'dups': rep.get('duplicate_recordings') or [], 'manual': core.manual_fields(), 'same_asin': core.same_asin_groups(), 'foreign': rv.get('other') or []},
     }
     counts = {'buecher': len(queue), 'reihen': len(secs['reihen']['review']) + len(secs['reihen']['merged']),
-              'autoren': len(secs['autoren']['review']) + len(secs['autoren']['merged']), 'sonstiges': len(secs['sonstiges']['dups'])}
+              'autoren': len(secs['autoren']['review']) + len(secs['autoren']['merged']), 'sonstiges': len(secs['sonstiges']['foreign']) + len(secs['sonstiges']['dups']) + len(secs['sonstiges']['same_asin'])}
     return render_template('review.html', secs=secs, counts=counts, generated=rv.get('generated'))
 
 
@@ -417,6 +417,22 @@ def queue_action(qid, action):
 @app.route('/review/<path:mid>/<action>', methods=['POST'])
 @login_required
 def review_action(mid, action):
+    if action == 'remove_series':  # review list Other: take this series off the book (abs_apply: value check, journal, undo)
+        x = next((r for r in core.review().get('other', []) if r.get('id') == mid), None)
+        if not x: abort(404)
+        try: cur = ((core.abs_get(core.load_settings(), f"/api/items/{x['item']}").json().get('media') or {}).get('metadata') or {}).get('series') or []
+        except Exception: flash(T('ABS not reachable.'), 'error'); return redirect(url_for('review_page') + '#sonstiges')
+        new = [{'name': s.get('name'), 'sequence': s.get('sequence')} for s in cur if s.get('name') != x['series']]
+        old = [{'name': s.get('name'), 'sequence': s.get('sequence')} for s in cur]
+        rid = 'review-' + datetime.now().strftime('%Y%m%d-%H%M%S')
+        os.makedirs(core.REPORT_DIR, exist_ok=True)
+        with open(os.path.join(core.REPORT_DIR, f'planned_changes_{rid}.jsonl'), 'w', encoding='utf-8') as f:
+            f.write(json.dumps({'run': rid, 'ts': datetime.now().isoformat(timespec='seconds'), 'item': x['item'], 'key': x['key'], 'title': x['title'],
+                                'field': 'series', 'old': old, 'new': new, 'source': 'review_list', 'dry_run': True}, ensure_ascii=False) + '\n')
+        core.set_decision(mid, 'removed')
+        new_id, err = core.RUNNER.start('apply', undo_args=['--run', rid, '--apply'], label=f"Series removed from the review list: {x['title']}", run_settings={'ABS_BACKUP': False})
+        if err: flash(T(err), 'error'); return redirect(url_for('review_page') + '#sonstiges')
+        return redirect(url_for('run_view', run_id=new_id))
     if action not in ('merge', 'keep', 'merge_as'): abort(400)
     if action == 'merge_as':  # merge, but the candidate's name becomes the target ('choose the target name')
         x = next((r for k in ('series', 'authors') for r in core.review().get(k, []) if r.get('id') == mid), None)
@@ -424,7 +440,7 @@ def review_action(mid, action):
         core.set_decision(mid, 'merge', target=x.get('series'))
     else: core.set_decision(mid, action)
     flash(T('Decision saved. It is applied with the next scan.'), 'ok')
-    return redirect(url_for('review_page') + ('#autoren' if mid.startswith('author|') else '#reihen'))
+    return redirect(url_for('review_page') + ('#autoren' if mid.startswith('author|') else '#sonstiges' if mid.startswith('other|') else '#reihen'))
 
 
 # ---------------------------------------------------------------- runs

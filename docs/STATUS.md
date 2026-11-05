@@ -20,11 +20,11 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [U] Runtime tolerance default lower than 15 % / 20 min | ✅ | measured: 5 %/10 min loses 16, 10 %/15 min 6 of 1920 verified ASINs -> same-BOOK tolerance stays 15/20 (labelled so in the UI); recording details (narrators, publisher, year, abridged) now need runtime within 10 min (74 library books affected) |
 | [U] Per-source search state: found -> REFRESH_DAYS, missing -> next day, 5 misses or 'not listed' -> pause REFRESH_DAYS; blocked = no miss; rating-only passes ask only the missing sources (no Audible request) | ✅ built | source_state.py + 10 unit tests; seeded from history/caches; real-run test on the fake ABS (state persisted only in real runs) open |
 | [A] Phase C: full-library check incl. Hardcover cross-check | ✅ | Audible part (6 bugs fixed) + Hardcover part: 1854/1913 on Hardcover, 7 wrong found and fixed by number rules, library replay shows only those 7 changes |
-| [A] Series merge / author normalisation: every planned merge hand-checked, 0 wrong | ⚠️ 85 % | 19 merges hand-checked; write + undo vs fake ABS ok; REAL test ok (ABS removes emptied series/authors, undo re-creates them with new ids) |
-| [A] Fake-ABS edge cases for series/authors (articles, Saga, Light Novel, translations, initials, two real authors) | ⚠️ | only synthetic unit tests (test_series/test_authors), no fake-ABS books |
+| [A] Series merge / author normalisation: every planned merge hand-checked, 0 wrong | ✅ | baseline merges hand-checked; fresh snapshot of the real library 2026-11-05: 0 pending merges/author fixes (3 locked cases on the review list); translator-chain bug fixed |
+| [A] Fake-ABS edge cases for series/authors (articles, Saga, Light Novel, translations, initials, two real authors) | ✅ | synthetic merge batches 9-11 against the fake ABS (generator tools/merge_synth.py) + unit tests |
 | [U] Synthetic series/author merge batches; 3 clean in a row | ✅ | batches 9-11 clean (56/57/58 cases incl. role credits + empty authors) |
 | [U] One review list with a left menu (books, series, authors, other) | ✅ | |
-| [new] "Other" review cases: book in a series of another author (e.g. Bury Our Bones in "The Age of Madness") | ❌ | |
+| [new] "Other" review cases: book in a series of another author (e.g. Bury Our Bones in "The Age of Madness") | ✅ | review list Other: remove from series (journal, undo) / keep; 11 in the library |
 | [U] Remove empty authors (0 books) - re-checked before delete, never books; checkbox on the scan page + setting | ✅ | tested vs fake ABS (refuses deleting authors with books) |
 | [U] Only real authors: role credits removed / never taken from Audible; learned plain illustrators; checkbox + setting | ✅ | 26 library books cleaned in the dry run |
 | [new] Plain illustrators never seen with a suffix (e.g. only "Kurone Mishima") -> Hardcover contribution roles | ❌ | needs Hardcover quota |
@@ -67,7 +67,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [A] Real write + undo end-to-end against the fake ABS | ✅ | + real pilot on 30 books (user OK) |
 | [A] ABS backup before real runs | ✅ | run stops when it fails (user's ABS max backup size fixed) |
 | [A] Golden list + record/replay + evaluate + regress gate | ✅ | whole library + all synthetic batches |
-| [A] pytest suite | ❌ | tests are scripts run by tools/regress.sh, not bundled as pytest |
+| [A] pytest suite | ✅ | tools/pytest_all.sh (8 test files), step 2a of the regress gate |
 | [A] Review list small, only real doubt cases | ✅ | 8 entries for the whole library; wrong ISBNs without a replacement moved to reports/missing_isbn.json (status page), 529 offline - re-measure with Hardcover |
 | [U] Review list: accept for ISBN and title kinds | ✅ | ASIN (override), title + ISBN (abs_apply: value check, journal, undo, checksum), Hardcover link (override) |
 

@@ -592,9 +592,9 @@ def set_decision(mid, action, **extra):
     with _lock:
         d = decisions(); d[mid] = {'action': action, 'ts': datetime.now().isoformat(timespec='seconds'), **extra}
         _save_json(os.path.join(CONFIG_DIR, 'merge_decisions.json'), d)
-        if action in ('keep', 'undone', 'merge'):  # drop from the review list right away
+        if action in ('keep', 'undone', 'merge', 'removed'):  # drop from the review list right away
             rv = review()
-            for k in ('series', 'authors'): rv[k] = [x for x in rv.get(k, []) if x.get('id') != mid]
+            for k in ('series', 'authors', 'other'): rv[k] = [x for x in rv.get(k, []) if x.get('id') != mid]
             _save_json(os.path.join(CONFIG_DIR, 'merge_review.json'), rv)
 
 
