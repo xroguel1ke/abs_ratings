@@ -495,3 +495,5 @@ ABS backup ok; written: Emily Wilde -> Emily Wilde Series (1 book), V.E. Schwab 
   titles/subtitles/series/publisher/explicit/language/genres/covers fine. Consequences of the shared-LAST_SEARCH bug cleaned with the user's OK:
   wrong review-list proposal 'Dune' -> 'Dissolution' discarded; the 12 affected items removed from rating_history/source_state
   (stored Audible facts of the wrong book) so the next scan checks them fully (state files backed up first).
+- Hardcover streak COMPLETE: H14 (seed 49) 180/180, 105 HC hits; H15 (seed 50) 180/180, 119 HC hits; H16 (seed 51) 180/180, 109 HC hits;
+  0 cross-check drops, no HTTP 429, ~10 min per batch with 3 workers (was ~22). All three after the last core fixes.

@@ -12,7 +12,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | Item | State | Note |
 |---|---|---|
 | [A] Audible matching (ASIN repair/search, store, other edition, language, titles) | ✅ 100 % | 4 clean chains of 180 fresh books (100 EN + 80 DE), 0 wrong matches ever; whole library 1904/1906 existing books correct (99.9 %) |
-| [A] Hardcover matching + cross-check against Audible | ⏳ 80 % | H11/H12/H13 clean (180/180 each), but the LAST_SEARCH + author fixes reset the streak -> 0 of 3; EN ~75 %, DE ~25 % hit rate |
+| [A] Hardcover matching + cross-check against Audible | ✅ 100 % | streak 3 of 3: H14/H15/H16 (seeds 49-51) 180/180 each, 105/119/109 HC hits, 0 cross-check drops, no 429 |
 | [U] Hardcover request minimising | ✅ | combined requests tried and REVERTED (Hardcover charges every search field; caused 429 in H13); one request per step with early stop, shared cool-down, burst guard |
 | [U] Hardcover: title+subtitle and 'Series, Volume N: Title' comparison titles; edition-title lookup (translations) | ✅ | no wrong hits in H12; cross-check unchanged |
 | [A] Phase C: 3 rounds with EVERY Hardcover hit hand-checked | ❌ | quota now available (50k) |
