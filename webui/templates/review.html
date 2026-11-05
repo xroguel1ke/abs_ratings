@@ -49,6 +49,10 @@
 
 <div class="sec" data-sec="sonstiges">
 <div class="card"><h2 style="margin-top:0">{{ _('Other') }}</h2><p class="muted small" style="margin-top:-6px">{{ _('The same recording twice in the library (same author, same narrator, runtime equal to 2 seconds). The script changes nothing here - clean up in ABS itself.') }}</p></div>
+<div class="card"><h3 style="margin-top:0">{{ _('Changed by you in ABS') }} ({{ secs.sonstiges.manual|length }})</h3>
+<p class="muted small" style="margin-top:-6px">{{ _('After the script wrote these fields you (or another tool) changed them in ABS. They are respected and never overwritten again.') }}</p>
+{% for m in secs.sonstiges.manual[:200] %}<div class="small"><a href="{{ url_for('problem', key=m.key) }}">{{ m.title }}</a> – {{ field_label(m.field) }}: <b>{{ m.value }}</b> <span class="muted">({{ m.ts|dt }})</span></div>
+{% else %}<div class="muted small">{{ _('None.') }}</div>{% endfor %}</div>
 {% for d in secs.sonstiges.dups %}<div class="card mcard small"><b>{{ d.titles|join(' · ') }}</b><div class="muted">{{ (d.seconds // 60) }} min · ASIN {{ d.asins|join(' / ') }}</div></div>
 {% else %}<div class="card muted">{{ _('No duplicates found.') }}</div>{% endfor %}
 </div>

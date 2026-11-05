@@ -39,7 +39,25 @@ def patch_media(iid):
     log_write('media', iid, body)
     if body.get('metadata'): it['media']['metadata'].update(body['metadata'])
     if 'tags' in body: it['media']['tags'] = body['tags']
+    sync_listing(iid, it)
     return jsonify(updated=True)
+
+def sync_listing(iid, it):
+    """Like ABS: the library listing shows the current metadata (authorName / narratorName / seriesName derived)."""
+    import time as _t
+    md = it['media']['metadata']
+    names = lambda xs: ', '.join((x.get('name') if isinstance(x, dict) else str(x)) for x in (xs or []) if x)
+    for lst in SNAP['lists'].values():
+        for e in lst.get('results') or []:
+            if e.get('id') != iid: continue
+            em = e.setdefault('media', {}).setdefault('metadata', {})
+            for k in ('title', 'subtitle', 'asin', 'isbn', 'language', 'publisher', 'publishedYear', 'description', 'genres'):
+                if k in md: em[k] = md[k]
+            if 'authors' in md: em['authorName'] = names(md['authors'])
+            if 'narrators' in md: em['narratorName'] = names(md['narrators'])
+            if 'series' in md: em['seriesName'] = ', '.join(f"{x.get('name')} #{x.get('sequence')}" if x.get('sequence') else x.get('name') for x in md['series'] or [] if isinstance(x, dict))
+            if 'tags' in it['media']: e['media']['tags'] = it['media']['tags']
+            e['updatedAt'] = int(_t.time() * 1000)
 
 @app.post('/api/items/<iid>/cover')
 def cover(iid):

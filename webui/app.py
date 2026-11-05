@@ -346,7 +346,7 @@ def review_page():
         'buecher': {'label': T('Books'), 'entries': queue},
         'reihen': {'label': T('Series'), 'review': rv.get('series') or [], 'merged': [m for m in merged if m['kind'] == 'series']},
         'autoren': {'label': T('Authors'), 'review': rv.get('authors') or [], 'merged': [m for m in merged if m['kind'] == 'author']},
-        'sonstiges': {'label': T('Other'), 'dups': rep.get('duplicate_recordings') or []},
+        'sonstiges': {'label': T('Other'), 'dups': rep.get('duplicate_recordings') or [], 'manual': core.manual_fields()},
     }
     counts = {'buecher': len(queue), 'reihen': len(secs['reihen']['review']) + len(secs['reihen']['merged']),
               'autoren': len(secs['autoren']['review']) + len(secs['autoren']['merged']), 'sonstiges': len(secs['sonstiges']['dups'])}

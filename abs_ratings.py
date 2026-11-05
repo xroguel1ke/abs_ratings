@@ -158,6 +158,14 @@ HARDCOVER_PAID = os.getenv('HARDCOVER_PAID', 'false').lower() == 'true'
 HC_DAILY_LIMIT = int(os.getenv('HARDCOVER_DAILY_LIMIT') or (50000 if HARDCOVER_PAID else 5000))
 SOURCE_STATE_FILE = os.path.join(SCRIPT_DIR, 'source_state.json')  # per book + source: found / missing / paused (source_state.py)
 SOURCE_STATE = {}
+# change monitoring: what this script wrote last (per book + field) and fields the user changed himself afterwards
+LAST_WRITTEN_FILE = os.path.join(SCRIPT_DIR, 'last_written.json')   # {key: {field: {'ours': listing-style value, 'old': ...}}}
+MANUAL_FIELDS_FILE = os.path.join(SCRIPT_DIR, 'manual_fields.json') # {key: {field: {'value', 'ts', 'title'}}} never overwritten again
+LAST_WRITTEN, MANUAL_FIELDS = {}, {}
+RUN_MODE = os.getenv('RUN_MODE', 'auto').lower()                     # auto | buildup | maintain
+MAINTAIN_SAMPLE = int(os.getenv('MAINTAIN_SAMPLE', 30))              # maintenance: random due books per run (new / reverted books always)
+MANUAL_LOCK_TAG = os.getenv('MANUAL_LOCK_TAG', 'false').lower() == 'true'  # also set lock_<field> when the user changed a field
+WATCH_FIELDS = ('title', 'subtitle', 'asin', 'authors', 'narrators', 'series', 'publisher', 'publishedYear', 'isbn', 'language')
 LOOKUP_HITS = _TLDict('lookup_hits', {'hardcover': None, 'goodreads': None})  # result count of the last lookup (0 = no such book at all), per thread
 HC_USAGE_FILE = os.path.join(SCRIPT_DIR, 'hardcover_usage.json')  # {'day': 'YYYY-MM-DD' (UTC), 'requests': n}
 HC_CACHE_FILE = os.path.join(SCRIPT_DIR, "hardcover_cache.json")  # key -> {'id': Hardcover book id, 'slug': ...}
@@ -495,9 +503,27 @@ def journal_change(iid, key, title, field, old, new, source, extra=None):
         with IO_LOCK, open(path, 'a', encoding='utf-8') as f: f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except OSError as e: logging.error(f"Journal write failed: {e}")
 
+def listing_value(field, v):
+    """A metadata value in the form of the ABS library listing (one request per run compares against it)."""
+    if v is None: return ''
+    if field in ('authors', 'narrators'):
+        v = ', '.join((x.get('name') if isinstance(x, dict) else str(x)) for x in (v or []) if x)
+    elif field == 'series':
+        v = ', '.join(f"{x.get('name')} #{x.get('sequence')}" if x.get('sequence') not in (None, '') else str(x.get('name')) for x in (v or []) if isinstance(x, dict) and x.get('name'))
+    return re.sub(r'\s+', ' ', str(v)).strip().lower()
+
+def listing_field(item, field):
+    md = (item.get('media') or {}).get('metadata') or {}
+    return {'authors': md.get('authorName'), 'narrators': md.get('narratorName'), 'series': md.get('seriesName')}.get(field, md.get(field))
+
 def abs_update(iid, key, title, updates, old_meta, source, tags=None, old_tags=None, extra=None):
     """The only way this script writes metadata/tags to ABS. Journals every field (old -> new).
     In DRY_RUN nothing is sent, the change is only written to the planned-changes file."""
+    if updates and MANUAL_FIELDS.get(key):  # the user changed these fields himself after our last write: never overwrite
+        kept = [f for f in updates if f in MANUAL_FIELDS[key]]
+        if kept:
+            logging.info(f"        ✋ Not changed (you edited it in ABS): {', '.join(kept)}")
+            updates = {k: v for k, v in updates.items() if k not in kept}
     if not updates and tags is None: return True
     if not DRY_RUN:
         payload = {}
@@ -509,6 +535,8 @@ def abs_update(iid, key, title, updates, old_meta, source, tags=None, old_tags=N
             return False
     for field, new in (updates or {}).items():
         journal_change(iid, key, title, field, (old_meta or {}).get(field), new, source, extra)
+        if field in WATCH_FIELDS and not DRY_RUN:
+            with IO_LOCK: LAST_WRITTEN.setdefault(key, {})[field] = {'ours': listing_value(field, new), 'old': listing_value(field, (old_meta or {}).get(field))}
     if tags is not None: journal_change(iid, key, title, 'tags', old_tags, tags, source, extra)
     return True
 
@@ -2519,7 +2547,17 @@ def run_libraries(history, failed, recheck):
     pool = []
     for lib in LIBRARY_IDS: pool += build_queue(lib, history, recheck)
     random.shuffle(pool)
-    batch = pool[:MAX_BATCH_SIZE]
+    # run mode: build-up = the whole library over several runs (new books first); maintenance = new / changed books always + a small
+    # random sample of the due ones. auto = build-up until every book was completed once.
+    urgent = [it for it in pool if f"{it['_lib']}_{it['id']}" not in history or it.get('_manual_trigger') or it.get('_reverted')]
+    rest = [it for it in pool if it not in urgent]
+    never = sum(1 for it in pool if f"{it['_lib']}_{it['id']}" not in history and f"{it['_lib']}_{it['id']}" not in failed)
+    mode = RUN_MODE if RUN_MODE in ('buildup', 'maintain') else ('buildup' if never or not history else 'maintain')
+    if mode == 'maintain':
+        batch = urgent[:MAX_BATCH_SIZE] + rest[:max(0, min(MAINTAIN_SAMPLE, MAX_BATCH_SIZE - len(urgent)))]
+    else:
+        batch = (urgent + rest)[:MAX_BATCH_SIZE]
+    logging.info(f"Run mode: {mode}{' (auto)' if RUN_MODE not in ('buildup', 'maintain') else ''} - {len(urgent)} new/changed, {len(rest)} other due books")
     per_lib = defaultdict(int)
     for it in batch: per_lib[it['_lib']] += 1
     logging.info(f"Pool: {len(pool)} due books in {len(LIBRARY_IDS)} libraries. This run: {len(batch)} random books "
@@ -2598,6 +2636,11 @@ def build_queue(lib_id, history, recheck):
             try: recheck_due = now_utc >= datetime.fromisoformat(recheck[key])
             except ValueError: recheck_due = True
 
+        watch = watch_changes(key, item)
+        if watch == 'reverted':
+            item['_recheck'] = True; item['_reverted'] = True
+            work_queue.append(item); count_recheck += 1
+            continue
         SST.seed(SOURCE_STATE, key, last_run_dt.isoformat(timespec='seconds'), audible_ok=(RESULTS.get(key) or {}).get('status') in ('ok', 'other_edition'),
                  gr_known=key in GR_CACHE, hc_known=key in HC_CACHE)  # first run with source_state.json: take over what is known
         if is_manual_update:
@@ -2659,6 +2702,32 @@ def remove_ratings_pass():
                 for src in gone: SST.record(SOURCE_STATE, key, src.lower(), 'absent', why='rating removed by you')
     if not DRY_RUN: rw_json(SOURCE_STATE_FILE, SOURCE_STATE)
     logging.info(f"Ratings removed from {n_changed} book(s){' (planned, DRY RUN)' if DRY_RUN else ''}; {n_locked} locked book(s) kept")
+
+def watch_changes(key, item):
+    """Change monitoring (1 listing request per run): a field we wrote now shows its OLD value again (ABS rescan restored a file
+    name title, ...) -> 'reverted' (the book is checked again and our value written again); a NEW value that is neither old nor ours
+    -> the user changed it: respected for good (manual_fields.json, optional lock_<field> tag). ABS does not record WHO changed a field,
+    so doubt counts as the user's change."""
+    fp = LAST_WRITTEN.get(key)
+    if not fp: return None
+    reverted = False
+    for field, e in list(fp.items()):
+        cur = listing_value(field, listing_field(item, field))
+        if field in ('authors', 'narrators', 'series') and listing_field(item, field) is None: continue  # listing without this field
+        if cur == e.get('ours'): continue
+        if e.get('old') and cur == e.get('old'):
+            reverted = True
+            logging.info(f"  ↩️ '{(item.get('media') or {}).get('metadata', {}).get('title')}': {field} is back at its old value - checked again")
+            continue
+        with IO_LOCK:
+            MANUAL_FIELDS.setdefault(key, {})[field] = {'value': cur, 'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+                                                       'title': (item.get('media') or {}).get('metadata', {}).get('title')}
+            fp.pop(field, None)
+        logging.info(f"  ✋ '{(item.get('media') or {}).get('metadata', {}).get('title')}': {field} was changed in ABS by you - never overwritten again")
+        if MANUAL_LOCK_TAG and not DRY_RUN:
+            tags = sorted(item_tags(item) | {f'lock_{"series" if field == "series" else field.replace("publishedYear", "year")}'})
+            abs_update(item['id'], key, (item.get('media') or {}).get('metadata', {}).get('title'), {}, {}, 'manual_lock', tags=tags, old_tags=sorted(item_tags(item)))
+    return 'reverted' if reverted else None
 
 def enabled_sources():
     return ['audible'] + (['hardcover'] if HARDCOVER_ENABLED else []) + (['goodreads'] if GOODREADS_ENABLED else [])
@@ -3459,7 +3528,7 @@ DEBUG_ENV_KEYS = ['ABS_URL', 'LIBRARY_IDS', 'GOODREADS_ENABLED', 'BATCH_SIZE', '
                   'GR_BLOCK_COOLDOWN', 'GR_MAX_COOLDOWNS', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'FILL_COVERS', 'GENRE_LANGUAGE',
                   'SERIES_MERGE', 'SERIES_LOCK_AFTER_MERGE', 'AUTHOR_NORMALIZE', 'LIBRARY_REPORT', 'NO_RATINGS_RECHECK_DAYS',
                   'GR_MISSING_RECHECK_DAYS', 'SEARCH_PENALTY_SLEEP', 'ABS_TIMEOUT',
-                  'HARDCOVER_ENABLED', 'HARDCOVER_INTERVAL', 'HARDCOVER_PAID', 'GR_BOOK_PAGES', 'WORKERS', 'REMOVE_RATINGS', 'RATING_ORDER']  # never API_TOKEN
+                  'HARDCOVER_ENABLED', 'HARDCOVER_INTERVAL', 'HARDCOVER_PAID', 'GR_BOOK_PAGES', 'WORKERS', 'REMOVE_RATINGS', 'RUN_MODE', 'MAINTAIN_SAMPLE', 'MANUAL_LOCK_TAG', 'RATING_ORDER']  # never API_TOKEN
 
 def write_debug_bundle(log_file):
     """One file with everything needed for troubleshooting: settings (no token), the run log, all changes
@@ -3548,6 +3617,7 @@ def main():
     ROLE_NAMES.update(rw_json(ROLE_NAMES_FILE) or [])
     HC_USAGE.update(rw_json(HC_USAGE_FILE) or {})
     SOURCE_STATE.update(rw_json(SOURCE_STATE_FILE) or {})
+    LAST_WRITTEN.update(rw_json(LAST_WRITTEN_FILE) or {}); MANUAL_FIELDS.update(rw_json(MANUAL_FIELDS_FILE) or {})
     FILLED_NARR.update(rw_json(FILLED_NARR_FILE) or [])
     try:  # also every narrator fill already in the journal (runs before this file existed)
         with open(CHANGES_FILE, encoding='utf-8') as f_:
@@ -3570,6 +3640,7 @@ def main():
         if not DRY_RUN: rw_json(COVER_STATE_FILE, COVER_STATE)
         rw_json(ROLE_NAMES_FILE, sorted(ROLE_NAMES))  # knowledge, also from dry runs
         rw_json(HC_USAGE_FILE, HC_USAGE)  # real requests count in dry runs too
+        if not DRY_RUN: rw_json(LAST_WRITTEN_FILE, LAST_WRITTEN); rw_json(MANUAL_FIELDS_FILE, MANUAL_FIELDS)
         if not DRY_RUN: rw_json(FILLED_NARR_FILE, sorted(FILLED_NARR))
 
     series_result = {}

@@ -86,7 +86,7 @@ Status: ✅ done (branch `claude/web-ui`) · 🔜 next · ⏳ later
 - Re-startable any time from the settings page ("Einführung erneut starten").
 - Same design language as the rest of the UI (Material style, light/dark, see "Web UI design"); skippable, progress dots, remembers "completed" in settings.json.
 
-## Run mode "build up, then maintain" + change monitoring (user wish, 2026-11-03) – TODO (after matching is production ready)
+## Run mode "build up, then maintain" + change monitoring (user wish, 2026-11-03) – ✅ done
 1. **Mode instead of a fixed schedule:** (a) build-up: process the whole library over several runs until every book has been completed once; (b) maintenance: new books always, plus ~30 random books per day (configurable) which then count as processed for N days. Scheduler in the web UI just triggers it.
 2. **Change monitoring:** per book remember what the script last wrote (fingerprint of title/ASIN/series/authors/rating block, `last_written.json`). Each run compares with the library list (1 request).
    - field went back to its OLD value from `changes.jsonl` (e.g. ABS rescan restores a file-name title) -> automatic overwrite -> re-check and re-apply;

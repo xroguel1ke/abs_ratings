@@ -28,6 +28,9 @@ FIELDS = [
     ('DRY_RUN', 'Test run (DRY_RUN) for scheduled scans', 'bool', True, 'On = nothing is written to ABS, changes are only planned and logged', 'Run'),
     ('BATCH_SIZE', 'Books per scan', 'int', 300, 'Picked at random from all due books of all libraries', 'Run'),
     ('REFRESH_DAYS', 'Refresh after (days)', 'int', 90, '0 = every book is due (one complete pass)', 'Run'),
+    ('RUN_MODE', 'Run mode', 'choice:auto|buildup|maintain', 'auto', 'auto = build-up until every book was checked once, then maintenance. Maintenance: new and changed books always, plus a few random due books', 'Run'),
+    ('MAINTAIN_SAMPLE', 'Random books per maintenance scan', 'int', 30, 'Besides new and changed books', 'Run'),
+    ('MANUAL_LOCK_TAG', 'Lock tag for fields you changed in ABS', 'bool', False, 'Fields you change yourself in ABS are never overwritten anyway; this also sets the lock_<field> tag in ABS', 'Run'),
     ('ABS_BACKUP', 'ABS backup before real scans', 'bool', True, 'Creates an ABS backup before every scan without DRY_RUN; if it fails nothing is written', 'Run'),
     ('SLEEP_TIMER', 'Extra pause between books (s)', 'float', 0, 'Every source has its own minimum interval, so 0 is safe and fastest', 'Run'),
     ('NO_RATINGS_RECHECK_DAYS', 'Re-check books without ratings (days)', 'int', 7, '', 'Run'),
@@ -139,6 +142,13 @@ def save_scan_form(form):
     s['scan_form'] = f
     save_settings(s)
     return f
+
+
+def manual_fields():
+    """Fields the user changed in ABS after our last write (change monitoring): never overwritten again. Newest first."""
+    d = _load_json(os.path.join(CONFIG_DIR, 'manual_fields.json'), {})
+    out = [{'key': k, 'field': f, **v} for k, fs in d.items() for f, v in (fs or {}).items()]
+    return sorted(out, key=lambda x: x.get('ts') or '', reverse=True)
 
 
 def check_password(s, pw): return check_password_hash(s['password_hash'], pw or '')
