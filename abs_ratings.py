@@ -166,7 +166,7 @@ RUN_MODE = os.getenv('RUN_MODE', 'auto').lower()                     # auto | bu
 MAINTAIN_SAMPLE = int(os.getenv('MAINTAIN_SAMPLE', 30))              # maintenance: random due books per run (new / reverted books always)
 MANUAL_LOCK_TAG = os.getenv('MANUAL_LOCK_TAG', 'false').lower() == 'true'  # also set lock_<field> when the user changed a field
 WATCH_FIELDS = ('title', 'subtitle', 'asin', 'authors', 'narrators', 'series', 'publisher', 'publishedYear', 'isbn', 'language')
-LOOKUP_HITS = _TLDict('lookup_hits', {'hardcover': None, 'goodreads': None})  # result count of the last lookup (0 = no such book at all), per thread
+LOOKUP_HITS = _TLDict('lookup_hits', {'hardcover': None, 'goodreads': None, 'audible': None})  # result count of the last lookup (0 = no such book at all), per thread
 HC_USAGE_FILE = os.path.join(SCRIPT_DIR, 'hardcover_usage.json')  # {'day': 'YYYY-MM-DD' (UTC), 'requests': n}
 HC_CACHE_FILE = os.path.join(SCRIPT_DIR, "hardcover_cache.json")  # key -> {'id': Hardcover book id, 'slug': ...}
 # Order of the sources in the rating block (unknown names are ignored, missing ones are appended)
@@ -219,7 +219,7 @@ GOODREADS_SAMPLE = max(1, int(os.getenv('GOODREADS_SAMPLE', 1)))  # Goodreads on
 GR_ID_TRIES = int(os.getenv('GR_ID_TRIES', 2))  # max Goodreads pages tried per book via Hardcover IDs
 # Max Goodreads searches per run (cached URLs don't count). Keeps the first full pass under Goodreads'
 # bot detection: the rest is deferred to the next run. 0 = unlimited.
-GOODREADS_MAX_PER_RUN = int(os.getenv('GOODREADS_MAX_PER_RUN', 300))
+GOODREADS_MAX_PER_RUN = int(os.getenv('GOODREADS_MAX_PER_RUN', 25))  # measured 2026-11-05: ~100-150 searches in a row, then a bot block for hours
 
 # --- HEADERS & CONSTANTS ---
 FIXED_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
@@ -1448,13 +1448,15 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 r = requests.get(f"https://{host}/1.0/catalog/products", params={"num_results": 5, **q, "response_groups": "product_attrs"},
                                  headers={"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}, timeout=15)
                 if r.status_code == 429: raise RateLimitException(f"HTTP 429 on {host} (API search)", True)
-                if r.status_code != 200: continue
+                if r.status_code != 200: LOOKUP_HITS['audible'] = None; continue
                 api_ok = True
+                if LOOKUP_HITS.get('audible') is not None: LOOKUP_HITS['audible'] += len(r.json().get('products') or [])
                 logging.debug(f"        search {host} {q}: {len(r.json().get('products') or [])} results")
                 for prod in r.json().get('products') or []:
                     if only_queries and duration and prod.get("runtime_length_min") and abs(prod["runtime_length_min"] * 60 - duration) > max(600, 0.1 * duration): continue  # last resort: only candidates with a plausible runtime are fetched
                     if prod.get('asin') and prod['asin'] not in candidates: candidates.append(prod['asin'])
             except (requests.RequestException, ValueError) as e:
+                LOOKUP_HITS['audible'] = None  # no answer: unknown, never 'not on Audible'
                 logging.warning(f"        🌐 Audible API search failed ({host}): {type(e).__name__}")
             if len(candidates) >= 4 and not (title_first and qi == 0): break  # the prepended exact-title query never ends the loop alone (it returns other volumes for 'Renegades of Pern: ..., Book 10')
         if not candidates and not only_extra: logging.info(f"        ↪️ No search results on {domain} ({len(queries)} queries)")
@@ -2861,6 +2863,7 @@ def process_queue(work_queue, history, failed, recheck):
         search_penalty = False
         needs_sleep = False  # Only pause after items that actually hit Audible/Goodreads
         ITEM_LOG.lines = []
+        LOOKUP_HITS['audible'] = 0  # products returned by the Audible searches of THIS book (negative cache)
 
         while True: 
             try:
@@ -3412,8 +3415,14 @@ def process_queue(work_queue, history, failed, recheck):
                     sst_record(key, 'audible', 'not_found', None)
                     record_attempt(key, history, failed, recheck)
                 else:
-                    logging.warning(f"      -> ⚠️ No Audible data (Audible: {has_aud}, GR: {has_gr})")
-                    record_attempt(key, history, failed, recheck)
+                    if LOOKUP_HITS.get('audible') == 0 and not aud_data and not ov.get('asin'):
+                        # negative cache (task): every search in every store answered with NO product at all -> surely not on Audible:
+                        # no 5 daily attempts, the next check is after REFRESH_DAYS
+                        logging.info(f"      -> 🗂️ Not on Audible (no search result in any store): next check in {REFRESH_DAYS} days")
+                        record_attempt(key, history, failed, recheck, complete=True)
+                    else:
+                        logging.warning(f"      -> ⚠️ No Audible data (Audible: {has_aud}, GR: {has_gr})")
+                        record_attempt(key, history, failed, recheck)
 
                 # Result for the web UI dashboard / problem list
                 if aud_data and aud_data.get('related_edition'):

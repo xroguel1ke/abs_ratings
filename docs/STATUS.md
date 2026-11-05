@@ -29,7 +29,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [U] Only real authors: role credits removed / never taken from Audible; learned plain illustrators; checkbox + setting | ✅ | 26 library books cleaned in the dry run |
 | [new] Plain illustrators never seen with a suffix (e.g. only "Kurone Mishima") -> Hardcover contribution roles | ❌ | needs Hardcover quota |
 | [U] Series merge blocked by lock_series -> on the review list (user decides) | ✅ | 3 cases in the library |
-| [A] Negative cache for not-on-Audible books (re-check after ~90 days) | ⚠️ check | failed_history parks books after N attempts until REFRESH_DAYS – verify it matches the task |
+| [A] Negative cache for not-on-Audible books (re-check after ~90 days) | ✅ | no product in any store -> parked until REFRESH_DAYS at once; other misses: 5 daily tries, then REFRESH_DAYS |
 | [U] Group confirmation (same-title books of one series) | ✅ | Realms of War = Spider Queen 1-6 |
 | [U] Covers: Audible cover for verified ASINs, also replacing, backup + undo | ✅ | real ABS undo tested (byte-identical) |
 | [U] ISBN = print edition (HC/Goodreads), Audible audio ISBN last fallback, ASIN never | ✅ | live library test: 227 fixes + 60 fills, 2 wrong (foreign group) fixed by a registration-group check; 409 without safe replacement in the ISBN report |
@@ -46,10 +46,10 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [A] Sparse sampling (GOODREADS_SAMPLE), stop at first block, never bypass | ✅ | |
 | [U] Hardcover Goodreads-ID path first | ✅ | correct 5/5; /book/show may be guarded more strictly than search |
 | [U] Limit measurement until a reliable requests/hour + per night value | ⏳ | test 4: blocked after ~3 book pages; test 5: block on the 7th BOOK page; test 6 (search only): ~75 searches, NO block |
-| [U] Open Library fallback for the Goodreads ID / ISBN | ❌ | measure first |
+| [U] Open Library fallback for the Goodreads ID / ISBN | ✅ not needed | the search list gives the rating in one request; series rows/pages cover volumes |
 | [new] Search-list-only mode: rating from the SEARCH result row, never a /book/show page (GR_BOOK_PAGES=false) | ✅ | new Next.js search layout parser (work.stats); test 6 replay 21/25 found, all hand-checked correct |
 | [U] Goodreads series: series name + number + author confirm a row; series page for other volumes (1 request) | ✅ | test 7 live: 25/25 found, no block |
-| [U] Production rhythm (≈25 per night?) | ❌ | after the measurements |
+| [U] Production rhythm (≈25 per night?) | ✅ | test 8: block after ~125 searches within hours -> 25 per run (default), stop at the first block, continue next day |
 
 ## User findings 2026-11-05
 | Item | State | Note |
@@ -100,7 +100,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 ## Finish (Phase C end)
 | Item | State |
 |---|---|
-| README for the new UI functions | ❌ |
+| README for the new UI functions | ✅ |
 | Change overview for a later merge (to web-ui/main) | ❌ |
 | Final report in LOOP_LOG + to the user (numbers, changes, limits, first-run recommendation) | ❌ |
 | CLAUDE.md / ROADMAP.md up to date with all learned rules | ⚠️ |

@@ -516,3 +516,10 @@ ABS backup ok; written: Emily Wilde -> Emily Wilde Series (1 book), V.E. Schwab 
 - 2026-11-05: one regress run crashed inside difflib ("'int' object has no attribute 'bjunk'" - an object of the wrong type inside the
   interpreter) WITHOUT any file edit during the run; the identical re-run was all green. Same class as the earlier unexplained crashes.
   Not a logic error of the code (not reproducible); possible host-level cause (memory/CPU stability) - reported to the user.
+- Goodreads measurement 8 (150 books, search list only): blocked (bot challenge, WAF) after 5 lookups - after tests 6/7 (~125 searches in the
+  previous hours). Production rhythm: GOODREADS_MAX_PER_RUN default 25 (script now = UI), stop at the first block, next day continues
+  (per-source state: a block is no miss). Open Library fallback not needed any more (search list gives the rating in 1 request).
+- Negative cache (task): a book whose Audible searches return NO product in any store is parked until REFRESH_DAYS at once (no 5 daily attempts).
+- Roadmap items built: description replacement (85 books), narrator=author hygiene, run mode + change monitoring (integration test), review-list
+  accept for ISBN/Hardcover, same-ASIN duplicates, lock report, version + update hint, settings export/import, rating block format
+  (sources/order/icons/labels/position/min count), CSV export, genre rules, quick mode, "merge as" target name, linked report with re-check.

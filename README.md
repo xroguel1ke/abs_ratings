@@ -4,13 +4,20 @@
 ![Platform](https://img.shields.io/badge/Platform-Unraid%20%7C%20Docker-orange)
 ![Vibecoding](https://img.shields.io/badge/Vibecoded-✨-purple)
 
-A fully automated script designed for **Audiobookshelf (ABS)** on **Unraid**. It scrapes ratings from **Audible** (multiple regions) and **Goodreads** and injects them directly into your audiobook descriptions.
+A fully automated tool for **Audiobookshelf (ABS)** on **Unraid**. It writes ratings from **Audible** (all regions), **Hardcover** and **Goodreads**
+into your audiobook descriptions and keeps the metadata clean (ASIN repair, titles, series, authors, genres, language, covers, ISBN) -
+with a web UI, a test-run mode, a change journal and undo for every write. The guiding rule: **0 wrong matches**; anything uncertain goes to the
+review list instead of being written.
 
 ## ✨ Features
 
+* **Web UI (Docker):** overview, books with certainty score, review list, status/coverage, scans with test run + apply, history with undo, settings, English/German.
+* **Hardcover:** ratings and the print ISBN via the GraphQL API (cross-checked against the Audible product; free plan 5000/day or paid plan 50000/day).
+* **Search only what is missing:** every source is tracked per book (found -> next refresh, nothing found -> next day, 5 misses or not listed -> pause).
+* **Parallel books:** 3 books at once, never more than one request in flight per host.
 * **Dockerized Execution:** Runs via a temporary `python:3.11-slim` container using a wrapper script. No dependency hell on your host.
 * **Audible Catalog API:** Ratings (overall/performance/story) and metadata come from Audible's JSON API (`.com` & `.de`). Scraping the product pages is only used as a fallback.
-* **Goodreads:** Ratings via ISBN/ASIN lookup or text search with title/author/volume matching.
+* **Goodreads (experimental):** ratings read straight from the search list (no book pages - those trigger the bot block), series name + number confirm volumes; stops at the first block.
 * **Auto-Repair & Fallback:** Automatically searches for missing ASINs (Audible search API, verified by title, author and runtime) and updates them in ABS.
 * **Title Repair:** Broken, file-name style titles such as `The Book of the New Sun 05 The Urth of the New Sun` or `High Spirits: High Spirits: A Cultural History…` are detected, searched with the clean title and corrected to Audible's title (and subtitle, if empty). Normal titles are never touched.
 * **Goodreads Cache:** Once a Goodreads book page was found, its URL is remembered (`goodreads_cache.json`), so refreshes need a single request.
@@ -23,10 +30,17 @@ A fully automated script designed for **Audiobookshelf (ABS)** on **Unraid**. It
 
 ## 🐳 Docker container with web UI (recommended)
 
-A permanent container with a web UI on port **47823**: settings, schedule (weekdays + time or cron), dashboard with
-problem list and manual fixes (paste an ASIN / Audible / Goodreads / Hardcover link), merged & merge-review tabs,
-live logs with download, notifications via Apprise. Image: `ghcr.io/xroguel1ke/abs_ratings` (`:web-ui` test branch,
-`:latest` = main), built automatically by GitHub Actions.
+A permanent container with a web UI on port **47823**, English by default (German under *Settings → Interface*):
+
+* **Overview** – what needs you, last/next scan, library numbers.
+* **Books** – every checked book with a certainty score (0-100), ABS ↔ Audible ↔ Hardcover comparison, reasoning, manual fix (ASIN or link), remove ratings, test/real run per book.
+* **Review list** – only real decisions: uncertain ASIN/title/ISBN/Hardcover proposals (accept/discard), series and author merges (merge / merge as … / keep separate), automatically merged series/authors to confirm or undo, fields you changed yourself, duplicates.
+* **Status** – coverage of every field with trend, books without a value (linked, one-click re-check), Hardcover budget, Goodreads state, lock report, CSV export.
+* **Scans** – tasks as checkboxes (metadata & ratings, authors, series, only real authors, empty authors, remove ratings), test run or real (with optional ABS backup); options for one scan only; live progress. A test run can be reviewed and applied selectively without new requests.
+* **History** – every real change, old → new (removed parts red, added parts green), undo per field, book or scan.
+* **Settings** – sections with save buttons, schedule (weekdays/time or cron), quick mode, run mode (build-up / maintenance), sources and rating block format, notifications via Apprise, logs, export/import.
+
+Image: `ghcr.io/xroguel1ke/abs_ratings` (`:web-ui` test branch, `:latest` = main), built automatically by GitHub Actions.
 
 **Unraid:** Docker → Add Container → Template URL / or fill in manually:
 * Repository: `ghcr.io/xroguel1ke/abs_ratings:web-ui`
@@ -34,7 +48,7 @@ live logs with download, notifications via Apprise. Image: `ghcr.io/xroguel1ke/a
 * Path: `/config` → `/mnt/user/appdata/audiobookshelf/abs_scripts` (your existing folder: history, caches and logs are kept)
 
 Template: [`unraid/abs-ratings.xml`](unraid/abs-ratings.xml). First login: password `admin`, you are asked to change it.
-Then enter ABS URL + token under *Einstellungen*, pick the libraries and save.
+Then enter ABS URL + token under *Settings → Connection*, pick the libraries and save. Start with a **test run**.
 
 Plain Docker:
 ```bash
@@ -93,7 +107,13 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 | `GOODREADS_ENABLED` | `false` = no Goodreads requests at all (existing Goodreads ratings in the description are kept). | `true` |
 | `GOODREADS_MAX_PER_RUN` | Max Goodreads searches per run (cached books don't count, `0` = unlimited). The rest follows in the next runs. | `300` |
 | `SEARCH_PENALTY_SLEEP` | Optional extra pause after an ASIN search. | `0` |
-| `RUNTIME_TOLERANCE_PCT` / `RUNTIME_TOLERANCE_MIN` | Runtime difference that counts as another edition (both must be exceeded). | `15` / `20` |
+| `RUNTIME_TOLERANCE_PCT` / `RUNTIME_TOLERANCE_MIN` | Runtime difference that counts as another BOOK (both must be exceeded); recording details need 10 min. | `15` / `20` |
+| `HARDCOVER_ENABLED` / `HARDCOVER_TOKEN` / `HARDCOVER_PAID` | Hardcover ratings + print ISBN; own daily budget 5000 (free) or 50000 (paid). | `true` / – / `false` |
+| `WORKERS` | Books processed at the same time (max. 1 request per host). | `3` |
+| `RUN_MODE` / `MAINTAIN_SAMPLE` | `auto`, `buildup` or `maintain` / random due books per maintenance run. | `auto` / `30` |
+| `GR_BOOK_PAGES` | Also load Goodreads book pages (off = search list only). | `false` |
+| `RATING_ORDER`, `RATING_ICONS`, `RATING_LABELS`, `RATING_POSITION`, `RATING_MIN_COUNT` | Shown sources + order, moons/stars, en/de, top/bottom, minimum ratings. | `audible,goodreads,hardcover`, `moons`, `en`, `top`, `0` |
+| `GENRE_RULES` | Lines `Old => New` or `Old => -` for genres from Audible. | – |
 | `FILL_COVERS` | Set the Audible cover when ABS has none. | `true` |
 | `GENRE_LANGUAGE` | `en` = translate audible.de genres, `keep` = keep as delivered. | `en` |
 | `SERIES_MERGE` / `LIBRARY_REPORT` | ABS-only series merge / library report at the end of the run. | `true` |
@@ -112,21 +132,31 @@ Open `userscript.sh` and adjust the **CONFIGURATION** section:
 
 Audible ratings and metadata come from the API and are fast (one request per book). Goodreads has no API and blocks bots after a while, so the **first** pass is spread over several runs: each run searches Goodreads for at most `GOODREADS_MAX_PER_RUN` books, the rest is re-checked the next day. Once a book is found, its Goodreads URL is cached, so later refreshes need one request per book.
 
-### Re-checks instead of strikes
+### Only what is missing is searched (per source)
 
-* **No ratings yet:** If the Audible product page exists but nobody has rated the book yet, the script does **not** search for a replacement ASIN. It re-checks the book after `NO_RATINGS_RECHECK_DAYS`.
-* **Only Goodreads missing:** If Audible worked, a missing Goodreads match does not count as a failed attempt. The book is re-checked after `GR_MISSING_RECHECK_DAYS`.
-* **Goodreads blocked:** If Goodreads blocks the script (HTTP 403/429/503, bot challenge, login wall), the script pauses for `GR_BLOCK_COOLDOWN` seconds and retries. If it is still blocked, Goodreads is skipped for the rest of the run and the book is re-checked the next day. The notification shows `⚠️ Goodreads blocked`.
-* Only books without any Audible data get "strikes". After 5 strikes they wait for the normal `REFRESH_DAYS`.
+Every source (Audible, Hardcover, Goodreads) is tracked per book in `source_state.json`:
 
-Scheduled re-checks are stored in `recheck_history.json`.
+* **found** – not asked again until `REFRESH_DAYS` have passed.
+* **nothing found** – asked again in the next daily run; after 5 misses in a row paused until `REFRESH_DAYS`.
+* **surely not there** (the source has no such book at all) – paused at once.
+* **blocked / budget used** – no miss, the next run simply tries again.
+
+If Audible is fresh and only Goodreads or Hardcover is missing, a light pass asks only those sources (no Audible request) and adds the
+rating to the existing block. **Run mode** `auto`: build-up until every book was checked once, then maintenance (new and changed books always,
+plus `MAINTAIN_SAMPLE` random due books). **Change monitoring:** a field the script wrote that shows its old value again (ABS rescan) is written
+again; a field you changed yourself afterwards is never overwritten (listed in the review list, optional lock tag).
 
 ## 📝 Metadata Rules
 
 Everything is decided automatically. If a match is not certain, nothing is changed (the reason is logged).
 
 * **Runtime check:** If the ABS file duration and Audible's runtime differ by more than `RUNTIME_TOLERANCE_PCT` (15 %) **and** `RUNTIME_TOLERANCE_MIN` (20 min), the ASIN probably points to another edition. The script searches for the right one; if none is found, only the ratings are used and no metadata is changed.
-* **Filled only when empty:** narrators, authors, publisher, year, ISBN, cover, description (Audible summary).
+* **Filled only when empty:** narrators, authors, publisher, year, ISBN, cover, description (Audible summary). Recording details (narrators, publisher, year, abridged) only from the same recording (runtime within 10 min).
+* **Cover:** set for a verified ASIN (same recording) even if ABS has one (`UPDATE_COVERS`); the old cover is backed up, undo uploads it again.
+* **ISBN = the print edition:** from the verified Hardcover book (same language, registration group checked), then Goodreads, the audio ISBN from Audible only as a last fallback; an ASIN in the ISBN field is replaced only by a verified ISBN.
+* **Description:** Audible's complete summary replaces the ABS text only if that is a truncated beginning of it or very short (chapter names, placeholders); an own text is never replaced.
+* **Narrator = author** (file tags) is replaced by Audible's narrators of the same recording.
+* **Only real authors:** illustrators, translators, editors … are removed from the author field when a real author remains (`REMOVE_ROLE_CREDITS`); empty ABS authors (0 books) are deleted (`REMOVE_EMPTY_AUTHORS`).
 * **Explicit:** only set to true when Audible marks the product as adult content.
 * **Language:** ISO codes are normalized (`eng` → `English`, `deu` → `German`, ...). If ABS and Audible disagree, title, narrator and series decide (if there is no narrator/series to compare, nothing is changed): if they match Audible, the ABS language is corrected; if not (translated title, different narrator, or `lock_language`), the ASIN belongs to another language edition and the edition in the ABS language is searched. If none is found, metadata is left alone.
 * **Genres from audible.de** are translated to the English Audible names (`GENRE_LANGUAGE=en`); untranslated names are listed in the library report.
