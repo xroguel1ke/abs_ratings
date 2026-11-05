@@ -510,3 +510,6 @@ ABS backup ok; written: Emily Wilde -> Emily Wilde Series (1 book), V.E. Schwab 
   'Part N', alternative-title-only hit of another volume for English books). Library replay: exactly these 7 changed (5 now none, Mark of the
   Crijik + Resistance Above Magic + Mynoghra now the right volume), 0 other changes, Hardcover golden unchanged. Two unclear ID-tied cases left
   (Tom Sawyer -> Tom Sawyer Abroad via the ABS ISBN; Arch Magus Publisher's Pack 1 -> Pack 2 via the ABS ASIN) - ABS identifiers decide there.
+- ISBN live test (library, Hardcover live): 227 wrong ISBNs replaced + 60 empty filled with print ISBNs of the verified Hardcover book;
+  409 without a safe replacement stay (ISBN report). Registration group vs book language: 2 wrong (Russian 978-5 for 'Assassin's Quest',
+  Serbian 978-86 for 'The Rise of Endymion': Hardcover marked them English) -> group check added; replay: both now English print ISBNs, nothing else changed.

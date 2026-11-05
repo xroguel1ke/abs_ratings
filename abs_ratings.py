@@ -2331,8 +2331,17 @@ def hc_replacement_isbn(hc, asin, abs_dur, abs_lang="English"):
     data = hc_query("query($id:Int!){ editions(where:{book_id:{_eq:$id}, isbn_13:{_is_null:false}}, limit:25){ isbn_13 asin audio_seconds language{ language } } }", {'id': hc['id']})
     eds = [(normalize_isbn(e.get('isbn_13')), e) for e in ((data or {}).get('editions') or [])]
     eds = [(i, e) for i, e in eds if i and isbn_checksum_ok(i) and not e.get('asin') and not e.get('audio_seconds')]
-    same_lang = [(i, e) for i, e in eds if str(((e.get('language') or {}).get('language')) or '').lower() == str(abs_lang or '').lower()]
+    same_lang = [(i, e) for i, e in eds if str(((e.get('language') or {}).get('language')) or '').lower() == str(abs_lang or '').lower()
+                 and isbn_group_fits(i, abs_lang)]  # Hardcover's edition language is sometimes wrong (a Russian 978-5 'English' edition)
     return (same_lang[0][0], 'print edition of the same book (same language)') if same_lang else None
+
+ISBN_GROUPS = {'english': ('9780', '9781', '9798'), 'german': ('9783',), 'french': ('9782',), 'spanish': ('97884',), 'italian': ('97888',),
+               'dutch': ('97890', '97894'), 'japanese': ('9784',)}
+
+def isbn_group_fits(isbn13, lang):
+    """The ISBN registration group must belong to the book language (978-0/1 and 979-8 English, 978-3 German, ...); unknown language: no check."""
+    groups = ISBN_GROUPS.get(str(lang or '').lower())
+    return not groups or str(isbn13 or '').startswith(groups)
 
 def normalize_desc(d):
     """Compare descriptions independent of how ABS stores them ('<br />' vs '<br>', '&amp;' vs '&')."""

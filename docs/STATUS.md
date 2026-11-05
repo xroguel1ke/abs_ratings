@@ -32,7 +32,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [A] Negative cache for not-on-Audible books (re-check after ~90 days) | ⚠️ check | failed_history parks books after N attempts until REFRESH_DAYS – verify it matches the task |
 | [U] Group confirmation (same-title books of one series) | ✅ | Realms of War = Spider Queen 1-6 |
 | [U] Covers: Audible cover for verified ASINs, also replacing, backup + undo | ✅ | real ABS undo tested (byte-identical) |
-| [U] ISBN = print edition (HC/Goodreads), Audible audio ISBN last fallback, ASIN never | ⚠️ 80 % | built + offline tested; live test with Hardcover open; then re-measure the 636 ISBN review entries |
+| [U] ISBN = print edition (HC/Goodreads), Audible audio ISBN last fallback, ASIN never | ✅ | live library test: 227 fixes + 60 fills, 2 wrong (foreign group) fixed by a registration-group check; 409 without safe replacement in the ISBN report |
 | [U] Description update when ABS text is truncated/very short and Audible's is clearly complete | ❌ | |
 | [U] Narrator == author hygiene (remove the wrong ABS narrator) | ❌ | search already ignores it |
 | [U] Duplicate books report (same recording twice) in the UI | ❌ | data exists (library_report duplicate_recordings) |
