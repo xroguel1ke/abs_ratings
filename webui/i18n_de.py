@@ -101,7 +101,10 @@ add({
 add({
     # navigation / base
     'Overview': 'Übersicht', 'Review list': 'Prüfliste', 'Status': 'Status', 'Scans': 'Scans', 'History': 'Verlauf', 'Settings': 'Einstellungen',
-    'Menu': 'Menü', 'yes': 'ja', 'no': 'nein', 'Scan running': 'Scan läuft', 'Search…': 'Suchen…', 'running': 'läuft', 'next scan': 'nächster Scan', 'Light / dark': 'Hell / dunkel',
+    'Menu': 'Menü', 'Remove ratings': 'Bewertungen entfernen', 'instead of a normal scan': 'statt eines normalen Scans', 'all books': 'alle Bücher',
+    'Removes the chosen lines from the rating block of all books (or the list under "Which books"). Every change can be undone in the History. The source is paused for these books until the refresh time; switch it off in the settings to keep it away for good.':
+        'Entfernt die gewählten Zeilen aus dem Bewertungsblock aller Bücher (oder der Liste unter „Welche Bücher“). Jede Änderung lässt sich im Verlauf rückgängig machen. Die Quelle wird für diese Bücher bis zur Auffrischzeit pausiert; damit sie dauerhaft weg bleibt, in den Einstellungen abschalten.',
+    'Please choose at least one source.': 'Bitte mindestens eine Quelle wählen.', 'Remove the chosen ratings from this book? (can be undone in the History)': 'Die gewählten Bewertungen von diesem Buch entfernen? (im Verlauf rückgängig machbar)', 'Remove': 'Entfernen', 'ABS backup before a real scan': 'ABS-Backup vor echtem Scan', 'Ask ABS for a backup before anything is written (takes a few minutes for big libraries)': 'ABS legt ein Backup an, bevor etwas geschrieben wird (dauert bei großen Bibliotheken einige Minuten)', 'yes': 'ja', 'no': 'nein', 'Scan running': 'Scan läuft', 'Search…': 'Suchen…', 'running': 'läuft', 'next scan': 'nächster Scan', 'Light / dark': 'Hell / dunkel',
     'Password': 'Passwort', 'Log out': 'Abmelden',
     # overview
     'Not set up yet: please enter the ABS URL, token and libraries under': 'Noch nicht eingerichtet: bitte ABS-URL, Token und Bibliotheken eintragen unter',

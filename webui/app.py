@@ -220,6 +220,13 @@ def problem(key):
         if action == 'unignore':
             core.save_override(key, {'ignore': False}); flash(T('No longer ignored.'), 'ok')
             return redirect(url_for('problem', key=key))
+        if action == 'remove_ratings':
+            rm = [src for src in ('audible', 'goodreads', 'hardcover') if request.form.get(f'rm_{src}') == 'on']
+            if not rm: flash(T('Please choose at least one source.'), 'error'); return redirect(url_for('problem', key=key))
+            run_id, err = core.RUNNER.start('item', dry_run=False, only_items=[key], label=f"Remove ratings ({', '.join(rm)}): {res.get('title')}",
+                                            run_settings={'REMOVE_RATINGS': ','.join(rm), 'ABS_BACKUP': False})
+            if err: flash(T(err), 'error'); return redirect(url_for('problem', key=key))
+            return redirect(url_for('run_view', run_id=run_id, back=key))
         data = {}
         for field in ('smart', 'asin', 'goodreads', 'hardcover'):
             val = (request.form.get(field) or '').strip()
@@ -385,7 +392,8 @@ def queue_action(qid, action):
             f.write(json.dumps({'run': rid, 'ts': datetime.now().isoformat(timespec='seconds'), 'item': iid, 'key': item['key'], 'title': item.get('title'),
                                 'field': 'title', 'old': item.get('title'), 'new': item['candidate'], 'source': 'review_list', 'dry_run': True}, ensure_ascii=False) + '\n')
         core.set_queue_decision(qid, action)
-        new_id, err = core.RUNNER.start('apply', undo_args=['--run', rid, '--apply'], label=f"Title from the review list: {item.get('title')}")
+        new_id, err = core.RUNNER.start('apply', undo_args=['--run', rid, '--apply'], label=f"Title from the review list: {item.get('title')}",
+                                             run_settings={'ABS_BACKUP': False})  # the user checked it himself: no 3-minute ABS backup (undo stays possible)
         if err: flash(T(err), 'error'); return redirect(url_for('review_page') + '#buecher')
         return redirect(url_for('run_view', run_id=new_id))
     elif action == 'accept':
@@ -417,12 +425,25 @@ def runs():
         if a == 'start':  # scan page: tasks as checkboxes (metadata & ratings / authors / series) + test-run switch
             core.save_scan_form(request.form)  # remembered for the next visit (never changes the settings)
             meta, authors, series, roles, empty = (request.form.get(k) == 'on' for k in ('task_meta', 'task_authors', 'task_series', 'task_roles', 'task_empty'))
+            rm = [src for src in ('audible', 'goodreads', 'hardcover') if request.form.get(f'rm_{src}') == 'on']
+            if rm:  # remove-ratings task: runs alone (no searches, no metadata)
+                dry = request.form.get('dry') == 'on'
+                s_ = core.load_settings()
+                items, note = (None, T('all books'))
+                if request.form.get('custom') == '1' and request.form.get('selection', 'all') != 'all':
+                    items, note = core.select_items(s_, request.form.get('selection'), request.form.get('list', ''), limit=5000)
+                    if not items: flash(T('No books for this selection (%(n)s).', n=note), 'error'); return redirect(url_for('runs'))
+                run_id, err = core.RUNNER.start('full', dry_run=dry, only_items=items, label=f"{'Test run' if dry else 'Scan (real)'}: remove ratings ({', '.join(rm)}) – {note}",
+                                                run_settings={'REMOVE_RATINGS': ','.join(rm), 'ABS_BACKUP': request.form.get('backup') == 'on'})
+                if err: flash(T(err), 'error'); return redirect(url_for('runs'))
+                return redirect(url_for('run_view', run_id=run_id))
             if not (meta or authors or series or roles or empty): flash(T('Please choose at least one task.'), 'error'); return redirect(url_for('runs'))
             dry = request.form.get('dry') == 'on'
             kind = 'full' if meta else 'series'  # without metadata only the series/author task runs (whole library)
             tasks = [t for t, on in (('metadata', meta), ('authors', authors), ('series', series), ('only real authors', roles), ('empty authors', empty)) if on]
             label = f"{'Test run' if dry else 'Scan (real)'}: {', '.join(tasks)}"
-            rs = {'SERIES_MERGE': series, 'AUTHOR_NORMALIZE': authors, 'REMOVE_ROLE_CREDITS': roles, 'REMOVE_EMPTY_AUTHORS': empty}
+            rs = {'SERIES_MERGE': series, 'AUTHOR_NORMALIZE': authors, 'REMOVE_ROLE_CREDITS': roles, 'REMOVE_EMPTY_AUTHORS': empty,
+                  'ABS_BACKUP': request.form.get('backup') == 'on'}
         else:  # older buttons (kept for links / scripts)
             kind = {'run': 'full', 'dry': 'full', 'series': 'series'}.get(a)
             if not kind: abort(400)

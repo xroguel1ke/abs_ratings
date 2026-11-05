@@ -85,9 +85,16 @@ class _BookLogRouter(logging.Handler):
         if not buf: return
         _TL.logbuf = []
         with IO_LOCK:
+            # '(n/total)' = books FINISHED so far (in queue order the workers finish out of order: 174, 214, 135 ... made the progress jump)
+            for r in buf:
+                if isinstance(r.msg, str) and (m := re.match(r'^\((\d+)/(\d+)\)', r.msg)):
+                    BOOKS_DONE[0] += 1
+                    r.msg = f"({BOOKS_DONE[0]}/{m.group(2)})" + r.msg[m.end():]
+                    break
             for r in buf:
                 for h in self.real: h.handle(r)
 LOG_ROUTER = None
+BOOKS_DONE = [0]  # finished books of the current run_books() (progress numbering with parallel workers)
 
 
 # ================= CONFIGURATION =================
@@ -185,6 +192,8 @@ GENRE_LANGUAGE = os.getenv('GENRE_LANGUAGE', 'en').lower()            # 'en' = t
 SERIES_MERGE = os.getenv('SERIES_MERGE', 'true').lower() == 'true'    # ABS-only series merge task at the end
 LIBRARY_REPORT = os.getenv('LIBRARY_REPORT', 'true').lower() == 'true'
 SERIES_ONLY = os.getenv('SERIES_ONLY', 'false').lower() == 'true'     # Only run the ABS-only series/report task
+# Remove ratings task (web UI): 'audible,goodreads,hardcover' or 'all' - only this task runs (no searches, no metadata)
+REMOVE_RATINGS = {x.strip().capitalize() for x in os.getenv('REMOVE_RATINGS', '').replace('all', 'audible,goodreads,hardcover').split(',') if x.strip()}
 AUTHOR_NORMALIZE = os.getenv('AUTHOR_NORMALIZE', 'true').lower() == 'true'  # Unify author spellings (series task)
 SERIES_LOCK_AFTER_MERGE = os.getenv('SERIES_LOCK_AFTER_MERGE', 'false').lower() == 'true'  # Old behaviour: tag lock_series
 NO_RATINGS_RECHECK_DAYS = int(os.getenv('NO_RATINGS_RECHECK_DAYS', 7))  # New releases without ratings yet
@@ -2165,10 +2174,12 @@ def get_hardcover_data(key, targets, authors, asin, isbn, manual_url=None, use_c
                 go_on = not fresh or HC_STATE['cooldowns'] <= 2 and HC_STATE.get('cool_ts', 0) > time.monotonic() - 1
             if go_on and not HC_STATE['disabled']:
                 wait = max(1, 60 - (time.monotonic() - HC_STATE['cool_ts']))
-                logging.warning(f"        ⏸️ Hardcover rate limit ({e}). Waiting {wait:.0f}s ({HC_STATE['cooldowns']}/2)...")
+                logging.warning(f"        ⏸️ Hardcover per-minute limit ({e}). Waiting {wait:.0f}s ({HC_STATE['cooldowns']}/2)...")
                 time.sleep(wait); continue
-            HC_STATE['disabled'] = 'rate limit'
-            logging.warning("        🛑 Hardcover still rate limited. Skipping Hardcover for the rest of this run.")
+            left = HC_STATE.get('daily_left')
+            HC_STATE['disabled'] = f"per-minute limit (HTTP 429){f', daily requests left: {left}' if left is not None else ''}"
+            logging.warning(f"        🛑 Hardcover still answers HTTP 429 = the per-MINUTE limit (60/min, shared by everything using this token), "
+                            f"not the daily limit{f' ({left} requests left today)' if left is not None else ''}. Skipping Hardcover for the rest of this run.")
             return None, 'blocked'
 
 def _hardcover_lookup(key, targets, authors, asin, isbn, manual_url, use_cache, abs_series):
@@ -2555,6 +2566,38 @@ def gr_book_series(meta, aud):
         m_ = re.search(r'\d+(?:\.\d+)?', str(cs.get('part') or cs.get('sequence') or ''))
         if n and m_: out.append((n, m_.group(0)))
     return list(dict.fromkeys(out))
+
+def remove_ratings_pass():
+    """Remove the rating lines of REMOVE_RATINGS from the rating block of every book (ONLY_ITEMS or all libraries).
+    Journaled like every write (undo restores the old description); lock_description respected. The source is paused for the
+    book until REFRESH_DAYS, so the next scan does not add it right back (switch the source off to keep it away for good)."""
+    keys = list(ONLY_ITEMS) if ONLY_ITEMS else []
+    if not keys:
+        for lib in LIBRARY_IDS:
+            try: keys += [f"{lib}_{it['id']}" for it in abs_session.get(f"{ABS_URL}/api/libraries/{lib}/items").json().get('results') or []]
+            except Exception as e: logging.error(f"Library {lib}: {e}")
+    logging.info(f"Remove ratings ({', '.join(sorted(REMOVE_RATINGS))}) from {len(keys)} book(s){' - DRY RUN' if DRY_RUN else ''}")
+    n_changed = n_locked = 0
+    for i, key in enumerate(keys):
+        lib, _, iid = key.partition('_')
+        try: it = abs_session.get(f"{ABS_URL}/api/items/{iid}", params={'expanded': 1}).json()
+        except Exception as e: logging.warning(f"  {key}: {e}"); continue
+        meta = (it.get('media') or {}).get('metadata') or {}
+        cur = meta.get('description') or ''
+        old = parse_rating_block(cur)
+        gone = [src for src in old if src in REMOVE_RATINGS]
+        if not gone: continue
+        from abs_series import expand_locks
+        if 'lock_description' in expand_locks(item_tags(it)):
+            n_locked += 1; logging.info(f"  🔒 {meta.get('title')}: description locked, ratings kept"); continue
+        new = build_description(cur, {}, {k: v for k, v in old.items() if k not in REMOVE_RATINGS})
+        if abs_update(iid, key, meta.get('title'), {'description': new}, meta, 'ratings_removed'):
+            n_changed += 1
+            logging.info(f"  {'WOULD REMOVE' if DRY_RUN else 'removed'}: {meta.get('title')} - {', '.join(gone)}")
+            if not DRY_RUN:
+                for src in gone: SST.record(SOURCE_STATE, key, src.lower(), 'absent', why='rating removed by you')
+    if not DRY_RUN: rw_json(SOURCE_STATE_FILE, SOURCE_STATE)
+    logging.info(f"Ratings removed from {n_changed} book(s){' (planned, DRY RUN)' if DRY_RUN else ''}; {n_locked} locked book(s) kept")
 
 def enabled_sources():
     return ['audible'] + (['hardcover'] if HARDCOVER_ENABLED else []) + (['goodreads'] if GOODREADS_ENABLED else [])
@@ -3256,6 +3299,7 @@ def run_books(work_queue, one):
             if stats['aborted_ratelimit']: break
         return
     groups = {}
+    BOOKS_DONE[0] = 0
     for idx, item in enumerate(work_queue): groups.setdefault(_author_lane(item), []).append((idx, item))
     jobs = _queue_mod.Queue()
     for g in sorted(groups.values(), key=lambda g: g[0][0]): jobs.put(g)  # keep the (random) queue order as far as possible
@@ -3340,7 +3384,7 @@ DEBUG_ENV_KEYS = ['ABS_URL', 'LIBRARY_IDS', 'GOODREADS_ENABLED', 'BATCH_SIZE', '
                   'GR_BLOCK_COOLDOWN', 'GR_MAX_COOLDOWNS', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'FILL_COVERS', 'GENRE_LANGUAGE',
                   'SERIES_MERGE', 'SERIES_LOCK_AFTER_MERGE', 'AUTHOR_NORMALIZE', 'LIBRARY_REPORT', 'NO_RATINGS_RECHECK_DAYS',
                   'GR_MISSING_RECHECK_DAYS', 'SEARCH_PENALTY_SLEEP', 'ABS_TIMEOUT',
-                  'HARDCOVER_ENABLED', 'HARDCOVER_INTERVAL', 'HARDCOVER_PAID', 'GR_BOOK_PAGES', 'WORKERS', 'RATING_ORDER']  # never API_TOKEN
+                  'HARDCOVER_ENABLED', 'HARDCOVER_INTERVAL', 'HARDCOVER_PAID', 'GR_BOOK_PAGES', 'WORKERS', 'REMOVE_RATINGS', 'RATING_ORDER']  # never API_TOKEN
 
 def write_debug_bundle(log_file):
     """One file with everything needed for troubleshooting: settings (no token), the run log, all changes
@@ -3437,6 +3481,10 @@ def main():
     logging.getLogger().addHandler(ITEM_LOG)
     if ABS_BACKUP and not DRY_RUN and not create_abs_backup():
         return fail_early(log_file, start_time, "ABS backup failed - nothing was written. Check ABS: Settings -> Backups (backup path, disk space) or set ABS_BACKUP=false to run without a backup.")
+    if REMOVE_RATINGS:
+        remove_ratings_pass()
+        log_run_summary(start_time, {}); write_env_file(log_file, start_time); write_debug_bundle(log_file)
+        return
     if not SERIES_ONLY:
         run_libraries(history, failed, recheck)
         group_confirm()

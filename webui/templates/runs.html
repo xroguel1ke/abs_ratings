@@ -10,9 +10,18 @@
   <label class="badge" title="{{ _('Remove illustrators, translators, editors, forewords … from the author field (only when a real author remains)') }}"><input type="checkbox" name="task_roles" {{ 'checked' if f.task_roles }}> {{ _('Only real authors') }}</label>
   <label class="badge" title="{{ _('Delete ABS authors without a single book') }}"><input type="checkbox" name="task_empty" {{ 'checked' if f.task_empty }}> {{ _('Remove empty authors') }}</label>
   <span style="flex:1"></span>
+  <label class="badge" id="backupopt" title="{{ _('Ask ABS for a backup before anything is written (takes a few minutes for big libraries)') }}"><input type="checkbox" name="backup" {{ 'checked' if f.backup }}> {{ _('ABS backup before a real scan') }}</label>
   <label class="badge"><input type="checkbox" name="dry" id="dry" {{ 'checked' if f.dry }} onchange="dryToggle()"> {{ _('Test run (write nothing)') }}</label>
   <button class="primary" id="startbtn" {{ 'disabled' if running }}>▶ {{ _('Start scan') }}</button>
  </div>
+ <details class="adv" style="margin-top:6px"><summary><b>{{ _('Remove ratings') }}</b> <span class="muted small">– {{ _('instead of a normal scan') }}</span></summary>
+  <div class="row" style="margin-top:6px">
+   <label class="badge"><input type="checkbox" name="rm_audible" class="rmr"> Audible</label>
+   <label class="badge"><input type="checkbox" name="rm_goodreads" class="rmr"> Goodreads</label>
+   <label class="badge"><input type="checkbox" name="rm_hardcover" class="rmr"> Hardcover</label>
+   <button type="button" onclick="document.querySelectorAll('.rmr').forEach(c=>c.checked=true)">{{ _('all') }}</button></div>
+  <p class="muted small">{{ _('Removes the chosen lines from the rating block of all books (or the list under "Which books"). Every change can be undone in the History. The source is paused for these books until the refresh time; switch it off in the settings to keep it away for good.') }}</p>
+ </details>
  <p class="muted small" id="drynote">{{ _('A test run only plans; afterwards you can review the planned changes and apply them selectively. Series and authors are always checked across the whole library.') }}</p>
  <details class="adv" id="advopts" {{ 'open' if f.adv_open }}><summary><b>{{ _('Options for this scan only') }}</b> <span class="muted small">– {{ _('does not change saved settings') }}</span></summary>
   <input type="hidden" name="custom" value="1"><input type="hidden" name="adv_open" id="adv_open" value="{{ '1' if f.adv_open else '0' }}">
@@ -34,6 +43,7 @@
 <script>
 function lst(){ document.getElementById('booklist').style.display = document.querySelector('input[name=selection]:checked').value==='list' ? '' : 'none'; }
 function dryToggle(){ const f=document.getElementById('startform'), d=document.getElementById('dry').checked, b=document.getElementById('startbtn');
+ document.getElementById('backupopt').style.display = d ? 'none' : '';
  if(d){ f.removeAttribute('data-confirm'); b.textContent='▶ '+T('Start scan'); b.classList.remove('danger-fill'); }
  else { f.setAttribute('data-confirm',T('Real scan: the changes are written to ABS (ABS backup first). Continue?')); f.setAttribute('data-confirm-ok',T('Start real scan')); b.textContent='▶ '+T('Start real scan'); } }
 dryToggle(); lst();

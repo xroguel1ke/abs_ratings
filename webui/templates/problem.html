@@ -55,5 +55,10 @@
  {% if ov.ignore %}<button name="action" value="unignore">{{ _('Stop ignoring') }}</button>{% else %}<button name="action" value="ignore">{{ _('Ignore') }}</button>{% endif %}</p>
  <p class="muted small">{{ _('A manual ASIN is written to ABS and never replaced automatically afterwards. A Goodreads or Hardcover link is used permanently for this book.') }}</p>
 </form></div>
+<details class="card"><summary><b>{{ _('Remove ratings') }}</b></summary>
+<form method="post" class="row" style="margin-top:10px" data-confirm="{{ _('Remove the chosen ratings from this book? (can be undone in the History)') }}">
+ <label class="badge"><input type="checkbox" name="rm_audible"> Audible</label><label class="badge"><input type="checkbox" name="rm_goodreads"> Goodreads</label>
+ <label class="badge"><input type="checkbox" name="rm_hardcover"> Hardcover</label>
+ <button class="danger" name="action" value="remove_ratings">{{ _('Remove') }}</button></form></details>
 <details class="card"><summary><b>{{ _('Log of the last check') }}</b></summary><pre class="log" style="margin-top:10px">{{ (r.log or ['(' ~ _('no log') ~ ')'])|join('\n') }}</pre></details>
 {% endblock %}

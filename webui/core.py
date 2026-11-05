@@ -112,14 +112,14 @@ def save_settings(s):
         os.replace(tmp, SETTINGS_FILE)
 
 
-SCAN_FORM_BOOL = ('task_meta', 'task_authors', 'task_series', 'task_roles', 'task_empty', 'dry', 'HARDCOVER_ENABLED', 'GOODREADS_ENABLED')
+SCAN_FORM_BOOL = ('task_meta', 'task_authors', 'task_series', 'task_roles', 'task_empty', 'dry', 'backup', 'HARDCOVER_ENABLED', 'GOODREADS_ENABLED')
 SCAN_FORM_INT = ('BATCH_SIZE', 'REFRESH_DAYS')
 
 
 def scan_form(s):
     """Last choices on the scan page; defaults from the saved settings (a choice there never changes a setting)."""
     f = {'task_meta': True, 'task_authors': bool(s.get('AUTHOR_NORMALIZE')), 'task_series': bool(s.get('SERIES_MERGE')),
-         'task_roles': bool(s.get('REMOVE_ROLE_CREDITS')), 'task_empty': bool(s.get('REMOVE_EMPTY_AUTHORS')), 'dry': True,
+         'task_roles': bool(s.get('REMOVE_ROLE_CREDITS')), 'task_empty': bool(s.get('REMOVE_EMPTY_AUTHORS')), 'dry': True, 'backup': bool(s.get('ABS_BACKUP')),
          'BATCH_SIZE': s.get('BATCH_SIZE'), 'REFRESH_DAYS': s.get('REFRESH_DAYS'), 'HARDCOVER_ENABLED': bool(s.get('HARDCOVER_ENABLED')),
          'GOODREADS_ENABLED': bool(s.get('GOODREADS_ENABLED')), 'selection': 'all', 'list': '', 'adv_open': False}
     f.update({k: v for k, v in (s.get('scan_form') or {}).items() if k in f})
@@ -247,7 +247,7 @@ def parse_env_summary():
     return out
 
 
-RUN_OVERRIDABLE = {'BATCH_SIZE', 'REFRESH_DAYS', 'HARDCOVER_ENABLED', 'GOODREADS_ENABLED', 'SERIES_MERGE', 'AUTHOR_NORMALIZE', 'UPDATE_COVERS', 'REMOVE_ROLE_CREDITS', 'REMOVE_EMPTY_AUTHORS'}  # start dialog
+RUN_OVERRIDABLE = {'BATCH_SIZE', 'REFRESH_DAYS', 'HARDCOVER_ENABLED', 'GOODREADS_ENABLED', 'SERIES_MERGE', 'AUTHOR_NORMALIZE', 'UPDATE_COVERS', 'REMOVE_ROLE_CREDITS', 'REMOVE_EMPTY_AUTHORS', 'ABS_BACKUP', 'REMOVE_RATINGS'}  # start dialog
 KIND_LABELS = {'full': 'Scan', 'series': 'Series & report only', 'item': 'Single book', 'undo': 'Undo', 'apply': 'Apply test run'}
 
 
@@ -284,6 +284,7 @@ class RunManager:
             if kind == 'series': extra['SERIES_ONLY'] = 'true'
             if kind == 'item' or (kind == 'full' and only_items): extra['ONLY_ITEMS'] = ','.join(only_items or [])
             env = script_env(s, extra)
+            if (run_settings or {}).get('REMOVE_RATINGS'): env['REMOVE_RATINGS'] = run_settings['REMOVE_RATINGS']  # remove-ratings task
             os.makedirs(LOG_DIR, exist_ok=True)
             if kind == 'undo':
                 cmd = [sys.executable, '-u', os.path.join(APP_DIR, 'abs_undo.py')] + list(undo_args or [])
