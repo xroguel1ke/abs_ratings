@@ -25,7 +25,7 @@ Status: ✅ done (branch `claude/web-ui`) · 🔜 next · ⏳ later
 
 ## 5. Schedule
 - ✅ Simple (weekdays + time) or cron toggle with "next run" check, never two runs at once
-- ⏳ Quick mode: poll ABS every X minutes and process new books immediately
+- ✅ Quick mode: look for never-checked books every X minutes and process them at once (QUICK_MODE_MINUTES)
 
 ## 6. Runs
 - ✅ Start / dry run / series & report only / stop, run history, live log, changes table per run

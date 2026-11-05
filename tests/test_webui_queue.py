@@ -65,6 +65,25 @@ def test_csv_export():
     assert h.splitlines()[0].startswith("title,author,status,asin") and "Test Book" in h or "Low" in h
 
 
+def test_quick_mode_starts_a_scan_for_new_books_only():
+    class R:
+        def json(self): return {'results': [{'id': 'old'}, {'id': 'new1'}]}
+    json.dump({'L_old': '2026-01-01T00:00:00+00:00'}, open(os.path.join(cfg, 'rating_history.json'), 'w'))
+    started = []
+    orig_get, orig_start, orig_running = core.abs_get, core.RUNNER.start, core.RUNNER.running
+    core.abs_get = lambda s, path, timeout=30: R()
+    core.RUNNER.start = lambda kind, **kw: started.append((kind, kw.get('only_items'))) or ('x', None)
+    core.RUNNER.running = lambda: False
+    try:
+        core._quick['t'] = 0
+        core.quick_poll({'QUICK_MODE_MINUTES': 5, 'LIBRARY_IDS': 'L', 'BATCH_SIZE': 300})
+        assert started == [('full', ['L_new1'])], started
+        core.quick_poll({'QUICK_MODE_MINUTES': 5, 'LIBRARY_IDS': 'L'})
+        assert len(started) == 1, 'not again within the interval'
+    finally:
+        core.abs_get, core.RUNNER.start, core.RUNNER.running = orig_get, orig_start, orig_running
+
+
 def test_isbn_checksum():
     assert core.isbn_valid("9780007370443") and core.isbn_valid("0-306-40615-2") and not core.isbn_valid("B0TEST0002") and not core.isbn_valid("9780007370444")
 

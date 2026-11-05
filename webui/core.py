@@ -30,6 +30,7 @@ FIELDS = [
     ('REFRESH_DAYS', 'Refresh after (days)', 'int', 90, '0 = every book is due (one complete pass)', 'Run'),
     ('RUN_MODE', 'Run mode', 'choice:auto|buildup|maintain', 'auto', 'auto = build-up until every book was checked once, then maintenance. Maintenance: new and changed books always, plus a few random due books', 'Run'),
     ('MAINTAIN_SAMPLE', 'Random books per maintenance scan', 'int', 30, 'Besides new and changed books', 'Run'),
+    ('QUICK_MODE_MINUTES', 'Quick mode: look for new books every (minutes)', 'int', 0, '0 = off. New books in ABS are checked right away instead of waiting for the next scheduled scan', 'Run'),
     ('MANUAL_LOCK_TAG', 'Lock tag for fields you changed in ABS', 'bool', False, 'Fields you change yourself in ABS are never overwritten anyway; this also sets the lock_<field> tag in ABS', 'Run'),
     ('ABS_BACKUP', 'ABS backup before real scans', 'bool', True, 'Creates an ABS backup before every scan without DRY_RUN; if it fails nothing is written', 'Run'),
     ('SLEEP_TIMER', 'Extra pause between books (s)', 'float', 0, 'Every source has its own minimum interval, so 0 is safe and fastest', 'Run'),
@@ -435,14 +436,33 @@ def scheduler_loop():
             nxt = next_run_time(s)
             if planned and datetime.now() >= planned:
                 if RUNNER.running(): pass  # previous run still busy: skip this slot
-                else: RUNNER.start('full', trigger='schedule', label='Geplanter Lauf')
+                else: RUNNER.start('full', trigger='schedule', label='Scheduled scan')
                 planned = None
+            quick_poll(s)
             if planned is None or (nxt and nxt < planned) or not s.get('schedule_enabled'):
                 planned = nxt
             cleanup_logs(s)
         except Exception:
             pass
         time.sleep(20)
+
+
+_quick = {'t': 0}
+def quick_poll(s):
+    """Quick mode: every QUICK_MODE_MINUTES look for books that were never checked and process them at once (1 ABS listing request)."""
+    every = int(s.get('QUICK_MODE_MINUTES') or 0)
+    if every <= 0 or time.time() - _quick['t'] < every * 60 or RUNNER.running(): return
+    _quick['t'] = time.time()
+    hist = _load_json(os.path.join(CONFIG_DIR, 'rating_history.json'), {})
+    failed = _load_json(os.path.join(CONFIG_DIR, 'failed_history.json'), {})
+    new = []
+    for lib in [l.strip() for l in (s.get('LIBRARY_IDS') or '').replace(';', ',').split(',') if l.strip()]:
+        try:
+            for it in abs_get(s, f'/api/libraries/{lib}/items', timeout=60).json().get('results') or []:
+                k = f"{lib}_{it['id']}"
+                if k not in hist and k not in failed: new.append(k)
+        except (requests.RequestException, ValueError): return
+    if new: RUNNER.start('full', trigger='quick', only_items=new[:int(s.get('BATCH_SIZE') or 300)], label=f'Quick mode: {len(new)} new book(s)')
 
 
 _last_cleanup = {'t': 0}
