@@ -1818,6 +1818,7 @@ def parse_gr_next_results(html):
 
 GR_ROW_SERIES = _TLDict('gr_row_series')  # result url -> [(series name, placement, series page url)] of the last parsed page (per thread)
 GR_CTX = _TLDict('gr_ctx')                # {'series': [(name, number)]} of the book being looked up (set by the caller, per thread)
+HC_CTX = _TLDict('hc_ctx')                # {'lang': ABS language of the book being looked up} (per thread)
 
 def _num_eq(a, b):
     try: return float(str(a).strip()) == float(str(b).strip())
@@ -2142,6 +2143,30 @@ def hc_acceptable(targets, authors, book, min_score, abs_series=(), extra_names=
     if score < min_score and not series_confirms: return False, score, f"title score {score:.2f}"
     ours, theirs = set().union(*(extract_volume(t) for t in targets)), extract_volume(f"{book.get('title') or ''} {book.get('subtitle') or ''}")
     if ours and theirs and not ours & theirs and not series_ok: return False, score, f"volume {sorted(theirs)} vs {sorted(ours)}"
+    # Library check 2026-11-05 (Phase C): number contradictions the title score did not see
+    abs_nums = set()
+    for _, q in abs_series:
+        try: abs_nums.add(str(float(q)).rstrip('0').rstrip('.'))
+        except (TypeError, ValueError): pass
+    # only numbers below 1000 (years like 2026 are no volumes); Hardcover: the MAIN title only (subtitles carry series counts)
+    nz = lambda xs: {str(float(x)).rstrip('0').rstrip('.') for x in xs if re.fullmatch(r'\d+(\.\d+)?', str(x)) and float(x) < 1000}
+    h_main = nz(extract_volume(book.get('title') or ''))
+    abs_t = HC_CTX.get('title') or ''
+    abs_title_nums = nz(extract_volume(abs_t))  # the ABS (search) title, not Audible's
+    if abs_title_nums and h_main and not abs_title_nums & h_main:  # ABS title 'Vol. 5' vs Hardcover 'Vol. 4' (even if a wrong ABS series number agrees)
+        return False, score, f"volume in the title {sorted(h_main)} vs ABS title {sorted(abs_title_nums)}"
+    if h_main and abs_nums and not nz(ours) and not h_main & abs_nums:  # 'Defiance of the Fall 3' for ABS series #1
+        return False, score, f"Hardcover title volume {sorted(h_main)} vs ABS series {sorted(abs_nums)}"
+    part = lambda t: set(re.findall(r'(?i)\bpart\s*(\d+)', t or ''))
+    if part(abs_t) and part(book.get('title')) and not part(abs_t) & part(book.get('title')):  # 'Part 1 Volume 1' vs 'Part 5 Volume 1'
+        return False, score, "part numbers differ"
+    if series_ok is False:  # same series, another number:
+        sname = ((fs.get('series') or {}).get('name') or '')
+        if sname and not h_main and title_similarity(clean_title(book.get('title') or ''), sname) >= 0.9:  # the Hardcover title is only the series name (no number)
+            return False, score, f"Hardcover title is the series name, number #{fs.get('position')} differs"
+        if HC_CTX.get('lang') == 'English' and hc_title_score(targets, {**book, 'alternative_titles': []}, extra_names, pure) < min_score:
+            # fits only via an alternative title (English book: no translation that would explain another title and numbering)
+            return False, score, f"only an alternative title fits and #{fs.get('position')} is another volume of the series"
     # Our title has a number but the Hardcover title has none ('Reborn as the Villain's Lackey, Volume 2' vs the first book)
     if pure and all(extract_volume(t) for t in targets) and not theirs and not series_ok: return False, score, f"no volume number on Hardcover (ours: {sorted(ours)})"
     if (m := RE_HC_SET_TITLE.search(book.get('title') or '')) and not any(RE_HC_SET_TITLE.search(t) for t in targets):
@@ -2156,8 +2181,10 @@ def hc_acceptable(targets, authors, book, min_score, abs_series=(), extra_names=
         if not (score >= 0.99 and single): return False, score, "compilation"
     return True, max(score, 1.0 if series_confirms else 0), ''
 
-def get_hardcover_data(key, targets, authors, asin, isbn, manual_url=None, use_cache=True, abs_series=()):
+def get_hardcover_data(key, targets, authors, asin, isbn, manual_url=None, use_cache=True, abs_series=(), lang=None, abs_title=None):
     """Returns (data, status) with status in 'found', 'not_found', 'blocked', 'disabled'."""
+    HC_CTX['lang'] = map_language(lang) if lang else None
+    HC_CTX['title'] = abs_title
     if not HARDCOVER_ENABLED: return None, 'disabled'
     if HC_STATE['disabled']:
         logging.info(f"      -> ⏭️ Hardcover skipped ({HC_STATE['disabled']})")
@@ -2644,7 +2671,7 @@ def rating_only_pass(item, key, idx, total):
     if 'hardcover' in due:
         targets = hc_target_titles(aud, title, title, meta.get('subtitle'))
         hc_data, hc_status = get_hardcover_data(key, targets, list(dict.fromkeys([*authors, *(aud.get('authors_raw') or [])])), meta.get('asin'), meta.get('isbn'),
-                                                ov.get('hardcover'), use_cache=True, abs_series=[(x.get('name'), x.get('sequence')) for x in (meta.get('series') or [])])
+                                                ov.get('hardcover'), use_cache=True, abs_series=[(x.get('name'), x.get('sequence')) for x in (meta.get('series') or [])], lang=meta.get('language'), abs_title=title)
         if hc_data and aud.get('title_raw'):  # the same cross-check as in a full pass, against the remembered Audible product
             cc_ok, cc_why = hc_audible_crosscheck(hc_data, aud)
             if not cc_ok:
@@ -3106,7 +3133,7 @@ def process_queue(work_queue, history, failed, recheck):
                     hc_data, hc_status = get_hardcover_data(key, hc_targets, list(dict.fromkeys([*authors, *((aud_data or {}).get('authors_raw') or [])])),  # ABS and Audible authors (ABS sometimes lists the translator)
                                                              asin, meta.get('isbn'), ov.get('hardcover'),
                                                             use_cache=not item.get('_manual_trigger'),
-                                                            abs_series=[(x.get('name'), x.get('sequence')) for x in (meta.get('series') or [])])
+                                                            abs_series=[(x.get('name'), x.get('sequence')) for x in (meta.get('series') or [])], lang=lang, abs_title=search_title)
                 else:
                     hc_data, hc_status = None, 'fresh'
                     logging.info(f"      -> ⏭️ Hardcover not asked: {source_note(key, 'hardcover')}")

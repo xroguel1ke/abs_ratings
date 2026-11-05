@@ -502,3 +502,11 @@ ABS backup ok; written: Emily Wilde -> Emily Wilde Series (1 book), V.E. Schwab 
   book 'Queen' (Hardcover lists the title as an alternative title; would also have written that book's print ISBN). Fixed (main-title hits
   beat alternative-title hits; a stricter volume rule was tried and dropped - it lost 7 correct translations). Hand-checked matches are now
   a Hardcover golden list (tests/synthetic/hc_golden.json) replayed in the regress gate (step 2c).
+- Phase C full-library check WITH live Hardcover (dry run, Audible from recordings): 1854 of 1913 books on Hardcover (97 %), 3 cross-check
+  drops, no 429. Reviewed the 219 matches with another title and every match with contradicting volume numbers: numbering-scheme cases
+  (Pern, Drizzt, Shannara, Mistborn, Witcher, Dune) are right; 7 WRONG (Dragonsblood->Dragon's Kin, Resistance Above Magic 4->#1,
+  Resistance Above Magic->#3, Defiance of the Fall->3, Mark of the Crijik 2->#1, Mynoghra Vol.5->Vol.4, Bookworm Part 1 Vol.1->Part 5 Vol.1).
+  New number rules (numbers < 1000 only, Hardcover main title only, ABS title vs Hardcover title, Hardcover title = series name without number,
+  'Part N', alternative-title-only hit of another volume for English books). Library replay: exactly these 7 changed (5 now none, Mark of the
+  Crijik + Resistance Above Magic + Mynoghra now the right volume), 0 other changes, Hardcover golden unchanged. Two unclear ID-tied cases left
+  (Tom Sawyer -> Tom Sawyer Abroad via the ABS ISBN; Arch Magus Publisher's Pack 1 -> Pack 2 via the ABS ASIN) - ABS identifiers decide there.
