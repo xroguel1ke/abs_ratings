@@ -23,7 +23,7 @@
  <p><b>{{ _('Certainty') }} {{ r.get('certainty') }} / 100</b> – {{ _('made up of') }}:</p>
  <div class="row">{% for k, v in (r.get('certainty_parts') or {}).items() %}<span class="badge {{ 'err' if v < 0 else 'ok' if v > 0 else '' }}">{{ PL.get(k, k) }} {{ ('%+d' % v) if v < 0 else '+' ~ v }}</span>{% endfor %}</div>
  {% endif %}
-  <p class="small"><b>{{ _('Source of the ASIN') }}:</b> {{ r.asin_source or '–' }}{% if r.hc_source %} · <b>{{ _('Hardcover found via') }}:</b> {{ r.hc_source }}{% endif %}</p>
+  <p class="small"><b>{{ _('Source of the ASIN') }}:</b> {{ _({'manuell': 'manual', 'Suche': 'search', 'ABS (bestätigt)': 'ABS (confirmed)'}.get(r.asin_source, r.asin_source)) if r.asin_source else '–' }}{% if r.hc_source %} · <b>{{ _('Hardcover found via') }}:</b> {{ r.hc_source }}{% endif %}</p>
  {% if r.evidence %}<p class="small" style="margin-top:10px"><b>{{ _('Evidence of the ASIN search') }}:</b> {{ r.evidence|join(', ') }}</p>{% endif %}
 </div>
 

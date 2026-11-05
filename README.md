@@ -227,7 +227,17 @@ You can prevent the script from updating specific metadata fields by adding **Ta
 
 ## 🖼️ Preview
 
-The script looks for `⭐ Ratings & Infos` in your description. If found, it updates the block; otherwise, it appends it.
+Web UI (screenshots with public test books, light and dark mode, phone):
+
+| Overview | Books | Book page |
+|---|---|---|
+| ![Overview](docs/screenshots/overview.png) | ![Books](docs/screenshots/books.png) | ![Book](docs/screenshots/book.png) |
+| **Scans** | **Status** | **Settings** |
+| ![Scans](docs/screenshots/scans.png) | ![Status](docs/screenshots/status.png) | ![Settings](docs/screenshots/settings.png) |
+| **Review list** | **Dark mode** | **Phone** |
+| ![Review list](docs/screenshots/review.png) | ![Dark](docs/screenshots/books_dark.png) | ![Phone](docs/screenshots/scans_mobile.png) |
+
+The script looks for `⭐ Ratings & Infos` (or `⭐ Bewertungen & Infos`) in your description. If found, it updates the block; otherwise it adds it at the top (or bottom, `RATING_POSITION`).
 
 **Example output in Audiobookshelf:**
 

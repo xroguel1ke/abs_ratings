@@ -3464,7 +3464,7 @@ def process_queue(work_queue, history, failed, recheck):
                 set_result(key, lib_id, iid, title, authors, asin, status, reason,
                            {'notes': notes, 'certainty': cert, 'certainty_parts': cert_parts, 'domain': (aud_data or {}).get('domain'), 'goodreads': (gr_data or {}).get('url') or (RESULTS.get(key) or {}).get('goodreads') if gr_status == 'fresh' else (gr_data or {}).get('url'),
                             'hardcover': ((hc_data or {}).get('url') or (RESULTS.get(key) or {}).get('hardcover')) if hc_status == 'fresh' else (hc_data or {}).get('url'), 'compare': compare_view(title, authors, meta, abs_dur, aud_data, hc_data),
-                            'asin_source': 'manuell' if ov.get('asin') else ('Suche' if asin_from_search else ('ABS (bestätigt)' if asin else '')), 'hc_source': (hc_data or {}).get('source'),
+                            'asin_source': 'manual' if ov.get('asin') else ('search' if asin_from_search else ('ABS (confirmed)' if asin else '')), 'hc_source': (hc_data or {}).get('source'),
                             'evidence': (LAST_MATCH.get('evidence') or []) if asin_from_search else [],
                             'locks': sorted(t for t in item_tags(item_data) if t.startswith('lock_'))})
 

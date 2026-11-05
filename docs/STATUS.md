@@ -86,7 +86,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | 14 | Hardcover / API status: used/left today, cache size, reset time | ✅ | used/left; reset time shown when Hardcover sends a reset header (logged since today), else "daily" |
 | – | Review list page | ✅ | see accept gap above |
 | – | [U] Design (Material light/dark), onboarding tour, settings with left sections + save per section, confirm dialog | ✅ | |
-| – | Screenshots in docs/screenshots/ (no private titles, public repo) | ⚠️ | settings only |
+| – | Screenshots in docs/screenshots/ (no private titles, public repo) | ✅ | 9 pages with public synthetic test books, light/dark/phone; in the README |
 
 ## Web UI language
 | Item | State | Note |

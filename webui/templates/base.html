@@ -5,8 +5,8 @@
 {% if session.auth %}<header><div class="nav"><span class="brand"><img src="{{ url_for('static', filename='icon.svg') }}" alt="" class="logo">ABS Ratings</span><button type="button" class="iconbtn navtoggle" aria-label="{{ _('Menu') }}" onclick="this.closest('.nav').classList.toggle('open')">☰</button>
 {% set ep = request.endpoint %}
 <div class="links">
-<a data-tour="dashboard" href="{{ url_for('dashboard') }}" class="{{ 'active' if ep in ('dashboard','problem') }}">{{ _('Overview') }}</a>
-<a data-tour="books" href="{{ url_for('books') }}" class="{{ 'active' if ep=='books' }}">{{ _('Books') }}</a>
+<a data-tour="dashboard" href="{{ url_for('dashboard') }}" class="{{ 'active' if ep == 'dashboard' }}">{{ _('Overview') }}</a>
+<a data-tour="books" href="{{ url_for('books') }}" class="{{ 'active' if ep in ('books','problem') }}">{{ _('Books') }}</a>
 <a data-tour="review" href="{{ url_for('review_page') }}" class="{{ 'active' if ep=='review_page' }}">{{ _('Review list') }}</a>
 <a data-tour="status" href="{{ url_for('status') }}" class="{{ 'active' if ep=='status' }}">{{ _('Status') }}</a>
 <a data-tour="runs" href="{{ url_for('runs') }}" class="{{ 'active' if ep in ('runs','run_view') }}">{{ _('Scans') }}</a>
