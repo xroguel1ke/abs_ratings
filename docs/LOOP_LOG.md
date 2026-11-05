@@ -461,3 +461,17 @@ ABS backup ok; written: Emily Wilde -> Emily Wilde Series (1 book), V.E. Schwab 
 - Empty ABS authors deleted (re-check, never books); fake ABS has the author endpoints and refuses deleting authors with books.
 - Synthetic merge batches with a 300-series Audible corpus: final code batches 9/10/11 = 56/56, 57/57, 58/58 -> SERIES/AUTHOR STREAK REACHED (3 of 3). Regress green, library baseline 13 merges, 3 review, 5 author fixes.
 - 3 unexplained crashes today (Bus error, Segfault, impossible TypeError in difflib), not reproducible. NOT the server (user: recent memtest clean, no crashes elsewhere) - most likely my own edits (perl -i / cp) replacing .py files while test containers were importing them. Rule: no file edits while a test container runs.
+
+## 2026-11-04/05 – source state, parallel books, Goodreads search list, Hardcover tuning
+- Runtime tolerance: 5 %/10 min loses 16 of 1920 verified ASINs, 10 %/15 min loses 6 (e.g. Pern: another recording 12-16 % longer, Charon's Claw 12 %)
+  -> same-BOOK tolerance stays 15 %/20 min; recording details (narrators/publisher/year/abridged) now only within 10 min runtime (74 library books).
+- Per-source search state (user rule): found -> REFRESH_DAYS, missing -> next day, 5 misses / not listed -> pause; blocked = no miss; rating-only passes.
+- Parallel books (WORKERS=3, 1 request in flight per host): first regress with 3 workers found 2 WRONG ASINs (The Prince, The Heist) caused by a
+  shared per-book search context (SEARCH_CTX) -> thread-local; regress identical with 1 and 3 workers afterwards.
+- Goodreads: the script got the new Next.js search layout (curl still the classic one) -> 0/25 parsed in test 6; new parser: replay 21/25,
+  all hand-checked correct. Test 6 (~75 searches) and test 7 (25 books, live, series match) without ANY block; test 7: 25/25 found.
+- Hardcover: H11 (seed 45) 180/180, 95 HC hits (EN 77/100, DE 18/80: most German titles are not on Hardcover). H12 (seed 46, 3 workers)
+  180/180, 101 HC hits, 14.5 min (vs ~22) -> Hardcover streak 1/3 after the core change.
+- Combined GraphQL request per book was a mistake: Hardcover charges every search field against the minute + daily limit (measured:
+  3 searches = 3 points) -> H13 (seed 47) got HTTP 429 after 18 books, Hardcover off for the rest (results still 180/180, but the batch does
+  not count). Reverted to one request per step with early stop; shared cool-down across workers; burst guard. H13 re-run with seed 48.

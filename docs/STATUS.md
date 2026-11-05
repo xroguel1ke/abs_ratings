@@ -13,7 +13,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 |---|---|---|
 | [A] Audible matching (ASIN repair/search, store, other edition, language, titles) | ✅ 100 % | 4 clean chains of 180 fresh books (100 EN + 80 DE), 0 wrong matches ever; whole library 1904/1906 existing books correct (99.9 %) |
 | [A] Hardcover matching + cross-check against Audible | ⏳ 80 % | streak restarted after the core change (parallel/source state): H12 (seed 46) 180/180 clean = 1 of 3; H11 (seed 45) clean before the change. Hit rate EN ~78 %, DE ~25 % (most German titles are not on Hardcover; edition-title lookup finds translations) |
-| [U] Hardcover request minimising: all lookup steps in ONE GraphQL request per book (aliases), same evaluation order | ✅ | regress identical (test mode falls back to single requests when no recording) |
+| [U] Hardcover request minimising | ✅ | combined requests tried and REVERTED (Hardcover charges every search field; caused 429 in H13); one request per step with early stop, shared cool-down, burst guard |
 | [U] Hardcover: title+subtitle and 'Series, Volume N: Title' comparison titles; edition-title lookup (translations) | ✅ | no wrong hits in H12; cross-check unchanged |
 | [A] Phase C: 3 rounds with EVERY Hardcover hit hand-checked | ❌ | quota now available (50k) |
 | [U] Hardcover 'paid plan' checkbox: own daily budget 5000 (free) / 50000 (paid), counted locally (hardcover_usage.json); production default = free | ✅ | status page shows account rest + own budget |
@@ -48,7 +48,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [U] Limit measurement until a reliable requests/hour + per night value | ⏳ | test 4: blocked after ~3 book pages; test 5: block on the 7th BOOK page; test 6 (search only): ~75 searches, NO block |
 | [U] Open Library fallback for the Goodreads ID / ISBN | ❌ | measure first |
 | [new] Search-list-only mode: rating from the SEARCH result row, never a /book/show page (GR_BOOK_PAGES=false) | ✅ | new Next.js search layout parser (work.stats); test 6 replay 21/25 found, all hand-checked correct |
-| [U] Goodreads series: series name + number + author confirm a row; series page for other volumes (1 request) | ⏳ | built, live test 7 running |
+| [U] Goodreads series: series name + number + author confirm a row; series page for other volumes (1 request) | ✅ | test 7 live: 25/25 found, no block |
 | [U] Production rhythm (≈25 per night?) | ❌ | after the measurements |
 
 ## Safety & tests
@@ -86,7 +86,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [U] App icon instead of the star, also as browser-tab favicon | ✅ | webui/static/icon.svg |
 | [U] Scan page remembers its choices (tasks, test run, options) across scans and page changes | ✅ | settings.json scan_form; never changes the settings; browser-tested |
 | [U] Header: running scan as compact pill (no layout break), logout icon, password in Settings | ✅ | 1280/1024/390 px checked |
-| [U] Human-readable values (series 'Name #1', lists, yes/no) in history, scan details, test-run review, book page | ✅ | |
+| [U] Human-readable values (series 'Name #1', lists, yes/no) in history, scan details, test-run review, book page | ✅ | + removed parts red (old), added parts green (new) |
 
 ## Finish (Phase C end)
 | Item | State |
