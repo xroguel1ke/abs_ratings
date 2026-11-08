@@ -54,6 +54,7 @@ def series_key(name):
     for pats in VARIANT_MARKERS.values():
         for p in pats: n = re.sub(p, ' ', n)
     for p in FORMAT_PHRASES: n = re.sub(p, ' ', n)
+    n = n.replace('&', ' and ')  # 'Memory, Sorrow & Thorn' = 'Memory, Sorrow, and Thorn'
     n = re.sub(r'[\(\)\[\]]', ' ', n)
     n = re.sub(r'[^\w\s]', ' ', n)
     words = n.split()
@@ -99,6 +100,11 @@ def fold_accents(s):
 
 def is_latin(name):
     return not re.search(r"[^\x00-\u024F]", name or "")
+
+LATIN_LANGS = {'english', 'eng', 'en', 'german', 'deu', 'ger', 'de', 'deutsch', '', None}
+def latin_books(g):
+    """The books of a merge group are English/German (or have no language): their series names must be Latin."""
+    return all((str(r.get('language') or '').strip().lower() or None) in LATIN_LANGS for s in g for r, _ in s.entries)
 
 def plausible_same_person(a, b):
     """Could two author names be ONE person written differently? Same surname, the same name parts in another order
@@ -354,6 +360,26 @@ def find_merges(records, decisions=None, preferred_names=None):
                 # the series that holds the lock_series books is the target: locked books are never moved (wins over everything)
                 lk = [s for s in g if any('lock_series' in r['tags'] for r, _ in s.entries)]
                 if len(lk) == 1 and lk[0] is not g[0]: _make_target(g, lk[0])
+                # user rule 2026-11-08: English/German books never end up in a series with a Japanese/Korean/... name
+                # (Konosuba: the locked books sat in the Japanese-named series and the merge moved the fixed books back into it)
+                if not is_latin(g[0].name) and any(is_latin(x.name) for x in g[1:]) and latin_books(g):
+                    if g[0] in lk:
+                        for x in g[1:]:
+                            rejected.append({'lib': lib, 'series': x.name, 'other': g[0].name, 'reason': 'contains book(s) with lock_series: '
+                                             'the locked books sit in a series with a non-Latin name', **pair_info(x, g[0])})
+                        continue
+                    _make_target(g, max((x for x in g[1:] if is_latin(x.name)), key=lambda x: len(x.entries)))
+                # ABS finds series names case-insensitively: 'The Beginning after the End' cannot be written as 'The Beginning After
+                # the End' while both exist. The apply step empties such a spelling first (ABS deletes the empty series), then writes
+                # the target name. That only works if no other spelling of the same name keeps books (locked ones) -> review list.
+                low = g[0].name.strip().lower()
+                stay = [x for x in series_map.values() if x is not g[0] and x.name.strip().lower() == low and x.name.strip() != g[0].name.strip()
+                        and (x not in g or any('lock_series' in r['tags'] for r, _ in x.entries))]
+                if stay:
+                    for x in g[1:]:
+                        rejected.append({'lib': lib, 'series': x.name, 'other': g[0].name, 'reason': 'contains book(s) with lock_series: ABS treats '
+                                         f"names that differ only in upper/lower case as ONE name and '{stay[0].name}' keeps locked books", **pair_info(x, g[0])})
+                    continue
                 merges.append({'lib': lib, 'target': g[0], 'members': g[1:]})
     return merges, rejected
 
@@ -378,6 +404,15 @@ def apply_merges(ctx, merges):
         if not dry:
             for n in member_names: aliases.setdefault(m['lib'], {})[n] = tgt.name
         group_records = {r['id']: r for s in [tgt] + m['members'] for r, _ in s.entries}
+        # spellings that differ from the target only in upper/lower case: empty them first (see find_merges)
+        case_names = {s.name for s in m['members'] if s.name.strip().lower() == tgt.name.strip().lower()}
+        for rid, r in group_records.items():
+            if 'lock_series' in r['tags'] or not any(x['name'] in case_names for x in r['series']): continue
+            first = [x for x in r['series'] if x['name'] not in case_names]
+            logging.info(f"        ✏️ '{r['title']}': leaves '{next(x['name'] for x in r['series'] if x['name'] in case_names)}' first (ABS ignores upper/lower case in names)")
+            mid = next((mid_of[x['name']] for x in r['series'] if x['name'] in mid_of), None)
+            abs_update(r['id'], f"{r['lib']}_{rid}", r['title'], {'series': first}, {'series': r['series']}, 'series_merge',
+                       extra={'merge_id': mid} if mid else None)
         for rid, r in group_records.items():
             key = f"{r['lib']}_{rid}"
             if 'lock_series' in r['tags'] and any(x['name'] in member_names for x in r['series']):

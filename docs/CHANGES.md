@@ -5,6 +5,9 @@ Code: 66 files, +6128 / −475 lines. Test data: public synthetic batches in `te
 (git-ignored).
 
 ## Matching (0 wrong matches is the rule; everything was measured on the whole library + fresh synthetic books)
+- **Rescan damage (2026-11-08).** Shared titles need runtime ±2 min; another volume's data is detected via the book folder and
+  repaired by a strict folder-title search; twins keep the volume; reverted values are written again; non-Latin and junk series go;
+  merge never targets a non-Latin name and handles names that differ only in case.
 - **Audible.** ASIN repair/search with an evidence gate:
   - all 8 stores, preferred store (`.com` English / `.de` German), twin listings;
   - series listings, group confirmation, messy file-name titles, language mismatch;

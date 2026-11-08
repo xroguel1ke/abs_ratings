@@ -374,6 +374,41 @@ AUTHOR_NOTES = []  # Author spelling differences between ABS and Audible (report
 SERIES_ALIASES, SERIES_INDEX = {}, {}  # Loaded in main()
 SEQ_TITLES = {}  # (lib, series name lower, number) -> normalized titles holding it (filled by build_queue)
 
+def _first_author(names):
+    return re.sub(r'[^a-z]', '', fold_accents(str(names or '').split(',')[0]).lower())
+
+def title_shared(key, title, cand_rt=None):
+    """Another library book has the same title (an ABS rescan gave five Solo Leveling books 'Vol. 7', fourteen Mushoku Tensei books
+    the bare series name): the title cannot tell the volumes apart, only the runtime can."""
+    own = TITLE_OWNERS.get((key.split('_')[0], normalize_title_text(title or '')), set()) if key else set()
+    mine = {a for k, a in own if k == key}
+    # same title AND same author ('Threshold' by two authors is no doubt); with cand_rt: only an owner whose runtime would ALSO fit the
+    # candidate makes it ambiguous (Judicator Jane 1 vs 6: the other book is far longer -> the candidate can only be this one)
+    return any(k != key and (a in mine or not mine) and (cand_rt is None or not KEY_DUR.get(k) or not runtime_mismatch(KEY_DUR[k], cand_rt)) for k, a in own)
+
+def folder_volume_conflict(item_data, key, title, meta):
+    """ABS metadata of ANOTHER volume (an ABS rescan with an old metadata.json gave Solo Leveling 2, 3, 5 and 8 the title, ASIN and number
+    of volume 7): the title is shared by several library books AND the book folder ('2 - Solo Leveling, Vol. 2 - Ki Hong Lee') names
+    another title with a number that neither the ABS title nor the ABS series number has. Returns {'title', 'num'} of the folder or None."""
+    if not title_shared(key, title): return None
+    parts = [p_ for p_ in str((item_data or {}).get('relPath') or '').replace('\\', '/').split('/') if p_.strip()]
+    if len(parts) < 3: return None  # author/series/book: only books inside a series folder
+    m = re.match(r'^(?:book\s*)?(\d+(?:\.\d+)?)\s+-\s+(.+)$', parts[-1].strip(), re.I)
+    if not m: return None
+    f_title = re.sub(r'\s*\{[^}]*\}', '', m.group(2).split(' - ')[0]).strip()
+    try: f_num = float(m.group(1))
+    except ValueError: return None
+    if not f_title or normalize_title_text(f_title) == normalize_title_text(title): return None
+    nums = set()
+    for x in meta.get('series') or []:
+        try: nums.add(float(str(x.get('sequence')).strip()))
+        except (TypeError, ValueError): pass
+    for v in extract_volume(title or ''):
+        try: nums.add(float(v))
+        except ValueError: pass
+    if not nums or f_num in nums: return None
+    return {'title': f_title, 'num': m.group(1).lstrip('0') or '0'}
+
 def seq_shared(lib, name, seq):
     """Two or more DIFFERENT books of the library hold this number in this series (an ABS rescan put three Witcher books at #0.5)."""
     q = str(seq or '').strip()
@@ -499,6 +534,7 @@ def is_boxset_title(t): return bool(t and BOXSET_RE.search(t))
 
 ASIN_OWNERS = {}  # asin -> set of item keys (ABS library + ASINs planned in this run); an ASIN is never given to a second book
 ISBN_OWNERS = {}  # isbn -> set of item keys (an ISBN is never given to a second book)
+TITLE_OWNERS = {}  # (lib, normalized title) -> item keys: a title held by several books says nothing about WHICH volume it is
 KEY_DUR = {}  # item key -> ABS duration (s): tells a duplicate (owner = same recording) from an owner with a wrong ASIN
 
 def _seq_num(v):
@@ -1474,6 +1510,8 @@ def preferred_twin(lang, key):
         if not isinstance(p, dict) or not p.get('runtime_sec') or abs(p['runtime_sec'] - m['runtime']) > 120: continue
         if norm(p.get('narrators_raw') or []) != norm(m['narrators']) or not match_author(m['authors'], ", ".join(p.get('authors_raw') or [])): continue
         if search_match_score(m['title'], p.get('title_raw') or '', p.get('subtitle_raw')) < 0.85 and search_match_score(p.get('title_raw') or '', m['title'], None) < 0.85: continue
+        tv, want = volume_of(p.get('title_raw'), p.get('subtitle_raw')), (extract_volume(m['title']) or SEARCH_CTX.get('want_vol') or set())
+        if tv and want and not tv & want: continue  # 'Mushoku Tensei: ..., Vol. 21' is no twin of the bare-titled vol. 22 (same narrator, similar runtime)
         pub = ((p.get('meta_raw') or {}).get('publisher') or {}).get('name') or ''
         yr = str(parse_release_year((p.get('meta_raw') or {}).get('releaseDate')) or '')
         pub_ok = bool(SEARCH_CTX.get('pub') and re.sub(r'[^a-z0-9]', '', pub.lower()) == re.sub(r'[^a-z0-9]', '', str(SEARCH_CTX['pub']).lower()) and yr == str(SEARCH_CTX.get('year')))
@@ -1702,6 +1740,10 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             dur_near_n = bool(duration and p.get("runtime_sec") and not runtime_mismatch(duration, p["runtime_sec"]) and a_narr and c_narr and a_narr & c_narr)
             na_w, nf_w = set(normalize_title_text(title).split()), set(normalize_title_text(found_title).split())
             exact_rt = bool(duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120)
+            if duration and p.get('runtime_sec') and not exact_rt and (SEARCH_CTX.get('need_exact_rt') or title_shared(SEARCH_CTX.get('key'), title, p['runtime_sec'])):
+                logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (the ABS title is shared by several library books: runtime must match to ±2 min, "
+                             f"differs by {abs(duration - p['runtime_sec']) / 60:.0f} min)")
+                continue
             if (t_score < 0.85 and auth_ok and exact_rt and a_narr and c_narr and a_narr & c_narr and na_w and na_w <= nf_w):  # 4 independent signals
                 t_score = 0.85  # 'Shannara' vs 'The Sword of Shannara': title words contained, but runtime to the minute + narrator + author + series number agree
             if strict:  # replacing an existing ASIN: everything must match
@@ -2798,6 +2840,7 @@ def note_listing_item(lib_id, it):
     key, md_ = f"{lib_id}_{it['id']}", (it.get('media') or {}).get('metadata') or {}
     if a := md_.get('asin'): ASIN_OWNERS.setdefault(a, set()).add(key)
     KEY_DUR[key] = (it.get('media') or {}).get('duration')
+    if t_ := normalize_title_text(md_.get('title') or ''): TITLE_OWNERS.setdefault((lib_id, t_), set()).add((key, _first_author(md_.get('authorName'))))
     if i_ := normalize_isbn(md_.get('isbn')): ISBN_OWNERS.setdefault(i_, set()).add(key)
     for part in str(md_.get('seriesName') or '').split(', '):
         if ' #' in part:
@@ -2940,6 +2983,40 @@ def remove_ratings_pass():
     if not DRY_RUN: rw_json(SOURCE_STATE_FILE, SOURCE_STATE)
     logging.info(f"Ratings removed from {n_changed} book(s){' (planned, DRY RUN)' if DRY_RUN else ''}; {n_locked} locked book(s) kept")
 
+REAPPLY_FIELDS = ('title', 'series', 'authors', 'narrators')
+_JOURNAL_LAST = {}
+def journal_last(key, field):
+    """Our last real write of this field (changes.jsonl; undone writes don't count). Read once per run."""
+    with IO_LOCK:
+        if not _JOURNAL_LAST:
+            _JOURNAL_LAST['_'] = True
+            try:
+                for line in open(CHANGES_FILE, encoding='utf-8'):
+                    try: e = json.loads(line)
+                    except ValueError: continue
+                    if e.get('dry_run') or e.get('field') not in REAPPLY_FIELDS + ('asin',): continue
+                    if 'undo' in str(e.get('source') or ''): _JOURNAL_LAST.pop((e.get('key'), e['field']), None); continue
+                    _JOURNAL_LAST[(e.get('key'), e['field'])] = e
+            except OSError: pass
+        return _JOURNAL_LAST.get((key, field))
+
+def reapply_reverted(item, iid, key, title, meta, tags):
+    """A field we set (group confirmation, your review decision, a cleaned title) shows exactly its value from BEFORE our change again
+    (ABS rescan with an old metadata.json): write our value again - no lock_<field>, the ASIN is still the one we had, and the source
+    is not one the normal rules redo anyway (series merge / author normalization run again at the end)."""
+    done = {}
+    for field in item.get('_reapply') or ():
+        e = journal_last(key, field)
+        src = str((e or {}).get('source') or '')
+        if not e or f'lock_{field}' in tags or not (src == 'group_confirm' or src.startswith('applied:') or (field == 'title' and src == 'audible_meta')):
+            continue
+        a_e = journal_last(key, 'asin')
+        if a_e and str(a_e.get('new') or '') != str(meta.get('asin') or ''): continue  # the ASIN changed since: the normal rules decide
+        logging.info(f"      -> ↩️ {field} is back at its value from before our change: '{listing_value(field, e.get('old'))}' -> '{listing_value(field, e.get('new'))}' written again ({src})")
+        if abs_update(iid, key, title, {field: e.get('new')}, {field: meta.get(field)}, f'reapply:{src}'):
+            done[field] = e.get('new')
+    return done
+
 def watch_changes(key, item):
     """Change monitoring (1 listing request per run): a field we wrote now shows its OLD value again (ABS rescan restored a file
     name title, ...) -> 'reverted' (the book is checked again and our value written again); a NEW value that is neither old nor ours
@@ -2960,6 +3037,7 @@ def watch_changes(key, item):
         how = 'is back at its old value' if (e.get('old') and lst(cur) == lst(e.get('old'))) else 'was changed outside the script'
         if how != 'is back at its old value':
             with IO_LOCK: e['ours'] = cur
+        elif field in REAPPLY_FIELDS: item.setdefault('_reapply', []).append(field)
         logging.info(f"  ↩️ '{(item.get('media') or {}).get('metadata', {}).get('title')}': {field} {how} - checked again (lock_ tags protect a field)")
     return 'reverted' if reverted else None
 
@@ -3099,6 +3177,8 @@ def process_queue(work_queue, history, failed, recheck):
 
                 logging.info(f"({idx+1}/{total}) [ETA: {eta_str}] {title} [ASIN: {asin}]{reason_str} (Try {failed.get(key,0)+1}/{MAX_FAIL_ATTEMPTS})")
                 stats['processed'] += 1
+                if item.get('_reapply') and (done_ := reapply_reverted(item, iid, key, title, meta, tags)):
+                    meta.update(done_); title = meta.get('title')
                 messy = parse_messy_title(title, [s_.get('name') for s_ in (meta.get('series') or [])])  # a one-word series prefix counts when it IS the ABS series ('Heist 01 Heist')
                 search_title = messy['title'] if messy else title
                 if messy: logging.info(f"      -> 🧹 Messy title detected ({messy['kind']}), searching as '{search_title}'")
@@ -3107,6 +3187,7 @@ def process_queue(work_queue, history, failed, recheck):
                     logging.info(f"      -> 🧹 Title '{search_title}' is the author's name; searching with the series name '{meta['series'][0].get('name')}' instead")
                     search_title = meta['series'][0].get('name') or search_title
                 asin_from_search = False
+                folder_fix = None  # set by folder_volume_conflict() below
                 skip_meta = False
                 abs_dur = (item_data.get('media') or {}).get('duration') or (item.get('media') or {}).get('duration')
                 src_due = set((SST.SOURCES if (item.get('_manual_trigger') or ONLY_ITEMS) else SST.due_sources(SOURCE_STATE, key, list(SST.SOURCES), REFRESH_DAYS)))
@@ -3174,7 +3255,13 @@ def process_queue(work_queue, history, failed, recheck):
                         logging.info(f"      -> ℹ️ ASIN is right (same narrator and runtime) but ABS title/authors differ from Audible '{aud_data.get('title_raw')}' ({', '.join(plaus_why)}): proposal in the review list")
                         add_review(key, title, "title", aud_data.get("title_raw"), "ASIN confirmed by runtime and narrator; ABS title/author differ", plaus_why,
                                    ctx={'iid': iid, 'cand_asin': asin, 'aud_title': aud_data.get('title_raw'), 'abs_series': [list(p) for p in _series_pairs(meta.get('series'))], 'tags': sorted(tags), 'lang': lang})
-                if not asin:
+                folder_fix = folder_volume_conflict(item_data, key, title, meta) if 'lock_asin' not in tags else None
+                if folder_fix:
+                    logging.info(f"      -> 📁 Title '{title}' is shared by several library books and the book folder names '{folder_fix['title']}' "
+                                 f"(#{folder_fix['num']}): ABS holds another volume's data, searching with the folder title (runtime must match to ±2 min)")
+                    search_title = folder_fix['title']
+                    should_search, strict_search = True, True
+                elif not asin:
                     logging.info("      -> ⚠️ No ASIN in ABS.")
                     should_search = True
                 elif pref_miss:
@@ -3227,11 +3314,14 @@ def process_queue(work_queue, history, failed, recheck):
                     SEARCH_CTX['dup_claim'] = bool(asin and (ASIN_OWNERS.get(asin, set()) - {key}))  # another ABS book has the same ASIN
                     SEARCH_CTX['pub'], SEARCH_CTX['year'] = meta.get('publisher'), meta.get('publishedYear')
                     SEARCH_CTX['key'] = key
+                    if folder_fix: SEARCH_CTX['need_exact_rt'] = True
+                    SEARCH_CTX['want_vol'] = extract_volume(search_title)  # the volume we are looking for (twin check)
                     if asin and aud_data and aud_data.get('title_raw'):
                         SEARCH_CTX.update({'old_title': aud_data['title_raw'], 'old_authors': ', '.join(aud_data.get('authors_raw') or [])})
-                    if not found: found = find_missing_asin(search_title, authors, abs_dur, lang, raw_title=title,
+                    srch_series = [dict(x, sequence=None) for x in (meta.get('series') or [])] if folder_fix else search_series(lib_id, meta.get("series"))  # ABS number belongs to another volume
+                    if not found: found = find_missing_asin(search_title, authors, abs_dur, lang, raw_title=None if folder_fix else title,
                                                             required_lang=lang_target, strict=strict_search and bool(asin),
-                                                            only_domain=search_only, narrators=search_narr, abs_series=search_series(lib_id, meta.get("series")))
+                                                            only_domain=search_only, narrators=search_narr, abs_series=srch_series)
                     if not found and pref_miss:
                         logging.info(f"        ℹ️ No exact match on {pref_store}: asking the other stores for {asin} (fallback)")
                         aud_data = get_audible_data(asin, lang, skip=(pref_store,))
@@ -3255,7 +3345,7 @@ def process_queue(work_queue, history, failed, recheck):
                                                       only_domain=None, narrators=[] if plaus == 'wrong' else search_narr,
                                                       abs_series=search_series(lib_id, meta.get("series")))
                     weak_ = LAST_SEARCH.get('weak')
-                    if not found and USE_AUDIBLE_API and meta.get('series') and abs_dur and not search_only:
+                    if not found and USE_AUDIBLE_API and meta.get('series') and abs_dur and not search_only and not folder_fix:
                         LAST_MATCH.clear()
                         found = find_missing_asin_via_series(search_title, authors, abs_dur, lang, raw_title=title, required_lang=lang_target,
                                                              strict=strict_search and bool(asin), narrators=search_narr,
@@ -3294,7 +3384,10 @@ def process_queue(work_queue, history, failed, recheck):
                             if aud_data and aud_data.get('meta_raw'):
                                 raw_l = aud_data['meta_raw'].get('language')
                                 if raw_l: new_lang_detected = map_language(raw_l)
-                        else: logging.info(f"        ℹ️ Search returned same ASIN. Keeping fallback data.")
+                        else:
+                            logging.info(f"        ℹ️ Search returned same ASIN. Keeping fallback data.")
+                            if folder_fix and LAST_MATCH.get('asin') == found and LAST_MATCH.get('confirmed'):
+                                folder_fix['same'] = True  # the folder title found THIS ASIN again (runtime ±2 min): title/number from it below
                     elif search_only: logging.info(f"        ℹ️ No exact match on {pref_store if pref_miss else search_only}. Keeping {asin} from {aud_data.get('domain') if aud_data else '?'}.")
                     else: logging.info(f"        ℹ️ No replacement found. Keeping fallback data.")
                     if plaus == "wrong" and not (found and found != asin):  # nothing taken from a product that is another book
@@ -3335,7 +3428,15 @@ def process_queue(work_queue, history, failed, recheck):
                     if aud_title and (m := re.match(r'^(.+?)\s*\(([^()]+)\)\s*$', aud_title)):
                         aud_series_names = {(x.get('name') or '').strip().lower() for x in (md_raw.get('series') or [])}
                         if m.group(2).strip().lower() in aud_series_names: aud_title = m.group(1).strip()
-                    if aud_title and aud_title != title and messy:  # only broken titles are replaced
+                    if folder_fix and (asin_from_search or folder_fix.get('same')) and aud_title and abs_dur and aud_data.get('runtime_sec') and abs(abs_dur - aud_data['runtime_sec']) <= 120:
+                        # the ABS title belongs to another volume (folder_volume_conflict) and the new ASIN is the same recording:
+                        # Audible's title, or the folder title if Audible's is the same ambiguous one ('Mushoku Tensei')
+                        new_t = aud_title if normalize_title_text(aud_title) != normalize_title_text(title) else folder_fix['title']
+                        if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{new_t}'")
+                        elif new_t != title:
+                            abs_updates['title'] = new_t
+                            log_updates.append(f"Title: '{title}' -> '{new_t}' (was another volume's title)")
+                    elif aud_title and aud_title != title and messy:  # only broken titles are replaced
                         candidates = [search_title]
                         if messy and messy.get('subtitle'): candidates.append(f"{messy['title']}: {messy['subtitle']}")
                         confirmed = asin_from_search or any(title_similarity(c, aud_title) >= 0.8 for c in candidates)
@@ -3400,6 +3501,17 @@ def process_queue(work_queue, history, failed, recheck):
                         if added_genres: logging.info(f"        🔒 Genre Update Skipped (Locked): +{added_genres}")
 
                     if 'lock_series' not in tags:
+                        # a non-Latin series name hangs on the BOOK, not on the recording: the same title is enough (Spice and Wolf, Solo
+                        # Leveling: other recording of the same volume); the language may have been corrected just above ('spa' -> English)
+                        nl_book = map_language(abs_updates.get('language') or lang) in ('English', 'German') and (same_rec_rt and bool(abs_dur and aud_data.get('runtime_sec'))
+                                   or normalize_title_text(title) == normalize_title_text(aud_data.get('title_raw') or ''))
+                        nl_cur = [x for x in (meta.get('series') or []) if x.get('name') and non_latin_name(x['name'])] if nl_book else []
+                        if nl_cur and not md_raw.get('series'):
+                            # user rule 2026-11-08: series names are English/German; Audible lists no series for this book -> the foreign one goes
+                            keep = [{"name": x.get('name'), "sequence": x.get('sequence')} for x in (meta.get('series') or []) if x.get('name') and x not in nl_cur]
+                            logging.info(f"        🔁 Series {', '.join(repr(x['name']) for x in nl_cur)} removed (not English/German, Audible lists no series for this book)")
+                            abs_updates['series'] = keep
+                            log_updates.append("Series: " + (", ".join(f"'{x['name']}' #{x['sequence']}" for x in keep) or '(none)'))
                         if series_list := md_raw.get('series'):
                             # ABS series are curated: Audible's series are only taken when the book has none in ABS.
                             # Otherwise only missing numbers of the same series are filled (Audible often lists reading
@@ -3408,12 +3520,12 @@ def process_queue(work_queue, history, failed, recheck):
                             # User rules 2026-11-08 (same recording only): a series name in a non-Latin script (English/German books)
                             # or a series that is only a folder name of the book path ('Elolaivat', 'Die vergessenen Welten') is
                             # replaced by Audible's series. A folder series only when Audible's series already exists in the library.
-                            en_de = map_language(lang) in ('English', 'German')
+                            en_de = map_language(abs_updates.get('language') or lang) in ('English', 'German')
                             ver = same_rec_rt and bool(abs_dur and aud_data.get('runtime_sec'))  # both runtimes known and equal
                             from abs_series import series_key as _skey, series_variant as _svar
                             same = lambda a, b: a == b or (_skey(a) == _skey(b) and _svar(a) == _svar(b))
                             aud_names = [n for s_ in series_list for n in ((s_.get('name') or '').strip(), canonical_series(lib_id, (s_.get('name') or '').strip(), authors)[0]) if n]
-                            bad_nl = [x for x in cur_list if ver and en_de and non_latin_name(x['name'])]
+                            bad_nl = [x for x in cur_list if nl_book and non_latin_name(x['name'])]
                             bad_fd = [x for x in cur_list if ver and x not in bad_nl and folder_series_name(item_data, x['name'])
                                       and not any(same(x['name'], n) for n in aud_names)]  # a folder named like Audible's series is fine
                             base_list = [x for x in cur_list if x not in bad_nl and x not in bad_fd]
@@ -3436,6 +3548,8 @@ def process_queue(work_queue, history, failed, recheck):
                                     text = f"{aud_t} {aud_s}".strip()
                                     pattern = re.escape(s_name) + r'[\s:,-]+(?:Book\s+|Band\s+|Teil\s+|Vol\.?\s*)?(\d+(?:\.\d+)?)'
                                     if text and (m := re.search(pattern, text, re.IGNORECASE)): s_seq = m.group(1)
+                                if folder_fix and s_seq and s_seq != folder_fix['num'] and folder_fix['num'] in extract_volume(aud_data.get('title_raw') or folder_fix['title']):
+                                    s_seq = folder_fix['num']  # Audible counts parts ('#2' for Vol. 8): folder and title agree on the volume
                                 canon, why = canonical_series(lib_id, s_name, authors)
                                 existing = next((x for x in new_list if same(x['name'], canon)), None)
                                 if existing:
@@ -3443,9 +3557,12 @@ def process_queue(work_queue, history, failed, recheck):
                                     if not existing.get('sequence') and s_seq: existing['sequence'] = s_seq
                                     elif s_seq and existing.get('sequence') and str(existing['sequence']) != str(s_seq):
                                         proven_fix = ((SEARCH_CTX.get('seq_fix') or {}).get(asin) or {}) if asin_from_search else {}
-                                        if ver and seq_shared(lib_id, existing['name'], existing['sequence']):  # ABS number is no evidence
-                                            logging.info(f"        🔢 Series '{canon}': ABS #{existing['sequence']} is shared by several books -> Audible #{s_seq}")
-                                            existing['sequence'] = s_seq
+                                        if ver and (seq_shared(lib_id, existing['name'], existing['sequence']) or (folder_fix and (asin_from_search or folder_fix.get('same')))):  # ABS number is no evidence
+                                            new_q = s_seq
+                                            if folder_fix and s_seq != folder_fix['num'] and folder_fix['num'] in extract_volume(aud_data.get('title_raw') or folder_fix['title']):
+                                                new_q = folder_fix['num']  # Audible counts parts ('#2' for Vol. 8): the folder and the title agree on the volume
+                                            logging.info(f"        🔢 Series '{canon}': ABS #{existing['sequence']} is shared by several books / belongs to another volume -> #{new_q}")
+                                            existing['sequence'] = new_q
                                         elif ver and any(k == ck_ or difflib.SequenceMatcher(None, k, ck_).ratio() >= 0.9 for k in proven_fix for ck_, _ in _series_pairs([{'name': existing['name']}])):
                                             logging.info(f"        🔢 Series '{canon}': ABS #{existing['sequence']} was proven wrong by Audible's series list -> #{s_seq}")
                                             existing['sequence'] = s_seq
@@ -3471,6 +3588,8 @@ def process_queue(work_queue, history, failed, recheck):
                                     if not x.get('sequence'): x['sequence'] = next((b['sequence'] for b in bad if b.get('sequence')), None)
                                 logging.info(f"        🔁 Series {', '.join(repr(b['name']) for b in bad)} -> {', '.join(repr(x['name']) for x in added)} "
                                              f"({'not English/German' if bad_nl else 'folder name, Audible series exists in the library'})")
+                            elif bad_nl and any(same(b['name'], n) for b in base_list for n in aud_names):
+                                logging.info(f"        🔁 Series {', '.join(repr(b['name']) for b in bad_nl)} removed (not English/German; Audible's series is already there)")
                             elif bad_nl:
                                 new_list = [x for x in new_list if x not in added] + [dict(x) for x in bad_nl]
                                 for b in bad_nl:
@@ -3478,6 +3597,13 @@ def process_queue(work_queue, history, failed, recheck):
                                     add_review(key, title, 'series', b['name'], 'series name is not English/German; Audible has no series for this book - please rename it in ABS')
                             if ignored:
                                 logging.info(f"        ℹ️ Audible series not added (ABS already has series, or other edition): {', '.join(ignored)}")
+                            # a number that three or more DIFFERENT books share is rescan junk ('Mushoku Tensei Web Novel' #3 on 18 books):
+                            # when Audible's series of the same recording was added, the junk series goes
+                            junk = [x for x in new_list if x in base_list and x.get('sequence')
+                                    and len(SEQ_TITLES.get((lib_id, x['name'].strip().lower(), str(x['sequence']).strip()), ())) >= 3]
+                            if ver and junk and any(x not in base_list for x in new_list):
+                                logging.info(f"        🔁 Series {', '.join(repr(x['name']) + ' #' + str(x['sequence']) for x in junk)} removed (number shared by 3+ different books; Audible's series added)")
+                                new_list = [x for x in new_list if x not in junk]
                             _sk = lambda L: sorted((x['name'], str(x.get('sequence') or '')) for x in L)
                             if _sk(new_list) != _sk(cur_list):  # only a real change, never a mere re-ordering
                                 abs_updates['series'] = new_list

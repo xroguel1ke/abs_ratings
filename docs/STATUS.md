@@ -8,6 +8,12 @@ Rule: update this file after every batch/chain and whenever an item changes (tas
 Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 
 ## Matching & data
+- [x] 2026-11-08 check of the first full real run (1921 books): fixes for shared titles (exact runtime), another volume's data (folder
+  title), twin volume guard, non-Latin series (same title enough, removal), junk shared numbers, merge target guards (non-Latin,
+  case-only names), '&', re-applying reverted values. Regress green, live dry run on 108 affected books ok.
+- [ ] User: update the container, run a full scan (refresh 0); then check: Konosuba 9/10 (lock_series in the Japanese series),
+  The Beginning After the End (Pack 1 and 2 locked in two case-variants -> remove one lock), Pern (two numberings mixed), Solo Leveling
+  folder '7 - ... Vol. 7 (Novel)' (493 min = probably not vol. 7), Mushoku Tensei vol. 8 (Audible counts #2).
 | Item | State | Note |
 |---|---|---|
 | [A] Audible matching (ASIN repair/search, store, other edition, language, titles) | ✅ 100 % | 4 clean chains of 180 fresh books (100 EN + 80 DE), 0 wrong matches ever; whole library 1904/1906 existing books correct (99.9 %) |

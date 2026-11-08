@@ -89,6 +89,21 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
 - **ABS forced rescan 2026-11-07** (precedence absMetadata last, storeMetadataWithItem=false -> stale August metadata.json in the book
   folders) reverted ~1900 books (1261 ASINs to dead ones, Japanese/folder series). No backup restore (user): the rules above fix it per
   book; every changed book is a 'manual update' in the queue.
+- **After the first full run 2026-11-08** (user OK "so vorgehen wie sinnvoll"):
+  - Shared title (another library book of the same author has it AND its runtime would also fit the candidate): only runtime ±2 min
+    accepts (Mushoku Tensei 21/23 got the neighbour volume at 27-37 min off; 'Threshold' by two authors and Judicator Jane 1 vs 6 stay normal).
+  - `folder_volume_conflict`: shared title + the book folder ('2 - Solo Leveling, Vol. 2 - ...') names another title with a number that
+    neither the ABS title nor the ABS number has -> ABS holds another volume's data: strict search with the folder title (±2 min), ABS
+    number ignored; a hit (or the same ASIN found again) replaces title (Audible's, or the folder's if Audible's is the same ambiguous one)
+    and number (folder number when Audible counts parts and the title agrees).
+  - Twin listings must not contradict the wanted volume (Vol. 21 is no twin of the bare-titled vol. 22).
+  - Non-Latin series: the same TITLE is enough (not the same recording); Audible lists no series -> removed; Audible's series already in ABS -> removed.
+  - A series number held by 3+ different books is junk: removed when Audible's series of the same recording is added.
+  - Merge: a non-Latin name is never the target for English/German books (locked books in it -> review list); spellings that differ
+    only in upper/lower case are ONE name for ABS: the apply step empties them first, then writes the target; another case-variant
+    with locked books -> review list. '&' = 'and' in series keys.
+  - Reverted values (exactly the value before our change, same ASIN, no lock): group confirmation / review decisions / title cleanup
+    are written again (`reapply_reverted`); merges and author normalization redo themselves at the end.
 - **Narrator = author** in ABS is replaced by Audible's narrators of the same recording (runtime 2 min) only.
 
 ## Testing
