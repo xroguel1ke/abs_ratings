@@ -108,6 +108,10 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     replaced by Audible's (same recording). Audible's series number that contradicts its own title AND the ABS title ('Vol. 8' vs #2) loses.
   - Refresh 0 days = one complete pass also in maintenance mode. ETA = speed of the last 150 FINISHED books blended with the run average
     (was: elapsed / queue index at the start of a book -> jumped between 4 s and 40 h with parallel workers).
+  - Foreign series names in LATIN script (French/Spanish/... function words, abs_series.foreign_series_name) on English/German books are
+    replaced like non-Latin ones, but kept when Audible lists the same name for the book; Audible lists no series -> review list (only a
+    non-Latin SCRIPT is removed automatically). A number held by 3+ different WORKS of one language (distinct_works: contained titles =
+    one work) is junk: Audible's number, else the book folder number when the series is the folder, else removed.
 - **Narrator = author** in ABS is replaced by Audible's narrators of the same recording (runtime 2 min) only.
 
 ## Testing
