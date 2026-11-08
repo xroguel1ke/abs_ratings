@@ -220,3 +220,4 @@ table.health td{vertical-align:top}
 a.tile{color:inherit;transition:border-color .15s var(--ease)}a.tile:hover{text-decoration:none;border-color:var(--fg2)}
 .card>details{padding:8px 0;border-bottom:1px solid var(--line)}.card>details:last-of-type{border-bottom:0}
 .card>details[open]>summary{margin-bottom:8px}
+table.cmp{margin:8px 0;width:100%}table.cmp td,table.cmp th{padding:4px 8px;vertical-align:top}table.cmp th{text-align:left;color:var(--fg2);font-weight:500}

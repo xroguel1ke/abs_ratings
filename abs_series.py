@@ -104,6 +104,19 @@ def is_latin(name):
 FOREIGN_WORDS = {'les', 'le', 'la', 'du', 'aux', 'et', 'une', 'un', 'el', 'los', 'las', 'del', 'y', 'il', 'gli', 'degli', 'della', 'dei', 'delle', 'di', 'os', 'dos', 'het', 'een'}
 ENDE_WORDS = {'the', 'of', 'and', 'a', 'an', 'der', 'die', 'das', 'und', 'von', 'vom', 'im', 'zum', 'zur', 'ein', 'eine', 'in', 'to', 'for'}
 
+GERMAN_WORDS = {'der', 'die', 'das', 'dem', 'den', 'des', 'und', 'von', 'vom', 'zum', 'zur', 'im', 'unter', 'einer', 'eines', 'zweiten', 'vergessenen', 'chroniken'}
+
+def foreign_for_book(name, book_lang):
+    """Series name that does not fit the BOOK's language: not English/German at all (foreign_series_name, Nordic letters å ø æ), or a
+    German name on an English book ('Das Spiel der Götter' on Gardens of the Moon). An English name on a German book is fine."""
+    if foreign_series_name(name) or re.search(r'[åøæÅØÆ]', name or ''): return True
+    lang = str(book_lang or '').strip().lower()
+    if lang in ('english', 'eng', 'en'):
+        w = re.findall(r"[a-zäöüß]+", (name or '').lower())
+        strong = GERMAN_WORDS - {'die', 'den', 'des', 'im'}  # 'Die Hard', 'Den of Thieves' are English
+        return (any(x in strong for x in w) or sum(x in GERMAN_WORDS for x in w) >= 2) and not any(x in ('the', 'of', 'and', 'a', 'an') for x in w)
+    return False
+
 def foreign_series_name(name):
     """A series name that is neither English nor German: non-Latin script ('四畳半シリーズ') or two or more French/Spanish/Italian/...
     function words and none of English/German ('Les Annales de la Compagnie Noire' on English Black Company books)."""

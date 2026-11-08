@@ -468,9 +468,10 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
             continue
         others = [y for y in out if y is not x]
         others_ok = any(listed(y['name']) or (folder and same(y['name'], folder)) for y in others)
-        if aud_series and others_ok and (fact(n)['n'] <= 2 or non_latin_name(n)):
+        from abs_series import foreign_for_book as _ffb
+        if aud_series and others_ok and (fact(n)['n'] <= 2 or non_latin_name(n) or _ffb(n, book_lang)):
             missing = [a for a in aud_series if not any(same(y['name'], a['name']) for y in out)]
-            near = [a for a in missing if non_latin_name(n) or difflib.SequenceMatcher(None, _k(n), _k(a['name'])).ratio() >= 0.75]
+            near = [a for a in missing if non_latin_name(n) or _ffb(n, book_lang) or difflib.SequenceMatcher(None, _k(n), _k(a['name'])).ratio() >= 0.75]
             if missing and not near: continue  # an own sub-series ('Hoid's Travails') next to a missing Audible series: leave it
             missing = near
             if missing:  # 'Realms of the Elderlings' #14 while Audible's 'Realm of the Elderlings' is not on the book: take Audible's
@@ -1850,6 +1851,18 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (the ABS title is shared by several library books: runtime must match to ±2 min, "
                              f"differs by {abs(duration - p['runtime_sec']) / 60:.0f} min)")
                 continue
+            ser_same = any(an is not None and cn is not None and an == cn and (ak == ck or difflib.SequenceMatcher(None, ak, ck).ratio() >= 0.9)
+                           for ak, an in _series_pairs(abs_series) for ck, cn in _series_pairs((p.get('meta_raw') or {}).get('series')))
+            if t_score < 0.85 and auth_ok and exact_rt and a_narr and c_narr and a_narr & c_narr and ser_same and not (LAST_SEARCH.get('weak') or {}).get('series_ok'):
+                # 'Oathbound Healer' = 'Beneath the Dragoneye Moons' #1: author, narrator, runtime to 2 min, series AND number agree - only the title is
+                # another one. LAST resort (the caller takes it only if the normal search found nothing: an exact-title listing of the same recording wins)
+                LAST_SEARCH['weak'] = {'asin': cand, 'title': found_title, 'title_score': round(t_score, 2), 'author_ok': True, 'series_ok': True, 'domain': domain,
+                                       'runtime_sec': p['runtime_sec'], 'narrators': p.get('narrators_raw') or [], 'authors': p.get('authors_raw') or [],
+                                       'lang': (p.get('meta_raw') or {}).get('language'),
+                                       'cand': {'title': found_title, 'authors': p.get('authors_raw') or [], 'narrators': p.get('narrators_raw') or [], 'runtime_min': round(p['runtime_sec'] / 60),
+                                                'series': [f"{n} #{q}" if q else n for n, q in ((x.get('name') or x.get('title'), x.get('part') or x.get('sequence')) for x in ((p.get('meta_raw') or {}).get('series') or []))], 'store': domain}}
+                logging.info(f"        ↪️ '{found_title}' [{cand}]: title differs, but author, narrator, runtime (±2 min) and series number agree - kept as last resort")
+                continue
             if (t_score < 0.85 and auth_ok and exact_rt and a_narr and c_narr and a_narr & c_narr and na_w and na_w <= nf_w):  # 4 independent signals
                 t_score = 0.85  # 'Shannara' vs 'The Sword of Shannara': title words contained, but runtime to the minute + narrator + author + series number agree
             if strict:  # replacing an existing ASIN: everything must match
@@ -1896,7 +1909,10 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 logging.info(msg)
                 return cand
             if duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120 and a_narr and c_narr and a_narr & c_narr and not LAST_SEARCH.get('weak'):
-                LAST_SEARCH['weak'] = {'asin': cand, 'title': found_title, 'title_score': round(t_score, 2), 'author_ok': bool(auth_ok)}  # runtime to the minute + narrator agree, title/author do not: a human decides
+                LAST_SEARCH['weak'] = {'asin': cand, 'title': found_title, 'title_score': round(t_score, 2), 'author_ok': bool(auth_ok),
+                                       'cand': {'title': found_title, 'authors': p.get('authors_raw') or [], 'narrators': p.get('narrators_raw') or [],
+                                                'runtime_min': round(p['runtime_sec'] / 60), 'series': [f"{n} #{q}" if q else n for n, q in ((x.get('name') or x.get('title'), x.get('part') or x.get('sequence')) for x in ((p.get('meta_raw') or {}).get('series') or []))],
+                                                'store': domain}}  # runtime to the minute + narrator agree, title/author do not: a human decides
             logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, runtime {'✓' if dur_ok else '✗' if dur_conflict else '?'})")
         if domain == domains[0] and (nq or nq2) and not best_pick and not near_pick and not only_queries and not only_extra:  # preferred store first: author+narrator filter there before another store wins
             rel_b = LAST_SEARCH['related']
@@ -3473,9 +3489,17 @@ def process_queue(work_queue, history, failed, recheck):
                                                              strict=strict_search and bool(asin), narrators=search_narr,
                                                              abs_series=search_series(lib_id, meta.get('series')))
                     
+                    if not found and weak_ and weak_.get('series_ok') and 'lock_asin' not in tags and not (ASIN_OWNERS.get(weak_['asin'], set()) - {key}):
+                        found = weak_['asin']
+                        logging.info(f"        ✅ Taken: '{weak_['title']}' [{found}] - same author, narrator, runtime (±2 min), series and number; only the title differs")
+                        LAST_MATCH.clear(); LAST_MATCH.update({'asin': found, 'confirmed': True, 'evidence': ['author', 'narrator', 'runtime', 'series-number'], 'title': weak_['title'],
+                                                               'domain': weak_.get('domain'), 'runtime': weak_.get('runtime_sec'), 'narrators': weak_.get('narrators') or [],
+                                                               'authors': weak_.get('authors') or [], 'pub_year': False, 'count': 0, 'lang': weak_.get('lang')})
                     if not found and weak_ and 'lock_asin' not in tags:
                         add_review(key, title, 'asin', weak_['asin'], f"runtime (to the minute) and narrator match '{weak_['title']}'; title similarity {weak_.get('title_score')}, author {'matches' if weak_.get('author_ok') else 'differs'} - not enough for an automatic change",
-                                   ctx={'iid': iid, 'cand_asin': weak_['asin'], 'aud_title': weak_.get('title'), 'abs_series': [list(p) for p in _series_pairs(meta.get('series'))], 'tags': sorted(tags), 'lang': lang})
+                                   ctx={'iid': iid, 'cand_asin': weak_['asin'], 'aud_title': weak_.get('title'), 'abs_series': [list(p) for p in _series_pairs(meta.get('series'))], 'tags': sorted(tags), 'lang': lang,
+                                        'cand': weak_.get('cand'), 'abs': {'title': title, 'authors': authors, 'narrators': meta.get('narrators') or [],
+                                                                         'runtime_min': round((abs_dur or 0) / 60), 'series': [f"{x.get('name')} #{x.get('sequence')}" if x.get('sequence') else x.get('name') for x in (meta.get('series') or [])]}})
                     if found and found != asin and (ASIN_OWNERS.get(found, set()) - {key}):
                         logging.info(f"        ⛔ ASIN {found} already belongs to another book in the library/run: not assigned (needs a manual look)")
                         add_review(key, title, 'asin', found, 'ASIN already belongs to another book')
@@ -3660,7 +3684,8 @@ def process_queue(work_queue, history, failed, recheck):
                             from abs_series import series_key as _skey, series_variant as _svar
                             same = lambda a, b: a == b or (_skey(a) == _skey(b) and _svar(a) == _svar(b))
                             aud_names = [n for s_ in series_list for n in ((s_.get('name') or '').strip(), canonical_series(lib_id, (s_.get('name') or '').strip(), authors)[0]) if n]
-                            bad_nl = [x for x in cur_list if nl_book and non_latin_name(x['name'])
+                            from abs_series import foreign_for_book as _ffb
+                            bad_nl = [x for x in cur_list if nl_book and (non_latin_name(x['name']) or _ffb(x['name'], abs_updates.get('language') or lang))
                                       and (non_latin_script(x['name']) or not any(same(x['name'], n) for n in aud_names))]  # Audible uses this name too: it is the real one
                             bad_fd = [x for x in cur_list if ver and x not in bad_nl and folder_series_name(item_data, x['name'])
                                       and not any(same(x['name'], n) for n in aud_names)]  # a folder named like Audible's series is fine

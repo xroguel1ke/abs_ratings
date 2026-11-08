@@ -25,6 +25,13 @@
   <form method="post" action="{{ url_for('queue_action', qid=x.id, action='reject') }}"><button>{{ _('Discard') }}</button></form></div></div>
  <p class="small" style="margin:8px 0 4px">{{ _('Suggestion') }}: <code>{{ x.candidate }}</code> – {{ x.reason|de }}</p>
  {% if x.evidence %}<p class="muted small" style="margin:0">{{ _('Evidence') }}: {{ x.evidence|join(', ') }}</p>{% endif %}
+ {% set ca, ab = (x.ctx or {}).cand, (x.ctx or {}).abs %}{% if ca and ab %}
+ <table class="cmp small"><tr><th></th><th>{{ _('In ABS') }}</th><th>{{ _('Suggestion') }}</th></tr>
+ {% for k, lab in [('title', _('Title')), ('authors', _('Authors')), ('narrators', _('Narrators')), ('runtime_min', _('Runtime')), ('series', _('Series'))] %}
+  {% set va, vc = ab.get(k), ca.get(k) %}{% set ta = (va|join(', ') if va is iterable and va is not string else va) %}{% set tc = (vc|join(', ') if vc is iterable and vc is not string else vc) %}
+  {% if k == 'runtime_min' %}{% set eq = va and vc and ((va - vc)|abs) <= 2 %}{% set ta = (va ~ ' min') if va else '–' %}{% set tc = (vc ~ ' min') if vc else '–' %}{% else %}{% set eq = (ta|lower) == (tc|lower) %}{% endif %}
+  <tr><td class="muted">{{ lab }}</td><td>{{ ta or '–' }}</td><td><span class="dot {{ 'ok' if eq else 'warn' }}"></span>{{ tc or '–' }}</td></tr>
+ {% endfor %}</table>{% endif %}
  <div class="links small">{% if r.asin %}<a href="https://{{ store }}/pd/{{ r.asin }}" target="_blank">Audible ({{ _('current') }}) {{ icon('arrow-up-right', 14) }}</a>{% endif %}
   {% if x.kind == 'asin' and x.candidate %}<a href="https://{{ store }}/pd/{{ x.candidate }}" target="_blank">{{ _('Suggestion on Audible') }} {{ icon('arrow-up-right', 14) }}</a>{% if '.de' not in store %}<a href="https://www.audible.de/pd/{{ x.candidate }}" target="_blank">.de {{ icon('arrow-up-right', 14) }}</a>{% endif %}{% endif %}
   {% if r.goodreads %}<a href="{{ r.goodreads }}" target="_blank">Goodreads {{ icon('arrow-up-right', 14) }}</a>{% endif %}{% if r.hardcover %}<a href="{{ r.hardcover }}" target="_blank">Hardcover {{ icon('arrow-up-right', 14) }}</a>{% endif %}

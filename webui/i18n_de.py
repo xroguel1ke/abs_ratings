@@ -306,3 +306,4 @@ add({  # shorter help texts (2026-11-08)
 })
 add({'%(n)s entries done.': '%(n)s Einträge erledigt.', 'Apply all %(n)s?': 'Alle %(n)s übernehmen?', 'Apply all': 'Alle übernehmen',
      'Discard all %(n)s?': 'Alle %(n)s verwerfen?', 'Discard all': 'Alle verwerfen'})
+add({'In ABS': 'In ABS', 'Authors': 'Autoren', 'Narrators': 'Sprecher', 'Runtime': 'Laufzeit'})
