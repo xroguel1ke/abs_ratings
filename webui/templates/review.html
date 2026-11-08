@@ -10,7 +10,13 @@
 <div class="spanel">
 
 <div class="sec" data-sec="buecher">
-<div class="card"><h2 style="margin-top:0">{{ _('Books') }}</h2><p class="muted small" style="margin-top:-8px">{{ _('Suggestions without enough evidence for an automatic change. Apply writes it (can be undone), Discard keeps the book as it is.') }}</p></div>
+<div class="card"><h2 style="margin-top:0">{{ _('Books') }}</h2><p class="muted small" style="margin-top:-8px">{{ _('Suggestions without enough evidence for an automatic change. Apply writes it (can be undone), Discard keeps the book as it is.') }}</p>
+{% set kinds = secs.buecher.entries|map(attribute='kind')|list %}{% if kinds %}<div class="row small" style="gap:8px">
+{% for k in ['asin', 'hardcover', 'title', 'isbn', 'series'] %}{% set n = kinds|select('equalto', k)|list|length %}{% if n > 1 %}
+ <span class="badge">{{ {'asin': 'ASIN', 'isbn': 'ISBN', 'title': _('Title'), 'hardcover': 'Hardcover', 'series': _('Series')}[k] }} {{ n }}</span>
+ {% if k in ('asin', 'hardcover') %}<form method="post" action="{{ url_for('queue_bulk', kind=k, action='accept') }}" data-confirm="{{ _('Apply all %(n)s?', n=n) }}"><button>{{ _('Apply all') }}</button></form>{% endif %}
+ <form method="post" action="{{ url_for('queue_bulk', kind=k, action='reject') }}" data-confirm="{{ _('Discard all %(n)s?', n=n) }}"><button>{{ _('Discard all') }}</button></form>
+{% endif %}{% endfor %}</div>{% endif %}</div>
 {% for x in secs.buecher.entries %}{% set r = x.res %}{% set store = r.domain or 'www.audible.com' %}
 <div class="card mcard">
  <div class="row" style="justify-content:space-between"><div><span class="badge warn">{{ {'asin': 'ASIN', 'isbn': 'ISBN', 'title': _('Title'), 'hardcover': 'Hardcover', 'series': _('Series')}.get(x.kind, x.kind) }}</span>

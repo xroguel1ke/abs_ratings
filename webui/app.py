@@ -376,6 +376,20 @@ def merged_action(mid, action):
     return redirect(url_for('review_page') + ('#autoren' if m['kind'] == 'author' else '#reihen'))
 
 
+@app.route('/queue-bulk/<kind>/<action>', methods=['POST'])
+@login_required
+def queue_bulk(kind, action):
+    """Review list: the same decision for every open entry of one kind. Accept only where it is a saved override (ASIN, Hardcover link:
+    written / used with the next scan, can be checked per book before); Discard for every kind."""
+    if action not in ('accept', 'reject') or (action == 'accept' and kind not in ('asin', 'hardcover')): abort(400)
+    items = [x for x in core.open_queue() if x.get('kind') == kind]
+    for x in items:
+        if action == 'accept' and x.get('candidate'): core.save_override(x['key'], {kind: x['candidate']})
+        core.set_queue_decision(x['id'], action)
+    flash(T('%(n)s entries done.', n=len(items)), 'ok')
+    return redirect(url_for('review_page') + '#buecher')
+
+
 @app.route('/queue/<path:qid>/<action>', methods=['POST'])
 @login_required
 def queue_action(qid, action):

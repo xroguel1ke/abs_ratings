@@ -304,3 +304,5 @@ add({  # shorter help texts (2026-11-08)
     'Writes the checked changes where ABS still has the test-run value. ABS backup first; everything can be undone under': 'Schreibt die angehakten Änderungen, wo ABS noch den Wert aus dem Testlauf hat. Vorher ABS-Backup; alles rückgängig machbar unter',
     'These change which book is meant or its name - check each one (click the title for details).': 'Diese ändern, welches Buch gemeint ist oder wie es heißt – bitte einzeln prüfen (Klick auf den Titel zeigt Details).',
 })
+add({'%(n)s entries done.': '%(n)s Einträge erledigt.', 'Apply all %(n)s?': 'Alle %(n)s übernehmen?', 'Apply all': 'Alle übernehmen',
+     'Discard all %(n)s?': 'Alle %(n)s verwerfen?', 'Discard all': 'Alle verwerfen'})
