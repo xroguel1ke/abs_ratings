@@ -33,6 +33,8 @@ Code: 66 files, +6128 / −475 lines. Test data: public synthetic batches in `te
   - "Merge as …" lets you choose the target name.
 
 ## Repair after an ABS rescan (2026-11-08)
+- tools/library_reorg.py: reorganizes the audiobook folder tree from a plan (dry run by default; moves stay inside the author folder;
+  metadata.json archived before deletion; audio inventory before/after must match, symlinks are never followed).
 - An ABS forced rescan with stale metadata.json files reverted ~1900 books. The script now repairs such books by itself, book by book:
   dead ASINs replaced (English -> audible.com, German -> audible.de, other stores only as fallback), non-Latin and folder-name series replaced
   by Audible's series, library series added back (Stormlight), series numbers shared by several books corrected.
