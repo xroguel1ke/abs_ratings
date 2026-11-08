@@ -2423,6 +2423,8 @@ def hc_audible_crosscheck(hc, aud):
     contained = bool(hw and aw and (hw <= aw or aw <= hw) and min(len(hw), len(aw)) >= 2)  # 'Ascendant Insanity' in 'An Outcast in Another World: Ascendant Insanity'
     non_english = str((aud.get('meta_raw') or {}).get('language') or 'english').lower() not in ('english', 'en', 'eng')
     tied = hc.get('source') in ('ISBN', 'ASIN', 'manual link') and non_english  # identifier + non-English edition: a different title is a translation ('Shadow\'s Edge' = 'Am Rande der Schatten')
+    # the Hardcover id was cached when an earlier run verified it (translations via edition titles); a German edition keeps its German title
+    if hc.get('source') == 'cache' and non_english and a: tied = True
     alt_hit = any(title_similarity(clean_title(x), clean_title(aud.get('title_raw') or '')) >= 0.85 for x in hc.get('alts') or [])  # Hardcover lists the Audible title as an alternative title (translations)
     if alt_hit: why += ', Audible title is an alternative title on Hardcover'
     same_series = False
