@@ -739,6 +739,11 @@ ISBN_OWNERS = {}  # isbn -> set of item keys (an ISBN is never given to a second
 TITLE_OWNERS = {}  # (lib, normalized title) -> item keys: a title held by several books says nothing about WHICH volume it is
 KEY_DUR = {}  # item key -> ABS duration (s): tells a duplicate (owner = same recording) from an owner with a wrong ASIN
 
+def aud_part(q):
+    """Audible series sequence -> number. '1, The Stolen Heir' (The Folk of the Air) is the position inside a sub-series, not this
+    series' number (it gave The Stolen Heir 'Folk of the Air #1' next to The Cruel Prince #1, 2026-11-08): no number."""
+    return None if re.match(r'\s*\d+(?:\.\d+)?\s*,\s*[^\d\s]', str(q or '')) else q
+
 def _seq_num(v):
     m = re.search(r"\d+(?:\.\d+)?", str(v or ""))
     return float(m.group(0)) if m else None
@@ -1385,7 +1390,7 @@ def get_audible_api(asin, domain):
         'releaseDate': p.get('release_date') or p.get('issue_date'),
         'format': p.get('format_type'),
         'categories': [{'name': c} for c in categories],
-        'series': [{'name': s.get('title'), 'part': s.get('sequence'), 'asin': s.get('asin')} for s in (p.get('series') or []) if s.get('title')],
+        'series': [{'name': s.get('title'), 'part': aud_part(s.get('sequence')), 'asin': s.get('asin')} for s in (p.get('series') or []) if s.get('title')],
     }
     note_series(p.get('series'))
     return res
@@ -3043,6 +3048,7 @@ def run_libraries(history, failed, recheck):
         batch, listed = [], {}
         for lib_id in {k.partition('_')[0] for k in ONLY_ITEMS}:  # duplicate-ASIN guard needs the whole library, also in single-book mode
             try:
+                load_series_names(lib_id)
                 for it in abs_session.get(f"{ABS_URL}/api/libraries/{lib_id}/items").json()['results']:
                     listed[f"{lib_id}_{it['id']}"] = it  # author for the parallel lanes
                     note_listing_item(lib_id, it)
@@ -3076,11 +3082,23 @@ def run_libraries(history, failed, recheck):
                  + (f", {len(pool) - len(batch)} follow in the next runs." if len(pool) > len(batch) else "."))
     process_queue(batch, history, failed, recheck)
 
-def split_series_name(s):
+LIB_SERIES_NAMES = {}  # lib -> {lower-case series names} (ABS series list): splits an unnumbered name off the listing's seriesName
+
+def load_series_names(lib_id):
+    try:
+        r = abs_session.get(f"{ABS_URL}/api/libraries/{lib_id}/series", params={'limit': 5000, 'minified': 1}, timeout=60)
+        LIB_SERIES_NAMES[lib_id] = {(x.get('name') or '').strip().lower() for x in r.json().get('results') or [] if x.get('name')}
+    except Exception as e: logging.debug(f"series names of {lib_id} not loaded: {e}")
+
+def split_series_name(s, known=None):
     """ABS listing 'seriesName' -> [(name, number)]. The listing joins all series with ', ' - and names may contain commas themselves
-    ('Memory, Sorrow & Thorn #3, Das Geheimnis der Großen Schwerter #3'): a part ends at ' #<number>'."""
+    ('Memory, Sorrow & Thorn #3, Das Geheimnis der Großen Schwerter #3'): a part ends at ' #<number>'. An UNNUMBERED name in front
+    ('Elfhame, The Folk of the Air #1') is split off when it is a known library series and the glued name is none (2026-11-08: the
+    glued name hid that The Cruel Prince and The Stolen Heir both held Folk of the Air #1)."""
     out, cur = [], ''
     for tok in str(s or '').split(', '):
+        if cur and known and cur.strip().lower() in known and not any(k.startswith(f"{cur}, {tok}".strip().lower()) for k in known):
+            out.append((cur.strip(), '')); cur = ''
         cur = f"{cur}, {tok}" if cur else tok
         if m := re.search(r' #(\S+)$', tok):
             out.append((cur[:len(cur) - len(m.group(0))].strip(), m.group(1))); cur = ''
@@ -3094,7 +3112,7 @@ def note_listing_item(lib_id, it):
     KEY_DUR[key] = (it.get('media') or {}).get('duration')
     if t_ := normalize_title_text(md_.get('title') or ''): TITLE_OWNERS.setdefault((lib_id, t_), set()).add((key, _first_author(md_.get('authorName'))))
     if i_ := normalize_isbn(md_.get('isbn')): ISBN_OWNERS.setdefault(i_, set()).add(key)
-    for sn_, q_ in split_series_name(md_.get('seriesName')):
+    for sn_, q_ in split_series_name(md_.get('seriesName'), LIB_SERIES_NAMES.get(lib_id)):
         if sn_:
             f_ = SERIES_FACTS.setdefault((lib_id, sn_.lower()), {'n': 0, 'authors': set(), 'folders': set(), 'name': sn_})
             f_['n'] += 1; f_['authors'] |= {_first_author(md_.get('authorName'))}
@@ -3118,6 +3136,7 @@ def build_queue(lib_id, history, recheck):
     now = datetime.now()
     now_utc = datetime.now(timezone.utc)
 
+    load_series_names(lib_id)
     for it in items: note_listing_item(lib_id, it)
 
     for item in items:
