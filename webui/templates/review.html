@@ -3,14 +3,14 @@
 {% macro side(name, books, tl, authors, label) %}<div class="mside"><div class="muted small">{{ label }}</div><b>{{ name }}</b>
  <div class="small">{% if books %}{{ _('Volumes') }} {{ books }}{% endif %}{% if authors %} · {{ authors|join(', ') }}{% endif %}</div>{{ titles(tl) }}</div>{% endmacro %}
 
-<div class="row" style="justify-content:space-between"><h1>{{ _('Review list') }}</h1><button type="button" class="iconbtn snav-toggle" onclick="document.querySelector('.snav').classList.toggle('open')">☰ {{ _('Sections') }}</button></div>
+<div class="row" style="justify-content:space-between"><h1>{{ _('Review list') }}</h1><button type="button" class="iconbtn snav-toggle" onclick="document.querySelector('.snav').classList.toggle('open')">{{ icon('menu') }} {{ _('Sections') }}</button></div>
 <p class="muted small">{{ _('Only what needs a decision from you, plus the automatically merged series and authors to confirm or undo. Nothing uncertain is written without you.') }}</p>
 <div class="slayout">
 <nav class="snav" aria-label="{{ _('Sections') }}">{% for k, s in secs.items() %}<a href="#{{ k }}" data-sec="{{ k }}">{{ s.label }} <span class="badge {{ 'warn' if counts[k] else '' }}" style="margin-left:auto">{{ counts[k] }}</span></a>{% endfor %}</nav>
 <div class="spanel">
 
 <div class="sec" data-sec="buecher">
-<div class="card"><h2 style="margin-top:0">{{ _('Books') }}</h2><p class="muted small" style="margin-top:-6px">{{ _('New ASIN, title suggestion or Hardcover match where the evidence is not enough for an automatic change. "Apply" writes the suggestion (can be undone in the history), "Discard" leaves the book as it is - the suggestion does not come back.') }}</p></div>
+<div class="card"><h2 style="margin-top:0">{{ _('Books') }}</h2><p class="muted small" style="margin-top:-8px">{{ _('New ASIN, title suggestion or Hardcover match where the evidence is not enough for an automatic change. "Apply" writes the suggestion (can be undone in the history), "Discard" leaves the book as it is - the suggestion does not come back.') }}</p></div>
 {% for x in secs.buecher.entries %}{% set r = x.res %}{% set store = r.domain or 'www.audible.com' %}
 <div class="card mcard">
  <div class="row" style="justify-content:space-between"><div><span class="badge warn">{{ {'asin': 'ASIN', 'isbn': 'ISBN', 'title': _('Title'), 'hardcover': 'Hardcover'}.get(x.kind, x.kind) }}</span>
@@ -19,20 +19,20 @@
   <form method="post" action="{{ url_for('queue_action', qid=x.id, action='reject') }}"><button>{{ _('Discard') }}</button></form></div></div>
  <p class="small" style="margin:8px 0 4px">{{ _('Suggestion') }}: <code>{{ x.candidate }}</code> – {{ x.reason|de }}</p>
  {% if x.evidence %}<p class="muted small" style="margin:0">{{ _('Evidence') }}: {{ x.evidence|join(', ') }}</p>{% endif %}
- <div class="links small">{% if r.asin %}<a href="https://{{ store }}/pd/{{ r.asin }}" target="_blank">Audible ({{ _('current') }}) ↗</a>{% endif %}
-  {% if x.kind == 'asin' and x.candidate %}<a href="https://{{ store }}/pd/{{ x.candidate }}" target="_blank">{{ _('Suggestion on Audible') }} ↗</a>{% if '.de' not in store %}<a href="https://www.audible.de/pd/{{ x.candidate }}" target="_blank">.de ↗</a>{% endif %}{% endif %}
-  {% if r.goodreads %}<a href="{{ r.goodreads }}" target="_blank">Goodreads ↗</a>{% endif %}{% if r.hardcover %}<a href="{{ r.hardcover }}" target="_blank">Hardcover ↗</a>{% endif %}
-  {% if abs_base and r.id %}<a href="{{ abs_base }}/item/{{ r.id }}" target="_blank">ABS ↗</a>{% endif %}</div>
+ <div class="links small">{% if r.asin %}<a href="https://{{ store }}/pd/{{ r.asin }}" target="_blank">Audible ({{ _('current') }}) {{ icon('arrow-up-right', 14) }}</a>{% endif %}
+  {% if x.kind == 'asin' and x.candidate %}<a href="https://{{ store }}/pd/{{ x.candidate }}" target="_blank">{{ _('Suggestion on Audible') }} {{ icon('arrow-up-right', 14) }}</a>{% if '.de' not in store %}<a href="https://www.audible.de/pd/{{ x.candidate }}" target="_blank">.de {{ icon('arrow-up-right', 14) }}</a>{% endif %}{% endif %}
+  {% if r.goodreads %}<a href="{{ r.goodreads }}" target="_blank">Goodreads {{ icon('arrow-up-right', 14) }}</a>{% endif %}{% if r.hardcover %}<a href="{{ r.hardcover }}" target="_blank">Hardcover {{ icon('arrow-up-right', 14) }}</a>{% endif %}
+  {% if abs_base and r.id %}<a href="{{ abs_base }}/item/{{ r.id }}" target="_blank">ABS {{ icon('arrow-up-right', 14) }}</a>{% endif %}</div>
 </div>{% else %}<div class="card muted">{{ _('No open books.') }}</div>{% endfor %}
 </div>
 
 {% for k in ('reihen', 'autoren') %}{% set s = secs[k] %}
 <div class="sec" data-sec="{{ k }}">
 <div class="card"><h2 style="margin-top:0">{{ _('Merge series') if k == 'reihen' else _('Normalize authors') }}</h2>
- <p class="muted small" style="margin-top:-6px">{% if k == 'reihen' %}{{ _('Series are merged automatically only when the names are equal after cleaning (or almost equal and the volume numbers complement or interleave), every book shares an author, the edition is the same and no numbers overlap.') }}{% else %}{{ _('Authors are normalized automatically only with evidence for the same person: spelling (initials, spaces, accents), the same Audible author id or identical books. The goal is one spelling in Latin script.') }}{% endif %}</p></div>
+ <p class="muted small" style="margin-top:-8px">{% if k == 'reihen' %}{{ _('Series are merged automatically only when the names are equal after cleaning (or almost equal and the volume numbers complement or interleave), every book shares an author, the edition is the same and no numbers overlap.') }}{% else %}{{ _('Authors are normalized automatically only with evidence for the same person: spelling (initials, spaces, accents), the same Audible author id or identical books. The goal is one spelling in Latin script.') }}{% endif %}</p></div>
 <h3>{{ _('Uncertain - your decision') }} ({{ s.review|length }})</h3>
 {% for x in s.review %}<div class="card mcard">
- <div class="mpair">{{ side(x.series, x.series_books if k == 'reihen' else '', x.series_titles, x.series_authors, _('Candidate')) }}<div class="marrow">→</div>{{ side(x.other, x.other_books if k == 'reihen' else '', x.other_titles, x.other_authors, _('Target')) }}</div>
+ <div class="mpair">{{ side(x.series, x.series_books if k == 'reihen' else '', x.series_titles, x.series_authors, _('Candidate')) }}<div class="marrow">{{ icon('arrow-right', 14) }}</div>{{ side(x.other, x.other_books if k == 'reihen' else '', x.other_titles, x.other_authors, _('Target')) }}</div>
  <div class="row" style="justify-content:space-between;margin-top:8px"><span class="small"><b>{{ _('Why uncertain') }}:</b> {{ x.reason|de }}</span>
   <span class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('review_action', mid=x.id, action='merge') }}"><button class="primary" title="{{ _('Target name') }}: {{ x.other }}">{{ _('Merge') }}</button></form>
   <form method="post" action="{{ url_for('review_action', mid=x.id, action='merge_as') }}"><button title="{{ _('Merge, but keep this name') }}">{{ _('Merge as') }} „{{ x.series|truncate(28) }}“</button></form>
@@ -40,16 +40,16 @@
 </div>{% else %}<div class="card muted">{{ _('No uncertain cases.') }}</div>{% endfor %}
 <h3>{{ _('Merged automatically') }} ({{ s.merged|length }})</h3>
 {% for m in s.merged %}<div class="card mcard">
- <div class="mpair">{{ side(m.member, m.member_books, m.member_titles, m.member_authors, _('before')) }}<div class="marrow">→</div>{{ side(m.target, m.target_books, m.target_titles, m.target_authors, _('now')) }}</div>
+ <div class="mpair">{{ side(m.member, m.member_books, m.member_titles, m.member_authors, _('before')) }}<div class="marrow">{{ icon('arrow-right', 14) }}</div>{{ side(m.target, m.target_books, m.target_titles, m.target_authors, _('now')) }}</div>
  <div class="row" style="justify-content:space-between;margin-top:8px"><span class="small"><span class="badge {{ 'ok' if m.status == 'applied' else 'warn' }}">{{ _('applied') if m.status == 'applied' else _('planned (test run)') }}</span> {{ _('%(n)s book(s)', n=m.member_count) }} · {{ {'exact': _('same name after cleaning'), 'similar': _('almost the same name, numbers complement'), 'spelling': _('same person, different spelling')}.get(m.relation, m.relation) }} · {{ m.last_seen }}</span>
-  <span class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('merged_action', mid=m.id, action='confirm') }}"><button>✓ {{ _('Correct') }}</button></form>
-  <form method="post" action="{{ url_for('merged_action', mid=m.id, action='undo') }}" data-confirm="{{ _('Undo this merge? The old names are restored and these will not be merged again.') }}"><button class="danger">↶ {{ _('Undo') }}</button></form></span></div>
+  <span class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('merged_action', mid=m.id, action='confirm') }}"><button>{{ icon('check') }} {{ _('Correct') }}</button></form>
+  <form method="post" action="{{ url_for('merged_action', mid=m.id, action='undo') }}" data-confirm="{{ _('Undo this merge? The old names are restored and these will not be merged again.') }}"><button class="danger">{{ icon('undo-2') }} {{ _('Undo') }}</button></form></span></div>
 </div>{% else %}<div class="card muted">{{ _('Nothing open.') }}</div>{% endfor %}
 {% if generated %}<p class="muted small">{{ _('As of') }}: {{ generated }}</p>{% endif %}
 </div>{% endfor %}
 
 <div class="sec" data-sec="sonstiges">
-<div class="card"><h2 style="margin-top:0">{{ _('Other') }}</h2><p class="muted small" style="margin-top:-6px">{{ _('The same recording twice in the library (same author, same narrator, runtime equal to 2 seconds). The script changes nothing here - clean up in ABS itself.') }}</p></div>
+<div class="card"><h2 style="margin-top:0">{{ _('Other') }}</h2><p class="muted small" style="margin-top:-8px">{{ _('The same recording twice in the library (same author, same narrator, runtime equal to 2 seconds). The script changes nothing here - clean up in ABS itself.') }}</p></div>
 <h3>{{ _('Book in a series of another author') }} ({{ secs.sonstiges.foreign|length }})</h3>
 {% for x in secs.sonstiges.foreign %}<div class="card mcard"><div class="row" style="justify-content:space-between">
  <div class="small"><a href="{{ url_for('problem', key=x.key) }}"><b>{{ x.title }}</b></a> – {{ x.authors|join(', ') }}<br>
@@ -58,11 +58,11 @@
  <form method="post" action="{{ url_for('review_action', mid=x.id, action='keep') }}"><button>{{ _('Keep') }}</button></form></span></div></div>
 {% else %}<div class="card muted">{{ _('None.') }}</div>{% endfor %}
 <div class="card"><h3 style="margin-top:0">{{ _('Changed by you in ABS') }} ({{ secs.sonstiges.manual|length }})</h3>
-<p class="muted small" style="margin-top:-6px">{{ _('After the script wrote these fields you (or another tool) changed them in ABS. They are respected and never overwritten again.') }}</p>
+<p class="muted small" style="margin-top:-8px">{{ _('After the script wrote these fields you (or another tool) changed them in ABS. They are respected and never overwritten again.') }}</p>
 {% for m in secs.sonstiges.manual[:200] %}<div class="small"><a href="{{ url_for('problem', key=m.key) }}">{{ m.title }}</a> – {{ field_label(m.field) }}: <b>{{ m.value }}</b> <span class="muted">({{ m.ts|dt }})</span></div>
 {% else %}<div class="muted small">{{ _('None.') }}</div>{% endfor %}</div>
 <div class="card"><h3 style="margin-top:0">{{ _('Same ASIN twice') }} ({{ secs.sonstiges.same_asin|length }})</h3>
-<p class="muted small" style="margin-top:-6px">{{ _('Several books in the library carry the same ASIN - usually one book twice (other format, copy). Nothing is changed automatically.') }}</p>
+<p class="muted small" style="margin-top:-8px">{{ _('Several books in the library carry the same ASIN - usually one book twice (other format, copy). Nothing is changed automatically.') }}</p>
 {% for a, books in secs.sonstiges.same_asin[:200] %}<div class="small"><code>{{ a }}</code>: {% for b in books %}<a href="{{ url_for('problem', key=b.key) }}">{{ b.title }}</a>{{ ' · ' if not loop.last }}{% endfor %}</div>
 {% else %}<div class="muted small">{{ _('None.') }}</div>{% endfor %}</div>
 {% for d in secs.sonstiges.dups %}<div class="card mcard small"><b>{{ d.titles|join(' · ') }}</b><div class="muted">{{ (d.seconds // 60) }} min · ASIN {{ d.asins|join(' / ') }}</div></div>

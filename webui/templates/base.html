@@ -1,8 +1,8 @@
 <!doctype html><html lang="{{ lang }}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}ABS Ratings{% endblock %}</title><link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon.svg') }}"><link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
-<script>window.I18N = {{ js_i18n|tojson }};</script>
+<script>window.I18N = {{ js_i18n|tojson }}; window.ICONS = {light: {{ icon('moon')|tojson }}, dark: {{ icon('sun')|tojson }}};</script>
 <script src="{{ url_for('static', filename='app.js') }}"></script></head><body>
-{% if session.auth %}<header><div class="nav"><span class="brand"><img src="{{ url_for('static', filename='icon.svg') }}" alt="" class="logo">ABS Ratings</span><button type="button" class="iconbtn navtoggle" aria-label="{{ _('Menu') }}" onclick="this.closest('.nav').classList.toggle('open')">☰</button>
+{% if session.auth %}<header><div class="nav"><span class="brand"><img src="{{ url_for('static', filename='icon.svg') }}" alt="" class="logo">ABS Ratings</span><button type="button" class="iconbtn navtoggle" aria-label="{{ _('Menu') }}" onclick="this.closest('.nav').classList.toggle('open')">{{ icon('menu') }}</button>
 {% set ep = request.endpoint %}
 <div class="links">
 <a data-tour="dashboard" href="{{ url_for('dashboard') }}" class="{{ 'active' if ep == 'dashboard' }}">{{ _('Overview') }}</a>
@@ -12,13 +12,13 @@
 <a data-tour="runs" href="{{ url_for('runs') }}" class="{{ 'active' if ep in ('runs','run_view') }}">{{ _('Scans') }}</a>
 <a data-tour="history" href="{{ url_for('history') }}" class="{{ 'active' if ep in ('history','history_run') }}">{{ _('History') }}</a>
 <a data-tour="settings" href="{{ url_for('settings') }}" class="{{ 'active' if ep in ('settings','logs','log_view') }}">{{ _('Settings') }}</a>
-<form action="{{ url_for('books') }}" method="get" style="margin:0 8px"><input type="search" name="q" placeholder="{{ _('Search…') }}" style="width:120px;padding:6px 12px;border-radius:99px"></form>
+<form class="navsearch" action="{{ url_for('books') }}" method="get">{{ icon('search') }}<input type="search" name="q" placeholder="{{ _('Search') }}" aria-label="{{ _('Search') }}"></form>
 </div>
-<span class="right">{% if running %}<a class="runpill" href="{{ url_for('run_view', run_id=current_run.id) }}" title="{{ current_run.label }}"><span class="badge running">● {{ _('Scan running') }}<span id="runpct"></span></span></a>
+<span class="right">{% if running %}<a class="runpill" href="{{ url_for('run_view', run_id=current_run.id) }}" title="{{ current_run.label }}"><span class="badge running"><span class="live"></span>{{ _('Scan running') }}<span id="runpct"></span></span></a>
 <script>(function(){ const el=document.getElementById('runpct'); async function tick(){ try{ const j=await (await fetch("{{ url_for('api_run_progress', run_id=current_run.id) }}")).json();
  if(j.status!=='running'){ el.textContent=''; return; } el.textContent=j.total? ' · '+Math.round(j.pct||0)+' %' : ''; }catch(e){} setTimeout(tick, 5000); } tick(); })();</script>{% elif next_run %}{{ _('next scan') }}: {{ next_run|dt }}{% endif %}
-<button type="button" class="iconbtn" id="theme-toggle" title="{{ _('Light / dark') }}">☾</button>
-<a class="iconbtn" href="{{ url_for('logout') }}" title="{{ _('Log out') }}" aria-label="{{ _('Log out') }}">⏻</a></span></div></header>{% endif %}
+<button type="button" class="iconbtn" id="theme-toggle" title="{{ _('Light / dark') }}">{{ icon('moon') }}</button>
+<a class="iconbtn" href="{{ url_for('logout') }}" title="{{ _('Log out') }}" aria-label="{{ _('Log out') }}">{{ icon('log-out') }}</a></span></div></header>{% endif %}
 <main>{% with msgs = get_flashed_messages(with_categories=true) %}{% for c, m in msgs %}<div class="flash {{ c }}">{{ m }}</div>{% endfor %}{% endwith %}
 {% block body %}{% endblock %}</main>
-{% if session.auth %}<footer class="muted small" style="text-align:center;padding:18px 0 26px">ABS Ratings {{ app_version }}{% if update_available %} · <span class="badge warn">{{ _('Update available') }}</span>{% endif %}</footer>{% endif %}</body></html>
+{% if session.auth %}<footer class="muted small">ABS Ratings {{ app_version }}{% if update_available %} · <span class="badge warn">{{ _('Update available') }}</span>{% endif %}</footer>{% endif %}</body></html>

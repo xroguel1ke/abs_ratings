@@ -85,10 +85,10 @@ ADVANCED = {'ABS_TIMEOUT', 'SLEEP_TIMER', 'NO_RATINGS_RECHECK_DAYS', 'USE_AUDIBL
 SECTIONS = {'Connection': ['Connection'], 'Run': ['Run'], 'Sources': ['Audible', 'Hardcover', 'Goodreads'], 'Metadata': ['Metadata'],
             'Series & authors': ['Series & authors'], 'Logs': ['Logs'], 'Schedule': [], 'Notifications': [], 'Interface': ['Interface']}
 def section_slug(name): return re.sub(r'[^a-z0-9]+', '-', name.lower().replace('&', 'and')).strip('-')
-# cards that belong to a data source: icon + colour stripe
-PROVIDERS = {'Audible': ('🎧', '#e8913a', 'Main source: ASIN, ratings, metadata, cover'),
-             'Hardcover': ('📘', '#7d6bd6', 'Ratings and print ISBN'),
-             'Goodreads': ('📗', '#8a7a52', 'Ratings – experimental')}
+# cards that belong to a data source: colour dot
+PROVIDERS = {'Audible': ('', '#c8833a', 'Main source: ASIN, ratings, metadata, cover'),
+             'Hardcover': ('', '#6f7f5a', 'Ratings and print ISBN'),
+             'Goodreads': ('', '#8a6f52', 'Ratings – experimental')}
 SCRIPT_KEYS = [f[0] for f in FIELDS if f[0] not in ('LOG_RETENTION_DAYS', 'UI_LANGUAGE')]
 DEFAULTS = {f[0]: f[3] for f in FIELDS}
 DEFAULTS.update({

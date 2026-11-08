@@ -2,9 +2,9 @@
 {% set FL = {'asin': 'ASIN', 'title': _('Title'), 'subtitle': _('Subtitle'), 'description': _('Description'), 'genres': _('Genres'), 'cover': _('Cover'), 'language': _('Language'), 'publisher': _('Publisher'), 'publishedYear': _('Year'), 'narrators': _('Narrators'), 'authors': _('Authors'), 'series': _('Series'), 'isbn': 'ISBN', 'explicit': 'Explicit', 'abridged': _('Abridged'), 'tags': 'Tags'} %}
 {% macro val(e, v, new=False) %}{{ V.show(e.field, v, new, e.old if new else e.new) }}{% endmacro %}
 {% macro row(e) %}<tr class="{{ 'risky' if e.risky }}"><td><input type="checkbox" name="sel" value="{{ e.n }}" form="applyform" class="pick g-{{ e.field }}" checked></td>
-<td><a href="{{ url_for('problem', key=e.key) }}">{{ e.title }}</a>{% if e.risky %} <span class="badge warn" title="{{ _('risky change: check carefully') }}">⚠️ {{ risky_labels.get(e.field, e.field) }}</span>{% endif %}<div class="muted small">{{ e.source }}</div></td>
+<td><a href="{{ url_for('problem', key=e.key) }}">{{ e.title }}</a>{% if e.risky %} <span class="badge warn" title="{{ _('risky change: check carefully') }}">{{ icon('triangle-alert') }} {{ risky_labels.get(e.field, e.field) }}</span>{% endif %}<div class="muted small">{{ e.source }}</div></td>
 <td class="small">{{ val(e, e.old) }}</td><td class="small">{{ val(e, e.new, True) }}</td></tr>{% endmacro %}
-<p><a href="{{ url_for('run_view', run_id=run.id) }}">← {{ _('back to the test run') }}</a></p>
+<p><a href="{{ url_for('run_view', run_id=run.id) }}">{{ icon('arrow-left', 14) }} {{ _('back to the test run') }}</a></p>
 <h1>{{ _('Review test run') }} <span class="muted" style="font-weight:400">({{ _('%(n)s changes', n=total) }})</span></h1>
 <form class="card row" method="get">
  <input type="search" name="q" value="{{ q }}" placeholder="{{ _('Filter books') }}" style="flex:2 1 220px">
@@ -21,7 +21,7 @@
   <button name="mode" value="apply" class="primary">{{ _('Apply selection') }}</button>
  </form>
 </div>
-{% if risky and not field %}<div class="card tablewrap" style="border-left:5px solid var(--warn)"><h2 style="margin-top:0">⚠️ {{ _('Check risky changes first') }} ({{ risky|length }})</h2>
+{% if risky and not field %}<div class="card tablewrap" style="border-left:5px solid var(--warn)"><h2 style="margin-top:0">{{ icon('triangle-alert') }} {{ _('Check risky changes first') }} ({{ risky|length }})</h2>
 <p class="muted small">{{ _('ASIN change or new ASIN, title, language, new series, authors, ISBN replacement: they change which book is meant or what it is called. Look at each one (a click on the title shows comparison and reason).') }}</p>
 <table class="diff"><tr><th></th><th>{{ _('Book') }}</th><th>{{ _('Old') }}</th><th>{{ _('New') }}</th></tr>{% for e in risky %}{{ row(e) }}{% endfor %}</table></div>{% endif %}
 {% for f, es in groups %}{% set safe = es|rejectattr('risky')|list %}{% if safe %}

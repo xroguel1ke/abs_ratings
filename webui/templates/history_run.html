@@ -1,14 +1,14 @@
 {% extends 'base.html' %}{% import '_values.html' as V %}{% block title %}{{ _('History') }} {{ run_id }}{% endblock %}{% block body %}
 {% set FL = {'asin': 'ASIN', 'title': _('Title'), 'subtitle': _('Subtitle'), 'description': _('Description'), 'genres': _('Genres'), 'cover': _('Cover'), 'language': _('Language'), 'publisher': _('Publisher'), 'publishedYear': _('Year'), 'narrators': _('Narrators'), 'authors': _('Authors'), 'series': _('Series'), 'isbn': 'ISBN', 'explicit': 'Explicit', 'abridged': _('Abridged'), 'tags': 'Tags', 'author': _('Empty author')} %}
-<p><a href="{{ url_for('history') }}">← {{ _('History') }}</a></p>
+<p><a href="{{ url_for('history') }}">{{ icon('arrow-left', 14) }} {{ _('History') }}</a></p>
 <h1>{{ _('Scan') }} {{ run_id }}</h1>
 <form class="card row" method="get">
  <input type="search" name="q" value="{{ q }}" placeholder="{{ _('Filter books') }}" style="flex:2 1 220px">
  <select name="field" style="flex:1 1 160px"><option value="">{{ _('all fields') }}</option>{% for f in fields %}<option value="{{ f }}" {{ 'selected' if f == field }}>{{ FL.get(f, f) }}</option>{% endfor %}</select>
  <button class="primary">{{ _('Filter') }}</button>
 </form>
-<form method="post" action="{{ url_for('history_undo', run_id=run_id) }}" data-confirm="{{ _('Undo the WHOLE scan? All %(n)s still active changes are reset in ABS.', n=entries|rejectattr('undone')|list|length) }}" style="margin-bottom:14px">
- <input type="hidden" name="label" value="{{ _('whole scan') }} {{ run_id }}"><button class="danger" {{ 'disabled' if q or field }}>↶ {{ _('Undo whole scan') }}</button>
+<form method="post" action="{{ url_for('history_undo', run_id=run_id) }}" data-confirm="{{ _('Undo the WHOLE scan? All %(n)s still active changes are reset in ABS.', n=entries|rejectattr('undone')|list|length) }}" style="margin-bottom:16px">
+ <input type="hidden" name="label" value="{{ _('whole scan') }} {{ run_id }}"><button class="danger" {{ 'disabled' if q or field }}>{{ icon('undo-2') }} {{ _('Undo whole scan') }}</button>
  {% if q or field %}<span class="muted small">({{ _('available without filter') }})</span>{% endif %}
 </form>
 <div class="card tablewrap"><table class="diff"><tr><th>{{ _('Book') }}</th><th>{{ _('Field') }}</th><th>{{ _('Old') }}</th><th>{{ _('New') }}</th><th></th></tr>
@@ -17,8 +17,8 @@
 <td class="small">{{ V.show(e.field, e.old, False, e.new) }}</td>
 <td class="small">{{ V.show(e.field, e.new, True, e.old) }}</td>
 <td class="row" style="flex-wrap:nowrap">{% if e.undone %}<span class="badge warn">{{ _('undone') }}</span>{% elif e.field == 'author' %}<span class="muted small">{{ _('cannot be undone') }}</span>{% else %}
- <form method="post" action="{{ url_for('history_undo', run_id=run_id) }}" data-confirm="{{ _('Undo this change?') }}"><input type="hidden" name="item" value="{{ e.item }}"><input type="hidden" name="field" value="{{ e.field }}"><input type="hidden" name="label" value="{{ e.title }}: {{ FL.get(e.field, e.field) }}"><button title="{{ _('only this field') }}">↶ {{ _('Field') }}</button></form>
- <form method="post" action="{{ url_for('history_undo', run_id=run_id) }}" data-confirm="{{ _('Undo all changes of this book in this scan?') }}"><input type="hidden" name="item" value="{{ e.item }}"><input type="hidden" name="label" value="{{ e.title }} ({{ _('whole book') }})"><button title="{{ _('all fields of this book') }}">↶ {{ _('Book') }}</button></form>
+ <form method="post" action="{{ url_for('history_undo', run_id=run_id) }}" data-confirm="{{ _('Undo this change?') }}"><input type="hidden" name="item" value="{{ e.item }}"><input type="hidden" name="field" value="{{ e.field }}"><input type="hidden" name="label" value="{{ e.title }}: {{ FL.get(e.field, e.field) }}"><button title="{{ _('only this field') }}">{{ icon('undo-2') }} {{ _('Field') }}</button></form>
+ <form method="post" action="{{ url_for('history_undo', run_id=run_id) }}" data-confirm="{{ _('Undo all changes of this book in this scan?') }}"><input type="hidden" name="item" value="{{ e.item }}"><input type="hidden" name="label" value="{{ e.title }} ({{ _('whole book') }})"><button title="{{ _('all fields of this book') }}">{{ icon('undo-2') }} {{ _('Book') }}</button></form>
 {% endif %}</td></tr>
 {% else %}<tr><td colspan="5" class="muted">{{ _('No changes') }}{{ (' ' ~ _('for this filter')) if q or field }}.</td></tr>{% endfor %}</table></div>
 {% endblock %}

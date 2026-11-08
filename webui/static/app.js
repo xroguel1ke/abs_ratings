@@ -9,12 +9,12 @@ function T(s) { return (window.I18N && window.I18N[s]) || s; }
 
   // ---- theme ----
   // first visit: follow the system setting (not stored); the switch toggles light <-> dark and remembers the choice in this browser
-  var ICON = { light: '☾', dark: '☀' }, LABEL = { light: T('Switch to dark'), dark: T('Switch to light') };
+  var ICON = window.ICONS || { light: '', dark: '' }, LABEL = { light: T('Switch to dark'), dark: T('Switch to light') };
   function systemTheme() { try { return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch (e) { return 'light'; } }
   function applyTheme(t) {
     document.documentElement.setAttribute('data-theme', t);
     var b = document.getElementById('theme-toggle');
-    if (b) { b.textContent = ICON[t]; b.title = LABEL[t]; b.setAttribute('aria-label', LABEL[t]); }
+    if (b) { b.innerHTML = ICON[t]; b.title = LABEL[t]; b.setAttribute('aria-label', LABEL[t]); }
   }
   var saved = store.get('abs_theme');
   var theme = (saved === 'light' || saved === 'dark') ? saved : systemTheme();  // an old 'auto' value counts as not set

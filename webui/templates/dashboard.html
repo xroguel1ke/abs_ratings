@@ -6,7 +6,7 @@
  <a class="card herocard" href="{{ url_for('review_page') }}">
   <div class="muted small">{{ _('To review') }}</div><div class="v">{{ tiles.queue + tiles.review + tiles.merged }}</div>
   <div class="small">{{ _('%(a)s books · %(b)s uncertain series/authors · %(c)s merges to confirm', a=tiles.queue, b=tiles.review, c=tiles.merged) }}</div>
-  <div class="go">{{ _('Open the review list') }} →</div></a>
+  <div class="go">{{ _('Open the review list') }} {{ icon('arrow-right', 14) }}</div></a>
  <div class="card herocard">
   <div class="muted small">{{ _('Last scan') }}</div>
   {% if last %}<div class="v" style="font-size:1.2em"><a href="{{ url_for('run_view', run_id=last.id) }}">{{ last.start|dt }}</a></div>
@@ -16,7 +16,7 @@
  <a class="card herocard" href="{{ url_for('runs') }}">
   <div class="muted small">{{ _('Next scan') }}</div><div class="v" style="font-size:1.2em">{{ next_run|dt if next_run else _('no schedule') }}</div>
   <div class="small">Goodreads: {{ gr_note or (_('off') if not settings.GOODREADS_ENABLED else _('on')) }}</div>
-  <div class="go">{{ _('Start a scan') }} →</div></a>
+  <div class="go">{{ _('Start a scan') }} {{ icon('arrow-right', 14) }}</div></a>
 </div>
 
 <h2>{{ _('Library') }}</h2>
@@ -27,7 +27,7 @@
  <div class="tile"><div class="v" style="color:var(--warn)">{{ tiles.other_edition }}</div><div class="l">{{ _('other edition') }}</div></div>
  <div class="tile"><div class="v">{{ tiles.no_ratings_yet }}</div><div class="l">{{ _('no ratings yet') }}</div></div>
 </div>
-<p class="small"><a href="{{ url_for('status') }}">{{ _('Coverage of all fields') }} →</a> · <a href="{{ url_for('report') }}" target="_blank">{{ _('Library report') }} ↗</a></p>
+<p class="small"><a href="{{ url_for('status') }}">{{ _('Coverage of all fields') }} {{ icon('arrow-right', 14) }}</a> · <a href="{{ url_for('report') }}" target="_blank">{{ _('Library report') }} {{ icon('arrow-up-right', 14) }}</a></p>
 
 <h2>{{ _('Books without ratings') }} ({{ tiles.problems }})</h2>
 <form class="card row" method="get">

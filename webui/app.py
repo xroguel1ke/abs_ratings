@@ -31,6 +31,9 @@ def T(text, **kw): return i18n.t(text, lang(), **kw)
 
 
 app.jinja_env.globals['_'] = T
+from webui.icons import icon, moon
+app.jinja_env.globals['moon'] = moon
+app.jinja_env.globals['icon'] = icon
 REASON_DE = {
     'No ASIN and no match found on Audible': 'Keine ASIN und kein Treffer bei Audible',
     'ASIN not available in any Audible store, no replacement found': 'ASIN in keinem Audible-Shop verfügbar, kein Ersatz gefunden',

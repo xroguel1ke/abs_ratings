@@ -51,7 +51,9 @@ Code: 66 files, +6128 / −475 lines. Test data: public synthetic batches in `te
   Hardcover budget, lock report, CSV), scans (task checkboxes, remembered choices, backup checkbox, live progress, apply a test run
   selectively), history (red/green diff, undo).
 - Settings: sections, sortable rating-block sources, icons / labels / position / minimum, genre rules, run mode, export/import.
-- Design: app icon, version + update hint, dark mode, phone layout.
+- Design (unslop pass, after "unslop" by Damir Sokolovsky, CC BY 4.0): library-catalogue look with warm paper neutrals, one lamp-amber accent,
+  Instrument Sans + Newsreader (OFL, bundled), lucide line icons instead of emoji/glyphs, a flat half-moon app mark, a moon-phase glyph
+  for certainty, quiet tags instead of pills, 4 px spacing grid; version + update hint, dark mode, phone layout.
 
 ## Tests
 `tools/regress.sh` is the gate:

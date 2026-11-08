@@ -3,15 +3,15 @@
 {% set FL = {'asin': 'ASIN', 'title': _('Title'), 'subtitle': _('Subtitle'), 'description': _('Description'), 'genres': _('Genres'), 'cover': _('Cover'), 'language': _('Language'), 'publisher': _('Publisher'), 'publishedYear': _('Year'), 'narrators': _('Narrators'), 'authors': _('Authors'), 'series': _('Series'), 'isbn': 'ISBN', 'explicit': 'Explicit', 'tags': 'Tags'} %}
 {# compare keys are stored in German by the script #}
 {% set CK = {'Titel': _('Title'), 'Autor': _('Author'), 'Laufzeit': _('Runtime'), 'Sprecher': _('Narrator'), 'Reihe': _('Series'), 'Verlag': _('Publisher'), 'Jahr': _('Year'), 'Sprache': _('Language')} %}
-<p><a href="{{ url_for('books') }}">← {{ _('Books') }}</a> · <a href="{{ url_for('dashboard') }}">{{ _('Overview') }}</a></p>
+<p><a href="{{ url_for('books') }}">{{ icon('arrow-left', 14) }} {{ _('Books') }}</a> · <a href="{{ url_for('dashboard') }}">{{ _('Overview') }}</a></p>
 <h1>{{ r.title }}</h1>
-<div class="card"><div class="row" style="gap:18px">
+<div class="card"><div class="row" style="gap:20px">
  <span><span class="badge {{ r.status }}">{{ status_label.get(r.status, r.status) }}</span></span>
  <span>{{ _('Author') }}: {{ r.author or '–' }}</span><span>ASIN: {% if r.asin %}<code>{{ r.asin }}</code>{% else %}–{% endif %}{% if r.domain %} <span class="muted small">({{ r.domain }})</span>{% endif %}</span>
- {% if r.goodreads %}<a href="{{ r.goodreads }}" target="_blank">Goodreads ↗</a>{% endif %}
- {% if r.hardcover %}<a href="{{ r.hardcover }}" target="_blank">Hardcover ↗</a>{% endif %}
- {% if r.asin and r.domain %}<a href="https://{{ r.domain }}/pd/{{ r.asin }}" target="_blank">Audible ↗</a>{% endif %}
- {% if abs_base %}<a href="{{ abs_base }}/item/{{ r.id }}" target="_blank">{{ _('Open in ABS') }} ↗</a>{% endif %}
+ {% if r.goodreads %}<a href="{{ r.goodreads }}" target="_blank">Goodreads {{ icon('arrow-up-right', 14) }}</a>{% endif %}
+ {% if r.hardcover %}<a href="{{ r.hardcover }}" target="_blank">Hardcover {{ icon('arrow-up-right', 14) }}</a>{% endif %}
+ {% if r.asin and r.domain %}<a href="https://{{ r.domain }}/pd/{{ r.asin }}" target="_blank">Audible {{ icon('arrow-up-right', 14) }}</a>{% endif %}
+ {% if abs_base %}<a href="{{ abs_base }}/item/{{ r.id }}" target="_blank">{{ _('Open in ABS') }} {{ icon('arrow-up-right', 14) }}</a>{% endif %}
  <span class="muted small">{{ _('checked') }}: {{ r.ts|dt }}{{ (' (' ~ _('test run') ~ ')') if r.dry_run }}</span></div>
  {% if ov %}<p class="small">{{ _('Manual overrides') }}: {% for k, v in ov.items() %}<span class="badge">{{ k }}: {{ v }}</span> {% endfor %}</p>{% endif %}
 </div>
@@ -20,14 +20,14 @@
  {% if r.reason %}<p><b>{{ _('Result') }}:</b> {{ r.reason|de }}</p>{% endif %}
  {% for n in r.notes or [] %}<p class="muted small">{{ n|de }}</p>{% endfor %}
  {% if r.get('certainty') is not none %}
- <p><b>{{ _('Certainty') }} {{ r.get('certainty') }} / 100</b> – {{ _('made up of') }}:</p>
+ {% set c = r.get('certainty') %}<p><span class="cert {{ 'hi' if c >= 85 else 'mid' if c >= 60 else 'lo' }}">{{ moon(c, 18) }}<b>{{ _('Certainty') }} {{ c }} / 100</b></span> – {{ _('made up of') }}:</p>
  <div class="row">{% for k, v in (r.get('certainty_parts') or {}).items() %}<span class="badge {{ 'err' if v < 0 else 'ok' if v > 0 else '' }}">{{ PL.get(k, k) }} {{ ('%+d' % v) if v < 0 else '+' ~ v }}</span>{% endfor %}</div>
  {% endif %}
   <p class="small"><b>{{ _('Source of the ASIN') }}:</b> {{ _({'manuell': 'manual', 'Suche': 'search', 'ABS (bestätigt)': 'ABS (confirmed)'}.get(r.asin_source, r.asin_source)) if r.asin_source else '–' }}{% if r.hc_source %} · <b>{{ _('Hardcover found via') }}:</b> {{ r.hc_source }}{% endif %}</p>
- {% if r.evidence %}<p class="small" style="margin-top:10px"><b>{{ _('Evidence of the ASIN search') }}:</b> {{ r.evidence|join(', ') }}</p>{% endif %}
+ {% if r.evidence %}<p class="small" style="margin-top:12px"><b>{{ _('Evidence of the ASIN search') }}:</b> {{ r.evidence|join(', ') }}</p>{% endif %}
 </div>
 
-{% if r.compare %}<div class="card tablewrap"><h2 style="margin-top:0">{{ _('Comparison') }} ABS ↔ Audible ↔ Hardcover</h2>
+{% if r.compare %}<div class="card tablewrap"><h2 style="margin-top:0">{{ _('Comparison') }} ABS {{ icon('arrow-left-right', 14) }} Audible {{ icon('arrow-left-right', 14) }} Hardcover</h2>
 <table><tr><th>{{ _('Field') }}</th><th>ABS</th><th>Audible</th><th></th><th>Hardcover</th></tr>
 {% for f, v in r.compare.items() %}{% if f == 'Laufzeit' and v[0] and v[1] %}{% set same = ((v[0][:-4]|int) - (v[1][:-4]|int))|abs <= 2 %}{% else %}{% set same = (v[0]|lower|replace(' ','')) == (v[1]|lower|replace(' ','')) %}{% endif %}
 <tr><td class="muted">{{ CK.get(f, f) }}</td><td>{{ v[0] or '–' }}</td><td>{{ v[1] or '–' }}</td><td>{% if v[0] and v[1] %}<span class="badge {{ 'ok' if same else 'warn' }}">{{ '=' if same else '≠' }}</span>{% elif v[1] %}<span class="badge">{{ _('Audible only') }}</span>{% endif %}</td><td class="muted">{{ (v[2] if v|length > 2 else '') or '–' }}</td></tr>{% endfor %}
@@ -56,9 +56,9 @@
  <p class="muted small">{{ _('A manual ASIN is written to ABS and never replaced automatically afterwards. A Goodreads or Hardcover link is used permanently for this book.') }}</p>
 </form></div>
 <details class="card"><summary><b>{{ _('Remove ratings') }}</b></summary>
-<form method="post" class="row" style="margin-top:10px" data-confirm="{{ _('Remove the chosen ratings from this book? (can be undone in the History)') }}">
+<form method="post" class="row" style="margin-top:12px" data-confirm="{{ _('Remove the chosen ratings from this book? (can be undone in the History)') }}">
  <label class="badge"><input type="checkbox" name="rm_audible"> Audible</label><label class="badge"><input type="checkbox" name="rm_goodreads"> Goodreads</label>
  <label class="badge"><input type="checkbox" name="rm_hardcover"> Hardcover</label>
  <button class="danger" name="action" value="remove_ratings">{{ _('Remove') }}</button></form></details>
-<details class="card"><summary><b>{{ _('Log of the last check') }}</b></summary><pre class="log" style="margin-top:10px">{{ (r.log or ['(' ~ _('no log') ~ ')'])|join('\n') }}</pre></details>
+<details class="card"><summary><b>{{ _('Log of the last check') }}</b></summary><pre class="log" style="margin-top:12px">{{ (r.log or ['(' ~ _('no log') ~ ')'])|join('\n') }}</pre></details>
 {% endblock %}

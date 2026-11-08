@@ -1,9 +1,9 @@
 {% extends 'base.html' %}{% import '_values.html' as V %}{% block body %}
-<p>{% if back %}<a href="{{ url_for('problem', key=back) }}">← {{ _('back to the book') }}</a>{% else %}<a href="{{ url_for('runs') }}">← {{ _('Scans') }}</a>{% endif %}</p>
+<p>{% if back %}<a href="{{ url_for('problem', key=back) }}">{{ icon('arrow-left', 14) }} {{ _('back to the book') }}</a>{% else %}<a href="{{ url_for('runs') }}">{{ icon('arrow-left', 14) }} {{ _('Scans') }}</a>{% endif %}</p>
 <h1>{{ run.label }} {% if run.dry_run %}<span class="badge">{{ _('Test run') }}</span>{% endif %}</h1>
-<div class="card row" style="gap:18px"><span>{{ _('Status') }}: <span id="st" class="badge {{ 'ok' if run.status=='ok' else ('running' if run.status=='running' else 'err') }}">{{ run.status }}</span></span>
+<div class="card row" style="gap:20px"><span>{{ _('Status') }}: <span id="st" class="badge {{ 'ok' if run.status=='ok' else ('running' if run.status=='running' else 'err') }}">{{ run.status }}</span></span>
 <span>{{ _('Start') }}: {{ run.start|dt }}</span><span>{{ _('End') }}: {{ run.end|dt }}</span>
-{% if run.status=='running' %}<form method="post" action="{{ url_for('runs') }}"><button class="danger" name="action" value="stop">■ {{ _('Cancel') }}</button></form>{% endif %}
+{% if run.status=='running' %}<form method="post" action="{{ url_for('runs') }}"><button class="danger" name="action" value="stop">{{ icon('square') }} {{ _('Cancel') }}</button></form>{% endif %}
 <a href="{{ url_for('log_download', kind='log', name=run.log) }}">{{ _('Download log') }}</a></div>
 {% if run.status=='running' %}<div class="card" id="prog"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><b id="pt">…</b><span class="muted" id="pe"></span></div>
 <div style="background:var(--line);border-radius:8px;height:12px;margin:8px 0"><div id="pb" style="height:12px;border-radius:8px;width:0;background:var(--ok);transition:width .6s"></div></div>
@@ -11,7 +11,7 @@
 {% if run.summary %}<div class="card small">{{ run.summary }}</div>{% endif %}
 {% if run.dry_run and run.kind in ('full', 'item') and run.status != 'running' and changes %}
 <div class="card"><h2 style="margin-top:0">{{ _('Apply this test run') }}</h2>
- <p><a class="btn primary" href="{{ url_for('run_review', run_id=run.id) }}">{{ _('Review and select changes') }} →</a> <span class="muted small">{{ _('grouped, risky ones first, with checkboxes') }}</span></p>
+ <p><a class="btn primary" href="{{ url_for('run_review', run_id=run.id) }}">{{ _('Review and select changes') }} {{ icon('arrow-right', 14) }}</a> <span class="muted small">{{ _('grouped, risky ones first, with checkboxes') }}</span></p>
  <p class="small">{{ _('Writes exactly the %(n)s planned changes to ABS - but only where the ABS value is still the same as in the test run. If a book was changed in the meantime (by you or another scan) or locked, that change is skipped and named in the log. An ABS backup is made first (if enabled); everything then appears under History and can be undone.', n=changes|length) }} <a href="{{ url_for('history') }}">{{ _('History') }}</a></p>
  <div class="row"><form method="post" action="{{ url_for('run_apply', run_id=run.id) }}"><input type="hidden" name="mode" value="check"><button>{{ _('Check first (write nothing)') }}</button></form>
  <form method="post" action="{{ url_for('run_apply', run_id=run.id) }}" data-confirm="{{ _('Really write %(n)s changes to ABS now?', n=changes|length) }}"><input type="hidden" name="mode" value="apply"><button class="primary">{{ _('Apply') }}</button></form></div>

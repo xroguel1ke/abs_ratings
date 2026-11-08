@@ -1,5 +1,5 @@
 {% extends 'base.html' %}{% block title %}{{ _('Books') }}{% endblock %}{% block body %}
-<h1>{{ _('Books') }} <span class="muted" style="font-weight:400">({{ total }})</span></h1>
+<h1>{{ _('Books') }} <span class="muted">{{ total }}</span></h1>
 <form class="card row" method="get">
  <input type="search" name="q" value="{{ q }}" placeholder="{{ _('Search title or author') }}" style="flex:2 1 220px">
  <select name="sort" style="flex:1 1 140px" title="{{ _('Sort') }}"><option value="certainty" {{ 'selected' if sort=='certainty' }}>{{ _('by certainty') }}</option><option value="title" {{ 'selected' if sort=='title' }}>{{ _('by title') }}</option><option value="author" {{ 'selected' if sort=='author' }}>{{ _('by author') }}</option><option value="status" {{ 'selected' if sort=='status' }}>{{ _('by status') }}</option></select>
@@ -8,7 +8,7 @@
  <button class="primary">{{ _('Show') }}</button></form>
 <p class="muted small">{{ _('The certainty (0-100) says how sure the script is that the Audible product behind the ASIN is exactly this book: title 25, author 20, runtime 20, narrator 12, series/volume number 10, publisher+year 8, Hardcover confirmation 5; deductions for ASIN search (-5), other edition (-20), open review entry (-15). Check low values first.') }}</p>
 <div class="card tablewrap"><table><tr><th>{{ _('Certainty') }}</th><th>{{ _('Title') }}</th><th>{{ _('Author') }}</th><th>{{ _('Status') }}</th><th>ASIN</th></tr>
-{% for r in rows %}{% set c = r.get('certainty') %}<tr><td style="min-width:130px">{% if c is not none %}<div class="row" style="gap:8px;flex-wrap:nowrap"><div style="flex:1;background:var(--line);border-radius:6px;height:8px"><div style="width:{{ c }}%;height:8px;border-radius:6px;background:{{ 'var(--ok)' if c >= 85 else 'var(--warn)' if c >= 60 else 'var(--err)' }}"></div></div><b class="small">{{ c }}</b></div>{% else %}<span class="muted">–</span>{% endif %}</td>
+{% for r in rows %}{% set c = r.get('certainty') %}<tr><td style="min-width:130px">{% if c is not none %}<span class="cert {{ 'hi' if c >= 85 else 'mid' if c >= 60 else 'lo' }}">{{ moon(c, 16) }}<span>{{ c }}</span></span>{% else %}<span class="muted">–</span>{% endif %}</td>
 <td><a href="{{ url_for('problem', key=r.key) }}">{{ r.title }}</a></td><td class="small">{{ r.author }}</td>
 <td><span class="badge {{ r.status }}">{{ status_label.get(r.status, r.status) }}</span></td><td class="small">{% if r.asin %}<code>{{ r.asin }}</code>{% else %}<span class="muted">–</span>{% endif %}</td></tr>
 {% else %}<tr><td colspan="5" class="muted">{{ _('No results yet.') }}</td></tr>{% endfor %}</table>

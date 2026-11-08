@@ -2,7 +2,7 @@
 {% macro field(key, label, ftype, default, help_) %}
  {% if ftype == 'libraries' %}
  <div class="f" style="padding:8px 0;border-bottom:1px dashed var(--line)"><b>{{ _(label) }}</b>
-  {% if libs %}<div class="row" style="margin-top:6px">{% for l in libs %}<label class="badge"><input type="checkbox" name="{{ key }}" value="{{ l.id }}" {{ 'checked' if l.id in selected }}> {{ l.name }}</label>{% endfor %}</div>
+  {% if libs %}<div class="row" style="margin-top:8px">{% for l in libs %}<label class="badge"><input type="checkbox" name="{{ key }}" value="{{ l.id }}" {{ 'checked' if l.id in selected }}> {{ l.name }}</label>{% endfor %}</div>
   {% else %}<input type="text" name="{{ key }}_manual" value="{{ s[key] }}" placeholder="{{ _('Library ids, comma separated (the list appears after a successful connection)') }}">{% endif %}
   <div class="muted small">{{ _(help_) }}</div></div>
  {% else %}
@@ -14,8 +14,8 @@
   {% elif ftype.startswith('order:') %}{% set cur = (s[key] or '').split(',') %}{% set allsrc = ftype[6:].split('|') %}
    <span><input type="hidden" name="{{ key }}" id="{{ key }}" value="{{ s[key] }}">
    <span class="orderlist" data-target="{{ key }}">{% for src in (cur|select('in', allsrc)|list) + (allsrc|reject('in', cur)|list) %}
-    <span class="row orderitem" data-src="{{ src }}" style="gap:6px;margin:3px 0"><input type="checkbox" {{ 'checked' if src in cur }}><b style="min-width:90px">{{ src|capitalize }}</b>
-     <button type="button" class="iconbtn" data-mv="-1">▲</button><button type="button" class="iconbtn" data-mv="1">▼</button></span>{% endfor %}</span></span>
+    <span class="row orderitem" data-src="{{ src }}" style="gap:8px;margin:4px 0"><input type="checkbox" {{ 'checked' if src in cur }}><b style="min-width:90px">{{ src|capitalize }}</b>
+     <button type="button" class="iconbtn" data-mv="-1">{{ icon('chevron-up') }}</button><button type="button" class="iconbtn" data-mv="1">{{ icon('chevron-down') }}</button></span>{% endfor %}</span></span>
   {% elif ftype.startswith('choice:') %}<select name="{{ key }}">{% for o in ftype[7:].split('|') %}<option value="{{ o }}" {{ 'selected' if s[key]==o }}>{{ {'en': 'English', 'de': 'Deutsch'}.get(o, o) }}</option>{% endfor %}</select>
   {% else %}<input type="{{ 'number' if ftype in ('int','float') else 'text' }}" {{ 'step=any' if ftype=='float' }} name="{{ key }}" id="{{ key }}" value="{{ s[key] }}">{% endif %}
   {% if help_ %}<span class="h">{{ _(help_) }}</span>{% endif %}</label>
@@ -23,18 +23,18 @@
 {% endmacro %}
 {% macro group_card(group) %}{% set fields = groups.get(group, []) %}{% set pv = providers.get(group) %}
 <div class="card{{ ' provider' if pv }}" {% if pv %}style="--pc:{{ pv[1] }}"{% endif %}>
- <h2 style="margin-top:0">{% if pv %}<span class="pv-icon">{{ pv[0] }}</span>{% endif %}{{ _(group) }}{% if group == 'Goodreads' %} <span class="badge warn">{{ _('experimental') }}</span>{% endif %}</h2>
- {% if pv %}<p class="muted small" style="margin-top:-6px">{{ _(pv[2]) }}</p>{% endif %}
+ <h2 style="margin-top:0">{% if pv %}<span class="pv-dot"></span>{% endif %}{{ _(group) }}{% if group == 'Goodreads' %} <span class="badge warn">{{ _('experimental') }}</span>{% endif %}</h2>
+ {% if pv %}<p class="muted small" style="margin-top:-8px">{{ _(pv[2]) }}</p>{% endif %}
  {% for key, label, ftype, default, help_, g in fields if key not in adv %}{{ field(key, label, ftype, default, help_) }}{% endfor %}
  {% set more = fields|selectattr(0, 'in', adv)|list %}
  {% if more %}<details class="adv"><summary class="small muted">{{ _('Advanced') }} ({{ more|length }})</summary>
   {% for key, label, ftype, default, help_, g in more %}{{ field(key, label, ftype, default, help_) }}{% endfor %}</details>{% endif %}
-{% if group == 'Logs' %}<p><a class="btn" href="{{ url_for('logs') }}">{{ _('View and download logs') }} →</a></p>{% endif %}
+{% if group == 'Logs' %}<p><a class="btn" href="{{ url_for('logs') }}">{{ _('View and download logs') }} {{ icon('arrow-right', 14) }}</a></p>{% endif %}
  {% if group == 'Connection' %}<p class="small" id="test_abs"></p>{% elif group == 'Hardcover' %}<p class="small" id="test_hardcover"></p>{% endif %}
 </div>{% endmacro %}
 {% macro save(sec) %}<p class="savebar"><input type="hidden" name="section" value="{{ sec }}"><button class="primary">{{ _('Save %(s)s', s=_(sec)) }}</button></p>{% endmacro %}
 
-<div class="row" style="justify-content:space-between"><h1>{{ _('Settings') }}</h1><button type="button" class="iconbtn snav-toggle" aria-label="{{ _('Sections') }}" onclick="document.querySelector('.snav').classList.toggle('open')">☰ {{ _('Sections') }}</button></div>
+<div class="row" style="justify-content:space-between"><h1>{{ _('Settings') }}</h1><button type="button" class="iconbtn snav-toggle" aria-label="{{ _('Sections') }}" onclick="document.querySelector('.snav').classList.toggle('open')">{{ icon('menu') }} {{ _('Sections') }}</button></div>
 <div class="slayout">
 <nav class="snav" aria-label="{{ _('Sections') }}">{% for sec, grps in sections.items() %}<a href="#{{ slug(sec) }}" data-sec="{{ slug(sec) }}">{% if sec == 'Sources' %}<span class="dots">{% for g in grps %}<span class="dot" style="--pc:{{ providers[g][1] }}"></span>{% endfor %}</span>{% endif %}{{ _(sec) }}</a>{% endfor %}</nav>
 <div class="spanel">
@@ -42,18 +42,18 @@
 <form method="post" class="sec" data-sec="{{ slug(sec) }}">{% for g in grps %}{{ group_card(g) }}{% endfor %}{% if sec == 'Interface' %}<div class="card"><h2 style="margin-top:0">{{ _('Onboarding') }}</h2>
  <p class="small">{{ _('The tour explains the pages of the app in a few steps. It starts automatically on the first visit.') }}</p>
  <div class="row"><button type="button" class="primary" onclick="window.ABSTour && ABSTour.start()">{{ _('Start the tour') }}</button>
- <span class="muted small">{{ _('Switch between light and dark at the top right with ☾ / ☀ (on the first visit the system setting applies, afterwards your choice in this browser).') }}</span></div></div>
+ <span class="muted small">{{ _('Switch between light and dark with the moon button at the top right (on the first visit the system setting applies, afterwards your choice in this browser).') }}</span></div></div>
 <div class="card"><h2 style="margin-top:0">{{ _('Export / import') }}</h2>
  <p class="small">{{ _('All settings as a file - without tokens, password and notification URL.') }}</p>
- <div class="row"><a class="btn" href="{{ url_for('settings_export') }}">⬇ {{ _('Export') }}</a>
-  <input type="file" name="file" accept=".json,application/json" form="importform" style="max-width:260px"><button form="importform" type="submit">⬆ {{ _('Import') }}</button></div></div>
-<div class="card"><h2 style="margin-top:0">{{ _('Password') }}</h2><p><a class="btn" href="{{ url_for('password') }}">{{ _('Change password') }} →</a></p></div>{% endif %}{{ save(sec) }}</form>
+ <div class="row"><a class="btn" href="{{ url_for('settings_export') }}">{{ icon('download') }} {{ _('Export') }}</a>
+  <input type="file" name="file" accept=".json,application/json" form="importform" style="max-width:260px"><button form="importform" type="submit">{{ icon('upload') }} {{ _('Import') }}</button></div></div>
+<div class="card"><h2 style="margin-top:0">{{ _('Password') }}</h2><p><a class="btn" href="{{ url_for('password') }}">{{ _('Change password') }} {{ icon('arrow-right', 14) }}</a></p></div>{% endif %}{{ save(sec) }}</form>
 {% endfor %}
 
 <form method="post" class="sec" data-sec="{{ slug('Schedule') }}"><div class="card"><h2 style="margin-top:0">{{ _('Schedule') }}</h2>
  <label class="f"><span>{{ _('Schedule active') }}</span><span><input type="checkbox" name="schedule_enabled" {{ 'checked' if s.schedule_enabled }}></span></label>
  <label class="f"><span>{{ _('Cron mode') }}</span><span><input type="checkbox" name="schedule_mode" id="cronmode" {{ 'checked' if s.schedule_mode=='cron' }} onchange="cronToggle()"></span><span class="h">{{ _('Off = weekdays + time') }}</span></label>
- <div id="simple"><div class="f" style="padding:8px 0"><b>{{ _('Weekdays') }}</b><div class="row" style="margin-top:6px">
+ <div id="simple"><div class="f" style="padding:8px 0"><b>{{ _('Weekdays') }}</b><div class="row" style="margin-top:8px">
   {% for d in [_('Mon'),_('Tue'),_('Wed'),_('Thu'),_('Fri'),_('Sat'),_('Sun')] %}<label class="badge"><input type="checkbox" name="schedule_days" value="{{ loop.index0 }}" {{ 'checked' if loop.index0 in s.schedule_days }}> {{ d }}</label>{% endfor %}</div></div>
   <label class="f"><span>{{ _('Time') }}</span><input type="time" name="schedule_time" value="{{ s.schedule_time }}" style="max-width:140px"></label></div>
  <div id="cron"><label class="f"><span>{{ _('Cron expression') }}</span><span class="row"><input type="text" name="schedule_cron" id="cronexpr" value="{{ s.schedule_cron }}" style="max-width:220px"><button type="button" onclick="test('cron')">{{ _('Check') }}</button></span><span class="h">{{ _('minute hour day month weekday, e.g.') }} <code>30 2 * * *</code> = {{ _('daily at 02:30') }}</span></label><p class="small" id="test_cron"></p></div>
@@ -88,7 +88,7 @@ async function test(what){ const fd=new FormData(); const out=document.getElemen
  if(what==='notify'){ fd.append('url', document.getElementById('apprise_url').value); }
  if(what==='cron'){ fd.append('cron', document.getElementById('cronexpr').value); }
  const r=await fetch('/api/test/'+what,{method:'POST',body:fd}); const j=await r.json();
- out.textContent=(j.ok?'✅ ':'❌ ')+j.msg; out.style.color=j.ok?'var(--ok)':'var(--err)'; }
+ out.textContent=j.msg; out.style.color=j.ok?'var(--ok)':'var(--err)'; }
 
 document.querySelectorAll('.orderlist').forEach(function(list){ const out=document.getElementById(list.dataset.target);
  function save(){ out.value=[...list.querySelectorAll('.orderitem')].filter(x=>x.querySelector('input').checked).map(x=>x.dataset.src).join(','); }

@@ -2,7 +2,7 @@
    removed parts red on the old side, added parts green on the new side #}
 {% macro show(field, v, new=False, other=none) -%}
 {%- if field == 'description' -%}<span class="muted">{{ _('%(n)s characters', n=(v or '')|length) }}</span>
-{%- elif field == 'cover' -%}{% if v and (v|string).startswith('http') %}<a href="{{ v }}" target="_blank">{{ _('Image') }} ↗</a>{% elif v %}<span class="muted">{{ _('backup available') if not new else _('present') }}</span>{% else %}–{% endif %}
+{%- elif field == 'cover' -%}{% if v and (v|string).startswith('http') %}<a href="{{ v }}" target="_blank">{{ _('Image') }} {{ icon('arrow-up-right', 14) }}</a>{% elif v %}<span class="muted">{{ _('backup available') if not new else _('present') }}</span>{% else %}–{% endif %}
 {%- elif field == 'author' -%}{{ v|hv(field) }}
 {%- else -%}{{ v|hvd(other, field, new) }}{%- endif -%}
 {%- endmacro %}
