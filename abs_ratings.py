@@ -1611,6 +1611,8 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 # Exception: two ABS books claim the same ASIN (one ABS number must be wrong) and this sibling product matches the file
                 # length to the minute -> the runtime decides, not the (unreliable) ABS series number.
                 exact_rt = bool(duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120)
+                # NOTE 2026-11-08: 'same title + runtime ±2 min + narrator' is NOT enough to ignore the ABS number - The Hunter's Code
+                # 1 and 2 share title and narrator and differ by 2 minutes (regress reg_syn_21). Do not add that exception again.
                 if not (SEARCH_CTX.get('dup_claim') and exact_rt):
                     logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (series number differs from ABS)")
                     continue

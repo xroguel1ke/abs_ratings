@@ -32,7 +32,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   full-cast/dramatized/GraphicAudio/abridged/manga series to a normal edition. Names go through aliases + series index.
 - **Titles:** only replaced for messy file-name titles (`The Book of the New Sun 05 Title`, zero-padded numbers only;
   `X: X: Subtitle`; `01 Title`). A new ASIN alone never changes a title (Audible titles carry marketing suffixes).
-- **ASIN search:** different volume numbers = always reject. Subtitle never adds containment points. A longer Audible
+- **ASIN search:** different volume numbers = always reject (also an ABS series number: same title + runtime ±2 min + narrator is NOT
+  enough to ignore it - The Hunter's Code 1 and 2 share title and narrator and differ by 2 min, regress reg_syn_21). Subtitle never adds containment points. A longer Audible
   title only counts if the ABS title has the number or the extra words are a marketing suffix (`MARKETING_WORDS`).
   Replacing an *existing* ASIN is strict: title ≥0.85, author, runtime (±10 min) and narrator (if known) must match.
 - **Marketplaces** (user rule 2026-11-08): English books ask audible.com FIRST, German books audible.de (1 request). Not there -> strict
