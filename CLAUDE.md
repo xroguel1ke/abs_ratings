@@ -35,8 +35,10 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
 - **ASIN search:** different volume numbers = always reject. Subtitle never adds containment points. A longer Audible
   title only counts if the ABS title has the number or the extra words are a marketing suffix (`MARKETING_WORDS`).
   Replacing an *existing* ASIN is strict: title ≥0.85, author, runtime (±10 min) and narrator (if known) must match.
-- **Marketplaces:** look up ASINs in all stores (com, co.uk, ca, com.au, de, fr, it, es) before calling them broken.
-  Preferred store: English → .com, German → .de (swap only with a strict match, otherwise keep).
+- **Marketplaces** (user rule 2026-11-08): English books ask audible.com FIRST, German books audible.de (1 request). Not there -> strict
+  search in that store first; only if it finds nothing are the other stores asked for the current ASIN (in parallel) - kept as fallback
+  (after the usual plausibility/runtime checks); dead in every store -> search all stores. A product every store answers as 'not
+  available' is gone (no page scraping). The Audible API throttle is per marketplace host (AUDIBLE_API_INTERVAL, default 0.5 s).
 - **Group confirmation** (`group_confirm`, user idea 2026-11-04): >= 3 ABS books with the SAME title whose candidates each match runtime (to the minute) + narrator and are DIFFERENT volumes of ONE Audible series (distinct numbers, agreeing with ABS numbers of the same series) confirm each other: the shared title is a collection name, the books get ASIN + Audible title (lock_asin/lock_title respected, journaled). Regress round 08 (Realms of War = War of the Spider Queen 1-6).
 - **Other edition:** ASIN gone but same title/author exists as another recording → use its ratings, change nothing else.
 - **Language mismatch:** title + narrator + series decide whether ABS language or the ASIN is wrong; if nothing decides → change nothing.

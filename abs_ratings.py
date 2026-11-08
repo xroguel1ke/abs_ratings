@@ -8,6 +8,7 @@ import html as html_lib
 import recorder
 import source_state as SST; recorder.install()
 import threading, queue as _queue_mod
+from concurrent.futures import ThreadPoolExecutor
 import atexit
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
@@ -142,7 +143,7 @@ BASE_SLEEP = float(os.getenv('SLEEP_TIMER', 0))  # Extra pause between items. Ev
 SEARCH_PENALTY_SLEEP = float(os.getenv('SEARCH_PENALTY_SLEEP', 0))  # Optional extra pause after ASIN searches
 # Minimum seconds between two requests to the same source
 MIN_INTERVAL = {
-    'audible_api': float(os.getenv('AUDIBLE_API_INTERVAL', 1)),
+    'audible_api': float(os.getenv('AUDIBLE_API_INTERVAL', 0.5)),  # per marketplace (each store is its own server)
     'audible_web': float(os.getenv('AUDIBLE_WEB_INTERVAL', 3)),
     'goodreads': float(os.getenv('GOODREADS_INTERVAL', 10)),
     'hardcover': float(os.getenv('HARDCOVER_INTERVAL', 1.1)),  # API limit: 60 requests/min, 5000/day
@@ -547,15 +548,17 @@ class SourceBlockedException(Exception):
 # ================= UTILS =================
 
 _last_request = {}
-def throttle(source):
-    """Wait until MIN_INTERVAL[source] seconds have passed since the last request to that source."""
+def throttle(source, host=None):
+    """Wait until MIN_INTERVAL[source] seconds have passed since the last request to that source (with host: to that host -
+    the Audible marketplaces are separate servers, so .com and .de do not slow each other down)."""
     if recorder.REPLAY_DIR: return  # replay: nothing goes out
     if recorder.RECORD_DIR and not (source == 'goodreads' and GR_IMPERSONATE): return  # recorder.py waits before LIVE requests;
     # impersonated Goodreads requests bypass the recorder, so they must be spaced here (2026-11-08: a test burst of 12 pages in 30 s)
-    with _THROTTLE_LOCKS.setdefault(source, threading.Lock()):  # parallel books: the spacing holds across all threads
-        wait = MIN_INTERVAL.get(source, 0) - (time.monotonic() - _last_request.get(source, 0))
-        if wait > 0: time.sleep(wait + random.uniform(0, MIN_INTERVAL[source] * 0.4 if source == 'goodreads' else 0.5))  # Goodreads: no fixed rhythm
-        _last_request[source] = time.monotonic()
+    tkey = f"{source}:{host}" if host else source
+    with _THROTTLE_LOCKS.setdefault(tkey, threading.Lock()):  # parallel books: the spacing holds across all threads
+        wait = MIN_INTERVAL.get(source, 0) - (time.monotonic() - _last_request.get(tkey, 0))
+        if wait > 0: time.sleep(wait + random.uniform(0, MIN_INTERVAL[source] * 0.4 if source == 'goodreads' else min(0.5, MIN_INTERVAL.get(source, 0) / 2)))
+        _last_request[tkey] = time.monotonic()
 
 GR_BASE_INTERVAL = MIN_INTERVAL['goodreads']
 def gr_autothrottle(r):
@@ -1010,7 +1013,7 @@ def audible_isbn(asin, domain):
     wrong ISBN field (the user prefers the print ISBN; the main product request stays unchanged). Cached per run."""
     if not asin or not domain or domain not in AUDIBLE_API_HOSTS: return None
     if (domain, asin) not in _AUD_ISBN:
-        throttle('audible_api')
+        throttle('audible_api', AUDIBLE_API_HOSTS[domain])
         try:
             r = requests.get(f"https://{AUDIBLE_API_HOSTS[domain]}/1.0/catalog/products/{asin}", params={"response_groups": "product_details"},
                              headers={"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}, timeout=15)
@@ -1037,7 +1040,7 @@ def get_audible_api(asin, domain):
     is not available there, or None on errors (caller falls back to web scraping)."""
     host = AUDIBLE_API_HOSTS.get(domain)
     if not host: return None
-    throttle('audible_api')
+    throttle('audible_api', host)
     url = f"https://{host}/1.0/catalog/products/{asin}"
     try:
         r = requests.get(url, params={"response_groups": AUDIBLE_API_GROUPS, "image_sizes": "500,1215"},
@@ -1100,14 +1103,17 @@ def get_audible_api(asin, domain):
     note_series(p.get('series'))
     return res
 
-def get_audible_data(asin, language):
-    """Audible ratings + metadata. Uses the catalog API first and only falls back to
-    scraping the product pages when the API can't answer for any marketplace."""
+def get_audible_data(asin, language, skip=()):
+    """Audible ratings + metadata from the catalog API. All marketplaces (minus 'skip') are asked IN PARALLEL (separate servers); the
+    first hit in store order wins (the book language's store first). Only when the API could not answer (errors) the product pages are
+    scraped; a product that every store answers as 'not available' is gone - no page scraping (it only ever gave a soft 404)."""
     if not asin: return None
     if not USE_AUDIBLE_API: return get_audible_data_web(asin, language)
-    api_error, missing = False, []
-    for domain in audible_domains(language):
-        res = get_audible_api(asin, domain)
+    domains = [d for d in audible_domains(language) if d not in skip]
+    with ThreadPoolExecutor(max_workers=max(1, len(domains))) as ex:
+        answers = list(ex.map(lambda d: get_audible_api(asin, d), domains))
+    api_error, missing = False, [d.replace('www.audible.', '.') for d in skip]
+    for domain, res in zip(domains, answers):
         if res is None: api_error = True; continue
         if res == 'missing':
             missing.append(domain.replace('www.audible.', '.'))
@@ -1118,7 +1124,10 @@ def get_audible_data(asin, language):
         else:
             logging.info(f"        ℹ️ Product exists on {domain}, but has no ratings yet.")
         return res
-    logging.info(f"      -> Audible API: ASIN not available on {', '.join(missing) or '-'}{' (API errors)' if api_error else ''}, falling back to web scraping...")
+    if not api_error:
+        logging.info(f"      -> Audible API: ASIN not available on {', '.join(missing) or '-'} (gone from Audible)")
+        return None
+    logging.info(f"      -> Audible API: ASIN not available on {', '.join(missing) or '-'} (API errors), falling back to web scraping...")
     return get_audible_data_web(asin, language)
 
 def get_audible_data_web(asin, language):
@@ -1355,7 +1364,7 @@ def series_candidates(abs_series, authors_list, duration, domain):
     children = []
     for sa in wanted[:24]:  # one request per series ASIN, cached for the whole run
         if (host, sa) not in _SERIES_CHILDREN:
-            throttle('audible_api')
+            throttle('audible_api', host)
             try:
                 r = requests.get(f"https://{host}/1.0/catalog/products/{sa}", params={"response_groups": "relationships"}, headers=hdr, timeout=15)
                 rel = ((r.json().get('product') or {}).get('relationships') or []) if r.status_code == 200 else []
@@ -1364,7 +1373,7 @@ def series_candidates(abs_series, authors_list, duration, domain):
         children += [c for c in _SERIES_CHILDREN[(host, sa)] if c not in children]
     out = []
     for i in range(0, len(children), 50):
-        throttle('audible_api')
+        throttle('audible_api', host)
         try:
             r = requests.get(f"https://{host}/1.0/catalog/products", params={"asins": ",".join(children[i:i + 50]), "response_groups": "product_attrs,contributors,media"},
                              headers=hdr, timeout=20)
@@ -1402,7 +1411,7 @@ def preferred_twin(lang, key):
     if not (other_store or want_pub): return None
     domain = pref if other_store else m.get('domain')
     norm = lambda xs: {re.sub(r'[^a-z]', '', x.lower()) for x in xs if x}
-    throttle('audible_api')
+    throttle('audible_api', AUDIBLE_API_HOSTS[domain])
     try:
         r = requests.get(f"https://{AUDIBLE_API_HOSTS[domain]}/1.0/catalog/products",
                          params={"num_results": 20, "title": m['title'], "author": m['authors'][0], "narrator": m['narrators'][0], "response_groups": "product_attrs"},
@@ -1539,7 +1548,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
     for domain in domains:
         host, candidates = AUDIBLE_API_HOSTS[domain], list(extra_candidates or [])
         for qi, q in enumerate(queries):
-            throttle('audible_api')
+            throttle('audible_api', host)
             try:
                 r = requests.get(f"https://{host}/1.0/catalog/products", params={"num_results": 5, **q, "response_groups": "product_attrs"},
                                  headers={"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}, timeout=15)
@@ -3059,7 +3068,18 @@ def process_queue(work_queue, history, failed, recheck):
                             ASIN_OWNERS.setdefault(hint, set()).add(key); asin = hint
                         else: logging.info(f"      -> ℹ️ ISBN field holds {hint} but it does not fit this book ({hv}, {', '.join(hwhy)}): ignored")
                     else: logging.info(f"      -> ℹ️ ISBN field holds {hint}, which is no Audible product: ignored")
-                aud_data = get_audible_data(asin, lang)
+                # User rule 2026-11-08: English books -> audible.com, German books -> audible.de FIRST (one request). An ASIN that is
+                # not there makes the script search that store first; the other stores are asked only if that search finds nothing.
+                pref_store = PREFERRED_STORE.get(map_language(lang)) if (lang and asin and USE_AUDIBLE_API) else None
+                pref_miss, pref_res = False, None
+                if pref_store:
+                    pref_res = get_audible_api(asin, pref_store)
+                    if isinstance(pref_res, dict):
+                        logging.info(f"      -> Audible API: found on {pref_store}")
+                    elif pref_res == 'missing' and 'lock_asin' not in tags:
+                        pref_miss = True
+                        logging.info(f"      -> Audible API: {asin} is not on {pref_store} (preferred store for {map_language(lang)} books): searching there first")
+                aud_data = pref_res if isinstance(pref_res, dict) else (None if pref_miss else get_audible_data(asin, lang))
 
                 if aud_data and aud_data.get('meta_raw'):
                     raw_lang = aud_data['meta_raw'].get('language')
@@ -3100,6 +3120,8 @@ def process_queue(work_queue, history, failed, recheck):
                 if not asin:
                     logging.info("      -> ⚠️ No ASIN in ABS.")
                     should_search = True
+                elif pref_miss:
+                    should_search, strict_search, lang_target, search_only = True, True, map_language(lang), pref_store
                 elif aud_data is None:
                     logging.info("      -> ⚠️ ASIN not found in any marketplace.")
                     should_search, strict_search = True, True
@@ -3153,6 +3175,28 @@ def process_queue(work_queue, history, failed, recheck):
                     if not found: found = find_missing_asin(search_title, authors, abs_dur, lang, raw_title=title,
                                                             required_lang=lang_target, strict=strict_search and bool(asin),
                                                             only_domain=search_only, narrators=search_narr, abs_series=search_series(lib_id, meta.get("series")))
+                    if not found and pref_miss:
+                        logging.info(f"        ℹ️ No exact match on {pref_store}: asking the other stores for {asin} (fallback)")
+                        aud_data = get_audible_data(asin, lang, skip=(pref_store,))
+                        wide, wide_strict = aud_data is None, True
+                        if aud_data and aud_data.get('title_raw'):  # the same checks as for any found product
+                            plaus, plaus_why = asin_plausibility(search_title, authors, aud_data['title_raw'], aud_data.get('subtitle_raw'), aud_data.get('authors_raw'),
+                                                                 meta.get('narrators') or [], aud_data.get('narrators_raw'), abs_dur, aud_data.get('runtime_sec'))
+                            if plaus == 'wrong':
+                                logging.info(f"      -> ⛔ ASIN {asin} belongs to another book: Audible '{aud_data.get('title_raw')}' ({', '.join(plaus_why)}). Searching all stores...")
+                                wide, wide_strict = True, False
+                            elif runtime_mismatch(abs_dur, aud_data.get('runtime_sec')):
+                                logging.info(f"      -> ⚠️ Runtime mismatch: ABS {format_time(abs_dur)} vs Audible {format_time(aud_data['runtime_sec'])}. Searching all stores...")
+                                wide = True
+                        if not wide:
+                            search_only = aud_data.get('domain')  # the current ASIN stays (another store); no wider search
+                        else:
+                            if aud_data is None: logging.info("      -> ⚠️ ASIN not found in any marketplace: searching all stores")
+                            search_only, lang_target = None, None
+                            LAST_MATCH.clear()
+                            found = find_missing_asin(search_title, authors, abs_dur, lang, raw_title=title, required_lang=None, strict=wide_strict,
+                                                      only_domain=None, narrators=[] if plaus == 'wrong' else search_narr,
+                                                      abs_series=search_series(lib_id, meta.get("series")))
                     weak_ = LAST_SEARCH.get('weak')
                     if not found and USE_AUDIBLE_API and meta.get('series') and abs_dur and not search_only:
                         LAST_MATCH.clear()
@@ -3194,7 +3238,7 @@ def process_queue(work_queue, history, failed, recheck):
                                 raw_l = aud_data['meta_raw'].get('language')
                                 if raw_l: new_lang_detected = map_language(raw_l)
                         else: logging.info(f"        ℹ️ Search returned same ASIN. Keeping fallback data.")
-                    elif search_only: logging.info(f"        ℹ️ No exact match on {search_only}. Keeping {asin} from {aud_data.get('domain') if aud_data else '?'}.")
+                    elif search_only: logging.info(f"        ℹ️ No exact match on {pref_store if pref_miss else search_only}. Keeping {asin} from {aud_data.get('domain') if aud_data else '?'}.")
                     else: logging.info(f"        ℹ️ No replacement found. Keeping fallback data.")
                     if plaus == "wrong" and not (found and found != asin):  # nothing taken from a product that is another book
                         add_review(key, title, "asin", asin, "ASIN belongs to another book and no safe replacement was found", plaus_why)

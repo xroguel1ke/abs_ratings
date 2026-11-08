@@ -39,7 +39,7 @@ FIELDS = [
 
     ('AUDIBLE_MARKETPLACES', 'Audible stores', 'str', 'com,co.uk,ca,com.au,de,fr,it,es', 'An ASIN is searched in these stores', 'Audible'),
     ('USE_AUDIBLE_API', 'Use the Audible API', 'bool', True, 'Off = read web pages only (not recommended)', 'Audible'),
-    ('AUDIBLE_API_INTERVAL', 'Interval Audible API (s)', 'float', 1, '', 'Audible'),
+    ('AUDIBLE_API_INTERVAL', 'Interval Audible API (s)', 'float', 0.5, '', 'Audible'),
     ('AUDIBLE_WEB_INTERVAL', 'Interval Audible web page (s)', 'float', 3, '', 'Audible'),
     ('RUNTIME_TOLERANCE_PCT', 'Same-book runtime tolerance (%)', 'float', 15, 'Only decides whether the ASIN still names the same BOOK (another recording can be 12-16 % longer). Lower values lose correct matches. Narrator, publisher, year and cover need the runtime within 10 min anyway', 'Audible'),
     ('RUNTIME_TOLERANCE_MIN', 'Same-book runtime tolerance (min)', 'float', 20, 'Both limits must be exceeded', 'Audible'),
