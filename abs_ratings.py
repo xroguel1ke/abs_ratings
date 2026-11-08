@@ -515,6 +515,22 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
                 out.append(add); notes.append(f"'{add['name']}' #{add['sequence'] or '-'} added (folder and Audible name this series)")
     return out, notes
 
+def series_by_membership(lib, asin, host, book_authors, title=None):
+    """Audible lists no series for this product, but an Audible series of a library series of the same author has this book as a member
+    - by ASIN, or by the same title (an older listing of the same book: 'The Black Company' is #1 of Audible's 'Chronicles of the Black
+    Company'). Names are compared normalized ('The Chronicles ...' = 'Chronicles ...'). Returns (library series name, number) or None."""
+    from abs_series import series_key as _k
+    if not asin and not title: return None
+    me, nt = {_first_author(', '.join(book_authors))}, normalize_title_text(title or '')
+    hits = []
+    for (l_, low), v in list(SERIES_FACTS.items()):
+        if l_ != lib or not (v['authors'] & me) or v['n'] < 2 or non_latin_name(v['name']): continue
+        for s_asin in set().union(*[set(a) for t, a in SERIES_ASINS.items() if _k(t) == _k(v['name'])] or [set()]):
+            for a, q, t in (_series_members(host, s_asin) or []):
+                if a == asin or (nt and normalize_title_text(t or '') == nt): hits.append((v['name'], q))
+    hits = list(dict.fromkeys(h for h in hits if h[1]))
+    return hits[0] if len({h[0] for h in hits}) == 1 and len({h[1] for h in hits}) == 1 else None
+
 def canonical_series(lib, name, book_authors, book_variant=None):
     """Map a series name delivered by Audible to the name used in ABS:
     1. series_aliases.json (merges done earlier), 2. an existing ABS series with the same normalized
@@ -3686,6 +3702,11 @@ def process_queue(work_queue, history, failed, recheck):
                             same_b0 = (same_rec_rt and bool(abs_dur and aud_data.get('runtime_sec'))) or normalize_title_text(title) == normalize_title_text(aud_data.get('title_raw') or '')
                             cur0 = abs_updates.get('series') if 'series' in abs_updates else [{'name': x.get('name'), 'sequence': x.get('sequence')} for x in (meta.get('series') or []) if x.get('name')]
                             cl0, cl0_notes = series_cleanup(lib_id, item_data, cur0, [], authors, set(), same_b0, abs_updates.get('language') or lang)
+                            from abs_series import foreign_for_book as _ffb0
+                            if same_b0 and (not cl0 or all(non_latin_name(x['name']) or _ffb0(x['name'], abs_updates.get('language') or lang) for x in cl0)):
+                                if hit_ := series_by_membership(lib_id, asin, AUDIBLE_API_HOSTS.get(aud_data.get('domain') or 'www.audible.com', 'api.audible.com'), authors, title):
+                                    cl0 = [{'name': hit_[0], 'sequence': hit_[1] or None}]
+                                    cl0_notes.append(f"-> '{hit_[0]}' #{hit_[1] or '-'} (Audible lists this book in that series' list)")
                             if cl0 != cur0:
                                 for n_ in cl0_notes: logging.info(f"        🧹 Series {n_}")
                                 abs_updates['series'] = cl0
@@ -3838,7 +3859,8 @@ def process_queue(work_queue, history, failed, recheck):
                     a_narr = aud_data.get('narrators_raw') or []
                     exact_rec = bool(abs_dur and aud_data.get('runtime_sec') and abs(abs_dur - aud_data['runtime_sec']) <= 120)
                     same_t = normalize_title_text(title) == normalize_title_text(aud_data.get('title_raw') or '')
-                    if (exact_rec or same_t) and a_auth and a_narr and authors and meta.get('narrators') and _nk(authors) != _nk(a_auth) \
+                    full_x = bool(authors and meta.get('narrators') and set(_nk(authors)) <= set(_nk(a_narr)) and set(_nk(meta.get('narrators'))) <= set(_nk(a_auth)))
+                    if (exact_rec or same_t or full_x) and a_auth and a_narr and authors and meta.get('narrators') and _nk(authors) != _nk(a_auth) \
                             and set(_nk(authors)) & set(_nk(a_narr)) and not set(_nk(authors)) & set(_nk(a_auth)) \
                             and set(_nk(meta.get('narrators'))) & set(_nk(a_auth)):  # ABS authors = Audible narrators (none of Audible's authors), ABS narrators hold the author
                         if 'lock_authors' in tags or 'lock_narrators' in tags: logging.info("        🔒 Authors/narrators swapped, but locked")
