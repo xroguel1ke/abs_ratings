@@ -12,6 +12,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
   title), twin volume guard, non-Latin series (same title enough, removal), junk shared numbers, merge target guards (non-Latin,
   case-only names), '&', re-applying reverted values. Regress green, live dry run on 108 affected books ok.
 - [x] 2026-11-08 web UI: nav Overview·Scans·Books·Review list·Settings; status merged into the overview, history is a tab of Scans; library check (abs_series.library_health) after every scan; run page with end time, speed and change counters; shorter help texts.
+- [x] 2026-11-08 rules: French/Spanish-looking series names on English/German books (kept when Audible uses the name, review list when Audible has no series), a number held by 3+ different works of one language is replaced by the folder number or removed.
 - [ ] User: update the container, run a full scan (refresh 0); then check: Konosuba 9/10 (lock_series in the Japanese series),
   The Beginning After the End (Pack 1 and 2 locked in two case-variants -> remove one lock), Pern (two numberings mixed), Solo Leveling
   folder '7 - ... Vol. 7 (Novel)' (493 min = probably not vol. 7), Mushoku Tensei vol. 8 (Audible counts #2).

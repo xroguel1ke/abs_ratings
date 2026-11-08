@@ -458,8 +458,23 @@ def canonical_series(lib, name, book_authors):
     return name, None
 
 def non_latin_name(name):
-    """Series name in a non-Latin script (Japanese, Korean, Cyrillic ...). User rule 2026-11-08: series names are English or German."""
+    """Series name that is not English/German: non-Latin script (Japanese, Korean, Cyrillic ...) or French/Spanish/... function words
+    ('Les Annales de la Compagnie Noire'). User rule 2026-11-08: series names are English or German."""
+    from abs_series import foreign_series_name
+    return foreign_series_name(str(name or ''))
+
+def non_latin_script(name):
+    """Only a non-Latin SCRIPT (no doubt it is not an English/German name; a French-looking name may be a real English series name)."""
     return any(c.isalpha() and 'LATIN' not in unicodedata.name(c, '') for c in str(name or ''))
+
+SEQ_WORKS = {}  # (lib, series name lower, number, language) -> normalized titles (junk numbers: abs_series.distinct_works >= 3)
+
+def junk_seq(lib, name, seq, lang):
+    """Three or more different WORKS of the same language hold this number in this series ('Shannara (Chronological Order)' #1 on 4
+    books, three Publisher's Packs at #1): the number is no information."""
+    from abs_series import distinct_works
+    q = str(seq or '').strip()
+    return bool(q) and distinct_works(SEQ_WORKS.get((lib, str(name or '').strip().lower(), q, map_language(lang) or ''), ())) >= 3
 
 def folder_series_name(item_data, name):
     """The series name is only a folder of the book's path (ABS 'folder structure' metadata), e.g. relPath
@@ -2865,6 +2880,7 @@ def note_listing_item(lib_id, it):
         if ' #' in part:
             n_, q_ = part.rsplit(' #', 1)
             SEQ_TITLES.setdefault((lib_id, n_.strip().lower(), q_.strip()), set()).add(normalize_title_text(md_.get('title') or ''))
+            SEQ_WORKS.setdefault((lib_id, n_.strip().lower(), q_.strip(), map_language(md_.get('language')) or ''), set()).add(normalize_title_text(md_.get('title') or ''))
 
 def build_queue(lib_id, history, recheck):
     """Due books of one library (new, manually changed, due for refresh, re-checks). Each item gets '_lib'."""
@@ -3519,7 +3535,12 @@ def process_queue(work_queue, history, failed, recheck):
                         # Leveling: other recording of the same volume); the language may have been corrected just above ('spa' -> English)
                         nl_book = map_language(abs_updates.get('language') or lang) in ('English', 'German') and (same_rec_rt and bool(abs_dur and aud_data.get('runtime_sec'))
                                    or normalize_title_text(title) == normalize_title_text(aud_data.get('title_raw') or ''))
-                        nl_cur = [x for x in (meta.get('series') or []) if x.get('name') and non_latin_name(x['name'])] if nl_book else []
+                        nl_cur = [x for x in (meta.get('series') or []) if x.get('name') and non_latin_script(x['name'])] if nl_book else []
+                        if nl_book and not md_raw.get('series'):
+                            for x in (meta.get('series') or []):
+                                if x.get('name') and non_latin_name(x['name']) and not non_latin_script(x['name']):
+                                    logging.info(f"        ⚠️ Series '{x['name']}' does not look English/German and Audible has no series for this book: review list")
+                                    add_review(key, title, 'series', x['name'], 'series name does not look English/German; Audible has no series for this book - keep or rename it in ABS')
                         if nl_cur and not md_raw.get('series'):
                             # user rule 2026-11-08: series names are English/German; Audible lists no series for this book -> the foreign one goes
                             keep = [{"name": x.get('name'), "sequence": x.get('sequence')} for x in (meta.get('series') or []) if x.get('name') and x not in nl_cur]
@@ -3539,7 +3560,8 @@ def process_queue(work_queue, history, failed, recheck):
                             from abs_series import series_key as _skey, series_variant as _svar
                             same = lambda a, b: a == b or (_skey(a) == _skey(b) and _svar(a) == _svar(b))
                             aud_names = [n for s_ in series_list for n in ((s_.get('name') or '').strip(), canonical_series(lib_id, (s_.get('name') or '').strip(), authors)[0]) if n]
-                            bad_nl = [x for x in cur_list if nl_book and non_latin_name(x['name'])]
+                            bad_nl = [x for x in cur_list if nl_book and non_latin_name(x['name'])
+                                      and (non_latin_script(x['name']) or not any(same(x['name'], n) for n in aud_names))]  # Audible uses this name too: it is the real one
                             bad_fd = [x for x in cur_list if ver and x not in bad_nl and folder_series_name(item_data, x['name'])
                                       and not any(same(x['name'], n) for n in aud_names)]  # a folder named like Audible's series is fine
                             base_list = [x for x in cur_list if x not in bad_nl and x not in bad_fd]
@@ -3596,10 +3618,10 @@ def process_queue(work_queue, history, failed, recheck):
                                             existing['sequence'] = s_seq
                                         else:
                                             logging.info(f"        ℹ️ Series '{canon}': ABS #{existing['sequence']} vs Audible #{s_seq} (ABS kept)")
-                                elif not base_list and not non_latin_name(canon):
+                                elif not base_list and not non_latin_script(canon):
                                     if why: logging.info(f"        🔗 Series '{s_name}' -> '{canon}' ({'alias list' if why == 'alias' else 'existing ABS series'})")
                                     new_list.append({"name": canon, "sequence": s_seq})
-                                elif ver and s_seq and not non_latin_name(canon) and series_in_library(lib_id, canon, authors, exact=True):
+                                elif ver and s_seq and not non_latin_script(canon) and series_in_library(lib_id, canon, authors, exact=True):
                                     # user rule 2026-11-08: a series of THIS recording that already exists in the library for this author
                                     # is added although the book has other series (Way of Kings back into 'The Stormlight Archive')
                                     logging.info(f"        ➕ Series '{canon}' #{s_seq}: Audible lists it and it exists in the library for this author")
@@ -3628,7 +3650,7 @@ def process_queue(work_queue, history, failed, recheck):
                             # a number that three or more DIFFERENT books share is rescan junk ('Mushoku Tensei Web Novel' #3 on 18 books):
                             # when Audible's series of the same recording was added, the junk series goes
                             junk = [x for x in new_list if x in base_list and x.get('sequence')
-                                    and len(SEQ_TITLES.get((lib_id, x['name'].strip().lower(), str(x['sequence']).strip()), ())) >= 3]
+                                    and junk_seq(lib_id, x['name'], x['sequence'], lang)]
                             if ver and junk and any(x not in base_list for x in new_list):
                                 logging.info(f"        🔁 Series {', '.join(repr(x['name']) + ' #' + str(x['sequence']) for x in junk)} removed (number shared by 3+ different books; Audible's series added)")
                                 new_list = [x for x in new_list if x not in junk]
@@ -3636,6 +3658,20 @@ def process_queue(work_queue, history, failed, recheck):
                             if _sk(new_list) != _sk(cur_list):  # only a real change, never a mere re-ordering
                                 abs_updates['series'] = new_list
                                 log_updates.append("Series: " + ", ".join(f"'{x['name']}' #{x['sequence']}" for x in new_list))
+                        # a junk number Audible could not replace (the series is not Audible's, e.g. a reading-order series): the number goes,
+                        # the book stays in the series - a wrong number is worse than none, and the next Audible match can fill it
+                        cur_s = abs_updates.get('series') if 'series' in abs_updates else [{'name': x.get('name'), 'sequence': x.get('sequence')} for x in (meta.get('series') or []) if x.get('name')]
+                        def _fix_junk(x):
+                            if not junk_seq(lib_id, x['name'], x.get('sequence'), lang): return x
+                            # the series IS the folder of the book ('Shannara (Chronological Order)/10 - A Knight of the Word'): the folder number is the order
+                            fm = re.match(r'^(?:book\s*)?(\d+(?:\.\d+)?)\s+-\s+', str(item_data.get('relPath') or '').replace('\\', '/').split('/')[-1])
+                            if fm and folder_series_name(item_data, x['name']) and (fm.group(1).lstrip('0') or '0') != str(x.get('sequence')).strip(): return dict(x, sequence=fm.group(1).lstrip('0') or '0')
+                            return dict(x, sequence=None)
+                        cleared = [_fix_junk(x) for x in cur_s]
+                        if cleared != cur_s:
+                            logging.info(f"        🔢 Series {', '.join(repr(a['name']) + ' #' + str(a['sequence']) for a, b in zip(cur_s, cleared) if a != b)}: number held by 3+ different books - replaced by the folder number or removed")
+                            abs_updates['series'] = cleared
+                            log_updates.append("Series: " + ", ".join(f"'{x['name']}'" + (f" #{x['sequence']}" if x.get('sequence') else '') for x in cleared))
                     else: logging.info("        🔒 Series Update Skipped (Locked)")
 
                     # Narrators / authors: only filled when empty

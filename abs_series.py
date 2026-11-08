@@ -101,6 +101,24 @@ def fold_accents(s):
 def is_latin(name):
     return not any(c.isalpha() and "LATIN" not in unicodedata.name(c, "") for c in (name or ""))  # letters only: "86—EIGHTY-SIX" (em dash) is Latin
 
+FOREIGN_WORDS = {'les', 'le', 'la', 'du', 'aux', 'et', 'une', 'un', 'el', 'los', 'las', 'del', 'y', 'il', 'gli', 'degli', 'della', 'dei', 'delle', 'di', 'os', 'dos', 'het', 'een'}
+ENDE_WORDS = {'the', 'of', 'and', 'a', 'an', 'der', 'die', 'das', 'und', 'von', 'vom', 'im', 'zum', 'zur', 'ein', 'eine', 'in', 'to', 'for'}
+
+def foreign_series_name(name):
+    """A series name that is neither English nor German: non-Latin script ('四畳半シリーズ') or two or more French/Spanish/Italian/...
+    function words and none of English/German ('Les Annales de la Compagnie Noire' on English Black Company books)."""
+    if not is_latin(name): return True
+    w = re.findall(r"[a-zà-ÿ]+", (name or '').lower())
+    return sum(x in FOREIGN_WORDS for x in w) >= 2 and not any(x in ENDE_WORDS for x in w)
+
+def distinct_works(titles):
+    """How many different WORKS a set of normalized titles names: a title contained in another is the same work
+    ('mistborn', 'the final empire', 'mistborn the final empire' = 1)."""
+    groups = []
+    for t in sorted({t for t in titles if t}, key=len, reverse=True):
+        if not any(t in g or g in t for g in groups): groups.append(t)
+    return len(groups)
+
 LATIN_LANGS = {'english', 'eng', 'en', 'german', 'deu', 'ger', 'de', 'deutsch', '', None}
 def latin_books(g):
     """The books of a merge group are English/German (or have no language): their series names must be Latin."""
@@ -739,15 +757,15 @@ def library_health(records, results_path=None):
         log = ' '.join((results.get(key(r)) or {}).get('log') or [])
         dom = re.findall(r'SUCCESS on www\.audible\.([a-z.]+)', log)
         if want and dom and dom[-1] != want and 'lock_asin' not in r['tags']: add('wrong_store', r, f".{dom[-1]} ({r.get('language')})")
-        if want and any(not is_latin(x['name']) for x in r['series']): add('non_latin_series', r, ', '.join(x['name'] for x in r['series'] if not is_latin(x['name'])))
+        if want and any(foreign_series_name(x['name']) for x in r['series']): add('non_latin_series', r, ', '.join(x['name'] for x in r['series'] if foreign_series_name(x['name'])))
         if r['authors']: by_title[(r['lib'], author_key(r['authors'][0]), re.sub(r'\W+', ' ', r['title'].lower()).strip())].append(r)
         for x in r['series']:
             names[(r['lib'], x['name'].strip().lower())].add(x['name'])
-            if x.get('sequence'): seq_titles[(r['lib'], x['name'], str(x['sequence']), lang)].add(re.sub(r'\W+', ' ', r['title'].lower()).strip())  # per language: a translation in two parts is no junk
+            if x.get('sequence'): seq_titles[(r['lib'], x['name'], str(x['sequence']), LANG_STORE.get(lang, lang))].add(re.sub(r'\W+', ' ', r['title'].lower()).strip())  # per language: a translation in two parts is no junk
     for (_, a), rs in by_asin.items():
         if len(rs) > 1:
             for r in rs: add('shared_asin', r, a)
-    junk = {k[:3] for k, t in seq_titles.items() if len(t) >= 3}
+    junk = {k[:3] for k, t in seq_titles.items() if distinct_works(t) >= 3}
     for r in records:
         hit = [f"{x['name']} #{x['sequence']}" for x in r['series'] if (r['lib'], x['name'], str(x.get('sequence'))) in junk]
         if hit and 'lock_all' not in r['tags']: add('junk_number', r, ', '.join(hit))

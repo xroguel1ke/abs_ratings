@@ -88,6 +88,21 @@ def test_eta_text_uses_finished_books():
     assert txt.endswith('s') and 'h' not in txt, txt
 
 
+def test_foreign_latin_series_name():
+    for n in ('Les Annales de la Compagnie Noire', '四畳半シリーズ', 'Il Signore degli Anelli'): assert S.foreign_series_name(n), n
+    for n in ('The Black Company', 'Das Lied von Eis und Feuer', 'Die Chroniken von Waldsee', 'La Belle Sauvage', '86—EIGHTY-SIX Light Novel', 'Les Misérables'): assert not S.foreign_series_name(n), n
+
+
+def test_distinct_works_and_junk_seq():
+    assert S.distinct_works({'mistborn', 'the final empire', 'mistborn the final empire'}) == 1
+    assert S.distinct_works({'the black elfstone', 'running with the demon', 'wards of faerie'}) == 3
+    A.SEQ_WORKS.clear()
+    A.SEQ_WORKS[('L', 'shannara (chronological order)', '1', 'English')] = {'the black elfstone', 'running with the demon', 'wards of faerie', 'the high druid s blade'}
+    A.SEQ_WORKS[('L', 'memory, sorrow, and thorn', '3', 'German')] = {'die nornenkonigin', 'der engelsturm'}
+    assert A.junk_seq('L', 'Shannara (Chronological Order)', '1', 'eng')
+    assert not A.junk_seq('L', 'Memory, Sorrow, and Thorn', '3', 'deu')  # a translation in two parts
+
+
 if __name__ == '__main__':
     for n, f in list(globals().items()):
         if n.startswith('test_'): f(); print('ok', n)
