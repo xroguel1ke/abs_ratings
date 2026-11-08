@@ -3587,10 +3587,13 @@ def process_queue(work_queue, history, failed, recheck):
                                 # Audible's own title says 'Vol. 8', the series lists #2 (Mushoku Tensei: Audible counts parts there): if the ABS
                                 # title names the same single volume and the series name is part of the title, the title's volume wins
                                 if s_seq and not is_boxset_title(title):
-                                    tv_a, tv_b = extract_volume(aud_data.get('title_raw') or ''), extract_volume(abs_updates.get('title') or title or '')
-                                    from abs_series import series_key as _sk2
+                                    # only an EXPLICIT 'Vol./Volume/Book N' (not 'Metro 2033'), N < 1000, and the FULL series name in the title
+                                    # ('Threads of Destiny: Volume 1' is Destiny Cycle #4 - 'destiny' alone matched, 2026-11-08)
+                                    _xv = lambda t: {m.lstrip('0') or '0' for m in re.findall(r'(?i)\b(?:vol(?:ume)?\.?|book|band)\s*(\d{1,3})\b', t or '')}
+                                    tv_a, tv_b = _xv(aud_data.get('title_raw')), _xv(abs_updates.get('title') or title)
+                                    _nn = lambda t: re.sub(r'[^a-z0-9]+', ' ', (t or '').lower()).strip()
                                     if len(tv_a) == 1 and tv_a == tv_b and s_seq.lstrip('0') not in tv_a and '.' not in s_seq \
-                                            and _sk2(s_name) and _sk2(s_name) in _sk2(aud_data.get('title_raw') or ''):
+                                            and len(_nn(s_name)) >= 8 and _nn(s_name) in _nn(aud_data.get('title_raw')):
                                         logging.info(f"        🔢 Series '{s_name}': Audible lists #{s_seq}, but its title and the ABS title say volume {next(iter(tv_a))}: #{next(iter(tv_a))}")
                                         s_seq = next(iter(tv_a))
                                 if folder_fix and s_seq and s_seq != folder_fix['num'] and folder_fix['num'] in extract_volume(aud_data.get('title_raw') or folder_fix['title']):
