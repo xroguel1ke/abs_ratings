@@ -12,7 +12,7 @@ add({
     'Test run (DRY_RUN) for scheduled scans': 'Testlauf (DRY_RUN) für geplante Scans',
     'On = nothing is written to ABS, changes are only planned and logged': 'An = nichts wird in ABS geschrieben, Änderungen werden nur geplant und protokolliert',
     'Books per scan': 'Bücher pro Scan', 'Picked at random from all due books of all libraries': 'Zufällig aus allen fälligen Büchern aller Bibliotheken',
-    'Refresh after (days)': 'Auffrischen nach (Tage)', '0 = every book is due (one complete pass)': '0 = jedes Buch ist fällig (ein kompletter Durchlauf)',
+    'Refresh after (days)': 'Auffrischen nach (Tage)', '0 = every book is due (one complete pass, also in maintenance mode)': '0 = jedes Buch ist fällig (ein kompletter Durchlauf, auch im Wartungsmodus)',
     'ABS backup before real scans': 'ABS-Backup vor echten Scans',
     'Creates an ABS backup before every scan without DRY_RUN; if it fails nothing is written': 'Legt vor jedem Scan ohne DRY_RUN ein ABS-Backup an; schlägt es fehl, wird nichts geschrieben',
     'Extra pause between books (s)': 'Zusätzliche Pause zwischen Büchern (s)',
