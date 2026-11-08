@@ -80,6 +80,14 @@ def test_case_only_variant_with_locked_books_goes_to_review():
     assert not merges, [(m['target'].name, [x.name for x in m['members']]) for m in merges]
 
 
+def test_eta_text_uses_finished_books():
+    import time as _t
+    A.RUN_T0[0] = _t.time() - 100; A.DONE_TS.clear()
+    for i in range(30): A.DONE_TS.append(_t.time() - 60 + 2 * i)  # one book every 2 s lately
+    txt = A.eta_text(50, 150)  # 100 left at ~0.5 books/s -> a few minutes, not hours or seconds
+    assert txt.endswith('s') and 'h' not in txt, txt
+
+
 if __name__ == '__main__':
     for n, f in list(globals().items()):
         if n.startswith('test_'): f(); print('ok', n)

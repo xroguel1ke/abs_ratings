@@ -13,7 +13,7 @@ echo "== 2a pytest"; tools/pytest_all.sh > /tmp/claude-0/pytest_all.out 2>&1 || 
 echo "== 2b per-source search state (real-run mode vs fake ABS, offline)"; tools/source_state_test.sh tests/private/sst_keys.txt > /tmp/claude-0/sst_it.out 2>&1 || fail=1; tail -1 /tmp/claude-0/sst_it.out
 echo "== 2d change monitoring (real-run mode vs fake ABS)"; tools/watch_test.sh > /tmp/claude-0/watch_it.out 2>&1 || fail=1; tail -1 /tmp/claude-0/watch_it.out
 echo "== 2c Hardcover matches of the hand-checked batches"; tools/hc_golden_check.sh || fail=1
-echo "== 3 library-wide series/author decisions"; py tools/lib_check.py > /tmp/claude-0/lib_check.out 2>&1 || { fail=1; echo "lib_check exit code $?"; }; tail -4 /tmp/claude-0/lib_check.out
+echo "== 3 library-wide series/author decisions"; py tools/lib_check.py > /tmp/claude-0/lib_check.out 2>&1; rc=$?; [ $rc -ne 0 ] && { fail=1; echo "lib_check exit code $rc (0-byte output = container did not start; see docker events)"; }; tail -4 /tmp/claude-0/lib_check.out
 echo "== 4 golden rounds"
 i=0
 for k in tests/private/round*_keys.txt tests/private/wl0*_keys.txt; do

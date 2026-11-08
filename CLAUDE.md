@@ -104,6 +104,10 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     with locked books -> review list. '&' = 'and' in series keys.
   - Reverted values (exactly the value before our change, same ASIN, no lock): group confirmation / review decisions / title cleanup
     are written again (`reapply_reverted`); merges and author normalization redo themselves at the end.
+  - An ABS number that equals the number of ANOTHER series of the same book (Fitz and the Fool #16 = Realm of the Elderlings #16) is
+    replaced by Audible's (same recording). Audible's series number that contradicts its own title AND the ABS title ('Vol. 8' vs #2) loses.
+  - Refresh 0 days = one complete pass also in maintenance mode. ETA = speed of the last 150 FINISHED books blended with the run average
+    (was: elapsed / queue index at the start of a book -> jumped between 4 s and 40 h with parallel workers).
 - **Narrator = author** in ABS is replaced by Audible's narrators of the same recording (runtime 2 min) only.
 
 ## Testing

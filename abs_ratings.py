@@ -90,12 +90,28 @@ class _BookLogRouter(logging.Handler):
             for r in buf:
                 if isinstance(r.msg, str) and (m := re.match(r'^\((\d+)/(\d+)\)', r.msg)):
                     BOOKS_DONE[0] += 1
-                    r.msg = f"({BOOKS_DONE[0]}/{m.group(2)})" + r.msg[m.end():]
+                    rest = re.sub(r'^ \[ETA: [^\]]*\]', lambda _: f" [ETA: {eta_text(BOOKS_DONE[0], int(m.group(2)))}]", r.msg[m.end():])
+                    r.msg = f"({BOOKS_DONE[0]}/{m.group(2)})" + rest
                     break
             for r in buf:
                 for h in self.real: h.handle(r)
 LOG_ROUTER = None
 BOOKS_DONE = [0]  # finished books of the current run_books() (progress numbering with parallel workers)
+RUN_T0 = [None]   # start of the current run_books()
+DONE_TS = __import__('collections').deque(maxlen=150)  # finish times of the last books (rolling speed)
+
+def eta_text(done, total):
+    """Remaining time from the books FINISHED so far. Was: elapsed / queue index at the START of a book - with parallel workers the
+    index is the queue position (an author group with index 1230 runs early), so the ETA jumped between 4 s and 40 h. Now: speed of
+    the last 150 finished books (a slow phase - Goodreads cool-down, many searches - shows up quickly), blended with the run average."""
+    now = time.time()
+    DONE_TS.append(now)
+    if not RUN_T0[0] or done < 3: return '…'
+    overall = done / max(1.0, now - RUN_T0[0])
+    rate = overall
+    if len(DONE_TS) >= 20 and DONE_TS[-1] > DONE_TS[0]:
+        rate = 0.7 * ((len(DONE_TS) - 1) / (DONE_TS[-1] - DONE_TS[0])) + 0.3 * overall
+    return format_time(max(0, total - done) / rate) if rate > 0 else '…'
 
 
 # ================= CONFIGURATION =================
@@ -3132,12 +3148,7 @@ def process_queue(work_queue, history, failed, recheck):
         if stats['aborted_ratelimit']: return
         lib_id = item['_lib']
         
-        elapsed = (datetime.now() - start).total_seconds()
-        items_done = idx + 1
-        avg_time = elapsed / items_done
-        remaining_items = total - items_done
-        eta_seconds = avg_time * remaining_items
-        eta_str = format_time(eta_seconds)
+        eta_str = eta_text(idx, total) if not LOG_ROUTER or WORKERS <= 1 else '…'  # parallel: the log router writes the real ETA when the book is finished
         
         search_penalty = False
         needs_sleep = False  # Only pause after items that actually hit Audible/Goodreads
@@ -3551,6 +3562,15 @@ def process_queue(work_queue, history, failed, recheck):
                                     text = f"{aud_t} {aud_s}".strip()
                                     pattern = re.escape(s_name) + r'[\s:,-]+(?:Book\s+|Band\s+|Teil\s+|Vol\.?\s*)?(\d+(?:\.\d+)?)'
                                     if text and (m := re.search(pattern, text, re.IGNORECASE)): s_seq = m.group(1)
+                                # Audible's own title says 'Vol. 8', the series lists #2 (Mushoku Tensei: Audible counts parts there): if the ABS
+                                # title names the same single volume and the series name is part of the title, the title's volume wins
+                                if s_seq and not is_boxset_title(title):
+                                    tv_a, tv_b = extract_volume(aud_data.get('title_raw') or ''), extract_volume(abs_updates.get('title') or title or '')
+                                    from abs_series import series_key as _sk2
+                                    if len(tv_a) == 1 and tv_a == tv_b and s_seq.lstrip('0') not in tv_a and '.' not in s_seq \
+                                            and _sk2(s_name) and _sk2(s_name) in _sk2(aud_data.get('title_raw') or ''):
+                                        logging.info(f"        🔢 Series '{s_name}': Audible lists #{s_seq}, but its title and the ABS title say volume {next(iter(tv_a))}: #{next(iter(tv_a))}")
+                                        s_seq = next(iter(tv_a))
                                 if folder_fix and s_seq and s_seq != folder_fix['num'] and folder_fix['num'] in extract_volume(aud_data.get('title_raw') or folder_fix['title']):
                                     s_seq = folder_fix['num']  # Audible counts parts ('#2' for Vol. 8): folder and title agree on the volume
                                 canon, why = canonical_series(lib_id, s_name, authors)
@@ -3568,6 +3588,11 @@ def process_queue(work_queue, history, failed, recheck):
                                             existing['sequence'] = new_q
                                         elif ver and any(k == ck_ or difflib.SequenceMatcher(None, k, ck_).ratio() >= 0.9 for k in proven_fix for ck_, _ in _series_pairs([{'name': existing['name']}])):
                                             logging.info(f"        🔢 Series '{canon}': ABS #{existing['sequence']} was proven wrong by Audible's series list -> #{s_seq}")
+                                            existing['sequence'] = s_seq
+                                        elif ver and any(o is not existing and str(o.get('sequence') or '') == str(existing['sequence']) and not same(o['name'], existing['name'])
+                                                         and any(same(o['name'], n_) for n_ in aud_names) for o in new_list):
+                                            # 'Fitz and the Fool' #16 = the book's 'Realm of the Elderlings' number, Audible (same recording): Fitz #3, Realm #16
+                                            logging.info(f"        🔢 Series '{canon}': ABS #{existing['sequence']} is the number of another series of this book -> Audible #{s_seq}")
                                             existing['sequence'] = s_seq
                                         else:
                                             logging.info(f"        ℹ️ Series '{canon}': ABS #{existing['sequence']} vs Audible #{s_seq} (ABS kept)")
@@ -3887,12 +3912,13 @@ def _author_lane(item):
 def run_books(work_queue, one):
     """Run one(idx, item) for every book: WORKERS threads; groups of the same author stay in one thread, in queue order."""
     if WORKERS <= 1 or len(work_queue) < 2:
+        RUN_T0[0] = time.time(); DONE_TS.clear()
         for idx, item in enumerate(work_queue):
             one(idx, item)
             if stats['aborted_ratelimit']: break
         return
     groups = {}
-    BOOKS_DONE[0] = 0
+    BOOKS_DONE[0] = 0; RUN_T0[0] = time.time(); DONE_TS.clear()
     for idx, item in enumerate(work_queue): groups.setdefault(_author_lane(item), []).append((idx, item))
     jobs = _queue_mod.Queue()
     for g in sorted(groups.values(), key=lambda g: g[0][0]): jobs.put(g)  # keep the (random) queue order as far as possible
