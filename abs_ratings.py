@@ -1153,6 +1153,8 @@ def parse_messy_title(t, abs_series_names=None):
         is_abs_series = normalize_title_text(series) in {normalize_title_text(n) for n in abs_series_names or [] if n}  # the prefix IS the ABS series
         if (len(series.split()) >= 2 or re.fullmatch(r"0\d\.\d{1,2}", seq) or is_abs_series) and (len(rest.split()) >= 2 or (re.fullmatch(r"0\d", seq) and (len(rest) >= 5 or (is_abs_series and len(rest) >= 3)))):  # 'The Four Horsemen [Thalassa] 02 War'  # 'Prince of the Doomed City 01 Entranced'
             return {'title': rest, 'series': series, 'sequence': None if '-' in seq else str(float(seq)).rstrip('0').rstrip('.'), 'kind': 'series_prefix'}  # '01-3' = a range (omnibus): no single volume number
+    if m := re.match(r'^\s*((?:19|20)\d\d)\s+-\s+(\S.{2,})$', t):  # '2019 - This Is How You Lose the Time War' (year from the file name)
+        if len(m.group(2).split()) >= 2: return {'title': m.group(2).strip(), 'kind': 'year_prefix'}
     if m := RE_LEADING_NUM.match(t):
         rest_ = m.group(2).strip()
         if len(rest_.split()) >= 2 or (re.fullmatch(r'0[1-9]', m.group(1)) and len(rest_) >= 3):  # '03 Blutmale', '06 Rick' yes ('0N' = file-name prefix; the match still needs the full evidence), '007 Skyfall' no
@@ -4262,6 +4264,14 @@ def process_queue(work_queue, history, failed, recheck):
                     else:
                         logging.warning(f"      -> ⚠️ No Audible data (Audible: {has_aud}, GR: {has_gr})")
                         record_attempt(key, history, failed, recheck)
+
+                # ISO code -> language name ('eng' -> 'English') also for books without a metadata sync (not found / other edition):
+                # a pure spelling change, journaled, lock_language respected (audit 2026-11-09: 24 books kept 'eng'/'deu')
+                lang_now = str(meta.get('language') or '').strip()
+                if lang_now and lang_now.lower() in LANGUAGE_MAP and LANGUAGE_MAP[lang_now.lower()] != lang_now and 'lock_language' not in tags \
+                        and 'language' not in (locals().get('abs_updates') or {}) and not ov.get('ignore'):
+                    if abs_update(iid, key, title, {'language': LANGUAGE_MAP[lang_now.lower()]}, meta, 'language_code'):
+                        logging.info(f"        🛠️ Language: '{lang_now}' -> '{LANGUAGE_MAP[lang_now.lower()]}' (code spelled out)")
 
                 # Result for the web UI dashboard / problem list
                 if aud_data and aud_data.get('related_edition'):

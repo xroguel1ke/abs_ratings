@@ -124,6 +124,10 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   number. The listing seriesName glues an UNNUMBERED leading series to the next ('Elfhame, The Folk of the Air #1'): split via the ABS
   series list (LIB_SERIES_NAMES). A novella range ('0.1 - 0.5', span < 1) containing the ABS number is no conflict; box sets ('1-3') are.
   Audible '#P.V' for 'Part P, Volume V' is no conflict when both titles name that part + volume. Narrator/author keys fold accents.
+- Round 7 (2026-11-09): an ABS narrator of ANOTHER recording is replaced when the book folder AND Audible's same recording (runtime
+  2 min) name the same other narrator; a folder narrator contradicting ABS drives the ASIN search with runtime ±2 min (Fool's Errand
+  flipped between two ASINs). Folder narrators = person names only ('09 - Volume 09 - The Town of Strife II' is a title). Title
+  'YYYY - Title' = file-name title. ISO language codes ('eng') are spelled out for every book, also without Audible data.
 - **Narrator = author** in ABS is replaced by Audible's narrators of the same recording (runtime 2 min) only.
 
 ## Testing
