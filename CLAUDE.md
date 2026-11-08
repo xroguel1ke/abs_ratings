@@ -66,7 +66,10 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   title, Hardcover title = series name without number, 'Part N', alternative-title hit of another volume for English books). Hardcover counts
   every search FIELD of a request against its limits - never combine lookup steps in one request. Contributors with a role are learned as role names.
 - **ISBN:** registration group must fit the book language (978-0/1, 979-8 English; 978-3 German ...).
-- **Goodreads:** search list only (GR_BOOK_PAGES=false); max 25 searches per run (block after ~100-150 in a row); series name + number + author confirm.
+- **Goodreads** (user decision 2026-11-08): book page first (robots.txt allows /book/show, /book/isbn; disallows /search), max GOODREADS_PAGES_PER_RUN=3 pages
+  (challenge after 3-7); a challenge on a book page only switches pages off for the run, the search list stays as FALLBACK (max 25 searches,
+  block after ~100-150 in a row); series name + number + author confirm. AutoThrottle: jitter, slow answer widens the interval, Retry-After wins.
+  No browser and no TLS/fingerprint impersonation (image size; Claude Code's safety check blocks it).
 - **Change monitoring:** a field the script wrote that shows the OLD value again is written again; a NEW value is the user's: never overwritten.
 - **Narrator = author** in ABS is replaced by Audible's narrators of the same recording (runtime 2 min) only.
 

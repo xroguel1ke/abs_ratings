@@ -149,7 +149,8 @@ MIN_INTERVAL = {
 }
 USE_AUDIBLE_API = os.getenv('USE_AUDIBLE_API', 'true').lower() == 'true'
 GOODREADS_ENABLED = os.getenv('GOODREADS_ENABLED', 'true').lower() == 'true'  # false = no Goodreads requests at all
-GR_BOOK_PAGES = os.getenv('GR_BOOK_PAGES', 'false').lower() == 'true'  # false = only the search list is read (no /book/show pages: they trigger the bot block)
+GR_BOOK_PAGES = os.getenv('GR_BOOK_PAGES', 'true').lower() == 'true'  # true = book page first (robots.txt allows it), search list as fallback
+GOODREADS_PAGES_PER_RUN = int(os.getenv('GOODREADS_PAGES_PER_RUN', 3))  # book pages per run (measured: challenge after 3-7); a challenge only switches pages off
 HARDCOVER_TOKEN, _ = clean_env('HARDCOVER_TOKEN', r'A-Za-z0-9._\- ')
 HARDCOVER_TOKEN = re.sub(r'(?i)^\s*bearer\s+', '', HARDCOVER_TOKEN).strip()
 HARDCOVER_ENABLED = os.getenv('HARDCOVER_ENABLED', 'true').lower() == 'true' and bool(HARDCOVER_TOKEN)
@@ -337,7 +338,7 @@ RE_RAW_COUNT = re.compile(r'count="(\d+)"')
 
 stats = _Stats({k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred", "cover_added", "desc_filled", "series_merged", "other_edition", "hc_found", "hc_missing", "rating_only"]})
 stats['aborted_ratelimit'] = False
-GR_STATE = {'blocked': False, 'cooldowns': 0, 'searches': 0}
+GR_STATE = {'blocked': False, 'cooldowns': 0, 'searches': 0, 'pages': 0, 'pages_blocked': False}
 GR_CACHE = {}  # Filled in main()  # Set once Goodreads blocks us; GR is then skipped for the rest of the run
 reports = {"audible": {}, "goodreads": {}, "isbn": {}}
 AUTHOR_NOTES = []  # Author spelling differences between ABS and Audible (report only)
@@ -487,8 +488,29 @@ def throttle(source):
     if recorder.REPLAY_DIR or recorder.RECORD_DIR: return  # test mode: recorder.py waits only before LIVE requests
     with _THROTTLE_LOCKS.setdefault(source, threading.Lock()):  # parallel books: the spacing holds across all threads
         wait = MIN_INTERVAL.get(source, 0) - (time.monotonic() - _last_request.get(source, 0))
-        if wait > 0: time.sleep(wait + random.uniform(0, 0.5))
+        if wait > 0: time.sleep(wait + random.uniform(0, MIN_INTERVAL[source] * 0.4 if source == 'goodreads' else 0.5))  # Goodreads: no fixed rhythm
         _last_request[source] = time.monotonic()
+
+GR_BASE_INTERVAL = MIN_INTERVAL['goodreads']
+def gr_autothrottle(r):
+    """AutoThrottle (idea from Scrapling): a slow Goodreads answer (server under load or starting to rate-limit) widens
+    the interval x1.5 (max 6x the setting), fast answers narrow it back slowly; never below GOODREADS_INTERVAL."""
+    cur, el = MIN_INTERVAL['goodreads'], r.elapsed.total_seconds()
+    new = min(cur * 1.5, GR_BASE_INTERVAL * 6) if el > 3 else max(GR_BASE_INTERVAL, cur * 0.9)
+    if abs(new - cur) >= 1 or (new == GR_BASE_INTERVAL and cur != new):
+        logging.info(f"        🐢 Goodreads answered in {el:.1f}s -> interval {cur:.0f}s -> {new:.0f}s")
+    MIN_INTERVAL['goodreads'] = new
+
+def retry_after_seconds(r):
+    """Retry-After header (seconds or HTTP date) -> seconds, else None."""
+    v = (r.headers.get('Retry-After') or '').strip()
+    if not v: return None
+    if v.isdigit(): return int(v)
+    try:
+        from email.utils import parsedate_to_datetime
+        return max(0, int((parsedate_to_datetime(v) - datetime.now(timezone.utc)).total_seconds()))
+    except Exception:
+        return None
 
 def map_language(raw):
     if not raw: return None
@@ -844,6 +866,9 @@ def fetch_url(url, params=None, domain=None, source=None):
     if r is None: return None, None
 
     status, final_url = r.status_code, r.url
+    if source == 'goodreads':
+        if status in (429, 503) and (ra := retry_after_seconds(r)) is not None: GR_STATE['retry_after'] = ra
+        if not recorder.REPLAY_DIR: gr_autothrottle(r)
     if status == 429: blocked(f"HTTP 429 on {final_url}", True)
     if status in (403, 503): blocked(f"HTTP {status} on {final_url}")
     # AWS WAF (Goodreads/Amazon) answers bot challenges with 202 + empty/JS body
@@ -1745,8 +1770,9 @@ def get_goodreads_data(isbn, title, authors, prim_auth, cached_url=None, hc_ids=
         except SourceBlockedException as e:
             if GR_STATE['cooldowns'] < GR_MAX_COOLDOWNS:
                 GR_STATE['cooldowns'] += 1
-                logging.warning(f"        ⏸️ Goodreads blocks requests: {e}. Cool-down {GR_BLOCK_COOLDOWN}s, then retrying ({GR_STATE['cooldowns']}/{GR_MAX_COOLDOWNS})...")
-                time.sleep(GR_BLOCK_COOLDOWN)
+                pause = max(GR_BLOCK_COOLDOWN, GR_STATE.pop('retry_after', 0) or 0)  # the server's Retry-After wins when longer
+                logging.warning(f"        ⏸️ Goodreads blocks requests: {e}. Cool-down {pause}s, then retrying ({GR_STATE['cooldowns']}/{GR_MAX_COOLDOWNS})...")
+                time.sleep(pause)
                 continue
             GR_STATE['blocked'] = True
             logging.warning(f"        🛑 Goodreads still blocks requests: {e}. Skipping Goodreads for the rest of this run.")
@@ -1759,45 +1785,62 @@ def gr_page_matches(d, title, authors):
     a_ok = match_author(authors, d['author']) if d.get('author') else None
     return t >= 0.8 and a_ok is not False, t, a_ok
 
-def _goodreads_lookup(isbn, title, authors, prim_auth, cached_url, hc_ids=None):
-    if not GR_BOOK_PAGES:
-        # Search-only mode: Goodreads blocks bots mainly on /book/show pages, while the search list already carries
-        # 'x.xx avg rating - n ratings'. Known ids (from Hardcover or an earlier run) only CONFIRM a search row.
-        known = {str(g) for g in (hc_ids or [])}
-        if cached_url and (m := RE_GR_BOOK_ID.search(cached_url)): known.add(m.group(1))
-        if GOODREADS_MAX_PER_RUN and GR_STATE['searches'] >= GOODREADS_MAX_PER_RUN:
-            if GR_STATE['searches'] == GOODREADS_MAX_PER_RUN:
-                logging.info(f"        ⏭️ Goodreads search budget for this run reached ({GOODREADS_MAX_PER_RUN}). Remaining books follow in the next runs.")
-                GR_STATE['searches'] += 1
-            stats['gr_deferred'] += 1
-            return None, 'deferred'
-        GR_STATE['searches'] += 1
-        d = _search_goodreads(isbn, title, authors, prim_auth, known_ids=known, list_only=True)
-        return d, ('found' if d else 'not_found')
-    # Option 1: Goodreads IDs from Hardcover -> the book page directly (1 request, no search)
-    for gid in (hc_ids or [])[:GR_ID_TRIES]:
-        d = scrape_gr_details(f"https://www.goodreads.com/book/show/{gid}", require_book_page=True)
-        if not d: continue
-        ok, t, a_ok = gr_page_matches(d, title, authors)
-        logging.info(f"        🔗 Goodreads page via Hardcover ID {gid}: '{d.get('name') or d.get('page_title')}' title {t:.2f}, author {'?' if a_ok is None else '✓' if a_ok else '✗'}")
-        if ok and d.get('count'):
-            d['source'] = 'Hardcover-ID'
-            logging.info(f"        ✅ Goodreads via Hardcover ID (Count: {d.get('count')}, Rating: {round(safe_float(d.get('val')), 2)})")
-            return d, 'found'
-    if cached_url:
-        if d := scrape_gr_details(cached_url, require_book_page=True):
-            d['source'] = 'Cache'
-            logging.info(f"        ✅ Found via cached URL (Count: {d.get('count')}, Rating: {round(safe_float(d.get('val')), 2)})")
-            return d, 'found'
-        logging.info("        ↪️ Cached Goodreads URL failed, searching again...")
+def _gr_budget_left():
+    """Search budget of this run (book pages have their own, GOODREADS_PAGES_PER_RUN)."""
     if GOODREADS_MAX_PER_RUN and GR_STATE['searches'] >= GOODREADS_MAX_PER_RUN:
         if GR_STATE['searches'] == GOODREADS_MAX_PER_RUN:
             logging.info(f"        ⏭️ Goodreads search budget for this run reached ({GOODREADS_MAX_PER_RUN}). Remaining books follow in the next runs.")
-            GR_STATE['searches'] += 1  # Log only once
+            GR_STATE['searches'] += 1  # log only once
+        return False
+    return True
+
+def _gr_book_pages(isbn, title, authors, hc_ids, cached_url):
+    """Primary path (allowed by Goodreads' robots.txt): the book page itself, from a known URL, a Hardcover Goodreads ID
+    or the ISBN page. Every page counts against GOODREADS_PAGES_PER_RUN; Goodreads guards these pages more strictly
+    than the search (measured 2026-11-04: challenge after 3-7 pages), so the budget stays small.
+    Raises SourceBlockedException on a bot challenge (the caller then falls back to the search list)."""
+    cands = []
+    if cached_url: cands.append((cached_url, 'Cache'))
+    cands += [(f"https://www.goodreads.com/book/show/{g}", 'Hardcover-ID') for g in (hc_ids or [])[:GR_ID_TRIES]]
+    if q := normalize_isbn(isbn): cands.append((f"https://www.goodreads.com/book/isbn/{q}", 'ISBN Lookup'))
+    seen = set()
+    for url, src in cands:
+        gid = (m.group(1) if (m := RE_GR_BOOK_ID.search(url)) else url)
+        if gid in seen: continue
+        seen.add(gid)
+        if GR_STATE['pages'] >= GOODREADS_PAGES_PER_RUN:
+            if GR_STATE['pages'] == GOODREADS_PAGES_PER_RUN:
+                logging.info(f"        ⏭️ Goodreads book-page budget for this run reached ({GOODREADS_PAGES_PER_RUN}); search list only from here")
+                GR_STATE['pages'] += 1
+            return None
+        GR_STATE['pages'] += 1
+        d = scrape_gr_details(url, require_book_page=True)
+        if not d: continue
+        ok, t, a_ok = gr_page_matches(d, title, authors)
+        logging.info(f"        🔗 Goodreads page via {src}: '{d.get('name') or d.get('page_title')}' title {t:.2f}, author {'?' if a_ok is None else '✓' if a_ok else '✗'}")
+        if ok and d.get('count'):
+            d['source'] = src
+            logging.info(f"        ✅ Goodreads via {src} (Count: {d.get('count')}, Rating: {round(safe_float(d.get('val')), 2)})")
+            return d
+    return None
+
+def _goodreads_lookup(isbn, title, authors, prim_auth, cached_url, hc_ids=None):
+    known = {str(g) for g in (hc_ids or [])}
+    if cached_url and (m := RE_GR_BOOK_ID.search(cached_url)): known.add(m.group(1))
+    # 1) book page (robots.txt allows /book/show and /book/isbn) - small budget per run
+    if GR_BOOK_PAGES and not GR_STATE.get('pages_blocked') and GOODREADS_PAGES_PER_RUN > 0:
+        try:
+            if d := _gr_book_pages(isbn, title, authors, hc_ids, cached_url):
+                return d, 'found'
+        except SourceBlockedException as e:
+            GR_STATE['pages_blocked'] = True
+            logging.warning(f"        ⚠️ Goodreads blocks book pages: {e}. Book pages off for this run, search list as fallback.")
+    # 2) fallback: the search list (rating from the result row; known ids only confirm a row). A block here stops Goodreads.
+    if not _gr_budget_left():
         stats['gr_deferred'] += 1
         return None, 'deferred'
     GR_STATE['searches'] += 1
-    d = _search_goodreads(isbn, title, authors, prim_auth)
+    d = _search_goodreads(isbn, title, authors, prim_auth, known_ids=known, list_only=True)
     return d, ('found' if d else 'not_found')
 
 RE_GR_LIST_RATING = re.compile(r'(\d[.,]\d{1,2})\s*avg rating\s*[—–-]?\s*([\d,.]+)\s*ratings?', re.IGNORECASE)
@@ -3595,7 +3638,7 @@ DEBUG_ENV_KEYS = ['ABS_URL', 'LIBRARY_IDS', 'GOODREADS_ENABLED', 'BATCH_SIZE', '
                   'GR_BLOCK_COOLDOWN', 'GR_MAX_COOLDOWNS', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'FILL_COVERS', 'GENRE_LANGUAGE',
                   'SERIES_MERGE', 'SERIES_LOCK_AFTER_MERGE', 'AUTHOR_NORMALIZE', 'LIBRARY_REPORT', 'NO_RATINGS_RECHECK_DAYS',
                   'GR_MISSING_RECHECK_DAYS', 'SEARCH_PENALTY_SLEEP', 'ABS_TIMEOUT',
-                  'HARDCOVER_ENABLED', 'HARDCOVER_INTERVAL', 'HARDCOVER_PAID', 'GR_BOOK_PAGES', 'WORKERS', 'REMOVE_RATINGS', 'RATING_ICONS', 'RATING_LABELS', 'RATING_POSITION', 'RATING_MIN_COUNT', 'GENRE_RULES', 'RUN_MODE', 'MAINTAIN_SAMPLE', 'MANUAL_LOCK_TAG', 'RATING_ORDER']  # never API_TOKEN
+                  'HARDCOVER_ENABLED', 'HARDCOVER_INTERVAL', 'HARDCOVER_PAID', 'GR_BOOK_PAGES', 'GOODREADS_PAGES_PER_RUN', 'WORKERS', 'REMOVE_RATINGS', 'RATING_ICONS', 'RATING_LABELS', 'RATING_POSITION', 'RATING_MIN_COUNT', 'GENRE_RULES', 'RUN_MODE', 'MAINTAIN_SAMPLE', 'MANUAL_LOCK_TAG', 'RATING_ORDER']  # never API_TOKEN
 
 def write_debug_bundle(log_file):
     """One file with everything needed for troubleshooting: settings (no token), the run log, all changes

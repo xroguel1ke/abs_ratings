@@ -51,11 +51,12 @@ FIELDS = [
     ('HARDCOVER_INTERVAL', 'Interval Hardcover (s)', 'float', 1.1, 'Hardcover allows 60 requests per minute', 'Hardcover'),
 
     ('GOODREADS_ENABLED', 'Use Goodreads', 'bool', False, 'Experimental: Goodreads blocks bots quickly. At the first block Goodreads is stopped for the scan', 'Goodreads'),
-    ('GOODREADS_MAX_PER_RUN', 'Goodreads requests per scan', 'int', 25, 'Remembered books do not count. Safe so far: about 25 per night', 'Goodreads'),
+    ('GOODREADS_MAX_PER_RUN', 'Goodreads searches per scan', 'int', 25, 'Fallback when no book page helps. Remembered books do not count. Safe so far: about 25 per night', 'Goodreads'),
+    ('GOODREADS_PAGES_PER_RUN', 'Goodreads book pages per scan', 'int', 3, 'Book page first (allowed by Goodreads robots.txt), but a bot check comes after 3-7 pages; then only the search is used for the rest of the scan', 'Goodreads'),
     ('GOODREADS_INTERVAL', 'Interval Goodreads (s)', 'float', 10, '', 'Goodreads'),
     ('GR_BLOCK_COOLDOWN', 'Pause after a Goodreads block (s)', 'int', 900, '', 'Goodreads'),
     ('GR_MAX_COOLDOWNS', 'Pauses before Goodreads is skipped', 'int', 0, '0 = stop at the first block (recommended)', 'Goodreads'),
-    ('GR_BOOK_PAGES', 'Also load Goodreads book pages', 'bool', False, 'Off = read the rating from the search list only (book pages trigger the bot block much sooner)', 'Goodreads'),
+    ('GR_BOOK_PAGES', 'Goodreads book page first', 'bool', True, 'Off = read the rating from the search list only', 'Goodreads'),
     ('GR_MISSING_RECHECK_DAYS', 'Re-check books without Goodreads (days)', 'int', 30, '', 'Goodreads'),
 
     ('RATING_ORDER', 'Sources in the rating block', 'order:audible|goodreads|hardcover', 'audible,goodreads,hardcover', 'Ticked sources are shown, top to bottom (all enabled sources are still asked)', 'Metadata'),
@@ -80,7 +81,7 @@ FIELDS = [
 # rarely changed: shown folded ("Advanced") inside their card
 ADVANCED = {'ABS_TIMEOUT', 'SLEEP_TIMER', 'NO_RATINGS_RECHECK_DAYS', 'USE_AUDIBLE_API', 'AUDIBLE_API_INTERVAL',
             'AUDIBLE_WEB_INTERVAL', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'HARDCOVER_INTERVAL', 'GOODREADS_INTERVAL', 'GR_BLOCK_COOLDOWN',
-            'GR_MAX_COOLDOWNS', 'GR_MISSING_RECHECK_DAYS', 'GR_BOOK_PAGES', 'SERIES_LOCK_AFTER_MERGE'}
+            'GR_MAX_COOLDOWNS', 'GR_MISSING_RECHECK_DAYS', 'GR_BOOK_PAGES', 'GOODREADS_PAGES_PER_RUN', 'SERIES_LOCK_AFTER_MERGE'}
 # settings sections (left menu, one form + save button each) -> the field groups (cards) they contain
 SECTIONS = {'Connection': ['Connection'], 'Run': ['Run'], 'Sources': ['Audible', 'Hardcover', 'Goodreads'], 'Metadata': ['Metadata'],
             'Series & authors': ['Series & authors'], 'Logs': ['Logs'], 'Schedule': [], 'Notifications': [], 'Interface': ['Interface']}

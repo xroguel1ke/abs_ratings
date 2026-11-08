@@ -41,3 +41,12 @@ Hypothesis: /book/show/ pages (Hardcover-ID path) are guarded more strictly than
 ## Test 5 (2026-11-04 16:32): search path only (GR_TRIES=0), 8 library books, 60 s interval, only Goodreads live
 Result: 16:32-16:39 six books via SEARCH (search page + book page each, ~12 requests at 60 s) ok; 16:40 the 7th book page (/book/show) got the WAF challenge -> stopped. Test 4 (ID path, book pages only) was blocked after 2-3 pages.
 Interpretation: the /book/show pages are guarded much more strictly than /search. IDEA: take the rating from the search result row (avg rating + count are shown there) when title + author verify -> ONE request per book on the less guarded endpoint, no book page. Next probe: >= 3 h later, search-page-only parsing.
+
+## 2026-11-08: robots.txt + book page first, search as fallback (user decision)
+robots.txt (User-agent: *) allows /book/show and /book/isbn, disallows /search and /work. New order: book page (cached URL,
+Hardcover Goodreads ID, ISBN page) with its own budget GOODREADS_PAGES_PER_RUN=3; a challenge on a book page only switches pages
+off for the run, the search list (max 25) stays the fallback. AutoThrottle after Scrapling's idea: jitter up to 40 % of the
+interval, an answer slower than 3 s widens the interval x1.5 (max 6x), Retry-After wins over the fixed cool-down.
+Not built: browser (image size, user decision) and TLS/fingerprint impersonation (Claude Code's safety check blocked it).
+Live test (8 library books, dry run, 10 s): 3 book pages ok (one Greek edition page rejected by the title check), budget reached,
+5 via the search list; 8/8 Goodreads ratings, no challenge.

@@ -17,7 +17,7 @@ Code: 66 files, +6128 / −475 lines. Test data: public synthetic batches in `te
   - Own daily budget: free 5000 / paid 50000. Shared cool-down, burst guard.
   - Contributor roles are learned (illustrators, translators).
 - **Goodreads.**
-  - Search list only, no book pages (book pages trigger the bot block). Parsers for the classic and the Next.js layout.
+  - Book page first (robots.txt allows it, budget 3 per scan), search list as fallback; AutoThrottle (jitter, slow answer, Retry-After). Parsers for the classic and the Next.js layout.
   - Series name + number + author confirm a volume, plus the series page.
   - Max 25 searches per run; stops at the first block.
 - **Metadata.**
