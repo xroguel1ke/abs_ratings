@@ -3806,6 +3806,11 @@ def process_queue(work_queue, history, failed, recheck):
                                     if not x.get('sequence'): x['sequence'] = next((b['sequence'] for b in bad if b.get('sequence')), None)
                                 logging.info(f"        🔁 Series {', '.join(repr(b['name']) for b in bad)} -> {', '.join(repr(x['name']) for x in added)} "
                                              f"({'not English/German' if bad_nl else 'folder name, Audible series exists in the library'})")
+                                from abs_series import foreign_for_book as _ffb2
+                                keep_fd = [dict(b) for b in bad_fd if not (non_latin_name(b['name']) or _ffb2(b['name'], abs_updates.get('language') or lang))]
+                                if keep_fd:  # an English folder series is a real (sub-)series ('Disciples of the Horned One' in 'Soul Force Saga'): it stays
+                                    new_list += [b for b in keep_fd if b not in new_list]
+                                    logging.info(f"        ℹ️ Series {', '.join(repr(b['name']) for b in keep_fd)} kept next to it (English/German folder series)")
                             elif bad_nl and any(same(b['name'], n) for b in base_list for n in aud_names):
                                 logging.info(f"        🔁 Series {', '.join(repr(b['name']) for b in bad_nl)} removed (not English/German; Audible's series is already there)")
                             elif bad_nl and base_list:  # the book has another (English/German) series: the foreign extra one simply goes
