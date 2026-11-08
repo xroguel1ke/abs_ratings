@@ -770,7 +770,8 @@ def library_health(records, results_path=None):
         log = ' '.join((results.get(key(r)) or {}).get('log') or [])
         dom = re.findall(r'SUCCESS on www\.audible\.([a-z.]+)', log)
         if want and dom and dom[-1] != want and 'lock_asin' not in r['tags']: add('wrong_store', r, f".{dom[-1]} ({r.get('language')})")
-        if want and any(foreign_series_name(x['name']) for x in r['series']): add('non_latin_series', r, ', '.join(x['name'] for x in r['series'] if foreign_series_name(x['name'])))
+        bad_ser = [x['name'] for x in r['series'] if foreign_for_book(x['name'], r.get('language'))]
+        if want and bad_ser: add('non_latin_series', r, ', '.join(bad_ser) + (' (lock_series)' if 'lock_series' in r['tags'] else ''))
         if r['authors']: by_title[(r['lib'], author_key(r['authors'][0]), re.sub(r'\W+', ' ', r['title'].lower()).strip())].append(r)
         for x in r['series']:
             names[(r['lib'], x['name'].strip().lower())].add(x['name'])

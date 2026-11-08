@@ -457,8 +457,20 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
     me = {_first_author(', '.join(book_authors))}
     out, notes = [dict(x) for x in series], []
     german_book = map_language(book_lang) == 'German'
+    from abs_series import foreign_for_book as _ffb
+    fm = re.match(r'^(?:book\s*)?(\d+(?:\.\d+)?)\s+-\s+', parts[-1]) if parts else None
     for x in list(out):
         n = x['name']
+        if not aud_series and folder and (non_latin_name(n) or _ffb(n, book_lang)):
+            # Audible lists no series: the library series the other books of this FOLDER are in ('Les Annales de la Compagnie Noire' on
+            # 'Glen Cook/The Black Company/1 - The Black Company' -> 'The Chronicles of the Black Company'), number from the folder
+            libs = [v for k_, v in SERIES_FACTS.items() if k_[0] == lib and folder in v['folders'] and v['n'] >= 2 and v['name'] != n
+                    and (v['authors'] & me) and not non_latin_name(v['name']) and not _ffb(v['name'], book_lang)]
+            if len(libs) == 1:
+                x['name'] = libs[0]['name']
+                if fm: x['sequence'] = fm.group(1).lstrip('0') or '0'
+                notes.append(f"'{n}' -> '{x['name']}' (not English/German; the series of the other books in this folder)")
+                continue
         if german_book and re.search(r'(?i)\b(der|die|das|des|und|von|vom|im)\b', n): continue  # a German book keeps its German series name
         if listed(n):
             a = next(a['name'] for a in aud_series if same(n, a['name']))
