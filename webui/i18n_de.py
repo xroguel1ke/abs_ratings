@@ -36,6 +36,8 @@ add({
     'Experimental: Goodreads blocks bots quickly. At the first block Goodreads is stopped for the scan': 'Experimentell: Goodreads sperrt Bots schnell. Bei der ersten Sperre wird Goodreads für den Scan beendet',
     'Goodreads searches per scan': 'Goodreads-Suchen pro Scan',
     'Goodreads book pages per scan': 'Goodreads-Buchseiten pro Scan',
+    'Goodreads: imitate a browser signature': 'Goodreads: Browser-Signatur nachahmen',
+    'Sends the network signature of Chrome (curl_cffi, no browser). Your choice and risk: Goodreads does not want bots. Budgets and the stop at a block stay': 'Sendet die Netzwerk-Signatur von Chrome (curl_cffi, kein Browser). Deine Entscheidung und dein Risiko: Goodreads will keine Bots. Budgets und der Stopp bei einer Sperre bleiben',
     'Book page first (allowed by Goodreads robots.txt), but a bot check comes after 3-7 pages; then only the search is used for the rest of the scan': 'Zuerst die Buchseite (laut robots.txt von Goodreads erlaubt), nach 3-7 Seiten kommt aber eine Bot-Prüfung; danach nur noch die Suche für den Rest des Scans',
     'Fallback when no book page helps. Remembered books do not count. Safe so far: about 25 per night': 'Ausweichweg, wenn keine Buchseite hilft. Gemerkte Bücher zählen nicht. Bisher sicher: etwa 25 pro Nacht',
     'Interval Goodreads (s)': 'Abstand Goodreads (s)', 'Pause after a Goodreads block (s)': 'Pause nach einer Goodreads-Sperre (s)',

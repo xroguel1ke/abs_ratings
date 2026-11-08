@@ -69,7 +69,7 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
 - **Goodreads** (user decision 2026-11-08): book page first (robots.txt allows /book/show, /book/isbn; disallows /search), max GOODREADS_PAGES_PER_RUN=3 pages
   (challenge after 3-7); a challenge on a book page only switches pages off for the run, the search list stays as FALLBACK (max 25 searches,
   block after ~100-150 in a row); series name + number + author confirm. AutoThrottle: jitter, slow answer widens the interval, Retry-After wins.
-  No browser and no TLS/fingerprint impersonation (image size; Claude Code's safety check blocks it).
+  No browser (image size). Browser signature via curl_cffi only as opt-in GR_IMPERSONATE (user decision 2026-11-08, default off).
 - **Change monitoring:** a field the script wrote that shows the OLD value again is written again; a NEW value is the user's: never overwritten.
 - **Narrator = author** in ABS is replaced by Audible's narrators of the same recording (runtime 2 min) only.
 

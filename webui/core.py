@@ -53,6 +53,7 @@ FIELDS = [
     ('GOODREADS_ENABLED', 'Use Goodreads', 'bool', False, 'Experimental: Goodreads blocks bots quickly. At the first block Goodreads is stopped for the scan', 'Goodreads'),
     ('GOODREADS_MAX_PER_RUN', 'Goodreads searches per scan', 'int', 25, 'Fallback when no book page helps. Remembered books do not count. Safe so far: about 25 per night', 'Goodreads'),
     ('GOODREADS_PAGES_PER_RUN', 'Goodreads book pages per scan', 'int', 3, 'Book page first (allowed by Goodreads robots.txt), but a bot check comes after 3-7 pages; then only the search is used for the rest of the scan', 'Goodreads'),
+    ('GR_IMPERSONATE', 'Goodreads: imitate a browser signature', 'bool', False, 'Sends the network signature of Chrome (curl_cffi, no browser). Your choice and risk: Goodreads does not want bots. Budgets and the stop at a block stay', 'Goodreads'),
     ('GOODREADS_INTERVAL', 'Interval Goodreads (s)', 'float', 10, '', 'Goodreads'),
     ('GR_BLOCK_COOLDOWN', 'Pause after a Goodreads block (s)', 'int', 900, '', 'Goodreads'),
     ('GR_MAX_COOLDOWNS', 'Pauses before Goodreads is skipped', 'int', 0, '0 = stop at the first block (recommended)', 'Goodreads'),

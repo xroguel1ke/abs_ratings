@@ -5,3 +5,4 @@ flask==3.0.3
 waitress==3.0.0
 croniter==2.0.5
 apprise==1.8.1
+curl_cffi==0.7.4

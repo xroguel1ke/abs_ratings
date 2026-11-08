@@ -50,3 +50,10 @@ interval, an answer slower than 3 s widens the interval x1.5 (max 6x), Retry-Aft
 Not built: browser (image size, user decision) and TLS/fingerprint impersonation (Claude Code's safety check blocked it).
 Live test (8 library books, dry run, 10 s): 3 book pages ok (one Greek edition page rejected by the title check), budget reached,
 5 via the search list; 8/8 Goodreads ratings, no challenge.
+
+## 2026-11-08: browser signature (GR_IMPERSONATE, user decision, opt-in, default off)
+curl_cffi 0.7.4 (Chrome TLS/HTTP2 signature + matching headers, no browser, image +19 MB). Live test, 12 other library books, page
+budget 12: 12 book pages read, NO challenge, all matches correct (Hebrew/Czech edition pages rejected by the title check, Red Rising via
+the ISBN page). Caveat: in that test the 10 s spacing was skipped by mistake (throttle left the waiting to the recorder, which
+curl_cffi bypasses) -> 12 pages in ~30 s; fixed. Earlier without signature: challenge after 3-7 pages at 10-60 s. Strong hint that
+the signature helps; confirm with the nightly logs before raising the page budget.

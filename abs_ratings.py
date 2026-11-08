@@ -301,6 +301,34 @@ HEADERS_BASE = {
     "Sec-Fetch-User": "?1"
 }
 
+# Goodreads only, opt-in (user decision 2026-11-08): curl_cffi sends the TLS/HTTP2 signature of a real Chrome together
+# with matching headers. No browser, no JavaScript: a WAF JS challenge (HTTP 202) still stops book pages as before.
+# Budgets, throttle and the stop at a block stay unchanged.
+GR_IMPERSONATE = os.getenv('GR_IMPERSONATE', 'false').lower() == 'true'
+_GR_CURL, _GR_CURL_LOCK = None, threading.Lock()
+try:
+    from curl_cffi.requests.errors import RequestsError as _CurlRequestsError
+    GR_CURL_ERRORS = (_CurlRequestsError,)
+except Exception:  # curl_cffi missing: the option falls back to plain requests (see gr_impersonated_get)
+    GR_CURL_ERRORS = ()
+
+def gr_impersonated_get(url, params, accept_language):
+    """GET with a Chrome browser signature (curl_cffi). Headers (User-Agent, sec-ch-ua ...) come from the impersonation
+    profile so they fit the TLS signature; only the language is ours. Without curl_cffi: plain requests + a warning once."""
+    global _GR_CURL
+    with _GR_CURL_LOCK:  # one Goodreads request in flight; a curl session is not thread-safe
+        if _GR_CURL is None:
+            try:
+                from curl_cffi import requests as creq
+                _GR_CURL = creq.Session(impersonate='chrome')
+                logging.info("        🧭 Goodreads: browser signature on (curl_cffi, Chrome profile)")
+            except ImportError:
+                _GR_CURL = False
+                logging.warning("        ⚠️ GR_IMPERSONATE=true, but curl_cffi is not installed - plain requests are used")
+        if _GR_CURL is False:
+            return requests.get(url, headers=get_headers(), params=params, timeout=20)
+        return _GR_CURL.get(url, params=params, headers={'Accept-Language': accept_language}, timeout=20)
+
 HEADERS_ABS = {"Authorization": f"Bearer {API_TOKEN}", "Content-Type": "application/json"}
 class TimeoutSession(requests.Session):
     """requests.Session that applies a default timeout to every request."""
@@ -485,7 +513,9 @@ class SourceBlockedException(Exception):
 _last_request = {}
 def throttle(source):
     """Wait until MIN_INTERVAL[source] seconds have passed since the last request to that source."""
-    if recorder.REPLAY_DIR or recorder.RECORD_DIR: return  # test mode: recorder.py waits only before LIVE requests
+    if recorder.REPLAY_DIR: return  # replay: nothing goes out
+    if recorder.RECORD_DIR and not (source == 'goodreads' and GR_IMPERSONATE): return  # recorder.py waits before LIVE requests;
+    # impersonated Goodreads requests bypass the recorder, so they must be spaced here (2026-11-08: a test burst of 12 pages in 30 s)
     with _THROTTLE_LOCKS.setdefault(source, threading.Lock()):  # parallel books: the spacing holds across all threads
         wait = MIN_INTERVAL.get(source, 0) - (time.monotonic() - _last_request.get(source, 0))
         if wait > 0: time.sleep(wait + random.uniform(0, MIN_INTERVAL[source] * 0.4 if source == 'goodreads' else 0.5))  # Goodreads: no fixed rhythm
@@ -495,7 +525,8 @@ GR_BASE_INTERVAL = MIN_INTERVAL['goodreads']
 def gr_autothrottle(r):
     """AutoThrottle (idea from Scrapling): a slow Goodreads answer (server under load or starting to rate-limit) widens
     the interval x1.5 (max 6x the setting), fast answers narrow it back slowly; never below GOODREADS_INTERVAL."""
-    cur, el = MIN_INTERVAL['goodreads'], r.elapsed.total_seconds()
+    el = r.elapsed.total_seconds() if hasattr(r.elapsed, 'total_seconds') else float(r.elapsed or 0)  # curl_cffi: float seconds
+    cur = MIN_INTERVAL['goodreads']
     new = min(cur * 1.5, GR_BASE_INTERVAL * 6) if el > 3 else max(GR_BASE_INTERVAL, cur * 0.9)
     if abs(new - cur) >= 1 or (new == GR_BASE_INTERVAL and cur != new):
         logging.info(f"        🐢 Goodreads answered in {el:.1f}s -> interval {cur:.0f}s -> {new:.0f}s")
@@ -852,11 +883,18 @@ def fetch_url(url, params=None, domain=None, source=None):
         raise RateLimitException(msg, hard)
 
     r = None
+    impersonate = source == 'goodreads' and GR_IMPERSONATE and not recorder.REPLAY_DIR  # replays never go live
     for attempt in (1, 2):  # One retry for transient network errors
         throttle('goodreads' if source == 'goodreads' else 'audible_web')
         try:
-            r = requests.get(url, headers=get_headers(domain), params=params, timeout=20)
+            if impersonate:
+                r = gr_impersonated_get(url, params, get_headers(domain)['Accept-Language'])
+            else:
+                r = requests.get(url, headers=get_headers(domain), params=params, timeout=20)
             break
+        except GR_CURL_ERRORS as e:
+            logging.warning(f"        🌐 Request failed (try {attempt}/2, browser signature): {url} ({type(e).__name__})")
+            if attempt == 1: time.sleep(3)
         except (requests.ConnectionError, requests.Timeout) as e:
             logging.warning(f"        🌐 Request failed (try {attempt}/2): {url} ({type(e).__name__})")
             if attempt == 1: time.sleep(3)
@@ -3638,7 +3676,7 @@ DEBUG_ENV_KEYS = ['ABS_URL', 'LIBRARY_IDS', 'GOODREADS_ENABLED', 'BATCH_SIZE', '
                   'GR_BLOCK_COOLDOWN', 'GR_MAX_COOLDOWNS', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'FILL_COVERS', 'GENRE_LANGUAGE',
                   'SERIES_MERGE', 'SERIES_LOCK_AFTER_MERGE', 'AUTHOR_NORMALIZE', 'LIBRARY_REPORT', 'NO_RATINGS_RECHECK_DAYS',
                   'GR_MISSING_RECHECK_DAYS', 'SEARCH_PENALTY_SLEEP', 'ABS_TIMEOUT',
-                  'HARDCOVER_ENABLED', 'HARDCOVER_INTERVAL', 'HARDCOVER_PAID', 'GR_BOOK_PAGES', 'GOODREADS_PAGES_PER_RUN', 'WORKERS', 'REMOVE_RATINGS', 'RATING_ICONS', 'RATING_LABELS', 'RATING_POSITION', 'RATING_MIN_COUNT', 'GENRE_RULES', 'RUN_MODE', 'MAINTAIN_SAMPLE', 'MANUAL_LOCK_TAG', 'RATING_ORDER']  # never API_TOKEN
+                  'HARDCOVER_ENABLED', 'HARDCOVER_INTERVAL', 'HARDCOVER_PAID', 'GR_BOOK_PAGES', 'GOODREADS_PAGES_PER_RUN', 'GR_IMPERSONATE', 'WORKERS', 'REMOVE_RATINGS', 'RATING_ICONS', 'RATING_LABELS', 'RATING_POSITION', 'RATING_MIN_COUNT', 'GENRE_RULES', 'RUN_MODE', 'MAINTAIN_SAMPLE', 'MANUAL_LOCK_TAG', 'RATING_ORDER']  # never API_TOKEN
 
 def write_debug_bundle(log_file):
     """One file with everything needed for troubleshooting: settings (no token), the run log, all changes

@@ -26,4 +26,5 @@ timeout 14400 docker run --rm --name "abs_ratings_test_${R}" --network host -e P
   -v "$DEV":/src -v "$DATA":/data \
   -e FAKE_PORT="${FAKE_PORT:-18999}" -e DATA_DIR=/data -e ONLY_ITEMS="$ONLY" -e LIBRARY_IDS="$LIB" -e HARDCOVER_TOKEN="$HCT" -e HARDCOVER_ENABLED=$HC_ON \
   -e RECORD_NO_LIVE="${RECORD_NO_LIVE:-}" -e GOODREADS_ENABLED=${GOODREADS:-false} -e GOODREADS_SAMPLE=${GR_SAMPLE:-1} -e GR_ID_TRIES=${GR_TRIES:-2} -e GOODREADS_INTERVAL=${GR_INTERVAL:-10} -e SLEEP_TIMER=0 -e AUDIBLE_API_INTERVAL=0.5 -e REFRESH_DAYS=0 -e BATCH_SIZE=2500 -e ABS_BACKUP=false \
-  "${EXTRA[@]}" "${SYNTH_ENV[@]}" ghcr.io/xroguel1ke/abs_ratings:web-ui sh /src/tools/round_entry.sh
+  -e GR_IMPERSONATE=${GR_IMPERSONATE:-false} -e GOODREADS_PAGES_PER_RUN=${GR_PAGES:-3} \
+  "${EXTRA[@]}" "${SYNTH_ENV[@]}" ${IMG:-ghcr.io/xroguel1ke/abs_ratings:web-ui} sh /src/tools/round_entry.sh
