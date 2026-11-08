@@ -2823,6 +2823,9 @@ def run_libraries(history, failed, recheck):
     rest = [it for it in pool if it not in urgent]
     never = sum(1 for it in pool if f"{it['_lib']}_{it['id']}" not in history and f"{it['_lib']}_{it['id']}" not in failed)
     mode = RUN_MODE if RUN_MODE in ('buildup', 'maintain') else ('buildup' if never or not history else 'maintain')
+    if REFRESH_DAYS == 0 and mode == 'maintain':  # 'refresh 0 = one complete pass' (2026-11-08: maintenance capped it to 334 + 30 books)
+        mode = 'buildup'
+        logging.info("Refresh 0 days = one complete pass: every due book is checked (maintenance sample not used)")
     if mode == 'maintain':
         batch = urgent[:MAX_BATCH_SIZE] + rest[:max(0, min(MAINTAIN_SAMPLE, MAX_BATCH_SIZE - len(urgent)))]
     else:

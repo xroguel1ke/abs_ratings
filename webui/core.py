@@ -27,7 +27,7 @@ FIELDS = [
 
     ('DRY_RUN', 'Test run (DRY_RUN) for scheduled scans', 'bool', True, 'On = nothing is written to ABS, changes are only planned and logged', 'Run'),
     ('BATCH_SIZE', 'Books per scan', 'int', 300, 'Picked at random from all due books of all libraries', 'Run'),
-    ('REFRESH_DAYS', 'Refresh after (days)', 'int', 90, '0 = every book is due (one complete pass)', 'Run'),
+    ('REFRESH_DAYS', 'Refresh after (days)', 'int', 90, '0 = every book is due (one complete pass, also in maintenance mode)', 'Run'),
     ('RUN_MODE', 'Run mode', 'choice:auto|buildup|maintain', 'auto', 'auto = build-up until every book was checked once, then maintenance. Maintenance: new and changed books always, plus a few random due books', 'Run'),
     ('MAINTAIN_SAMPLE', 'Random books per maintenance scan', 'int', 30, 'Besides new and changed books', 'Run'),
     ('QUICK_MODE_MINUTES', 'Quick mode: look for new books every (minutes)', 'int', 0, '0 = off. New books in ABS are checked right away instead of waiting for the next scheduled scan', 'Run'),
