@@ -513,6 +513,9 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
                 out.remove(x); notes.append(f"'{n}' removed (Audible does not list it; the book is in {', '.join(repr(y['name']) for y in others)})")
         elif not aud_series and others_ok and fact(n)['n'] == 1 and not (folder and same(n, folder)):
             out.remove(x); notes.append(f"'{n}' removed (single-book series; the book is in its folder series)")
+        elif german_book and aud_series and others_ok and not listed(n) and not (folder and same(n, folder)):
+            # 'Lightbringer' (original English numbering) next to Audible's 'Licht-Saga' on the German edition: one series, the German one
+            out.remove(x); notes.append(f"'{n}' removed (German book: Audible lists {', '.join(repr(a['name']) for a in aud_series)}, the book is in it)")
         elif fact(n)['n'] == 1 and not (fact(n)['authors'] - me - {''}) and any(
                 k_[0] == lib and v['name'] != n and _k(v['name']) == _k(n) and v['authors'] and not (v['authors'] & me) for k_, v in SERIES_FACTS.items()):
             out.remove(x); notes.append(f"'{n}' removed (named like another author's series, Audible does not list it)")
@@ -531,7 +534,15 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
                 out.append(add); notes.append(f"'{add['name']}' #{add['sequence'] or '-'} added (folder and Audible name this series)")
     return out, notes
 
-def series_by_membership(lib, asin, host, book_authors, title=None):
+def folder_narrators(item_data):
+    """Narrators named in the book folder '1 - Fool's Errand - Nick Taylor' / '... - A + B' (the downloader's naming): the folder
+    cannot be overwritten by an ABS match, so it is evidence when ABS narrator and ASIN were replaced together."""
+    base = str((item_data or {}).get('relPath') or '').replace('\\', '/').split('/')[-1]
+    parts = [p.strip() for p in base.split(' - ')]
+    if len(parts) < 3 or not re.match(r'^(?:book\s*)?\d', parts[0], re.I): return []
+    return [n.strip() for n in re.split(r'\s*\+\s*|\s*,\s*|\s+&\s+', re.sub(r'\{[^}]*\}', '', parts[-1])) if n.strip() and not re.search(r'(?i)full cast', n)]
+
+def series_by_membership(lib, asin, host, book_authors, title=None, all_hits=False):
     """Audible lists no series for this product, but an Audible series of a library series of the same author has this book as a member
     - by ASIN, or by the same title (an older listing of the same book: 'The Black Company' is #1 of Audible's 'Chronicles of the Black
     Company'). Names are compared normalized ('The Chronicles ...' = 'Chronicles ...'). Returns (library series name, number) or None."""
@@ -540,12 +551,34 @@ def series_by_membership(lib, asin, host, book_authors, title=None):
     me, nt = {_first_author(', '.join(book_authors))}, normalize_title_text(title or '')
     hits = []
     for (l_, low), v in list(SERIES_FACTS.items()):
-        if l_ != lib or not (v['authors'] & me) or v['n'] < 2 or non_latin_name(v['name']): continue
+        if l_ != lib or not (v['authors'] & me) or v['n'] < (1 if all_hits else 2) or non_latin_name(v['name']): continue
         for s_asin in set().union(*[set(a) for t, a in SERIES_ASINS.items() if _k(t) == _k(v['name'])] or [set()]):
             for a, q, t in (_series_members(host, s_asin) or []):
                 if a == asin or (nt and normalize_title_text(t or '') == nt): hits.append((v['name'], q))
     hits = list(dict.fromkeys(h for h in hits if h[1]))
+    if all_hits:  # one number per series, else that series is ambiguous
+        by = {}
+        for n_, q_ in hits: by.setdefault(n_, set()).add(q_)
+        return [(n_, next(iter(qs))) for n_, qs in by.items() if len(qs) == 1]
     return hits[0] if len({h[0] for h in hits}) == 1 and len({h[1] for h in hits}) == 1 else None
+
+def sibling_series(asin, domain, series_list, title):
+    """Series of OTHER recordings of the same work: Audible lists the new Lucy Tregear recording of 'Ship of Magic' only in 'Liveship
+    Traders'; the older recording in the same Audible series list (same title, same number) is also 'Realm of the Elderlings' #4.
+    A series belongs to the work, not the recording. Returns extra series dicts like md_raw['series'] (name, part, asin)."""
+    host = AUDIBLE_API_HOSTS.get(domain or 'www.audible.com')
+    have = {(s.get('name') or '').strip().lower() for s in series_list or []}
+    extra, nt = [], normalize_title_text(title or '')
+    for s in series_list or []:
+        if not s.get('asin') or not host: continue
+        for a, q, t in (_series_members(host, s['asin']) or []):
+            if a == asin or _seq_num(q) != _seq_num(s.get('part')) or normalize_title_text(t or '') != nt: continue
+            p = get_audible_api(a, domain)
+            for x in ((p or {}).get('meta_raw') or {}).get('series') or [] if isinstance(p, dict) else []:
+                nm = (x.get('name') or '').strip()
+                if nm and nm.lower() not in have:
+                    have.add(nm.lower()); extra.append({'name': nm, 'part': x.get('part'), 'asin': x.get('asin'), 'sibling': a})
+    return extra
 
 def canonical_series(lib, name, book_authors, book_variant=None):
     """Map a series name delivered by Audible to the name used in ABS:
@@ -2496,6 +2529,7 @@ def hc_audible_crosscheck(hc, aud):
     t = max(title_similarity(clean_title(hc.get('title') or ''), clean_title(aud.get('title_raw') or '')),
             search_match_score(aud.get('title_raw') or '', hc.get('title') or '', ''), search_match_score(hc.get('title') or '', aud.get('title_raw') or '', aud.get('subtitle_raw')))
     a = match_author(aud.get('authors_raw') or [], ', '.join(hc.get('authors') or [])) if (aud.get('authors_raw') and hc.get('authors')) else None
+    if a is False and (non_latin_script(', '.join(aud.get('authors_raw') or [])) or non_latin_script(', '.join(hc.get('authors') or []))): a = None  # '理不尽な孫の手' = Rifujin na Magonote
     why = f"title {t:.2f}, author {'?' if a is None else '✓' if a else '✗'}"
     hw, aw = set(normalize_title_text(hc.get('title') or '').split()), set(normalize_title_text(aud.get('title_raw') or '').split())
     contained = bool(hw and aw and (hw <= aw or aw <= hw) and min(len(hw), len(aw)) >= 2)  # 'Ascendant Insanity' in 'An Outcast in Another World: Ascendant Insanity'
@@ -3388,6 +3422,7 @@ def process_queue(work_queue, history, failed, recheck):
                     search_title = meta['series'][0].get('name') or search_title
                 asin_from_search = False
                 folder_fix = None  # set by folder_volume_conflict() below
+                narr_override = None  # narrators from the book folder when ABS narrator + ASIN belong to another recording
                 skip_meta = False
                 abs_dur = (item_data.get('media') or {}).get('duration') or (item.get('media') or {}).get('duration')
                 src_due = set((SST.SOURCES if (item.get('_manual_trigger') or ONLY_ITEMS) else SST.due_sources(SOURCE_STATE, key, list(SST.SOURCES), REFRESH_DAYS)))
@@ -3430,7 +3465,7 @@ def process_queue(work_queue, history, failed, recheck):
 
                 # Language check: ABS and Audible disagree -> who is right?
                 lang_conflict, lang_target, strict_search, search_only = False, None, False, None
-                abs_lang = map_language(lang) if lang else None
+                abs_lang = map_language(lang) if lang and str(lang).strip().lower() not in ('und', 'undetermined', 'mul', 'zxx', 'unknown') else None
                 if aud_data and new_lang_detected and abs_lang and abs_lang != new_lang_detected:
                     verdict = language_verdict(search_title, meta.get('narrators') or [], aud_data, 'lock_language' in tags,
                                                [x.get('name') for x in (meta.get('series') or [])])
@@ -3480,6 +3515,15 @@ def process_queue(work_queue, history, failed, recheck):
                 elif runtime_mismatch(abs_dur, aud_data.get('runtime_sec')):
                     logging.info(f"      -> ⚠️ Runtime mismatch: ABS {format_time(abs_dur)} vs Audible {format_time(aud_data['runtime_sec'])}. ASIN probably points to another edition, searching...")
                     should_search = True
+                elif (((fnarr_ := folder_narrators(item_data)) or meta.get('narrators')) and aud_data.get('narrators_raw') and abs_dur and aud_data.get('runtime_sec')
+                      and abs(abs_dur - aud_data['runtime_sec']) > 600 and not ({re.sub(r'[^a-z]', '', n.lower()) for n in (fnarr_ or meta['narrators']) if n}
+                                                                              & {re.sub(r'[^a-z]', '', n.lower()) for n in aud_data['narrators_raw'] if n})
+                      and not any(same_person_name(n, a) for n in (fnarr_ or meta.get('narrators') or []) for a in authors)):
+                    # the ASIN is ANOTHER RECORDING (Fool's Errand: James Langton 1518 min on .com, the file is Nick Taylor 1389 min = .co.uk):
+                    # strict search for exactly this recording in every store; the current ASIN stays if there is none
+                    logging.info(f"      -> ⚠️ ASIN is another recording (narrator {', '.join(aud_data['narrators_raw'][:2])}, runtime {abs(abs_dur - aud_data['runtime_sec']) // 60:.0f} min off): searching this recording...")
+                    should_search, strict_search = True, True
+                    if fnarr_: narr_override = fnarr_  # the folder names the recording's narrator (ABS narrator may have come with the wrong ASIN)
                 elif int(aud_data.get('count', 0)) == 0 and aud_data.get('page_ok'):
                     logging.info(f"      -> 🆕 Product page exists on {aud_data.get('domain')}, but no ratings yet. No replacement search, re-check in {NO_RATINGS_RECHECK_DAYS} days.")
                 elif int(aud_data.get('count', 0)) == 0:
@@ -3510,7 +3554,7 @@ def process_queue(work_queue, history, failed, recheck):
 
                     LAST_MATCH.clear()
                     SEARCH_CTX.clear()
-                    search_narr = [] if plaus == "wrong" else (meta.get("narrators") or [])
+                    search_narr = narr_override or ([] if plaus == "wrong" else (meta.get("narrators") or []))
                     SEARCH_CTX['dup_claim'] = bool(asin and (ASIN_OWNERS.get(asin, set()) - {key}))  # another ABS book has the same ASIN
                     SEARCH_CTX['pub'], SEARCH_CTX['year'] = meta.get('publisher'), meta.get('publishedYear')
                     SEARCH_CTX['key'] = key
@@ -3734,11 +3778,21 @@ def process_queue(work_queue, history, failed, recheck):
                                 if hit_ := series_by_membership(lib_id, asin, AUDIBLE_API_HOSTS.get(aud_data.get('domain') or 'www.audible.com', 'api.audible.com'), authors, title):
                                     cl0 = [{'name': hit_[0], 'sequence': hit_[1] or None}]
                                     cl0_notes.append(f"-> '{hit_[0]}' #{hit_[1] or '-'} (Audible lists this book in that series' list)")
+                            if same_b0 and cl0:  # the book has series: ADD the library series of the author whose Audible list holds it ('Tawny Man')
+                                for n_, q_ in series_by_membership(lib_id, asin, AUDIBLE_API_HOSTS.get(aud_data.get('domain') or 'www.audible.com', 'api.audible.com'), authors, title, all_hits=True) or []:
+                                    if not any(x['name'].strip().lower() == n_.strip().lower() for x in cl0):
+                                        cl0 = cl0 + [{'name': n_, 'sequence': q_}]
+                                        cl0_notes.append(f"'{n_}' #{q_} added (Audible lists this book in that series' list)")
                             if cl0 != cur0:
                                 for n_ in cl0_notes: logging.info(f"        🧹 Series {n_}")
                                 abs_updates['series'] = cl0
                                 log_updates.append("Series: " + (", ".join(f"'{x['name']}'" + (f" #{x['sequence']}" if x.get('sequence') else '') for x in cl0) or '(none)'))
-                        if series_list := md_raw.get('series'):
+                        if (series_list := md_raw.get('series')) and ((same_rec_rt and bool(abs_dur and aud_data.get('runtime_sec'))) or normalize_title_text(title) == normalize_title_text(aud_data.get('title_raw') or '')):
+                            sib_ = sibling_series(asin, aud_data.get('domain'), series_list, aud_data.get('title_raw') or title)
+                            if sib_:
+                                logging.info(f"        ➕ Other recording(s) of this book are also in: {', '.join(x['name'] + (' #' + str(x['part']) if x.get('part') else '') for x in sib_)}")
+                                series_list = list(series_list) + sib_
+                        if series_list:
                             # ABS series are curated: Audible's series are only taken when the book has none in ABS.
                             # Otherwise only missing numbers of the same series are filled (Audible often lists reading
                             # orders, universes and translations as extra series).
@@ -3816,7 +3870,8 @@ def process_queue(work_queue, history, failed, recheck):
                                 elif not base_list and not non_latin_script(canon):
                                     if why: logging.info(f"        🔗 Series '{s_name}' -> '{canon}' ({'alias list' if why == 'alias' else 'existing ABS series'})")
                                     new_list.append({"name": canon, "sequence": s_seq})
-                                elif ver and s_seq and not non_latin_script(canon) and series_in_library(lib_id, canon, authors, exact=True):
+                                elif (ver or normalize_title_text(title) == normalize_title_text(aud_data.get('title_raw') or '')) and s_seq \
+                                        and not non_latin_script(canon) and series_in_library(lib_id, canon, authors, exact=True):
                                     # user rule 2026-11-08: a series of THIS recording that already exists in the library for this author
                                     # is added although the book has other series (Way of Kings back into 'The Stormlight Archive')
                                     logging.info(f"        ➕ Series '{canon}' #{s_seq}: Audible lists it and it exists in the library for this author")
@@ -3978,11 +4033,19 @@ def process_queue(work_queue, history, failed, recheck):
                 if hc_data and hc_data.get('id') and not DRY_RUN: HC_CACHE[key] = {'id': hc_data['id'], 'slug': hc_data.get('slug')}
                 if hc_data and aud_data and aud_data.get('title_raw') and not aud_data.get('related_edition') and not skip_meta:  # every Hardcover hit is cross-checked against the Audible product
                     cc_ok, cc_why = hc_audible_crosscheck(hc_data, aud_data)
-                    if not cc_ok:
+                    if not cc_ok and hc_data.get('source') == 'cache':  # the cached id came from earlier (wrong) data: forget it, search again
+                        logging.info(f"        ♻️ Cached Hardcover '{hc_data.get('title')}' does not fit Audible '{aud_data.get('title_raw')}' ({cc_why}): cache dropped, searching again")
+                        HC_CACHE.pop(key, None)
+                        hc_data, hc_status = get_hardcover_data(key, hc_targets, list(dict.fromkeys([*authors, *((aud_data or {}).get('authors_raw') or [])])), asin, meta.get('isbn'),
+                                                                ov.get('hardcover'), use_cache=False, abs_series=[(x.get('name'), x.get('sequence')) for x in (meta.get('series') or [])],
+                                                                lang=lang, abs_title=search_title)
+                        if hc_data and hc_data.get('id') and not DRY_RUN: HC_CACHE[key] = {'id': hc_data['id'], 'slug': hc_data.get('slug')}
+                        cc_ok, cc_why = hc_audible_crosscheck(hc_data, aud_data) if hc_data else (True, '')
+                    if hc_data and not cc_ok:
                         logging.info(f"        ⚠️ Hardcover '{hc_data.get('title')}' does not look like Audible '{aud_data.get('title_raw')}' ({cc_why}): Hardcover ratings are NOT used (review list)")
                         add_review(key, title, 'hardcover', hc_data.get('url'), f"Hardcover book differs from the Audible product ({cc_why})")
                         hc_data = None; LOOKUP_HITS['hardcover'] = None
-                    else:
+                    elif hc_data:
                         logging.info(f"        ✓ Hardcover cross-check against Audible: {cc_why}")
                         hc_learn_roles(hc_data)
                 if HARDCOVER_ENABLED and hc_status != 'fresh': stats['hc_found' if hc_data else 'hc_missing'] += 1
