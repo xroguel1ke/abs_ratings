@@ -540,7 +540,11 @@ def folder_narrators(item_data):
     base = str((item_data or {}).get('relPath') or '').replace('\\', '/').split('/')[-1]
     parts = [p.strip() for p in base.split(' - ')]
     if len(parts) < 3 or not re.match(r'^(?:book\s*)?\d', parts[0], re.I): return []
-    return [n.strip() for n in re.split(r'\s*\+\s*|\s*,\s*|\s+&\s+', re.sub(r'\{[^}]*\}', '', parts[-1])) if n.strip() and not re.search(r'(?i)full cast', n)]
+    names = [n.strip() for n in re.split(r'\s*\+\s*|\s*,\s*|\s+&\s+', re.sub(r'\{[^}]*\}', '', parts[-1])) if n.strip() and not re.search(r'(?i)full cast', n)]
+    # '09 - Volume 09 - The Town of Strife II': the last part is a TITLE, not a narrator (regress wl01 2026-11-09) -> person names only
+    person = lambda n: 1 <= len(n.split()) <= 4 and not re.search(r'\d', n) and not re.search(
+        r"(?i)\b(?:the|of|and|a|an|in|to|on|for|der|die|das|und|des|vol|volume|book|part|teil|band|[IVX]{2,})\b", n)
+    return names if names and all(person(n) for n in names) else []
 
 def series_by_membership(lib, asin, host, book_authors, title=None, all_hits=False):
     """Audible lists no series for this product, but an Audible series of a library series of the same author has this book as a member
@@ -3617,11 +3621,16 @@ def process_queue(work_queue, history, failed, recheck):
 
                     LAST_MATCH.clear()
                     SEARCH_CTX.clear()
+                    if not narr_override and (fn_ := folder_narrators(item_data)) and meta.get('narrators') and not (
+                            {re.sub(r'[^a-z]', '', fold_accents(n).lower()) for n in fn_ if n} & {re.sub(r'[^a-z]', '', fold_accents(n).lower()) for n in meta['narrators'] if n}):
+                        # folder and ABS name different narrators: search for the folder's recording, runtime to 2 min (Fool's Errand flip 2026-11-09)
+                        narr_override = fn_; SEARCH_CTX_need_exact = True
+                    else: SEARCH_CTX_need_exact = False
                     search_narr = narr_override or ([] if plaus == "wrong" else (meta.get("narrators") or []))
                     SEARCH_CTX['dup_claim'] = bool(asin and (ASIN_OWNERS.get(asin, set()) - {key}))  # another ABS book has the same ASIN
                     SEARCH_CTX['pub'], SEARCH_CTX['year'] = meta.get('publisher'), meta.get('publishedYear')
                     SEARCH_CTX['key'] = key
-                    if folder_fix: SEARCH_CTX['need_exact_rt'] = True
+                    if folder_fix or SEARCH_CTX_need_exact: SEARCH_CTX['need_exact_rt'] = True
                     SEARCH_CTX['want_vol'] = extract_volume(search_title)  # the volume we are looking for (twin check)
                     if asin and aud_data and aud_data.get('title_raw'):
                         SEARCH_CTX.update({'old_title': aud_data['title_raw'], 'old_authors': ', '.join(aud_data.get('authors_raw') or [])})
@@ -4035,12 +4044,21 @@ def process_queue(work_queue, history, failed, recheck):
                             and abs(abs_dur - aud_data['runtime_sec']) <= 120:  # same recording (runtime to 2 min)
                         # hygiene: ABS lists the AUTHOR as narrator (file tags) while the same recording on Audible has other narrators
                         k_ = lambda xs: {re.sub(r'[^a-z]', '', fold_accents_s(x).lower()) for x in xs if x}
+                        fn_ = folder_narrators(item_data) or []
                         if k_(meta['narrators']) and k_(meta['narrators']) <= k_(authors) and not (k_(aud_narr) & k_(authors)):
                             if 'lock_narrators' in tags: logging.info(f"        🔒 Narrators Update Skipped (Locked): {aud_narr}")
                             else:
                                 abs_updates['narrators'] = aud_narr
                                 FILLED_NARR.add(key)
                                 log_updates.append(f"Narrators: {meta['narrators']} (= author) -> {aud_narr}")
+                        elif fn_ and k_(fn_) & k_(aud_narr) and not (k_(meta['narrators']) & (k_(aud_narr) | k_(fn_))):
+                            # ABS narrator belongs to ANOTHER recording (came with a wrong ASIN: Fool's Errand 'James Langton') while the book
+                            # folder AND Audible's same recording (runtime 2 min) name the real one: it made the ASIN flip between rounds (2026-11-09)
+                            if 'lock_narrators' in tags: logging.info(f"        🔒 Narrators Update Skipped (Locked): {aud_narr}")
+                            else:
+                                abs_updates['narrators'] = aud_narr
+                                FILLED_NARR.add(key)
+                                log_updates.append(f"Narrators: {meta['narrators']} -> {aud_narr} (book folder and Audible's same recording agree)")
                     if not aud_data.get('related_edition'): note_author_links(authors, aud_data)
                     aud_auth = aud_data.get('authors_raw') or []
                     from abs_series import is_role_credit, author_key as _ak
