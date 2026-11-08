@@ -442,7 +442,57 @@ def search_series(lib, series):
         out.append(x)
     return out
 
-def canonical_series(lib, name, book_authors):
+SERIES_FACTS = {}  # (lib, series name lower) -> {'n': books, 'authors': first authors, 'folders': series folders, 'name'} (from the listing)
+
+def series_cleanup(lib, item_data, series, aud_series, book_authors, book_variant, verified, book_lang=None):
+    """Series that do not belong to the book (user findings 2026-11-08), decided with Audible's list for the SAME book.
+    series: current [{'name','sequence'}]; aud_series: Audible's [{'name','sequence'}] (already same edition). Returns (new list, notes)."""
+    from abs_series import series_key as _k, series_variant as _v, author_key
+    if not verified: return series, []
+    same = lambda a, b: a.strip().lower() == b.strip().lower() or (_k(a) == _k(b) and _v(a) == _v(b))
+    fact = lambda n: SERIES_FACTS.get((lib, n.strip().lower())) or {'n': 1, 'authors': set(), 'folders': set()}
+    listed = lambda n: any(same(n, a['name']) for a in aud_series)
+    parts = [p.strip().lower() for p in str(item_data.get('relPath') or '').replace('\\', '/').split('/') if p.strip()]
+    folder = parts[1] if len(parts) >= 3 else None
+    me = {_first_author(', '.join(book_authors))}
+    out, notes = [dict(x) for x in series], []
+    german_book = map_language(book_lang) == 'German'
+    for x in list(out):
+        n = x['name']
+        if german_book and re.search(r'(?i)\b(der|die|das|des|und|von|vom|im)\b', n): continue  # a German book keeps its German series name
+        if listed(n):
+            a = next(a['name'] for a in aud_series if same(n, a['name']))
+            lib_a = SERIES_FACTS.get((lib, a.strip().lower()))
+            if a != n and lib_a and fact(n)['n'] <= 2 and lib_a['n'] > fact(n)['n']:  # 'Remembrance of Earth's Past' -> the library's 'The Remembrance ...'
+                x['name'] = lib_a['name']; notes.append(f"'{n}' -> '{lib_a['name']}' (Audible's series, spelled as in the library)")
+            continue
+        others = [y for y in out if y is not x]
+        others_ok = any(listed(y['name']) or (folder and same(y['name'], folder)) for y in others)
+        if aud_series and others_ok and (fact(n)['n'] <= 2 or non_latin_name(n)):
+            missing = [a for a in aud_series if not any(same(y['name'], a['name']) for y in out)]
+            if missing:  # 'Realms of the Elderlings' #14 while Audible's 'Realm of the Elderlings' is not on the book: take Audible's
+                a = missing[0]; canon = canonical_series(lib, a['name'], book_authors, book_variant)[0]
+                x['name'], x['sequence'] = canon, a.get('sequence') or x.get('sequence')
+                notes.append(f"'{n}' -> '{canon}' (Audible does not list '{n}', but lists '{a['name']}' which the book lacks)")
+            else:
+                out.remove(x); notes.append(f"'{n}' removed (Audible does not list it; the book is in {', '.join(repr(y['name']) for y in others)})")
+        elif not aud_series and others_ok and fact(n)['n'] == 1 and not (folder and same(n, folder)):
+            out.remove(x); notes.append(f"'{n}' removed (single-book series; the book is in its folder series)")
+        elif fact(n)['n'] == 1 and not (fact(n)['authors'] - me - {''}) and any(
+                k_[0] == lib and v['name'] != n and _k(v['name']) == _k(n) and v['authors'] and not (v['authors'] & me) for k_, v in SERIES_FACTS.items()):
+            out.remove(x); notes.append(f"'{n}' removed (named like another author's series, Audible does not list it)")
+        elif aud_series and not others and fact(n)['n'] <= 2 and not listed(n):
+            a = aud_series[0]; canon = canonical_series(lib, a['name'], book_authors, book_variant)[0]
+            x['name'], x['sequence'] = canon, a.get('sequence') or x.get('sequence')
+            notes.append(f"'{n}' -> '{canon}' (only series of the book, Audible does not list it)")
+        elif folder and fact(n)['folders'] == {folder} and any(same(a['name'], folder) for a in aud_series) and not any(same(y['name'], folder) for y in out):
+            a = next(a for a in aud_series if same(a['name'], folder))
+            add = {'name': canonical_series(lib, a['name'], book_authors, book_variant)[0], 'sequence': a.get('sequence')}
+            if not any(same(y['name'], add['name']) for y in out):  # ADD only: 'Mistborn, Era 2' stays next to 'The Mistborn Saga'
+                out.append(add); notes.append(f"'{add['name']}' #{add['sequence'] or '-'} added (folder and Audible name this series)")
+    return out, notes
+
+def canonical_series(lib, name, book_authors, book_variant=None):
     """Map a series name delivered by Audible to the name used in ABS:
     1. series_aliases.json (merges done earlier), 2. an existing ABS series with the same normalized
     name, same edition and a shared author. Prevents Audible from splitting series again."""
@@ -455,6 +505,10 @@ def canonical_series(lib, name, book_authors):
     if ent and len(ent.get('names', [])) == 1 and name not in ent['names'] \
             and ({author_key(a) for a in book_authors} & set(ent.get('authors', []))):
         return ent['name'], 'existing'
+    if book_variant and not series_variant(name):  # 'The DemonWars Saga' for a dramatized book: the library's dramatized series of that name
+        ent = SERIES_INDEX.get(lib, {}).get(f"{','.join(sorted(book_variant))}|{series_key(name)}")
+        if ent and len(ent.get('names', [])) == 1 and ({author_key(a) for a in book_authors} & set(ent.get('authors', []))):
+            return ent['name'], 'existing'
     return name, None
 
 def non_latin_name(name):
@@ -738,7 +792,8 @@ def journal_change(iid, key, title, field, old, new, source, extra=None):
 def listing_value(field, v):
     """A metadata value in the form of the ABS library listing (one request per run compares against it)."""
     if v is None: return ''
-    if field in ('authors', 'narrators'):
+    if isinstance(v, str): pass  # already the listing form ('A #1, B #2' / 'Name, Name'); iterating it gave '' for series (2026-11-08)
+    elif field in ('authors', 'narrators'):
         v = ', '.join((x.get('name') if isinstance(x, dict) else str(x)) for x in (v or []) if x)
     elif field == 'series':
         v = ', '.join(f"{x.get('name')} #{x.get('sequence')}" if x.get('sequence') not in (None, '') else str(x.get('name')) for x in (v or []) if isinstance(x, dict) and x.get('name'))
@@ -1565,12 +1620,29 @@ def _add_review(key, title, kind, candidate, reason, evidence=None, ctx=None):
     if not isinstance(q, list): q = []
     for x in q:
         if x.get('key') == key and x.get('kind') == kind and x.get('candidate') == candidate:
-            if ctx and x.get('status') == 'open': x['ctx'], x['run'] = ctx, RUN_ID; rw_json(REVIEW_FILE, q)  # seen again: refresh the context for group_confirm()
+            if x.get('status', 'open') == 'open':
+                x['seen'] = RUN_ID  # still true in this run (review_sweep keeps it)
+                if ctx: x['ctx'], x['run'] = ctx, RUN_ID  # refresh the context for group_confirm()
+                rw_json(REVIEW_FILE, q)
             return
     q.append({'key': key, 'title': title, 'kind': kind, 'candidate': candidate, 'reason': reason, 'evidence': evidence or [],
               'run': RUN_ID, 'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'status': 'open'})
     if ctx: q[-1]['ctx'] = ctx
     rw_json(REVIEW_FILE, q)
+
+def review_sweep(key, kinds):
+    """Open review entries of this book that this run did NOT raise again are obsolete (the book was fixed, locked or changed since - the
+    list kept 66 entries of which most were long done, 2026-11-08). Only for the kinds this run really checked; not in a test run."""
+    if DRY_RUN: return
+    with IO_LOCK:
+        q = rw_json(REVIEW_FILE) or []
+        n = 0
+        for x in q if isinstance(q, list) else []:
+            if x.get('key') == key and x.get('kind') in kinds and x.get('status', 'open') == 'open' and RUN_ID not in (x.get('seen'), x.get('run')):
+                x['status'], x['obsolete_run'] = 'obsolete', RUN_ID; n += 1
+        if n:
+            rw_json(REVIEW_FILE, q)
+            logging.info(f"      -> 🧹 {n} review entr{'y' if n == 1 else 'ies'} of this book no longer apply (removed from the review list)")
 
 def group_confirm():
     """Several ABS books with the SAME title (>= 3) whose candidates each match runtime (to the minute) and narrator and are DIFFERENT volumes
@@ -2869,6 +2941,17 @@ def run_libraries(history, failed, recheck):
                  + (f", {len(pool) - len(batch)} follow in the next runs." if len(pool) > len(batch) else "."))
     process_queue(batch, history, failed, recheck)
 
+def split_series_name(s):
+    """ABS listing 'seriesName' -> [(name, number)]. The listing joins all series with ', ' - and names may contain commas themselves
+    ('Memory, Sorrow & Thorn #3, Das Geheimnis der Großen Schwerter #3'): a part ends at ' #<number>'."""
+    out, cur = [], ''
+    for tok in str(s or '').split(', '):
+        cur = f"{cur}, {tok}" if cur else tok
+        if m := re.search(r' #(\S+)$', tok):
+            out.append((cur[:len(cur) - len(m.group(0))].strip(), m.group(1))); cur = ''
+    if cur.strip(): out.append((cur.strip(), ''))  # unnumbered rest (several unnumbered series cannot be told apart)
+    return out
+
 def note_listing_item(lib_id, it):
     """Library-wide facts from the listing: ASIN/ISBN owners (duplicate guards), runtimes, and which books share a series number."""
     key, md_ = f"{lib_id}_{it['id']}", (it.get('media') or {}).get('metadata') or {}
@@ -2876,11 +2959,15 @@ def note_listing_item(lib_id, it):
     KEY_DUR[key] = (it.get('media') or {}).get('duration')
     if t_ := normalize_title_text(md_.get('title') or ''): TITLE_OWNERS.setdefault((lib_id, t_), set()).add((key, _first_author(md_.get('authorName'))))
     if i_ := normalize_isbn(md_.get('isbn')): ISBN_OWNERS.setdefault(i_, set()).add(key)
-    for part in str(md_.get('seriesName') or '').split(', '):
-        if ' #' in part:
-            n_, q_ = part.rsplit(' #', 1)
-            SEQ_TITLES.setdefault((lib_id, n_.strip().lower(), q_.strip()), set()).add(normalize_title_text(md_.get('title') or ''))
-            SEQ_WORKS.setdefault((lib_id, n_.strip().lower(), q_.strip(), map_language(md_.get('language')) or ''), set()).add(normalize_title_text(md_.get('title') or ''))
+    for sn_, q_ in split_series_name(md_.get('seriesName')):
+        if sn_:
+            f_ = SERIES_FACTS.setdefault((lib_id, sn_.lower()), {'n': 0, 'authors': set(), 'folders': set(), 'name': sn_})
+            f_['n'] += 1; f_['authors'] |= {_first_author(md_.get('authorName'))}
+            pp_ = str(it.get('relPath') or '').split('/')
+            if len(pp_) >= 3: f_['folders'].add(pp_[1].strip().lower())
+        if sn_ and q_:
+            SEQ_TITLES.setdefault((lib_id, sn_.lower(), q_.strip()), set()).add(normalize_title_text(md_.get('title') or ''))
+            SEQ_WORKS.setdefault((lib_id, sn_.lower(), q_.strip(), map_language(md_.get('language')) or ''), set()).add(normalize_title_text(md_.get('title') or ''))
 
 def build_queue(lib_id, history, recheck):
     """Due books of one library (new, manually changed, due for refresh, re-checks). Each item gets '_lib'."""
@@ -3547,6 +3634,14 @@ def process_queue(work_queue, history, failed, recheck):
                             logging.info(f"        🔁 Series {', '.join(repr(x['name']) for x in nl_cur)} removed (not English/German, Audible lists no series for this book)")
                             abs_updates['series'] = keep
                             log_updates.append("Series: " + (", ".join(f"'{x['name']}' #{x['sequence']}" for x in keep) or '(none)'))
+                        if not md_raw.get('series'):  # Audible lists no series: single-book extras / another author's series name (Elolaivat, Song of Achilles)
+                            same_b0 = (same_rec_rt and bool(abs_dur and aud_data.get('runtime_sec'))) or normalize_title_text(title) == normalize_title_text(aud_data.get('title_raw') or '')
+                            cur0 = abs_updates.get('series') if 'series' in abs_updates else [{'name': x.get('name'), 'sequence': x.get('sequence')} for x in (meta.get('series') or []) if x.get('name')]
+                            cl0, cl0_notes = series_cleanup(lib_id, item_data, cur0, [], authors, set(), same_b0, abs_updates.get('language') or lang)
+                            if cl0 != cur0:
+                                for n_ in cl0_notes: logging.info(f"        🧹 Series {n_}")
+                                abs_updates['series'] = cl0
+                                log_updates.append("Series: " + (", ".join(f"'{x['name']}'" + (f" #{x['sequence']}" if x.get('sequence') else '') for x in cl0) or '(none)'))
                         if series_list := md_raw.get('series'):
                             # ABS series are curated: Audible's series are only taken when the book has none in ABS.
                             # Otherwise only missing numbers of the same series are filled (Audible often lists reading
@@ -3598,7 +3693,7 @@ def process_queue(work_queue, history, failed, recheck):
                                         s_seq = next(iter(tv_a))
                                 if folder_fix and s_seq and s_seq != folder_fix['num'] and folder_fix['num'] in extract_volume(aud_data.get('title_raw') or folder_fix['title']):
                                     s_seq = folder_fix['num']  # Audible counts parts ('#2' for Vol. 8): folder and title agree on the volume
-                                canon, why = canonical_series(lib_id, s_name, authors)
+                                canon, why = canonical_series(lib_id, s_name, authors, book_variant)
                                 existing = next((x for x in new_list if same(x['name'], canon)), None)
                                 if existing:
                                     if why: logging.info(f"        🔗 Series '{s_name}' -> '{canon}' ({'alias list' if why == 'alias' else 'existing ABS series'})")
@@ -3650,6 +3745,11 @@ def process_queue(work_queue, history, failed, recheck):
                                     add_review(key, title, 'series', b['name'], 'series name is not English/German; Audible has no series for this book - please rename it in ABS')
                             if ignored:
                                 logging.info(f"        ℹ️ Audible series not added (ABS already has series, or other edition): {', '.join(ignored)}")
+                            same_book = (same_rec_rt and bool(abs_dur and aud_data.get('runtime_sec'))) or normalize_title_text(title) == normalize_title_text(aud_data.get('title_raw') or '')
+                            aud_ser = [{'name': (s_.get('name') or '').strip(), 'sequence': s_.get('part')} for s_ in series_list
+                                       if (s_.get('name') or '').strip() and not (_svar(s_['name']) - book_variant)]
+                            new_list, cl_notes = series_cleanup(lib_id, item_data, new_list, aud_ser, authors, book_variant, same_book, abs_updates.get('language') or lang)
+                            for n_ in cl_notes: logging.info(f"        🧹 Series {n_}")
                             # a number that three or more DIFFERENT books share is rescan junk ('Mushoku Tensei Web Novel' #3 on 18 books):
                             # when Audible's series of the same recording was added, the junk series goes
                             junk = [x for x in new_list if x in base_list and x.get('sequence')
@@ -3904,6 +4004,7 @@ def process_queue(work_queue, history, failed, recheck):
                 if GOODREADS_ENABLED and not has_gr and gr_status not in ('deferred', 'fresh'): notes.append(f"Goodreads {gr_status.replace('_', ' ')}")
                 if HARDCOVER_ENABLED and not hc_data and hc_status != 'fresh': notes.append(f"Hardcover {hc_status.replace('_', ' ')}")
                 if ov.get('ignore'): status = 'ignored'
+                review_sweep(key, {'asin', 'title', 'series'} | ({'hardcover'} if HARDCOVER_ENABLED and hc_status != 'fresh' else set()))
                 cert, cert_parts = certainty_score(search_title, authors, meta.get('narrators') or [], abs_dur, meta.get('publisher'), meta.get('publishedYear'),
                                                    meta.get('series') or [], aud_data, hc_data, asin_from_search,
                                                    any(x.get('key') == key and x.get('status', 'open') == 'open' for x in (rw_json(REVIEW_FILE) or []) if isinstance(x, dict)))
