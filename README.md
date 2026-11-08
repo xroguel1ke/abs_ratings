@@ -6,7 +6,8 @@
 
 > [!WARNING]
 > **Use at your own discretion.** This tool writes to your Audiobookshelf library (descriptions, ASINs, series, authors, titles, covers).
-> It is a personal project, built and tested on one library. **I do not recommend letting it loose on your Audiobookshelf library.**
+> It is a personal, **vibecoded** project: the code was written by AI (Claude) from my concept and rules, built and tested on one
+> library. **I do not recommend letting it loose on your Audiobookshelf library.**
 > If you try it anyway: make a backup, start with test runs only and review every planned change before you apply anything.
 
 ABS Ratings writes ratings from **Audible** and **Hardcover** (Goodreads experimental) into your audiobook descriptions and keeps the
