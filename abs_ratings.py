@@ -672,7 +672,7 @@ def certainty_score(search_title, authors, narrators, abs_dur, publisher, year, 
     parts['author'] = 20 if match_author(authors, ', '.join(aud.get('authors_raw') or [])) else 0
     rt = aud.get('runtime_sec')
     parts['runtime'] = 0 if not (abs_dur and rt) else 20 if abs(abs_dur - rt) <= 120 else 10 if not runtime_mismatch(abs_dur, rt) else 0
-    n = lambda xs: {re.sub(r'[^a-z]', '', x.lower()) for x in (xs or []) if x}
+    n = lambda xs: {re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in (xs or []) if x}
     parts['narrator'] = 12 if n(narrators) & n(aud.get('narrators_raw')) else 0
     cand_series = (aud.get('meta_raw') or {}).get('series')
     num = volume_of(aud['title_raw'], aud.get('subtitle_raw')) & extract_volume(search_title) if (volume_of(aud['title_raw'], aud.get('subtitle_raw')) and extract_volume(search_title)) else set()
@@ -709,7 +709,7 @@ def language_verdict(abs_title, abs_narrators, aud, lang_locked, abs_series_name
     sim = max(title_similarity(abs_title, aud_t), title_similarity(abs_title, f"{aud_t} {aud_s}"))
     if sim < 0.6: return 'asin_wrong'
     # Same title in both languages ('Dune', 'Blood Moon'): narrator and series decide
-    norm = lambda n: re.sub(r'[^a-z]', '', n.lower())
+    norm = lambda n: re.sub(r'[^a-z]', '', fold_accents(n).lower())
     a_narr, b_narr = {norm(n) for n in abs_narrators if n}, {norm(n) for n in (aud.get('narrators_raw') or []) if n}
     if a_narr and b_narr: return 'abs_wrong' if a_narr & b_narr else 'asin_wrong'
     from abs_series import series_key
@@ -728,7 +728,7 @@ def same_recording(abs_dur, abs_narrators, aud):
     """Same recording: runtime within 2 min AND a shared narrator. Then a differing volume NUMBER is a numbering scheme difference
     ('Book 8' in ABS vs 'Book 7' on Audible), not a wrong ASIN."""
     if not (abs_dur and aud and aud.get('runtime_sec') and abs(abs_dur - aud['runtime_sec']) <= 120): return False
-    n = lambda xs: {re.sub(r'[^a-z]', '', x.lower()) for x in (xs or []) if x}
+    n = lambda xs: {re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in (xs or []) if x}
     return bool(n(abs_narrators) & n(aud.get('narrators_raw')))
 
 BOXSET_RE = re.compile(r"\b\d+\s*[-–]\s*\d+\b|\b(trilog(y|ie)|box\s*set|boxed set|omnibus|sammelband|gesamtausgabe|publisher.?s pack|complete (series|collection)|collection)\b|\bbooks?\s+\d+\s*(?:-|–|&|and|,)\s*\d+", re.I)
@@ -761,6 +761,17 @@ def _novella_range(v):
     one volume: a box set '1-3' is several books and stays a different number."""
     m = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*[-\u2013]\s*(\d+(?:\.\d+)?)\s*", str(v or ""))
     return (float(m.group(1)), float(m.group(2))) if m and 0 < float(m.group(2)) - float(m.group(1)) < 1 else None
+
+def part_scheme_number(abs_title, cand_title, cand_series):
+    """Audible counts 'Part 1, Volume 3' as #1.3 while ABS counts volumes (#3): no conflict when both titles are IDENTICAL and name
+    the part and volume that Audible's number encodes (the title identifies the volume; Ascendance of a Bookworm, 2026-11-08)."""
+    na, nc = normalize_title_text(abs_title or ''), normalize_title_text(cand_title or '')
+    if not nc or not (na == nc or na.startswith(nc + ' ')): return False  # ABS may append the subtitle ('...: Ascendance of a Bookworm, Book 3')
+    rx = r'\bpart\s+(\d+)\W+(?:volume|vol\.?|book)\s+(\d+)\b'
+    m, ma = re.search(rx, cand_title or '', re.I), re.search(rx, abs_title or '', re.I)
+    if not m or not ma or (int(m.group(1)), int(m.group(2))) != (int(ma.group(1)), int(ma.group(2))): return False
+    want = f"{int(m.group(1))}.{int(m.group(2))}"
+    return any(str((x.get('sequence') if x.get('sequence') not in (None, '') else x.get('part')) or '').strip() == want for x in cand_series or [])
 
 def series_seq_conflict(abs_series, cand_series):
     """True if ABS and a candidate both state a number for the same series and the numbers differ (-> other volume).
@@ -1183,6 +1194,7 @@ def match_author(abs_authors, web_author):
         abs_clean = fold_accents(abs_auth).lower()
         for wa in web_clean:
             if abs_clean in wa or wa in abs_clean: return True
+            if len(sq := re.sub(r'[^a-z0-9]', '', abs_clean)) >= 6 and sq == re.sub(r'[^a-z0-9]', '', wa): return True  # 'Inadvisably Compelled' = 'InadvisablyCompelled'
             a_tok = set(re.split(r'[^a-z0-9]+', abs_clean))
             wa_tok = set(re.split(r'[^a-z0-9]+', wa))
             if len(a_tok.intersection(wa_tok)) >= 2: return True
@@ -1715,7 +1727,7 @@ def preferred_twin(lang, key):
     want_pub = bool(not m.get('pub_year') and SEARCH_CTX.get('pub') and SEARCH_CTX.get('year'))
     if not (other_store or want_pub): return None
     domain = pref if other_store else m.get('domain')
-    norm = lambda xs: {re.sub(r'[^a-z]', '', x.lower()) for x in xs if x}
+    norm = lambda xs: {re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in xs if x}
     throttle('audible_api', AUDIBLE_API_HOSTS[domain])
     try:
         r = requests.get(f"https://{AUDIBLE_API_HOSTS[domain]}/1.0/catalog/products",
@@ -1926,19 +1938,20 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             f_nums, t_nums = volume_of(found_title, p.get('subtitle_raw')), extract_volume(title)
             seq_nums = {str(int(float(s.get('sequence')))) for s in (abs_series or []) if re.fullmatch(r'\d+(\.0)?', str(s.get('sequence') or ''))}
             self_inconsistent = bool(seq_nums & f_nums and duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120
-                                     and {re.sub(r'[^a-z]', '', n.lower()) for n in (narrators or []) if n} & {re.sub(r'[^a-z]', '', n.lower()) for n in (p.get('narrators_raw') or []) if n})
+                                     and {re.sub(r'[^a-z]', '', fold_accents(n).lower()) for n in (narrators or []) if n} & {re.sub(r'[^a-z]', '', fold_accents(n).lower()) for n in (p.get('narrators_raw') or []) if n})
             if f_nums and t_nums and not f_nums & t_nums and not self_inconsistent:  # different volume: never the same book (unless ABS contradicts itself and runtime + narrator agree)
                 logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (volume {','.join(sorted(f_nums))} vs {','.join(sorted(t_nums))})")
                 continue
             dup_resolved = False
-            if series_seq_conflict(abs_series, (p.get('meta_raw') or {}).get('series')):  # ABS and Audible number the same series differently
+            if series_seq_conflict(abs_series, (p.get('meta_raw') or {}).get('series')) \
+                    and not part_scheme_number(title, found_title, (p.get('meta_raw') or {}).get('series')):  # ABS and Audible number the same series differently
                 # Exception: two ABS books claim the same ASIN (one ABS number must be wrong) and this sibling product matches the file
                 # length to the minute -> the runtime decides, not the (unreliable) ABS series number.
                 exact_rt = bool(duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120)
                 # NOTE 2026-11-08: 'same title + runtime ±2 min + narrator' is NOT enough to ignore the ABS number - The Hunter's Code
                 # 1 and 2 share title and narrator and differ by 2 minutes (regress reg_syn_21). Do not add that exception again.
                 same_rec = exact_rt and normalize_title_text(title) == normalize_title_text(found_title) and bool(
-                    {re.sub(r'[^a-z]', '', n.lower()) for n in (narrators or []) if n} & {re.sub(r'[^a-z]', '', n.lower()) for n in (p.get('narrators_raw') or []) if n})
+                    {re.sub(r'[^a-z]', '', fold_accents(n).lower()) for n in (narrators or []) if n} & {re.sub(r'[^a-z]', '', fold_accents(n).lower()) for n in (p.get('narrators_raw') or []) if n})
                 proven = abs_number_disproved(abs_series, cand, found_title, (p.get('meta_raw') or {}).get('series'), host) if same_rec else None
                 if proven:
                     fx_ = SEARCH_CTX.get('seq_fix') or {}; fx_[cand] = proven; SEARCH_CTX['seq_fix'] = fx_  # used only if THIS candidate becomes the ASIN
@@ -1951,7 +1964,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             auth_ok = match_author(authors_list, ", ".join(p.get('authors_raw') or []))
             dur_ok = bool(duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) < 600)
             dur_conflict = bool(duration and p.get('runtime_sec') and not dur_ok)
-            norm_n = lambda n: re.sub(r'[^a-z]', '', n.lower())
+            norm_n = lambda n: re.sub(r'[^a-z]', '', fold_accents(n).lower())
             a_narr, c_narr = {norm_n(n) for n in (narrators or []) if n}, {norm_n(n) for n in (p.get('narrators_raw') or []) if n}
             # Same book, possibly another recording (runtime/narrator differ): remembered as a ratings-only fallback
             rel_dur_ok = not (duration and p.get('runtime_sec')) or abs(duration - p['runtime_sec']) <= max(2700, 0.25 * duration)
@@ -1963,7 +1976,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 rel, diff = LAST_SEARCH['related'], abs((duration or 0) - (p.get('runtime_sec') or 0))
                 if rel is None or diff < rel['_diff']:
                     LAST_SEARCH['related'] = dict(p, _diff=diff)
-            norm_n = lambda n: re.sub(r'[^a-z]', '', n.lower())
+            norm_n = lambda n: re.sub(r'[^a-z]', '', fold_accents(n).lower())
             a_narr, c_narr = {norm_n(n) for n in (narrators or []) if n}, {norm_n(n) for n in (p.get('narrators_raw') or []) if n}
             # Author written in another script (ABS 'Rifujin na Magonote' vs Audible '理不尽な孫の手'): no contradiction if narrator and runtime (+-2 min) agree
             if not auth_ok and a_narr and c_narr and a_narr & c_narr and duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120:
@@ -2868,7 +2881,7 @@ def hc_audio_asin(hc, abs_dur, authors, targets, narrators, lang):
         t_abs = max([search_match_score(t, p['title_raw'], p.get('subtitle_raw')) for t in targets] or [0])
         t_hc = search_match_score(hc.get('title') or '', p['title_raw'], p.get('subtitle_raw'))
         hc_solid = hc.get('source') in ('ISBN', 'ASIN', 'manual link')
-        norm_n = lambda n: re.sub(r'[^a-z]', '', n.lower())
+        norm_n = lambda n: re.sub(r'[^a-z]', '', fold_accents(n).lower())
         a_narr, c_narr = {norm_n(n) for n in (narrators or []) if n}, {norm_n(n) for n in (p.get('narrators_raw') or []) if n}
         narr_contra = bool(a_narr and c_narr and not a_narr & c_narr)
         logging.info(f"        🔗 Hardcover edition ASIN {asin} ('{p['title_raw']}'): author {'✓' if auth_ok else '✗'}, runtime {'✓' if dur_ok else '✗'}, "
@@ -3566,8 +3579,8 @@ def process_queue(work_queue, history, failed, recheck):
                     logging.info(f"      -> ⚠️ Runtime mismatch: ABS {format_time(abs_dur)} vs Audible {format_time(aud_data['runtime_sec'])}. ASIN probably points to another edition, searching...")
                     should_search = True
                 elif (((fnarr_ := folder_narrators(item_data)) or meta.get('narrators')) and aud_data.get('narrators_raw') and abs_dur and aud_data.get('runtime_sec')
-                      and abs(abs_dur - aud_data['runtime_sec']) > 600 and not ({re.sub(r'[^a-z]', '', n.lower()) for n in (fnarr_ or meta['narrators']) if n}
-                                                                              & {re.sub(r'[^a-z]', '', n.lower()) for n in aud_data['narrators_raw'] if n})
+                      and abs(abs_dur - aud_data['runtime_sec']) > 600 and not ({re.sub(r'[^a-z]', '', fold_accents(n).lower()) for n in (fnarr_ or meta['narrators']) if n}
+                                                                              & {re.sub(r'[^a-z]', '', fold_accents(n).lower()) for n in aud_data['narrators_raw'] if n})
                       and not any(same_person_name(n, a) for n in (fnarr_ or meta.get('narrators') or []) for a in authors)):
                     # the ASIN is ANOTHER RECORDING (Fool's Errand: James Langton 1518 min on .com, the file is Nick Taylor 1389 min = .co.uk):
                     # strict search for exactly this recording in every store; the current ASIN stays if there is none
@@ -4039,9 +4052,9 @@ def process_queue(work_queue, history, failed, recheck):
                             abs_updates['authors'] = [{'name': n} for n in aud_auth]
                             log_updates.append(f"Authors: -> {aud_auth}")
                     elif aud_auth and authors:
-                        abs_norm = {re.sub(r'[^a-z]', '', a.lower()) for a in authors if a}
+                        abs_norm = {re.sub(r'[^a-z]', '', fold_accents(a).lower()) for a in authors if a}
                         for an in aud_auth:
-                            if re.sub(r'[^a-z]', '', an.lower()) not in abs_norm and match_author(authors, an):
+                            if re.sub(r'[^a-z]', '', fold_accents(an).lower()) not in abs_norm and match_author(authors, an):
                                 AUTHOR_NOTES.append({'title': title, 'abs': authors, 'audible': an})
                                 logging.info(f"        ℹ️ Author spelling differs: ABS {authors} vs Audible '{an}' (not changed, listed in report)")
                     # Explicit: only ever set to True when Audible marks the product as adult
