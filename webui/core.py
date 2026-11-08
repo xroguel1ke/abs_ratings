@@ -60,13 +60,13 @@ FIELDS = [
     ('GR_MISSING_RECHECK_DAYS', 'Re-check books without Goodreads (days)', 'int', 30, '', 'Goodreads'),
 
     ('RATING_ORDER', 'Sources in the rating block', 'order:audible|goodreads|hardcover', 'audible,goodreads,hardcover', 'Ticked sources are shown, top to bottom (all enabled sources are still asked)', 'Metadata'),
-    ('RATING_ICONS', 'Rating symbols', 'choice:moons|stars', 'moons', '🌕🌕🌕🌕🌗 or ★★★★★', 'Metadata'),
-    ('RATING_LABELS', 'Rating block language', 'choice:en|de', 'en', 'Overall / Performance / Story or Gesamt / Sprecher / Geschichte', 'Metadata'),
-    ('RATING_POSITION', 'Rating block position', 'choice:top|bottom', 'top', 'Above or below the book description', 'Metadata'),
+    ('RATING_ICONS', 'Rating symbols', 'choice:moons|stars', 'moons', '', 'Metadata'),
+    ('RATING_LABELS', 'Rating block language', 'choice:en|de', 'en', '', 'Metadata'),
+    ('RATING_POSITION', 'Rating block position', 'choice:top|bottom', 'top', '', 'Metadata'),
     ('RATING_MIN_COUNT', 'Minimum number of ratings', 'int', 0, 'A source with fewer ratings is not shown (0 = all)', 'Metadata'),
     ('FILL_COVERS', 'Set missing covers', 'bool', True, 'Only for a verified ASIN', 'Metadata'),
     ('UPDATE_COVERS', 'Replace existing covers', 'bool', True, 'Only for a verified ASIN (same recording); the old cover is backed up and can be restored', 'Metadata'),
-    ('GENRE_LANGUAGE', 'Genre language', 'choice:en|keep', 'en', 'en = translate German Audible genres, keep = unchanged', 'Metadata'),
+    ('GENRE_LANGUAGE', 'Genre language', 'choice:en|keep', 'en', 'Audible.de genres are translated to English', 'Metadata'),
     ('GENRE_RULES', 'Genre rules', 'text', '', 'One per line: "Old => New" renames, "Old => -" never adds that genre (only genres coming from Audible)', 'Metadata'),
 
     ('SERIES_MERGE', 'Merge series automatically', 'bool', True, 'Only safe cases; uncertain ones go to the review list', 'Series & authors'),
@@ -76,8 +76,11 @@ FIELDS = [
     ('LIBRARY_REPORT', 'Create the library report', 'bool', True, '', 'Series & authors'),
     ('SERIES_LOCK_AFTER_MERGE', 'Set lock_series after a merge', 'bool', False, 'Old variant, not recommended', 'Series & authors'),
 
-    ('UI_LANGUAGE', 'Language', 'choice:en|de', 'en', 'English (default) or Deutsch', 'Interface'),
+    ('UI_LANGUAGE', 'Language', 'choice:en|de', 'en', '', 'Interface'),
 ]
+CHOICE_LABELS = {'en': 'English', 'de': 'Deutsch', 'moons': '🌕🌕🌕🌕🌗', 'stars': '★★★★★', 'top': 'Above the description', 'bottom': 'Below the description',
+                 'keep': 'Keep as delivered', 'auto': 'Automatic', 'buildup': 'Build-up (whole library)', 'maintain': 'Maintenance (new and changed books)',
+                 'INFO': 'Normal', 'DEBUG': 'Debug (detailed)'}
 # rarely changed: shown folded ("Advanced") inside their card
 ADVANCED = {'ABS_TIMEOUT', 'SLEEP_TIMER', 'NO_RATINGS_RECHECK_DAYS', 'USE_AUDIBLE_API', 'AUDIBLE_API_INTERVAL',
             'AUDIBLE_WEB_INTERVAL', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'HARDCOVER_INTERVAL', 'GOODREADS_INTERVAL', 'GR_BLOCK_COOLDOWN',

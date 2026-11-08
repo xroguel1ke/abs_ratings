@@ -138,7 +138,7 @@ def inject():
     s = core.load_settings()
     nxt = core.next_run_time(s)
     return {'running': core.RUNNER.running(), 'current_run': core.RUNNER.current, 'next_run': nxt,
-            'status_label': {k: T(v) for k, v in STATUS_LABEL.items()}, 'app_version': core.APP_VERSION, 'update_available': core.update_available(), 'abs_base': (s.get('ABS_URL') or '').rstrip('/'), 'lang': lang(), 'js_i18n': i18n.DE if lang() == 'de' else {}}
+            'choice_label': lambda o: T(core.CHOICE_LABELS.get(o, o)), 'status_label': {k: T(v) for k, v in STATUS_LABEL.items()}, 'app_version': core.APP_VERSION, 'update_available': core.update_available(), 'abs_base': (s.get('ABS_URL') or '').rstrip('/'), 'lang': lang(), 'js_i18n': i18n.DE if lang() == 'de' else {}}
 
 
 # ---------------------------------------------------------------- auth

@@ -16,14 +16,14 @@
    <span class="orderlist" data-target="{{ key }}">{% for src in (cur|select('in', allsrc)|list) + (allsrc|reject('in', cur)|list) %}
     <span class="row orderitem" data-src="{{ src }}" style="gap:8px;margin:4px 0"><input type="checkbox" {{ 'checked' if src in cur }}><b style="min-width:90px">{{ src|capitalize }}</b>
      <button type="button" class="iconbtn" data-mv="-1">{{ icon('chevron-up') }}</button><button type="button" class="iconbtn" data-mv="1">{{ icon('chevron-down') }}</button></span>{% endfor %}</span></span>
-  {% elif ftype.startswith('choice:') %}<select name="{{ key }}">{% for o in ftype[7:].split('|') %}<option value="{{ o }}" {{ 'selected' if s[key]==o }}>{{ {'en': 'English', 'de': 'Deutsch'}.get(o, o) }}</option>{% endfor %}</select>
+  {% elif ftype.startswith('choice:') %}<select name="{{ key }}">{% for o in ftype[7:].split('|') %}<option value="{{ o }}" {{ 'selected' if s[key]==o }}>{{ choice_label(o) }}</option>{% endfor %}</select>
   {% else %}<input type="{{ 'number' if ftype in ('int','float') else 'text' }}" {{ 'step=any' if ftype=='float' }} name="{{ key }}" id="{{ key }}" value="{{ s[key] }}">{% endif %}
   {% if help_ %}<span class="h">{{ _(help_) }}</span>{% endif %}</label>
  {% endif %}
 {% endmacro %}
 {% macro group_card(group) %}{% set fields = groups.get(group, []) %}{% set pv = providers.get(group) %}
 <div class="card{{ ' provider' if pv }}" {% if pv %}style="--pc:{{ pv[1] }}"{% endif %}>
- <h2 style="margin-top:0">{% if pv %}<span class="pv-dot"></span>{% endif %}{{ _(group) }}{% if group == 'Goodreads' %} <span class="badge warn">{{ _('experimental') }}</span>{% endif %}</h2>
+ <h2 style="margin-top:0">{{ _(group) }}{% if group == 'Goodreads' %} <span class="badge warn">{{ _('experimental') }}</span>{% endif %}</h2>
  {% if pv %}<p class="muted small" style="margin-top:-8px">{{ _(pv[2]) }}</p>{% endif %}
  {% for key, label, ftype, default, help_, g in fields if key not in adv %}{{ field(key, label, ftype, default, help_) }}{% endfor %}
  {% set more = fields|selectattr(0, 'in', adv)|list %}
@@ -36,7 +36,7 @@
 
 <div class="row" style="justify-content:space-between"><h1>{{ _('Settings') }}</h1><button type="button" class="iconbtn snav-toggle" aria-label="{{ _('Sections') }}" onclick="document.querySelector('.snav').classList.toggle('open')">{{ icon('menu') }} {{ _('Sections') }}</button></div>
 <div class="slayout">
-<nav class="snav" aria-label="{{ _('Sections') }}">{% for sec, grps in sections.items() %}<a href="#{{ slug(sec) }}" data-sec="{{ slug(sec) }}">{% if sec == 'Sources' %}<span class="dots">{% for g in grps %}<span class="dot" style="--pc:{{ providers[g][1] }}"></span>{% endfor %}</span>{% endif %}{{ _(sec) }}</a>{% endfor %}</nav>
+<nav class="snav" aria-label="{{ _('Sections') }}">{% for sec, grps in sections.items() %}<a href="#{{ slug(sec) }}" data-sec="{{ slug(sec) }}">{{ _(sec) }}</a>{% endfor %}</nav>
 <div class="spanel">
 {% for sec, grps in sections.items() if grps %}
 <form method="post" class="sec" data-sec="{{ slug(sec) }}">{% for g in grps %}{{ group_card(g) }}{% endfor %}{% if sec == 'Interface' %}<div class="card"><h2 style="margin-top:0">{{ _('Onboarding') }}</h2>

@@ -31,14 +31,15 @@ function T(s) { return (window.I18N && window.I18N[s]) || s; }
 
   // ---- onboarding tour ----
   var STEPS = [
-    { sel: null, t: T('Welcome to ABS Ratings'), p: T('A short tour in 9 steps. You can skip it at any time and restart it under Settings.') },
-    { sel: '[data-tour=dashboard]', t: T('Overview'), p: T('What needs you, the last and the next scan, and the state of the library.') },
-    { sel: '[data-tour=books]', t: T('Books'), p: T('All checked books, sorted by how certain the match is. With search, ABS ↔ Audible comparison and the reasoning of every decision.') },
-    { sel: '[data-tour=review]', t: T('Review list'), p: T('Everything that needs your decision: uncertain book matches, series and authors (left menu), plus merged series/authors to confirm or undo.') },
-    { sel: '[data-tour=status]', t: T('Status'), p: T('Coverage of every metadata field and the state of the sources (Audible, Hardcover, Goodreads).') },
-    { sel: '[data-tour=runs]', t: T('Scans'), p: T('Start a scan here: metadata & ratings, authors, series - each a checkbox. Start with a test run: nothing is written and you check the changes first.') },
-    { sel: '[data-tour=history]', t: T('History'), p: T('Everything that was really written to ABS - per scan, book and field. Every change can be undone on its own, per book or for the whole scan.') },
-    { sel: '[data-tour=settings]', t: T('Settings'), p: T('ABS connection, schedule, sources, notifications, logs and the language. You can restart this tour here.') },
+    { sel: null, t: T('Welcome to ABS Ratings'), p: T('ABS Ratings writes Audible and Hardcover ratings into your book descriptions and repairs metadata: ASIN, series, authors, titles, covers. This tour shows the pages (10 steps). You can restart it under Settings.') },
+    { sel: '[data-tour=dashboard]', t: T('Overview'), p: T('Your start page: what needs a decision, the last and the next scan, the library tiles (click one to filter), the library check after every scan and the coverage of every field.') },
+    { sel: '[data-tour=dashboard]', t: T('Library check'), p: T('Orange dots mark problems the script found but could not fix safely: missing ASIN, an ASIN on several books, series names in another language, folder and volume that disagree. Open a line to see the books.') },
+    { sel: '[data-tour=runs]', t: T('Scans'), p: T('Start a scan here and follow it live: progress, time left, expected end and what changed. Start with a test run: nothing is written, you review the planned changes and apply only what you want.') },
+    { sel: '[data-tour=runs]', t: T('Changes written'), p: T('The second tab of Scans lists everything that was really written to ABS. Every change can be undone - one field, one book or a whole scan; replaced covers come back from the backup.') },
+    { sel: '[data-tour=books]', t: T('Books'), p: T('Every checked book with its status and how certain the match is. A book page shows ABS next to Audible and Hardcover, why each decision was made, and lets you set an ASIN by hand or test one book.') },
+    { sel: '[data-tour=review]', t: T('Review list'), p: T('Only what the script could not verify on its own. Each suggestion shows ABS next to the suggestion (title, authors, narrators, runtime, series) - green dots agree. Apply or discard, also for all entries of one kind at once. Done entries disappear by themselves.') },
+    { sel: '[data-tour=settings]', t: T('Settings'), p: T('Connection to ABS, schedule, sources (Audible, Hardcover, Goodreads), how the rating block looks, series and author rules, notifications and the language.') },
+    { sel: null, t: T('Protect what you curated'), p: T('Lock tags in ABS keep the script away from a field: lock_series, lock_title, lock_asin, lock_authors ... or lock_all for the whole book. Everything else the script may correct.') },
     { sel: '#theme-toggle', t: T('Design'), p: T('Light or dark. On the first visit the system setting is used, then the browser remembers your choice.') }
   ];
   var i = 0, dim = null, box = null, hl = null;
