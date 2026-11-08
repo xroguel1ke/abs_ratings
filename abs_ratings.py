@@ -425,7 +425,7 @@ def folder_volume_conflict(item_data, key, title, meta):
         try: nums.add(float(v))
         except ValueError: pass
     if not nums or f_num in nums: return None
-    return {'title': f_title, 'num': m.group(1).lstrip('0') or '0'}
+    return {'title': f_title, 'num': strip_lead0(m.group(1))}
 
 def seq_shared(lib, name, seq):
     """Two or more DIFFERENT books of the library hold this number in this series (an ABS rescan put three Witcher books at #0.5)."""
@@ -463,6 +463,22 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
     fm = re.match(r'^(?:book\s*)?(\d+(?:\.\d+)?)\s+-\s+', parts[-1]) if parts else None
     for x in list(out):
         n = x['name']
+        if x.get('sequence') and map_language(book_lang) == 'English' and clash_seq(lib, n, x['sequence'], book_lang) \
+                and not any(same(n, a['name']) and _seq_num(a.get('sequence')) == _seq_num(x['sequence']) for a in aud_series):
+            # another work has this number in this series and Audible does not confirm it for this book (English books only: a German
+            # translation in two parts legitimately shares a number). Audible's number of this series, else the folder number, else none;
+            # Audible's sub-series that carries the same number is added ('A Little Hatred' = The Age of Madness #1).
+            old_q = x['sequence']
+            own = next((a for a in aud_series if same(n, a['name']) and a.get('sequence')), None)
+            if own: x['sequence'] = own['sequence']
+            elif fm and folder and same(n, folder) and (strip_lead0(fm.group(1))) != str(old_q): x['sequence'] = strip_lead0(fm.group(1))
+            else: x['sequence'] = None
+            notes.append(f"'{n}' #{old_q} is held by another book too and Audible does not confirm it -> #{x['sequence'] or '-'}")
+            for a in aud_series:
+                if re.fullmatch(r'\d+(?:\.\d+)?', str(a.get('sequence') or '').strip()) and _seq_num(a.get('sequence')) == _seq_num(old_q) \
+                        and not same(n, a['name']) and not any(same(y['name'], a['name']) for y in out):
+                    add = {'name': canonical_series(lib, a['name'], book_authors, book_variant)[0], 'sequence': a.get('sequence')}
+                    out.append(add); notes.append(f"'{add['name']}' #{add['sequence']} added (the sub-series the number came from)")
         if not aud_series and folder and (non_latin_name(n) or _ffb(n, book_lang)):
             # Audible lists no series: the library series the other books of this FOLDER are in ('Les Annales de la Compagnie Noire' on
             # 'Glen Cook/The Black Company/1 - The Black Company' -> 'The Chronicles of the Black Company'), number from the folder
@@ -470,7 +486,7 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
                     and (v['authors'] & me) and not non_latin_name(v['name']) and not _ffb(v['name'], book_lang)]
             if len(libs) == 1:
                 x['name'] = libs[0]['name']
-                if fm: x['sequence'] = fm.group(1).lstrip('0') or '0'
+                if fm: x['sequence'] = strip_lead0(fm.group(1))
                 notes.append(f"'{n}' -> '{x['name']}' (not English/German; the series of the other books in this folder)")
                 continue
         if german_book and re.search(r'(?i)\b(der|die|das|des|und|von|vom|im)\b', n): continue  # a German book keeps its German series name
@@ -561,6 +577,17 @@ def non_latin_script(name):
     return any(c.isalpha() and 'LATIN' not in unicodedata.name(c, '') for c in str(name or ''))
 
 SEQ_WORKS = {}  # (lib, series name lower, number, language) -> normalized titles (junk numbers: abs_series.distinct_works >= 3)
+
+def strip_lead0(q):
+    """'08' -> '8', '0.5' stays '0.5' (lstrip('0') made it '.5'), '0' stays '0'."""
+    return re.sub(r'^0+(?=\d)', '', str(q))
+
+def clash_seq(lib, name, seq, lang):
+    """Two or more different WORKS of the same language hold this number in this series ('First Law World' #1 = The Blade Itself and
+    A Little Hatred: the umbrella series took the sub-series numbers)."""
+    from abs_series import distinct_works
+    q = str(seq or '').strip()
+    return bool(q) and distinct_works(SEQ_WORKS.get((lib, str(name or '').strip().lower(), q, map_language(lang) or ''), ())) >= 2
 
 def junk_seq(lib, name, seq, lang):
     """Three or more different WORKS of the same language hold this number in this series ('Shannara (Chronological Order)' #1 on 4
@@ -1061,7 +1088,7 @@ def title_similarity(a, b):
 
 def extract_volume(text):
     raw = set(RE_VOL.findall(text)) | ({m.group(1)} if (m := re.search(r'\b(\d+)$', text.strip())) else set())
-    return {x.lstrip('0') or '0' for x in raw}  # 'Vol. 02' == 'Vol. 2'
+    return {strip_lead0(x) for x in raw}  # 'Vol. 02' == 'Vol. 2'
 
 def volume_of(title, sub):
     """Volume numbers of an Audible product: title and subtitle separately (a number at the end of the SUBTITLE is not the volume)."""
@@ -3754,7 +3781,7 @@ def process_queue(work_queue, history, failed, recheck):
                                 if s_seq and not is_boxset_title(title):
                                     # only an EXPLICIT 'Vol./Volume/Book N' (not 'Metro 2033'), N < 1000, and the FULL series name in the title
                                     # ('Threads of Destiny: Volume 1' is Destiny Cycle #4 - 'destiny' alone matched, 2026-11-08)
-                                    _xv = lambda t: {m.lstrip('0') or '0' for m in re.findall(r'(?i)\b(?:vol(?:ume)?\.?|book|band)\s*(\d{1,3})\b', t or '')}
+                                    _xv = lambda t: {strip_lead0(m) for m in re.findall(r'(?i)\b(?:vol(?:ume)?\.?|book|band)\s*(\d{1,3})\b', t or '')}
                                     tv_a, tv_b = _xv(aud_data.get('title_raw')), _xv(abs_updates.get('title') or title)
                                     _nn = lambda t: re.sub(r'[^a-z0-9]+', ' ', (t or '').lower()).strip()
                                     if len(tv_a) == 1 and tv_a == tv_b and s_seq.lstrip('0') not in tv_a and '.' not in s_seq \
@@ -3845,7 +3872,7 @@ def process_queue(work_queue, history, failed, recheck):
                             if not junk_seq(lib_id, x['name'], x.get('sequence'), lang): return x
                             # the series IS the folder of the book ('Shannara (Chronological Order)/10 - A Knight of the Word'): the folder number is the order
                             fm = re.match(r'^(?:book\s*)?(\d+(?:\.\d+)?)\s+-\s+', str(item_data.get('relPath') or '').replace('\\', '/').split('/')[-1])
-                            if fm and folder_series_name(item_data, x['name']) and (fm.group(1).lstrip('0') or '0') != str(x.get('sequence')).strip(): return dict(x, sequence=fm.group(1).lstrip('0') or '0')
+                            if fm and folder_series_name(item_data, x['name']) and (strip_lead0(fm.group(1))) != str(x.get('sequence')).strip(): return dict(x, sequence=strip_lead0(fm.group(1)))
                             return dict(x, sequence=None)
                         cleared = [_fix_junk(x) for x in cur_s]
                         if cleared != cur_s:
