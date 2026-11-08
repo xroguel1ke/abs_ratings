@@ -3780,6 +3780,27 @@ def process_queue(work_queue, history, failed, recheck):
                             log_updates.append("Series: " + ", ".join(f"'{x['name']}'" + (f" #{x['sequence']}" if x.get('sequence') else '') for x in cleared))
                     else: logging.info("        🔒 Series Update Skipped (Locked)")
 
+                    # Proven data errors in authors (same recording only, runtime to 2 min):
+                    # 1) authors and narrators SWAPPED ('Overlord, Vol. 14': author Chris Guerrero, narrator Kugane Maruyama)
+                    # 2) several Audible authors glued into ONE ABS author ('JF Brink Thefirstdefier' = 'JF Brink' + 'Thefirstdefier')
+                    _nk = lambda xs: sorted(re.sub(r'[^a-z]', '', fold_accents(str(x)).lower()) for x in xs if x)
+                    from abs_series import is_role_credit as _irc, author_key as _ak0
+                    _roles0 = {_ak0(n) for n in tuple(ROLE_NAMES)}
+                    a_auth = [n for i, n in enumerate(aud_data.get('authors_raw') or []) if not _irc(n) and not (i > 0 and _ak0(n) in _roles0)]  # only real authors
+                    a_narr = aud_data.get('narrators_raw') or []
+                    exact_rec = bool(abs_dur and aud_data.get('runtime_sec') and abs(abs_dur - aud_data['runtime_sec']) <= 120)
+                    if exact_rec and a_auth and a_narr and authors and meta.get('narrators') and _nk(authors) != _nk(a_auth) \
+                            and set(_nk(authors)) <= set(_nk(a_narr)) and set(_nk(meta.get('narrators'))) & set(_nk(a_auth)):
+                        if 'lock_authors' in tags or 'lock_narrators' in tags: logging.info("        🔒 Authors/narrators swapped, but locked")
+                        else:
+                            abs_updates['authors'] = [{'name': n} for n in a_auth]; abs_updates['narrators'] = list(a_narr)
+                            log_updates.append(f"Authors/narrators were swapped: authors -> {a_auth}, narrators -> {a_narr}")
+                    elif exact_rec and len(authors) == 1 and len(a_auth) >= 2 and 'lock_authors' not in tags \
+                            and ''.join(_nk(authors)) in (''.join(re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in a_auth),
+                                                          ''.join(re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in reversed(a_auth))):
+                        abs_updates['authors'] = [{'name': n} for n in a_auth]
+                        log_updates.append(f"Author '{authors[0]}' is {len(a_auth)} authors glued together: -> {a_auth}")
+
                     # Narrators / authors: only filled when empty
                     aud_narr = aud_data.get('narrators_raw') or []
                     if aud_narr and not meta.get('narrators') and same_rec_rt:

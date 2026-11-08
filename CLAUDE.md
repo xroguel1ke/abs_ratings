@@ -112,6 +112,14 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     replaced like non-Latin ones, but kept when Audible lists the same name for the book; Audible lists no series -> review list (only a
     non-Latin SCRIPT is removed automatically). A number held by 3+ different WORKS of one language (distinct_works: contained titles =
     one work) is junk: Audible's number, else the book folder number when the series is the folder, else removed.
+- **Series cleanup** (series_cleanup, user findings 2026-11-08, same book = same title or same recording): with Audible's list of the SAME
+  book an ABS series Audible does not list is removed when the book is in another Audible/folder series and it has <= 2 books or is foreign
+  (replaced instead when it is spelled like an Audible series the book lacks; an own sub-series like 'Hoid's Travails' stays); an only
+  series of <= 2 books is replaced by Audible's; a single-book series named like ANOTHER author's series goes; a variant spelling becomes
+  the library's spelling of Audible's series; folder + Audible series is added. German books keep German-looking series names.
+- Listing seriesName is split at ' #N' (names contain commas). listing_value() keeps strings (iterating gave '' -> every series write
+  was 'changed outside' in the next run). Review entries a later run no longer raises are closed (review_sweep).
+- Authors (same recording, runtime 2 min): swapped authors/narrators and several Audible authors glued into one ABS author are fixed.
 - **Narrator = author** in ABS is replaced by Audible's narrators of the same recording (runtime 2 min) only.
 
 ## Testing
