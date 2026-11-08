@@ -296,6 +296,13 @@ def collect_records(ctx):
     return records
 
 
+def _make_target(g, new):
+    """Make 'new' the merge target of group g. The old target becomes a member and takes over the relation of the new one
+    (the relation is symmetric). Without this a swapped target had no .relation and the whole series task crashed (2026-11-07)."""
+    old = g[0]
+    g.remove(new); g.insert(0, new)
+    old.relation = getattr(new, 'relation', None) or 'name'
+
 def find_merges(records, decisions=None, preferred_names=None):
     """Returns (merges, rejected). merges: list of dicts {lib, target, members:[Series], evidence}.
     preferred_names: exact series titles used by Audible; if exactly one name of a merge group is one of them, it becomes the target
@@ -334,11 +341,11 @@ def find_merges(records, decisions=None, preferred_names=None):
             if len(g) > 1:
                 hits = [s for s in g if s.name in (preferred_names or ())]
                 if len(hits) == 1 and hits[0] is not g[0]:  # Audible's own name wins
-                    g.remove(hits[0]); g.insert(0, hits[0])
+                    _make_target(g, hits[0])
                 # the name YOU chose in the review list ('merge as ...') wins over everything
                 wanted = {d.get('target') for k, d in (decisions or {}).items() if d.get('action') == 'merge' and d.get('target') and k.startswith(f'series|{lib}|')}
                 mine = [s for s in g if s.name in wanted]
-                if len(mine) == 1 and mine[0] is not g[0]: g.remove(mine[0]); g.insert(0, mine[0])
+                if len(mine) == 1 and mine[0] is not g[0]: _make_target(g, mine[0])
                 merges.append({'lib': lib, 'target': g[0], 'members': g[1:]})
     return merges, rejected
 

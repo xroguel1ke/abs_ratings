@@ -100,6 +100,13 @@ def test_interleaved_but_other_author_or_edition_never_merges():
     assert names(r)[0] == []
 
 
+def test_swapped_target_keeps_a_relation():  # crash 2026-11-07: 'Series' object has no attribute 'relation'
+    r = [rec(i, f'w{i}', 'Cobble', 'Benjamin Ashwood', str(i)) for i in range(2, 7)] + [rec(1, 'w1', 'Cobble', 'Benjamin Ashwood Series', '1')]
+    merges, _ = S.find_merges(r, {}, {'Benjamin Ashwood Series'})
+    assert merges and merges[0]['target'].name == 'Benjamin Ashwood Series'
+    assert all(getattr(s, 'relation', None) for s in merges[0]['members']), [vars(s) for s in merges[0]['members']]
+
+
 if __name__ == '__main__':
     n = 0
     for name, fn in sorted(globals().items()):
