@@ -481,7 +481,8 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
         others = [y for y in out if y is not x]
         others_ok = any(listed(y['name']) or (folder and same(y['name'], folder)) for y in others)
         from abs_series import foreign_for_book as _ffb
-        if aud_series and others_ok and (fact(n)['n'] <= 2 or non_latin_name(n) or _ffb(n, book_lang)):
+        variant_dup = any(y is not x and _k(y['name']) == _k(n) and _v(n) - book_variant for y in out)  # 'X (Omnibus)'/'X Manga' next to 'X'
+        if aud_series and others_ok and (variant_dup or non_latin_name(n) or _ffb(n, book_lang)):  # NOT by book count: 'Skyward Flight' is real
             missing = [a for a in aud_series if not any(same(y['name'], a['name']) for y in out)]
             near = [a for a in missing if non_latin_name(n) or _ffb(n, book_lang) or difflib.SequenceMatcher(None, _k(n), _k(a['name'])).ratio() >= 0.75]
             if missing and not near: continue  # an own sub-series ('Hoid's Travails') next to a missing Audible series: leave it
@@ -3780,6 +3781,8 @@ def process_queue(work_queue, history, failed, recheck):
                                              f"({'not English/German' if bad_nl else 'folder name, Audible series exists in the library'})")
                             elif bad_nl and any(same(b['name'], n) for b in base_list for n in aud_names):
                                 logging.info(f"        🔁 Series {', '.join(repr(b['name']) for b in bad_nl)} removed (not English/German; Audible's series is already there)")
+                            elif bad_nl and base_list:  # the book has another (English/German) series: the foreign extra one simply goes
+                                logging.info(f"        🔁 Series {', '.join(repr(b['name']) for b in bad_nl)} removed (not English/German; the book is in {', '.join(repr(b['name']) for b in base_list)})")
                             elif bad_nl:
                                 new_list = [x for x in new_list if x not in added] + [dict(x) for x in bad_nl]
                                 for b in bad_nl:
@@ -3828,8 +3831,10 @@ def process_queue(work_queue, history, failed, recheck):
                     a_auth = [n for i, n in enumerate(aud_data.get('authors_raw') or []) if not _irc(n) and not (i > 0 and _ak0(n) in _roles0)]  # only real authors
                     a_narr = aud_data.get('narrators_raw') or []
                     exact_rec = bool(abs_dur and aud_data.get('runtime_sec') and abs(abs_dur - aud_data['runtime_sec']) <= 120)
-                    if exact_rec and a_auth and a_narr and authors and meta.get('narrators') and _nk(authors) != _nk(a_auth) \
-                            and set(_nk(authors)) <= set(_nk(a_narr)) and set(_nk(meta.get('narrators'))) & set(_nk(a_auth)):
+                    same_t = normalize_title_text(title) == normalize_title_text(aud_data.get('title_raw') or '')
+                    if (exact_rec or same_t) and a_auth and a_narr and authors and meta.get('narrators') and _nk(authors) != _nk(a_auth) \
+                            and set(_nk(authors)) & set(_nk(a_narr)) and not set(_nk(authors)) & set(_nk(a_auth)) \
+                            and set(_nk(meta.get('narrators'))) & set(_nk(a_auth)):  # ABS authors = Audible narrators (none of Audible's authors), ABS narrators hold the author
                         if 'lock_authors' in tags or 'lock_narrators' in tags: logging.info("        🔒 Authors/narrators swapped, but locked")
                         else:
                             abs_updates['authors'] = [{'name': n} for n in a_auth]; abs_updates['narrators'] = list(a_narr)

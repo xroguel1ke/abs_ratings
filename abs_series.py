@@ -101,7 +101,8 @@ def fold_accents(s):
 def is_latin(name):
     return not any(c.isalpha() and "LATIN" not in unicodedata.name(c, "") for c in (name or ""))  # letters only: "86—EIGHTY-SIX" (em dash) is Latin
 
-FOREIGN_WORDS = {'les', 'le', 'la', 'du', 'aux', 'et', 'une', 'un', 'el', 'los', 'las', 'del', 'y', 'il', 'gli', 'degli', 'della', 'dei', 'delle', 'di', 'os', 'dos', 'het', 'een'}
+FOREIGN_WORDS = {'les', 'le', 'la', 'du', 'aux', 'et', 'une', 'un', 'el', 'los', 'las', 'del', 'y', 'il', 'gli', 'degli', 'della', 'dei', 'delle', 'di', 'os', 'dos', 'het', 'een',
+                 'de', 'chroniques', 'cronache', 'crónicas', 'cronicas', 'ciclo', 'cycle de', 'saga de', 'trilogie', 'trilogia', 'kronikka', 'och', 'av'}
 ENDE_WORDS = {'the', 'of', 'and', 'a', 'an', 'der', 'die', 'das', 'und', 'von', 'vom', 'im', 'zum', 'zur', 'ein', 'eine', 'in', 'to', 'for'}
 
 GERMAN_WORDS = {'der', 'die', 'das', 'dem', 'den', 'des', 'und', 'von', 'vom', 'zum', 'zur', 'im', 'unter', 'einer', 'eines', 'zweiten', 'vergessenen', 'chroniken'}
@@ -122,7 +123,9 @@ def foreign_series_name(name):
     function words and none of English/German ('Les Annales de la Compagnie Noire' on English Black Company books)."""
     if not is_latin(name): return True
     w = re.findall(r"[a-zà-ÿ]+", (name or '').lower())
-    return sum(x in FOREIGN_WORDS for x in w) >= 2 and not any(x in ENDE_WORDS for x in w)
+    f, e = sum(x in FOREIGN_WORDS for x in w), sum(x in ENDE_WORDS for x in w)
+    if re.search(r"(?:^|\s)[ld]['’][a-zà-ÿ]", (name or '').lower()): f += 2  # French elision: "L'Assassin royal", "d'Arkadie"
+    return f >= 2 and f > e  # 'Il Ciclo di The Cosmere' (2 vs 1) is foreign; 'The Fall of La Ciudad' is not
 
 def distinct_works(titles):
     """How many different WORKS a set of normalized titles names: a title contained in another is the same work
