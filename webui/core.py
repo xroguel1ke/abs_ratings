@@ -31,7 +31,6 @@ FIELDS = [
     ('RUN_MODE', 'Run mode', 'choice:auto|buildup|maintain', 'auto', 'auto = build-up until every book was checked once, then maintenance. Maintenance: new and changed books always, plus a few random due books', 'Run'),
     ('MAINTAIN_SAMPLE', 'Random books per maintenance scan', 'int', 30, 'Besides new and changed books', 'Run'),
     ('QUICK_MODE_MINUTES', 'Quick mode: look for new books every (minutes)', 'int', 0, '0 = off. New books in ABS are checked right away instead of waiting for the next scheduled scan', 'Run'),
-    ('MANUAL_LOCK_TAG', 'Lock tag for fields you changed in ABS', 'bool', False, 'Fields you change yourself in ABS are never overwritten anyway; this also sets the lock_<field> tag in ABS', 'Run'),
     ('ABS_BACKUP', 'ABS backup before real scans', 'bool', True, 'Creates an ABS backup before every scan without DRY_RUN; if it fails nothing is written', 'Run'),
     ('SLEEP_TIMER', 'Extra pause between books (s)', 'float', 0, 'Every source has its own minimum interval, so 0 is safe and fastest', 'Run'),
     ('NO_RATINGS_RECHECK_DAYS', 'Re-check books without ratings (days)', 'int', 7, '', 'Run'),

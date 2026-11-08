@@ -239,7 +239,10 @@ def merge_check(group, cand, decisions=None):
     if not (g_authors & cand.authors): return False, rel, 'no shared author'
     # A manually locked book means the user decided on this series name: don't touch the series
     # (on EITHER side: a book you locked in the target series also means 'don't touch these names')
-    locked = [r['title'] for r, _ in cand.entries if 'lock_series' in r['tags']] + [r['title'] for s in group for r, _ in s.entries if 'lock_series' in r['tags']]
+    # User rule 2026-11-08: lock_series protects the BOOK. If all locked books sit in ONE series of the group, that series becomes
+    # the target and only unlocked books move (find_merges swaps the target). Locked books in two or more series -> review list.
+    with_locks = [s for s in group + [cand] if any('lock_series' in r['tags'] for r, _ in s.entries)]
+    locked = [r['title'] for s in with_locks for r, _ in s.entries if 'lock_series' in r['tags']] if len(with_locks) > 1 else []
     lock_msg = f"contains book(s) with lock_series: {', '.join(locked[:3])}" if locked else ''  # only a merge that is OTHERWISE allowed becomes a review case
     # Every single book of the smaller series must share an author with the target
     foreign = [r['title'] for r, _ in cand.entries if not ({author_key(a) for a in r['authors']} & g_authors)]
@@ -346,6 +349,11 @@ def find_merges(records, decisions=None, preferred_names=None):
                 wanted = {d.get('target') for k, d in (decisions or {}).items() if d.get('action') == 'merge' and d.get('target') and k.startswith(f'series|{lib}|')}
                 mine = [s for s in g if s.name in wanted]
                 if len(mine) == 1 and mine[0] is not g[0]: _make_target(g, mine[0])
+                # a clean spelling beats the same name with stray spaces ('The Titan ' -> 'The Titan')
+                if g[0].name != g[0].name.strip() and (clean := [s for s in g[1:] if s.name == g[0].name.strip()]): _make_target(g, clean[0])
+                # the series that holds the lock_series books is the target: locked books are never moved (wins over everything)
+                lk = [s for s in g if any('lock_series' in r['tags'] for r, _ in s.entries)]
+                if len(lk) == 1 and lk[0] is not g[0]: _make_target(g, lk[0])
                 merges.append({'lib': lib, 'target': g[0], 'members': g[1:]})
     return merges, rejected
 

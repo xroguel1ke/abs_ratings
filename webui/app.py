@@ -493,6 +493,7 @@ def runs():
             mode = request.form.get('selection', 'all')
             items, note = core.select_items(s, mode, request.form.get('list', ''), limit=min(rs['BATCH_SIZE'] or 300, 1500))
             if mode != 'all' and not items: flash(T('No books for this selection (%(n)s).', n=note), 'error'); return redirect(url_for('runs'))
+            if items is None: note = f"up to {rs['BATCH_SIZE']} of all due books"  # 'all' picks from all due books, the batch size still limits it
             label += f" – {note}"
         run_id, err = core.RUNNER.start(kind, dry_run=dry, label=label, only_items=items, run_settings=rs)
         if err: flash(T(err), 'error'); return redirect(url_for('runs'))

@@ -1,7 +1,8 @@
 #!/bin/bash
 # Integration test of the change monitoring (user wish 2026-11-03) against the FAKE ABS, real-run mode, offline (recordings only):
 #  run 1 writes a cleaned title + publisher; then ABS 'rescans' (title back to the old value) and the user sets an own publisher;
-#  run 2 must write the title again and must NOT touch the user's publisher (manual_fields.json).
+#  run 2 must write the title again (any change is checked again; only lock_ tags protect - user decision 2026-11-08) and must keep
+#  the publisher (publisher is only filled when empty).
 set -e
 DEV=/mnt/user/appdata/abs_ratings_dev; T=/mnt/user/appdata/abs_scripts_test/watch_it
 LIB=114068f9-142d-4524-b0ef-a349354b5f88; ID=8c6e8b09-009d-4b32-a346-6788161e7b2b
@@ -34,10 +35,9 @@ RUN_ID=w2 python -u abs_ratings.py > /data/run_w2.out 2>&1
 python -I - <<PY
 import json, requests
 md = requests.get("http://127.0.0.1:18992/api/items/$ID").json()["media"]["metadata"]
-man = json.load(open("/data/manual_fields.json"))
-ok = md["title"] == "Nightside the Long Sun" and md.get("publisher") == "My Own Publisher" and "publisher" in next(iter(man.values()), {})
-print("after run 2:", md["title"], "|", md.get("publisher"), "| manual:", {k[-6:]: list(v) for k, v in man.items()})
-print("change monitoring:", "ok (title re-applied after the rescan, your publisher kept)" if ok else "FAILED")
+ok = md["title"] == "Nightside the Long Sun" and md.get("publisher") == "My Own Publisher"
+print("after run 2:", md["title"], "|", md.get("publisher"))
+print("change monitoring:", "ok (title re-applied after the rescan, publisher kept: only filled when empty)" if ok else "FAILED")
 raise SystemExit(0 if ok else 1)
 PY
 '

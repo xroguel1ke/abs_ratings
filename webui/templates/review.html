@@ -13,7 +13,7 @@
 <div class="card"><h2 style="margin-top:0">{{ _('Books') }}</h2><p class="muted small" style="margin-top:-8px">{{ _('New ASIN, title suggestion or Hardcover match where the evidence is not enough for an automatic change. "Apply" writes the suggestion (can be undone in the history), "Discard" leaves the book as it is - the suggestion does not come back.') }}</p></div>
 {% for x in secs.buecher.entries %}{% set r = x.res %}{% set store = r.domain or 'www.audible.com' %}
 <div class="card mcard">
- <div class="row" style="justify-content:space-between"><div><span class="badge warn">{{ {'asin': 'ASIN', 'isbn': 'ISBN', 'title': _('Title'), 'hardcover': 'Hardcover'}.get(x.kind, x.kind) }}</span>
+ <div class="row" style="justify-content:space-between"><div><span class="badge warn">{{ {'asin': 'ASIN', 'isbn': 'ISBN', 'title': _('Title'), 'hardcover': 'Hardcover', 'series': _('Series')}.get(x.kind, x.kind) }}</span>
   <a href="{{ url_for('problem', key=x.key) }}"><b>{{ x.title }}</b></a></div>
   <div class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('queue_action', qid=x.id, action='accept') }}"><button class="primary">{{ _('Apply') }}</button></form>
   <form method="post" action="{{ url_for('queue_action', qid=x.id, action='reject') }}"><button>{{ _('Discard') }}</button></form></div></div>

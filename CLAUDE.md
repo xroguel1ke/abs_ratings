@@ -42,7 +42,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
 - **Language mismatch:** title + narrator + series decide whether ABS language or the ASIN is wrong; if nothing decides → change nothing.
 - **Only real authors** (user rule 2026-11-04): role credits ("X - illustrator/translator/editor/introduction/foreword/Übersetzer/Herausgeber …", `abs_series.ROLE_CREDIT_RE`) are never taken from Audible as authors and are removed in ABS when a real author remains (REMOVE_ROLE_CREDITS). A plain name counts as role credit when it was seen WITH a suffix somewhere (role_credits.json, learned from Audible) and it is nowhere the first author. lock_authors respected.
 - **Empty authors** (user rule): ABS author objects with 0 books are deleted (REMOVE_EMPTY_AUTHORS), re-checked right before the delete; books are never touched.
-- **lock_series on EITHER side** blocks a series merge; if the merge would otherwise be allowed it goes to the review list.
+- **lock_series protects the BOOK** (user rule 2026-11-08, was: lock on either side blocks): if all locked books sit in ONE series of a
+  merge group, that series becomes the target and only unlocked books move; locked books in two or more series -> review list.
 - **Interleaving numbers** (user rule 2026-11-04): two series with only LOOSELY similar names (ratio >= 0.8 or one name inside the other) merge when their numbers interleave into ONE gapless run (both sides >= 2 books, sides alternate >= 2 times, e.g. 1-3,7-8,10 | 4-6,9,11-13); same author, same edition, no lock_series still required. Loosely similar without interleaving -> review list.
 - **Series merge** (`abs_series.merge_check`): names equal after normalization (articles, generic words like Series/Saga,
   format labels like Light Novel) or same word count + ratio ≥0.9; never a name contained in a longer one
@@ -70,7 +71,17 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   (challenge after 3-7); a challenge on a book page only switches pages off for the run, the search list stays as FALLBACK (max 25 searches,
   block after ~100-150 in a row); series name + number + author confirm. AutoThrottle: jitter, slow answer widens the interval, Retry-After wins.
   No browser (image size). Browser signature via curl_cffi only as opt-in GR_IMPERSONATE (user decision 2026-11-08, default off).
-- **Change monitoring:** a field the script wrote that shows the OLD value again is written again; a NEW value is the user's: never overwritten.
+- **Change monitoring** (user decision 2026-11-08, was: a NEW value is the user's and never overwritten): ONLY lock_<field> tags protect a
+  field. A field the script wrote that shows any other value (ABS rescan or a manual edit - ABS cannot tell) makes the book due again and
+  the normal rules decide. List fields compare as sets (ABS re-sorts the listing). manual_fields.json is no longer written or used.
+- **Series names** (user rules 2026-11-08, same recording with both runtimes known): a non-Latin series name (English/German books) is
+  replaced by Audible's series (none -> review list); a series that is only a folder of the book path ('Elolaivat') is replaced when
+  Audible's series exists in the library; an Audible series that exists EXACTLY so in the library for this author is added even if the
+  book has other series (Way of Kings back into The Stormlight Archive). A series number shared by two or more different books is no
+  evidence: it never rejects an ASIN candidate and is replaced by Audible's number.
+- **ABS forced rescan 2026-11-07** (precedence absMetadata last, storeMetadataWithItem=false -> stale August metadata.json in the book
+  folders) reverted ~1900 books (1261 ASINs to dead ones, Japanese/folder series). No backup restore (user): the rules above fix it per
+  book; every changed book is a 'manual update' in the queue.
 - **Narrator = author** in ABS is replaced by Audible's narrators of the same recording (runtime 2 min) only.
 
 ## Testing

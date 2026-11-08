@@ -34,15 +34,26 @@ def test_different_authors_are_never_merged():
     assert names(r)[0] == []
 
 
-def test_lock_series_in_the_target_blocks_merge_too():
+def test_lock_series_book_keeps_its_series_as_target():  # user rule 2026-11-08 (was: lock on either side blocks the merge)
     r = _series('Coven Crest Academy', 'X', [1, 2]) + _series('Coven Crest Academy Series', 'X', [3, 4], 200)
     r[2]['tags'] = {'lock_series'}
-    assert names(r)[0] == []
+    assert names(r)[0] == [('Coven Crest Academy Series', ['Coven Crest Academy'])], names(r)[0]
 
 
-def test_lock_series_blocks_merge():
+def test_locked_side_becomes_target():  # user rule 2026-11-08: lock_series protects the book, not the whole merge
     r = [rec(1, 'a', 'X', 'The Big Saga', '1'), rec(2, 'b', 'X', 'The Big Saga', '2'), rec(3, 'c', 'X', 'Big Series', '3', tags=['lock_series'])]
-    assert names(r)[0] == []
+    assert names(r)[0] == [('Big Series', ['The Big Saga'])], names(r)[0]
+
+
+def test_locks_in_two_series_go_to_review():
+    r = [rec(1, 'a', 'X', 'The Big Saga', '1', tags=['lock_series']), rec(2, 'b', 'X', 'The Big Saga', '2'), rec(3, 'c', 'X', 'Big Series', '3', tags=['lock_series'])]
+    m, rej = names(r)
+    assert m == [] and any('lock_series' in x['reason'] for x in rej), (m, rej)
+
+
+def test_trailing_space_name_is_never_the_target():
+    r = [rec(i, f'w{i}', 'Ring', 'The Titan ', str(i)) for i in range(3, 9)] + [rec(1, 'w1', 'Ring', 'The Titan', '1')]
+    assert names(r)[0] == [('The Titan', ['The Titan '])], names(r)[0]
 
 
 def test_audible_name_becomes_target():

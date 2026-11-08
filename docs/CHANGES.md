@@ -32,6 +32,13 @@ Code: 66 files, +6128 / −475 lines. Test data: public synthetic batches in `te
   - Same-person check for Audible author records (translator chain bug).
   - "Merge as …" lets you choose the target name.
 
+## Repair after an ABS rescan (2026-11-08)
+- An ABS forced rescan with stale metadata.json files reverted ~1900 books. The script now repairs such books by itself, book by book:
+  dead ASINs replaced (English -> audible.com, German -> audible.de, other stores only as fallback), non-Latin and folder-name series replaced
+  by Audible's series, library series added back (Stormlight), series numbers shared by several books corrected.
+- Only lock_ tags protect a field (a value changed in ABS is checked again). lock_series protects the book: its series becomes the merge target.
+- Fixed: series task crash ("Series object has no attribute relation"), a thread race on role names, misleading "all due books" scan label.
+
 ## Processing
 - **Per-source search state** (`source_state.json`):
   - found → `REFRESH_DAYS`;

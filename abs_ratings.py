@@ -371,6 +371,24 @@ GR_CACHE = {}  # Filled in main()  # Set once Goodreads blocks us; GR is then sk
 reports = {"audible": {}, "goodreads": {}, "isbn": {}}
 AUTHOR_NOTES = []  # Author spelling differences between ABS and Audible (report only)
 SERIES_ALIASES, SERIES_INDEX = {}, {}  # Loaded in main()
+SEQ_TITLES = {}  # (lib, series name lower, number) -> normalized titles holding it (filled by build_queue)
+
+def seq_shared(lib, name, seq):
+    """Two or more DIFFERENT books of the library hold this number in this series (an ABS rescan put three Witcher books at #0.5)."""
+    q = str(seq or '').strip()
+    return bool(q) and len(SEQ_TITLES.get((lib, str(name or '').strip().lower(), q), ())) > 1
+
+def search_series(lib, series):
+    """ABS series for the ASIN search: a number that two or more DIFFERENT books of the same series share (e.g. three Witcher
+    books at #0.5 after an ABS rescan) is no evidence and must not reject the right product -> number unknown."""
+    out = []
+    for x in series or []:
+        q = str(x.get('sequence') or '').strip()
+        if seq_shared(lib, x.get('name'), q):
+            logging.info(f"        ℹ️ Series '{x.get('name')}' #{q} is shared by several books in ABS: number not used as evidence")
+            x = dict(x, sequence=None)
+        out.append(x)
+    return out
 
 def canonical_series(lib, name, book_authors):
     """Map a series name delivered by Audible to the name used in ABS:
@@ -386,6 +404,24 @@ def canonical_series(lib, name, book_authors):
             and ({author_key(a) for a in book_authors} & set(ent.get('authors', []))):
         return ent['name'], 'existing'
     return name, None
+
+def non_latin_name(name):
+    """Series name in a non-Latin script (Japanese, Korean, Cyrillic ...). User rule 2026-11-08: series names are English or German."""
+    return any(c.isalpha() and 'LATIN' not in unicodedata.name(c, '') for c in str(name or ''))
+
+def folder_series_name(item_data, name):
+    """The series name is only a folder of the book's path (ABS 'folder structure' metadata), e.g. relPath
+    'Robin Hobb/Elolaivat/1 - Ship of Magic' -> 'Elolaivat'. The first folder (author) does not count."""
+    parts = [p.strip().lower() for p in str((item_data or {}).get('relPath') or '').replace('\\', '/').split('/') if p.strip()][:-1]
+    return bool(name) and str(name).strip().lower() in parts[1:]
+
+def series_in_library(lib, name, authors=None, exact=False):
+    """An ABS series with this normalized name (same edition) exists in the library (series_index.json, written by the series
+    task); with authors: and it holds a book of one of these authors."""
+    from abs_series import series_key, series_variant, author_key
+    ent = SERIES_INDEX.get(lib, {}).get(f"{','.join(sorted(series_variant(name)))}|{series_key(name)}")
+    if not ent or (exact and name not in (ent.get('names') or [ent.get('name')])): return False
+    return not authors or bool({author_key(a) for a in authors} & set(ent.get('authors', [])))
 
 def certainty_score(search_title, authors, narrators, abs_dur, publisher, year, abs_series, aud, hc=None, asin_from_search=False, review_open=False):
     """0-100: how sure are we that the product behind the ASIN is THIS book. Parts are the independent pieces of evidence (weights see ROADMAP.md):
@@ -597,11 +633,8 @@ def listing_field(item, field):
 def abs_update(iid, key, title, updates, old_meta, source, tags=None, old_tags=None, extra=None):
     """The only way this script writes metadata/tags to ABS. Journals every field (old -> new).
     In DRY_RUN nothing is sent, the change is only written to the planned-changes file."""
-    if updates and MANUAL_FIELDS.get(key):  # the user changed these fields himself after our last write: never overwrite
-        kept = [f for f in updates if f in MANUAL_FIELDS[key]]
-        if kept:
-            logging.info(f"        ✋ Not changed (you edited it in ABS): {', '.join(kept)}")
-            updates = {k: v for k, v in updates.items() if k not in kept}
+    # User decision 2026-11-08: only lock_<field> tags protect a field. A value changed in ABS (by you or by an ABS rescan -
+    # ABS cannot tell them apart) is checked again and corrected like any other value.
     if not updates and tags is None: return True
     if not DRY_RUN:
         payload = {}
@@ -2666,11 +2699,7 @@ def run_libraries(history, failed, recheck):
             try:
                 for it in abs_session.get(f"{ABS_URL}/api/libraries/{lib_id}/items").json()['results']:
                     listed[f"{lib_id}_{it['id']}"] = it  # author for the parallel lanes
-                    a = ((it.get('media') or {}).get('metadata') or {}).get('asin')
-                    if a: ASIN_OWNERS.setdefault(a, set()).add(f"{lib_id}_{it['id']}")
-                    KEY_DUR[f"{lib_id}_{it['id']}"] = (it.get('media') or {}).get('duration')
-                    i_ = normalize_isbn(((it.get('media') or {}).get('metadata') or {}).get('isbn'))
-                    if i_: ISBN_OWNERS.setdefault(i_, set()).add(f"{lib_id}_{it['id']}")
+                    note_listing_item(lib_id, it)
             except Exception as e: logging.warning(f"Could not load ASIN owners for {lib_id}: {e}")
         for k in ONLY_ITEMS:
             lib, _, iid = k.partition('_')
@@ -2698,6 +2727,17 @@ def run_libraries(history, failed, recheck):
                  + (f", {len(pool) - len(batch)} follow in the next runs." if len(pool) > len(batch) else "."))
     process_queue(batch, history, failed, recheck)
 
+def note_listing_item(lib_id, it):
+    """Library-wide facts from the listing: ASIN/ISBN owners (duplicate guards), runtimes, and which books share a series number."""
+    key, md_ = f"{lib_id}_{it['id']}", (it.get('media') or {}).get('metadata') or {}
+    if a := md_.get('asin'): ASIN_OWNERS.setdefault(a, set()).add(key)
+    KEY_DUR[key] = (it.get('media') or {}).get('duration')
+    if i_ := normalize_isbn(md_.get('isbn')): ISBN_OWNERS.setdefault(i_, set()).add(key)
+    for part in str(md_.get('seriesName') or '').split(', '):
+        if ' #' in part:
+            n_, q_ = part.rsplit(' #', 1)
+            SEQ_TITLES.setdefault((lib_id, n_.strip().lower(), q_.strip()), set()).add(normalize_title_text(md_.get('title') or ''))
+
 def build_queue(lib_id, history, recheck):
     """Due books of one library (new, manually changed, due for refresh, re-checks). Each item gets '_lib'."""
     logging.info(f"--- Library: {lib_id} ---")
@@ -2712,12 +2752,7 @@ def build_queue(lib_id, history, recheck):
     now = datetime.now()
     now_utc = datetime.now(timezone.utc)
 
-    for it in items:  # remember who owns which ASIN (duplicate-ASIN guard)
-        a = ((it.get('media') or {}).get('metadata') or {}).get('asin')
-        if a: ASIN_OWNERS.setdefault(a, set()).add(f"{lib_id}_{it['id']}")
-        KEY_DUR[f"{lib_id}_{it['id']}"] = (it.get('media') or {}).get('duration')
-        i_ = normalize_isbn(((it.get('media') or {}).get('metadata') or {}).get('isbn'))
-        if i_: ISBN_OWNERS.setdefault(i_, set()).add(f"{lib_id}_{it['id']}")
+    for it in items: note_listing_item(lib_id, it)
 
     for item in items:
         key = f"{lib_id}_{item['id']}"
@@ -2850,19 +2885,16 @@ def watch_changes(key, item):
     for field, e in list(fp.items()):
         cur = listing_value(field, listing_field(item, field))
         if field in ('authors', 'narrators', 'series') and listing_field(item, field) is None: continue  # listing without this field
-        if cur == e.get('ours'): continue
-        if e.get('old') and cur == e.get('old'):
-            reverted = True
-            logging.info(f"  ↩️ '{(item.get('media') or {}).get('metadata', {}).get('title')}': {field} is back at its old value - checked again")
-            continue
-        with IO_LOCK:
-            MANUAL_FIELDS.setdefault(key, {})[field] = {'value': cur, 'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'),
-                                                       'title': (item.get('media') or {}).get('metadata', {}).get('title')}
-            fp.pop(field, None)
-        logging.info(f"  ✋ '{(item.get('media') or {}).get('metadata', {}).get('title')}': {field} was changed in ABS by you - never overwritten again")
-        if MANUAL_LOCK_TAG and not DRY_RUN:
-            tags = sorted(item_tags(item) | {f'lock_{"series" if field == "series" else field.replace("publishedYear", "year")}'})
-            abs_update(item['id'], key, (item.get('media') or {}).get('metadata', {}).get('title'), {}, {}, 'manual_lock', tags=tags, old_tags=sorted(item_tags(item)))
+        # list fields: ABS sorts the listing ('A #1, B #2'), we may have written another order -> compare as sets
+        lst = (lambda s: ', '.join(sorted(str(s or '').split(', ')))) if field in ('authors', 'narrators', 'series') else (lambda s: s)
+        if lst(cur) == lst(e.get('ours')): continue
+        # user decision 2026-11-08: old value back OR any other value -> checked again; only lock_<field> tags protect a field.
+        # 'ours' becomes the current value, so a value the script then accepts does not trigger a re-check in every run.
+        reverted = True
+        how = 'is back at its old value' if (e.get('old') and lst(cur) == lst(e.get('old'))) else 'was changed outside the script'
+        if how != 'is back at its old value':
+            with IO_LOCK: e['ours'] = cur
+        logging.info(f"  ↩️ '{(item.get('media') or {}).get('metadata', {}).get('title')}': {field} {how} - checked again (lock_ tags protect a field)")
     return 'reverted' if reverted else None
 
 def enabled_sources():
@@ -3120,13 +3152,13 @@ def process_queue(work_queue, history, failed, recheck):
                         SEARCH_CTX.update({'old_title': aud_data['title_raw'], 'old_authors': ', '.join(aud_data.get('authors_raw') or [])})
                     if not found: found = find_missing_asin(search_title, authors, abs_dur, lang, raw_title=title,
                                                             required_lang=lang_target, strict=strict_search and bool(asin),
-                                                            only_domain=search_only, narrators=search_narr, abs_series=meta.get("series") or [])
+                                                            only_domain=search_only, narrators=search_narr, abs_series=search_series(lib_id, meta.get("series")))
                     weak_ = LAST_SEARCH.get('weak')
                     if not found and USE_AUDIBLE_API and meta.get('series') and abs_dur and not search_only:
                         LAST_MATCH.clear()
                         found = find_missing_asin_via_series(search_title, authors, abs_dur, lang, raw_title=title, required_lang=lang_target,
                                                              strict=strict_search and bool(asin), narrators=search_narr,
-                                                             abs_series=meta.get('series') or [])
+                                                             abs_series=search_series(lib_id, meta.get('series')))
                     
                     if not found and weak_ and 'lock_asin' not in tags:
                         add_review(key, title, 'asin', weak_['asin'], f"runtime (to the minute) and narrator match '{weak_['title']}'; title similarity {weak_.get('title_score')}, author {'matches' if weak_.get('author_ok') else 'differs'} - not enough for an automatic change",
@@ -3272,9 +3304,19 @@ def process_queue(work_queue, history, failed, recheck):
                             # Otherwise only missing numbers of the same series are filled (Audible often lists reading
                             # orders, universes and translations as extra series).
                             cur_list = [{"name": x.get('name'), "sequence": x.get('sequence')} for x in (meta.get('series') or []) if x.get('name')]
-                            new_list = [dict(x) for x in cur_list]
+                            # User rules 2026-11-08 (same recording only): a series name in a non-Latin script (English/German books)
+                            # or a series that is only a folder name of the book path ('Elolaivat', 'Die vergessenen Welten') is
+                            # replaced by Audible's series. A folder series only when Audible's series already exists in the library.
+                            en_de = map_language(lang) in ('English', 'German')
+                            ver = same_rec_rt and bool(abs_dur and aud_data.get('runtime_sec'))  # both runtimes known and equal
                             from abs_series import series_key as _skey, series_variant as _svar
                             same = lambda a, b: a == b or (_skey(a) == _skey(b) and _svar(a) == _svar(b))
+                            aud_names = [n for s_ in series_list for n in ((s_.get('name') or '').strip(), canonical_series(lib_id, (s_.get('name') or '').strip(), authors)[0]) if n]
+                            bad_nl = [x for x in cur_list if ver and en_de and non_latin_name(x['name'])]
+                            bad_fd = [x for x in cur_list if ver and x not in bad_nl and folder_series_name(item_data, x['name'])
+                                      and not any(same(x['name'], n) for n in aud_names)]  # a folder named like Audible's series is fine
+                            base_list = [x for x in cur_list if x not in bad_nl and x not in bad_fd]
+                            new_list = [dict(x) for x in base_list]
                             book_variant = _svar(f"{title} {aud_data.get('title_raw', '')} {aud_data.get('subtitle_raw', '')}")
                             ignored = []
                             for s_obj in series_list:
@@ -3299,15 +3341,40 @@ def process_queue(work_queue, history, failed, recheck):
                                     if why: logging.info(f"        🔗 Series '{s_name}' -> '{canon}' ({'alias list' if why == 'alias' else 'existing ABS series'})")
                                     if not existing.get('sequence') and s_seq: existing['sequence'] = s_seq
                                     elif s_seq and existing.get('sequence') and str(existing['sequence']) != str(s_seq):
-                                        logging.info(f"        ℹ️ Series '{canon}': ABS #{existing['sequence']} vs Audible #{s_seq} (ABS kept)")
-                                elif not cur_list:
+                                        if ver and seq_shared(lib_id, existing['name'], existing['sequence']):  # ABS number is no evidence
+                                            logging.info(f"        🔢 Series '{canon}': ABS #{existing['sequence']} is shared by several books -> Audible #{s_seq}")
+                                            existing['sequence'] = s_seq
+                                        else:
+                                            logging.info(f"        ℹ️ Series '{canon}': ABS #{existing['sequence']} vs Audible #{s_seq} (ABS kept)")
+                                elif not base_list and not non_latin_name(canon):
                                     if why: logging.info(f"        🔗 Series '{s_name}' -> '{canon}' ({'alias list' if why == 'alias' else 'existing ABS series'})")
+                                    new_list.append({"name": canon, "sequence": s_seq})
+                                elif ver and s_seq and not non_latin_name(canon) and series_in_library(lib_id, canon, authors, exact=True):
+                                    # user rule 2026-11-08: a series of THIS recording that already exists in the library for this author
+                                    # is added although the book has other series (Way of Kings back into 'The Stormlight Archive')
+                                    logging.info(f"        ➕ Series '{canon}' #{s_seq}: Audible lists it and it exists in the library for this author")
                                     new_list.append({"name": canon, "sequence": s_seq})
                                 else:
                                     ignored.append(f"{canon}" + (f" #{s_seq}" if s_seq else ""))
+                            added = [x for x in new_list if not any(same(x['name'], b['name']) for b in base_list)]
+                            if bad_fd and not any(series_in_library(lib_id, x['name']) for x in added):
+                                new_list = [x for x in new_list if x not in added] + [dict(x) for x in bad_fd]  # Audible's series is unknown here: folder name stays
+                                added, bad_fd = [], []
+                            bad = bad_nl + bad_fd
+                            if bad and added:
+                                for x in added:  # Audible gave no number: keep the one of the replaced series
+                                    if not x.get('sequence'): x['sequence'] = next((b['sequence'] for b in bad if b.get('sequence')), None)
+                                logging.info(f"        🔁 Series {', '.join(repr(b['name']) for b in bad)} -> {', '.join(repr(x['name']) for x in added)} "
+                                             f"({'not English/German' if bad_nl else 'folder name, Audible series exists in the library'})")
+                            elif bad_nl:
+                                new_list = [x for x in new_list if x not in added] + [dict(x) for x in bad_nl]
+                                for b in bad_nl:
+                                    logging.info(f"        ⚠️ Series '{b['name']}' is not English/German and Audible has no series for this book: review list")
+                                    add_review(key, title, 'series', b['name'], 'series name is not English/German; Audible has no series for this book - please rename it in ABS')
                             if ignored:
                                 logging.info(f"        ℹ️ Audible series not added (ABS already has series, or other edition): {', '.join(ignored)}")
-                            if new_list != cur_list:
+                            _sk = lambda L: sorted((x['name'], str(x.get('sequence') or '')) for x in L)
+                            if _sk(new_list) != _sk(cur_list):  # only a real change, never a mere re-ordering
                                 abs_updates['series'] = new_list
                                 log_updates.append("Series: " + ", ".join(f"'{x['name']}' #{x['sequence']}" for x in new_list))
                     else: logging.info("        🔒 Series Update Skipped (Locked)")
@@ -3333,7 +3400,7 @@ def process_queue(work_queue, history, failed, recheck):
                     if not aud_data.get('related_edition'): note_author_links(authors, aud_data)
                     aud_auth = aud_data.get('authors_raw') or []
                     from abs_series import is_role_credit, author_key as _ak
-                    _roles = {_ak(n) for n in ROLE_NAMES}
+                    _roles = {_ak(n) for n in tuple(ROLE_NAMES)}  # tuple(): atomic copy, another worker may add role names meanwhile
                     aud_auth = [n for i, n in enumerate(aud_auth) if not is_role_credit(n) and not (i > 0 and _ak(n) in _roles)]  # only real authors
                     if aud_auth and not authors:
                         if 'lock_authors' in tags: logging.info(f"        🔒 Authors Update Skipped (Locked): {aud_auth}")

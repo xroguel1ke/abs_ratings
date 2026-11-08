@@ -49,7 +49,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [new] Search-list-only mode: rating from the SEARCH result row, never a /book/show page (GR_BOOK_PAGES=false) | ✅ | new Next.js search layout parser (work.stats); test 6 replay 21/25 found, all hand-checked correct |
 | [U] Goodreads series: series name + number + author confirm a row; series page for other volumes (1 request) | ✅ | test 7 live: 25/25 found, no block |
 | [U] Goodreads book page first (robots.txt allows it), search list as fallback, AutoThrottle (Scrapling idea), 2026-11-08 | ✅ | live 8/8, 3 pages + 5 searches, no challenge; no browser / no impersonation |
-| [U] Library check 2026-11-08: duplicate series (case, "(Series)", "(Light Novel)"), Japanese series names, ASINs not found on audible.com, Stormlight series broken, old logs | open | next |
+| [U] Library check 2026-11-08: duplicate series (case, "(Series)", "(Light Novel)"), Japanese series names, ASINs not found on audible.com, Stormlight series broken, old logs | ✅ code | cause: ABS forced rescan 2026-11-07 (stale August metadata.json). Fixed per book by the script: series task crash, lock rule, non-Latin / folder series, library series added again, shared numbers, change monitoring (only lock_ tags protect), ROLE_NAMES race. Dry run 20 problem books ok. Needs ONE full scan (batch >= 2000) |
 | [U] Production rhythm (≈25 per night?) | ✅ | test 8: block after ~125 searches within hours -> 25 per run (default), stop at the first block, continue next day |
 
 ## User findings 2026-11-05
