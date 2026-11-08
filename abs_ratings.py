@@ -323,11 +323,13 @@ HEADERS_BASE = {
 # Budgets, throttle and the stop at a block stay unchanged.
 GR_IMPERSONATE = os.getenv('GR_IMPERSONATE', 'false').lower() == 'true'
 _GR_CURL, _GR_CURL_LOCK = None, threading.Lock()
-try:
-    from curl_cffi.requests.errors import RequestsError as _CurlRequestsError
-    GR_CURL_ERRORS = (_CurlRequestsError,)
-except Exception:  # curl_cffi missing: the option falls back to plain requests (see gr_impersonated_get)
-    GR_CURL_ERRORS = ()
+GR_CURL_ERRORS = ()
+if GR_IMPERSONATE:  # load the native curl_cffi library ONLY when the option is on (it was loaded always; runs crashed with SIGSEGV, 2026-11-08)
+    try:
+        from curl_cffi.requests.errors import RequestsError as _CurlRequestsError
+        GR_CURL_ERRORS = (_CurlRequestsError,)
+    except Exception:  # curl_cffi missing: the option falls back to plain requests (see gr_impersonated_get)
+        pass
 
 def gr_impersonated_get(url, params, accept_language):
     """GET with a Chrome browser signature (curl_cffi). Headers (User-Agent, sec-ch-ua ...) come from the impersonation
@@ -500,8 +502,12 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
             out.remove(x); notes.append(f"'{n}' removed (named like another author's series, Audible does not list it)")
         elif aud_series and not others and fact(n)['n'] <= 2 and not listed(n):
             a = aud_series[0]; canon = canonical_series(lib, a['name'], book_authors, book_variant)[0]
-            x['name'], x['sequence'] = canon, a.get('sequence') or x.get('sequence')
-            notes.append(f"'{n}' -> '{canon}' (only series of the book, Audible does not list it)")
+            if non_latin_name(n) or _ffb(n, book_lang):
+                x['name'], x['sequence'] = canon, a.get('sequence') or x.get('sequence')
+                notes.append(f"'{n}' -> '{canon}' (only series of the book, not English/German, Audible does not list it)")
+            elif not any(same(y['name'], canon) for y in out):  # ADD: 'Chains of the Fallen' is a real sub-series of Audible's 'Soul Force Saga'
+                out.append({'name': canon, 'sequence': a.get('sequence')})
+                notes.append(f"'{canon}' #{a.get('sequence') or '-'} added (Audible's series; '{n}' stays)")
         elif folder and fact(n)['folders'] == {folder} and any(same(a['name'], folder) for a in aud_series) and not any(same(y['name'], folder) for y in out):
             a = next(a for a in aud_series if same(a['name'], folder))
             add = {'name': canonical_series(lib, a['name'], book_authors, book_variant)[0], 'sequence': a.get('sequence')}

@@ -15,9 +15,15 @@ from webui import core  # noqa: E402
 ap = argparse.ArgumentParser()
 ap.add_argument('--only', default='', help='comma separated item keys (single books)')
 ap.add_argument('--dry', action='store_true', help='test run (nothing is written)')
+ap.add_argument('--clear-stale', action='store_true', help="mark this tool's runs that still say 'running' as stopped (killed run)")
 a = ap.parse_args()
 
 runs = core.RUNNER.runs()
+if a.clear_stale:
+    for r in runs[:10]:
+        if r.get('status') == 'running' and r.get('trigger') == 'claude':
+            r.update(status='stopped', end=datetime.now().isoformat(timespec='seconds')); core.RUNNER._save_run(r); print('stale run marked stopped:', r['id'])
+    sys.exit(0)
 if any(r.get('status') == 'running' for r in runs[:5]):
     print('another scan is running - not started'); sys.exit(2)
 s = core.load_settings()
@@ -26,6 +32,7 @@ run_id = datetime.now().strftime('%Y%m%d-%H%M%S')
 extra = {'RUN_ID': run_id, 'DRY_RUN': 'true' if a.dry else 'false'}
 if a.only: extra['ONLY_ITEMS'] = a.only
 env = core.script_env(s, extra)
+env['PYTHONFAULTHANDLER'] = '1'  # a crash (SIGSEGV seen 2026-11-08) prints the Python stack into the console log
 log = f"run_{run_id}.log"
 run = {'id': run_id, 'kind': 'full', 'label': 'Scan (Claude fix loop)' + (' - test run' if a.dry else ''), 'dry_run': a.dry, 'trigger': 'claude',
        'items': a.only.split(',')[:50] if a.only else [], 'n_items': len(a.only.split(',')) if a.only else 0, 'run_settings': {},
