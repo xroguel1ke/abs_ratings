@@ -724,7 +724,20 @@ def run_progress(log_path):
     d = {'n': n, 'total': total, 'pct': round(100 * n / total, 1) if total else 0, 'eta': eta, 'title': title,
          'audible_found': cnt(r'SUCCESS on'), 'no_audible': cnt(r'No Audible data'), 'hardcover': cnt(r'✅ Hardcover via'),
          'goodreads': cnt(r'✅ Goodreads via|Found via cached URL'), 'new_asin': cnt(r'NEW ASIN'), 'reviews': cnt(r'added to the review list|review list\)'),
-         'errors': cnt(r' - (?:ERROR|WARNING) - .*(?:Error|Traceback)'), 'goodreads_blocked': bool(re.search(r'Goodreads still blocks|Bot challenge', txt))}
+         'errors': cnt(r' - (?:ERROR|WARNING) - .*(?:Error|Traceback)'), 'goodreads_blocked': bool(re.search(r'Goodreads still blocks|Bot challenge', txt)),
+         'titles': cnt(r'-> Title: '), 'series': cnt(r'-> Series: '), 'covers': cnt(r'Cover (?:replaced|added|set)'), 'merges': cnt(r'🔗 MERGE')}
+    # speed and expected end: from the timestamps of the progress lines (books FINISHED per minute over the last ~150 books)
+    ts = re.findall(r'^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+ - INFO - \((\d+)/\d+\) \[ETA', txt, re.M)
+    if len(ts) >= 5:
+        try:
+            t = [(datetime.strptime(x, '%Y-%m-%d %H:%M:%S'), int(k)) for x, k in ts[-150:]]
+            mins = (t[-1][0] - t[0][0]).total_seconds() / 60
+            if mins > 0:
+                d['speed'] = round((t[-1][1] - t[0][1]) / mins, 1)
+                left = total - n
+                if d['speed'] > 0 and left > 0:
+                    d['finish'] = (datetime.now() + timedelta(minutes=left / d['speed'])).strftime('%H:%M')
+        except ValueError: pass
     _prog_cache[log_path] = ((st.st_size, st.st_mtime), d)
     return d
 
