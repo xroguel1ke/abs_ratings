@@ -47,6 +47,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [U] Build-up / maintenance mode (~30 random books per day) + change monitoring (respect manual edits) | ✅ | RUN_MODE auto/buildup/maintain, MAINTAIN_SAMPLE; last_written.json: rescan-reverted fields re-applied, user-changed fields never overwritten (manual_fields.json, optional lock tag, review list Other); integration test in the regress gate |
 | [U] Lock feature kept but de-emphasised; lock report | ✅ | status page: lock tags with books (11 in the library) |
 | [U] Parallel books (WORKERS=3): max 1 request in flight per host, MIN_INTERVAL across threads, same author in one worker, per-book log blocks | ✅ | regress identical with 1 and 3 workers (first try found a shared search context -> 2 wrong ASINs, fixed); H12 14.5 min vs ~22 |
+| [U] Fix loop round 6/7 (2026-11-08): sibling-series cache (30 days), Audible sequence 'N, Subtitle' = no number, unnumbered leading series split via the ABS series list, novella range '0.1 - 0.5', accent-insensitive narrators, author without space, Part P Volume V = #P.V | ✅ | Stolen Heir / Assassin's Blade / Chain of Feathers / Blue Core 3 / Bookworm P1V3; regress + damage sim green |
 
 ## Goodreads (experimental)
 | Item | State | Note |

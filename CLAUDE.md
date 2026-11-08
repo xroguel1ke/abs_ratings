@@ -120,6 +120,10 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
 - Listing seriesName is split at ' #N' (names contain commas). listing_value() keeps strings (iterating gave '' -> every series write
   was 'changed outside' in the next run). Review entries a later run no longer raises are closed (review_sweep).
 - Authors (same recording, runtime 2 min): swapped authors/narrators and several Audible authors glued into one ABS author are fixed.
+- Round 6/7 (2026-11-08): an Audible sequence 'N, Subtitle' ('1, The Stolen Heir' in The Folk of the Air) is a sub-series position = no
+  number. The listing seriesName glues an UNNUMBERED leading series to the next ('Elfhame, The Folk of the Air #1'): split via the ABS
+  series list (LIB_SERIES_NAMES). A novella range ('0.1 - 0.5', span < 1) containing the ABS number is no conflict; box sets ('1-3') are.
+  Audible '#P.V' for 'Part P, Volume V' is no conflict when both titles name that part + volume. Narrator/author keys fold accents.
 - **Narrator = author** in ABS is replaced by Audible's narrators of the same recording (runtime 2 min) only.
 
 ## Testing
