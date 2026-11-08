@@ -562,7 +562,25 @@ def series_by_membership(lib, asin, host, book_authors, title=None, all_hits=Fal
         return [(n_, next(iter(qs))) for n_, qs in by.items() if len(qs) == 1]
     return hits[0] if len({h[0] for h in hits}) == 1 and len({h[1] for h in hits}) == 1 else None
 
+SIBLING_FILE = os.path.join(SCRIPT_DIR, 'sibling_series.json')  # {asin: {'ts': iso, 'extra': [...]}}: series of other recordings (30 days)
+SIBLING_CACHE, SIBLING_DAYS = {}, 30
+
 def sibling_series(asin, domain, series_list, title):
+    """Cached wrapper (round 6 2026-11-08 was ~25 % slower: series lists + sibling products for every book): an ASIN is asked again
+    after SIBLING_DAYS only."""
+    with IO_LOCK:
+        if not SIBLING_CACHE: SIBLING_CACHE.update(rw_json(SIBLING_FILE) or {'_': {}})
+        c = SIBLING_CACHE.get(asin)
+    if c:
+        try:
+            if datetime.now(timezone.utc) - datetime.fromisoformat(c['ts']) < timedelta(days=SIBLING_DAYS): return c['extra']
+        except (KeyError, ValueError): pass
+    extra = _sibling_series(asin, domain, series_list, title)
+    with IO_LOCK:
+        SIBLING_CACHE[asin] = {'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'extra': extra}
+    return extra
+
+def _sibling_series(asin, domain, series_list, title):
     """Series of OTHER recordings of the same work: Audible lists the new Lucy Tregear recording of 'Ship of Magic' only in 'Liveship
     Traders'; the older recording in the same Audible series list (same title, same number) is also 'Realm of the Elderlings' #4.
     A series belongs to the work, not the recording. Returns extra series dicts like md_raw['series'] (name, part, asin)."""
@@ -4447,6 +4465,7 @@ def main():
         rw_json(ROLE_NAMES_FILE, sorted(ROLE_NAMES))  # knowledge, also from dry runs
         rw_json(HC_USAGE_FILE, HC_USAGE)  # real requests count in dry runs too
         if not DRY_RUN: rw_json(LAST_WRITTEN_FILE, LAST_WRITTEN); rw_json(MANUAL_FIELDS_FILE, MANUAL_FIELDS)
+        if not DRY_RUN and len(SIBLING_CACHE) > 1: rw_json(SIBLING_FILE, {k: v for k, v in SIBLING_CACHE.items() if k != '_'})
         if not DRY_RUN: rw_json(FILLED_NARR_FILE, sorted(FILLED_NARR))
 
     series_result = {}
