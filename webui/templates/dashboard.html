@@ -5,39 +5,72 @@
 <div class="hero">
  <a class="card herocard" href="{{ url_for('review_page') }}">
   <div class="muted small">{{ _('To review') }}</div><div class="v">{{ tiles.queue + tiles.review + tiles.merged }}</div>
-  <div class="small">{{ _('%(a)s books · %(b)s uncertain series/authors · %(c)s merges to confirm', a=tiles.queue, b=tiles.review, c=tiles.merged) }}</div>
-  <div class="go">{{ _('Open the review list') }} {{ icon('arrow-right', 14) }}</div></a>
+  <div class="small muted">{{ _('%(a)s books · %(b)s series/authors · %(c)s merges', a=tiles.queue, b=tiles.review, c=tiles.merged) }}</div></a>
  <div class="card herocard">
   <div class="muted small">{{ _('Last scan') }}</div>
   {% if last %}<div class="v" style="font-size:1.2em"><a href="{{ url_for('run_view', run_id=last.id) }}">{{ last.start|dt }}</a></div>
-  <div class="small"><span class="badge {{ 'ok' if last.status=='ok' else 'err' }}">{{ last.status }}</span>{% if last.dry_run %} <span class="badge">{{ _('Test run') }}</span>{% endif %} {{ last.label }}</div>
-  {% if last.summary %}<div class="muted small" style="margin-top:4px">{{ last.summary[:180] }}{{ '…' if last.summary|length > 180 }}</div>{% endif %}
+  <div class="small"><span class="badge {{ 'ok' if last.status=='ok' else 'err' }}">{{ last.status }}</span>{% if last.dry_run %} <span class="badge">{{ _('Test run') }}</span>{% endif %}</div>
   {% else %}<div class="v" style="font-size:1.2em">–</div><div class="muted small">{{ _('no scan yet') }}</div>{% endif %}</div>
  <a class="card herocard" href="{{ url_for('runs') }}">
   <div class="muted small">{{ _('Next scan') }}</div><div class="v" style="font-size:1.2em">{{ next_run|dt if next_run else _('no schedule') }}</div>
-  <div class="small">Goodreads: {{ gr_note or (_('off') if not settings.GOODREADS_ENABLED else _('on')) }}</div>
-  <div class="go">{{ _('Start a scan') }} {{ icon('arrow-right', 14) }}</div></a>
+  <div class="small muted">Goodreads: {{ gr_note or (_('off') if not settings.GOODREADS_ENABLED else _('on')) }} · Hardcover: {% if api.hc_left is not none %}{{ api.hc_left }} {{ _('left') }}{% else %}–{% endif %}</div></a>
 </div>
 
 <h2>{{ _('Library') }}</h2>
 <div class="tiles">
  <div class="tile"><div class="v">{{ tiles.books }}</div><div class="l">{{ _('books checked') }}</div></div>
  <div class="tile"><div class="v" style="color:var(--ok)">{{ tiles.ok }}</div><div class="l">{{ _('with ratings') }}</div></div>
- <div class="tile"><div class="v" style="color:var(--err)">{{ tiles.not_found }}</div><div class="l">{{ _('not found') }}</div></div>
- <div class="tile"><div class="v" style="color:var(--warn)">{{ tiles.other_edition }}</div><div class="l">{{ _('other edition') }}</div></div>
- <div class="tile"><div class="v">{{ tiles.no_ratings_yet }}</div><div class="l">{{ _('no ratings yet') }}</div></div>
+ <a class="tile" href="?status=not_found#problems"><div class="v" style="color:var(--err)">{{ tiles.not_found }}</div><div class="l">{{ _('not found') }}</div></a>
+ <a class="tile" href="?status=other_edition#problems"><div class="v" style="color:var(--warn)">{{ tiles.other_edition }}</div><div class="l">{{ _('other edition') }}</div></a>
+ <a class="tile" href="?status=no_ratings_yet#problems"><div class="v">{{ tiles.no_ratings_yet }}</div><div class="l">{{ _('no ratings yet') }}</div></a>
 </div>
-<p class="small"><a href="{{ url_for('status') }}">{{ _('Coverage of all fields') }} {{ icon('arrow-right', 14) }}</a> · <a href="{{ url_for('report') }}" target="_blank">{{ _('Library report') }} {{ icon('arrow-up-right', 14) }}</a></p>
 
-<h2>{{ _('Books without ratings') }} ({{ tiles.problems }})</h2>
-<form class="card row" method="get">
+<h2 id="health">{{ _('Library check') }}</h2>
+<div class="card tablewrap">
+{% if health is none %}<p class="muted">{{ _('Appears after the next scan.') }}</p>
+{% else %}<table class="health">{% for k, label, items in health %}<tr><td>{% if items %}<span class="dot warn"></span>{% else %}<span class="dot ok"></span>{% endif %} {{ _(label) }}</td>
+<td class="num" style="width:4em">{{ items|length }}</td>
+<td class="small">{% if items %}<details><summary>{{ _('show') }}</summary>{% for x in items[:200] %}<a href="{{ url_for('problem', key=x.key) }}">{{ x.title }}</a>{% if x.why %} <span class="muted">({{ x.why }})</span>{% endif %}{{ ', ' if not loop.last }}{% endfor %}{% if items|length > 200 %} …{% endif %}</details>{% endif %}</td></tr>{% endfor %}</table>
+{% if generated %}<p class="muted small" style="margin-bottom:0">{{ _('As of') }} {{ generated }} · <a href="{{ url_for('report') }}" target="_blank">{{ _('Library report') }} {{ icon('arrow-up-right', 14) }}</a></p>{% endif %}{% endif %}
+</div>
+
+<h2 id="coverage">{{ _('Coverage') }}</h2>
+<div class="card tablewrap"><table><tr><th>{{ _('Field') }}</th><th>{{ _('present') }}</th><th>{{ _('Share') }}</th><th>{{ _('Trend') }}</th><th></th></tr>
+{% for label, have, total, pct, titles in rows %}{% if pct is none %}<tr><td>{{ _(label) }}</td><td colspan="4" class="muted small">{{ _('from the next scan on') }}</td></tr>{% else %}<tr><td>{{ _(label) }}</td><td class="num">{{ have }} / {{ total }}</td>
+<td class="covcell"><div class="bar {{ 'hi' if pct >= 95 else 'mid' if pct >= 80 else 'lo' }}"><i style="width:{{ pct }}%"></i></div><span class="small num">{{ pct }} %</span></td>
+<td class="small">{% if label in first %}{% set d = pct - first[label] %}<span class="{{ 'badge ok' if d > 0.05 else ('badge err' if d < -0.05 else 'muted') }}">{{ '%+.1f'|format(d) }} %</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+<td class="small">{% if titles %}<details><summary>{{ _('%(n)s without', n=total - have) }}</summary>
+ {% for t, k in titles %}{% if k %}<a href="{{ url_for('problem', key=k) }}">{{ t }}</a>{% else %}{{ t }}{% endif %}{{ ', ' if not loop.last }}{% endfor %}{% if total - have > titles|length %} …{% endif %}
+ {% set ks = titles|map(attribute=1)|select|list %}{% if ks %}<form method="post" action="{{ url_for('runs') }}" style="margin-top:8px"><input type="hidden" name="action" value="start">
+  <input type="hidden" name="task_meta" value="on"><input type="hidden" name="dry" value="on"><input type="hidden" name="custom" value="1"><input type="hidden" name="selection" value="list">
+  <input type="hidden" name="REFRESH_DAYS" value="0"><input type="hidden" name="BATCH_SIZE" value="{{ ks|length }}"><input type="hidden" name="list" value="{{ ks|join('\n') }}">
+  <button>{{ _('Check these %(n)s books again (test run)', n=ks|length) }}</button></form>{% endif %}</details>{% endif %}</td></tr>{% endif %}
+{% else %}<tr><td colspan="5" class="muted">{{ _('Appears after the next scan.') }}</td></tr>{% endfor %}</table>
+{% if first_ts %}<p class="muted small" style="margin-bottom:0">{{ _('Trend since %(t)s', t=first_ts) }}</p>{% endif %}</div>
+
+<h2 id="problems">{{ _('Books without ratings') }} ({{ tiles.problems }})</h2>
+<form class="row" method="get" action="#problems" style="margin-bottom:12px">
  <select name="status" style="flex:1 1 200px"><option value="">{{ _('all') }}</option>
  {% for k in ['not_found','other_edition','no_ratings_yet','error'] %}<option value="{{ k }}" {{ 'selected' if status_filter==k }}>{{ status_label[k] }} ({{ counts.get(k,0) }})</option>{% endfor %}</select>
  <input type="search" name="q" value="{{ q }}" placeholder="{{ _('Title or author') }}" style="flex:2 1 220px"><button class="primary">{{ _('Filter') }}</button></form>
 <div class="card tablewrap"><table><tr><th>{{ _('Book') }}</th><th>{{ _('Status') }}</th><th>{{ _('Reason') }}</th><th>ASIN</th></tr>
 {% for r in problems[:300] %}<tr><td><a href="{{ url_for('problem', key=r.key) }}">{{ r.title }}</a><div class="muted small">{{ r.author }}</div></td>
 <td><span class="badge {{ r.status }}">{{ status_label[r.status] }}</span>{% if r.dry_run %}<div class="muted small">{{ _('from a test run') }}</div>{% endif %}</td>
-<td class="small">{{ r.reason|de }}{% for n in r.notes or [] %}<div class="muted">{{ n|de }}</div>{% endfor %}</td><td class="small">{% if r.asin %}<code>{{ r.asin }}</code>{% else %}–{% endif %}</td></tr>
-{% else %}<tr><td colspan="4" class="muted">{{ _('None.') }} {{ _('The list fills after the first scan.') }}</td></tr>{% endfor %}</table>
+<td class="small">{{ r.reason|de }}</td><td class="small">{% if r.asin %}<code>{{ r.asin }}</code>{% else %}–{% endif %}</td></tr>
+{% else %}<tr><td colspan="4" class="muted">{{ _('None.') }}</td></tr>{% endfor %}</table>
 {% if problems|length > 300 %}<p class="muted small">{{ _('First 300 of %(n)s - please filter.', n=problems|length) }}</p>{% endif %}</div>
+
+<h2>{{ _('More') }}</h2>
+<div class="card">
+<details><summary>{{ _('ISBN field wrong, no replacement found') }} ({{ isbn_bad|length }})</summary>
+ <p class="muted small">{{ _('Replaced only with a verified ISBN; the next scan tries again.') }}</p>
+ {% if isbn_bad %}<table><tr><th>{{ _('Book') }}</th><th>{{ _('ISBN field') }}</th><th>{{ _('Reason') }}</th></tr>{% for x in isbn_bad[:500] %}<tr><td><a href="{{ url_for('problem', key=x.key) }}">{{ x.title }}</a></td><td><code>{{ x.isbn }}</code></td><td class="small">{{ x.reason|de }}</td></tr>{% endfor %}</table>{% endif %}</details>
+<details><summary>{{ _('Locked books') }} ({{ locks.values()|map('length')|sum }})</summary>
+ {% if locks %}<table>{% for t, books in locks.items() %}<tr><td><code>{{ t }}</code></td><td class="small"><details><summary>{{ books|length }}</summary>{% for k, title in books[:300] %}<a href="{{ url_for('problem', key=k) }}">{{ title }}</a>{{ ', ' if not loop.last }}{% endfor %}</details></td></tr>{% endfor %}</table>{% endif %}</details>
+<details><summary>{{ _('Limits and caches') }}</summary><table>
+ <tr><td>Hardcover</td><td class="small">{% if api.hc_left is not none %}{{ api.hc_left }} {{ _('left') }}{% if api.hc_when %} ({{ api.hc_when }}){% endif %} · {% endif %}{{ _('own budget %(n)s / %(m)s today', n=api.hc_used, m=api.hc_limit) }}</td></tr>
+ <tr><td>Goodreads</td><td class="small">{{ _(api.gr) }}</td></tr>
+ {% for k, v in api.caches.items() %}<tr><td>{{ _(k) }}</td><td class="small">{{ _('%(n)s entries', n=v) }}</td></tr>{% endfor %}</table></details>
+<p class="small" style="margin-bottom:0"><a href="{{ url_for('export_csv') }}">{{ icon('download', 14) }} {{ _('All books as CSV') }}</a></p>
+</div>
 {% endblock %}

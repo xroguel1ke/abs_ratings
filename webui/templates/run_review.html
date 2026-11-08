@@ -12,7 +12,7 @@
  <button class="primary">{{ _('Filter') }}</button>{% if q or field %}<a href="{{ url_for('run_review', run_id=run.id) }}">{{ _('Clear filter') }}</a>{% endif %}
 </form>
 <div class="card">
- <p class="small" style="margin-top:0">{{ _('Checked changes are written - but only if the ABS value is still the same as in the test run (otherwise skipped and named in the log). No new Audible requests. ABS backup first, afterwards everything can be undone under') }} <a href="{{ url_for('history') }}">{{ _('History') }}</a>.</p>
+ <p class="small" style="margin-top:0">{{ _('Writes the checked changes where ABS still has the test-run value. ABS backup first; everything can be undone under') }} <a href="{{ url_for('history') }}">{{ _('History') }}</a>.</p>
  <form id="applyform" method="post" action="{{ url_for('run_apply', run_id=run.id) }}" class="row" data-confirm="{{ _('Write the selected changes to ABS now?') }}" data-confirm-ok="{{ _('Write') }}">
   <input type="hidden" name="selection" value="1">
   <button type="button" onclick="pickAll(true)">{{ _('select all') }}</button><button type="button" onclick="pickAll(false)">{{ _('none') }}</button>
@@ -22,7 +22,7 @@
  </form>
 </div>
 {% if risky and not field %}<div class="card tablewrap" style="border-left:5px solid var(--warn)"><h2 style="margin-top:0">{{ icon('triangle-alert') }} {{ _('Check risky changes first') }} ({{ risky|length }})</h2>
-<p class="muted small">{{ _('ASIN change or new ASIN, title, language, new series, authors, ISBN replacement: they change which book is meant or what it is called. Look at each one (a click on the title shows comparison and reason).') }}</p>
+<p class="muted small">{{ _('These change which book is meant or its name - check each one (click the title for details).') }}</p>
 <table class="diff"><tr><th></th><th>{{ _('Book') }}</th><th>{{ _('Old') }}</th><th>{{ _('New') }}</th></tr>{% for e in risky %}{{ row(e) }}{% endfor %}</table></div>{% endif %}
 {% for f, es in groups %}{% set safe = es|rejectattr('risky')|list %}{% if safe %}
 <details class="card tablewrap" {{ 'open' if field or groups|length == 1 }}><summary><b>{{ FL.get(f, f) }}</b> <span class="muted">({{ safe|length }})</span>

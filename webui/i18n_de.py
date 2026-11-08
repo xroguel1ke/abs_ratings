@@ -282,3 +282,25 @@ add({
         'Hell oder dunkel. Beim ersten Besuch gilt die Systemeinstellung, danach merkt sich der Browser deine Wahl.',
     'Skip': 'Überspringen', 'Back': 'Zurück', 'Done': 'Fertig', 'Next': 'Weiter', 'Please confirm': 'Bitte bestätigen',
 })
+add({  # overview with status + library check, scans with history tab (2026-11-08)
+    '%(a)s books · %(b)s series/authors · %(c)s merges': '%(a)s Bücher · %(b)s Reihen/Autoren · %(c)s Zusammenführungen',
+    'Appears after the next scan.': 'Erscheint nach dem nächsten Scan.', 'Changes written': 'Geschriebene Änderungen', 'Coverage': 'Abdeckung',
+    'Library check': 'Bibliotheks-Check', 'Limits and caches': 'Limits und Caches', 'More': 'Mehr',
+    'Replaced only with a verified ISBN; the next scan tries again.': 'Wird nur durch eine geprüfte ISBN ersetzt; der nächste Scan versucht es erneut.',
+    'Trend since %(t)s': 'Trend seit %(t)s', 'Written to ABS. Each change can be undone - per field, book or scan.': 'In ABS geschrieben. Jede Änderung lässt sich rückgängig machen – pro Feld, Buch oder Scan.',
+    'from the next scan on': 'ab dem nächsten Scan', 'left': 'übrig', 'own budget %(n)s / %(m)s today': 'eigenes Budget %(n)s / %(m)s heute', 'show': 'anzeigen',
+    'Without ASIN': 'Ohne ASIN', 'ASIN on several books': 'ASIN bei mehreren Büchern', 'ASIN not from the preferred store': 'ASIN nicht aus dem bevorzugten Shop',
+    'Series name not English/German': 'Reihenname nicht Englisch/Deutsch', 'Series number on 3+ different books': 'Reihennummer bei 3+ verschiedenen Büchern',
+    'Book folder names another volume': 'Buchordner nennt einen anderen Band', 'Series spelled in several ways': 'Reihe in mehreren Schreibweisen',
+})
+add({  # shorter help texts (2026-11-08)
+    'Removes the chosen lines from the rating block. Can be undone; the source stays paused for these books until the refresh time.': 'Entfernt die gewählten Zeilen aus dem Bewertungsblock. Rückgängig machbar; die Quelle bleibt für diese Bücher bis zur Auffrischung pausiert.',
+    'A test run only plans; you can review and apply the changes afterwards.': 'Ein Testlauf plant nur; die Änderungen kannst du danach prüfen und übernehmen.',
+    'Suggestions without enough evidence for an automatic change. Apply writes it (can be undone), Discard keeps the book as it is.': 'Vorschläge ohne genug Belege für eine automatische Änderung. Übernehmen schreibt sie (rückgängig machbar), Verwerfen lässt das Buch wie es ist.',
+    'Merged automatically only with equal names (or matching numbers), a shared author, the same edition and no overlapping numbers.': 'Automatisch zusammengeführt nur bei gleichen Namen (oder passenden Nummern), gemeinsamem Autor, gleicher Ausgabe und ohne doppelte Nummern.',
+    'Unified only with evidence for the same person (spelling, Audible author id, identical books).': 'Vereinheitlicht nur mit Belegen für dieselbe Person (Schreibweise, Audible-Autoren-ID, gleiche Bücher).',
+    'The same recording twice (author, narrator and runtime equal). Clean up in ABS itself.': 'Dieselbe Aufnahme doppelt (Autor, Sprecher und Laufzeit gleich). Bitte in ABS selbst aufräumen.',
+    'How sure the script is that the ASIN is exactly this book (0-100), from title, author, runtime, narrator, number, publisher.': 'Wie sicher das Skript ist, dass die ASIN genau dieses Buch ist (0-100) – aus Titel, Autor, Laufzeit, Sprecher, Nummer, Verlag.',
+    'Writes the checked changes where ABS still has the test-run value. ABS backup first; everything can be undone under': 'Schreibt die angehakten Änderungen, wo ABS noch den Wert aus dem Testlauf hat. Vorher ABS-Backup; alles rückgängig machbar unter',
+    'These change which book is meant or its name - check each one (click the title for details).': 'Diese ändern, welches Buch gemeint ist oder wie es heißt – bitte einzeln prüfen (Klick auf den Titel zeigt Details).',
+})

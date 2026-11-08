@@ -213,3 +213,10 @@ pre.log{background:var(--code);border:1px solid var(--line);border-radius:var(--
 
 /* links inside tables read as catalogue entries: ink, amber only on hover */
 td>a,td>b>a{color:var(--fg)}td>a:hover{color:var(--accent-ink)}
+/* overview: library check + linked tiles */
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}
+table.health td{vertical-align:top}
+a.tile{color:inherit;transition:border-color .15s var(--ease)}a.tile:hover{text-decoration:none;border-color:var(--fg2)}
+.card>details{padding:8px 0;border-bottom:1px solid var(--line)}.card>details:last-of-type{border-bottom:0}
+.card>details[open]>summary{margin-bottom:8px}

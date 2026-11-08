@@ -10,7 +10,7 @@ json.dump({'lib_1': {'title': 'Test Book One', 'status': 'not_found', 'author': 
 json.dump({'must_change_password': False}, open(os.path.join(cfg, 'settings.json'), 'w'))
 from webui import app as W, core, i18n
 
-PAGES = ['/', '/books', '/review', '/status', '/runs', '/history', '/settings', '/logs', '/problem/lib_1', '/password']
+PAGES = ['/', '/books', '/review', '/runs', '/history', '/settings', '/logs', '/problem/lib_1', '/password']
 # words that must never show up on an English page (book data in the fixtures is English)
 GERMAN = re.compile(r'Bücher|Einstellungen|Prüfliste|Übernehmen|rückgängig|Testlauf|Übersicht|Verlauf|speichern|Zeitplan|Sicherheit|Begründung|Abbrechen|nicht gefunden')
 
@@ -66,14 +66,15 @@ def test_default_is_english():
 
 def test_german_selectable():
     c = client('de')
-    want = {'/': 'Übersicht', '/books': 'Sicherheit', '/review': 'Prüfliste', '/status': 'Abdeckung der Bibliothek', '/runs': 'Scan starten',
-            '/history': 'Verlauf', '/settings': 'Verbindung speichern', '/logs': 'Noch keine Logs', '/problem/lib_1': 'Keine ASIN und kein Treffer bei Audible',
+    want = {'/': 'Übersicht', '/books': 'Sicherheit', '/review': 'Prüfliste', '/runs': 'Scan starten',
+            '/history': 'Geschriebene Änderungen', '/settings': 'Verbindung speichern', '/logs': 'Noch keine Logs', '/problem/lib_1': 'Keine ASIN und kein Treffer bei Audible',
             '/password': 'Passwort ändern'}
     for p, w in want.items():
         h = c.get(p).get_data(as_text=True)
         assert w in h, (p, w)
         assert '<html lang="de">' in h
     assert 'Laufzeit' in c.get('/problem/lib_1').get_data(as_text=True)
+    assert 'Abdeckung' in c.get('/').get_data(as_text=True)  # the status page lives in the overview now
 
 
 def test_language_saved_in_interface_section():

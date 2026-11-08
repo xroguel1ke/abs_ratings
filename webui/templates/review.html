@@ -10,7 +10,7 @@
 <div class="spanel">
 
 <div class="sec" data-sec="buecher">
-<div class="card"><h2 style="margin-top:0">{{ _('Books') }}</h2><p class="muted small" style="margin-top:-8px">{{ _('New ASIN, title suggestion or Hardcover match where the evidence is not enough for an automatic change. "Apply" writes the suggestion (can be undone in the history), "Discard" leaves the book as it is - the suggestion does not come back.') }}</p></div>
+<div class="card"><h2 style="margin-top:0">{{ _('Books') }}</h2><p class="muted small" style="margin-top:-8px">{{ _('Suggestions without enough evidence for an automatic change. Apply writes it (can be undone), Discard keeps the book as it is.') }}</p></div>
 {% for x in secs.buecher.entries %}{% set r = x.res %}{% set store = r.domain or 'www.audible.com' %}
 <div class="card mcard">
  <div class="row" style="justify-content:space-between"><div><span class="badge warn">{{ {'asin': 'ASIN', 'isbn': 'ISBN', 'title': _('Title'), 'hardcover': 'Hardcover', 'series': _('Series')}.get(x.kind, x.kind) }}</span>
@@ -29,7 +29,7 @@
 {% for k in ('reihen', 'autoren') %}{% set s = secs[k] %}
 <div class="sec" data-sec="{{ k }}">
 <div class="card"><h2 style="margin-top:0">{{ _('Merge series') if k == 'reihen' else _('Normalize authors') }}</h2>
- <p class="muted small" style="margin-top:-8px">{% if k == 'reihen' %}{{ _('Series are merged automatically only when the names are equal after cleaning (or almost equal and the volume numbers complement or interleave), every book shares an author, the edition is the same and no numbers overlap.') }}{% else %}{{ _('Authors are normalized automatically only with evidence for the same person: spelling (initials, spaces, accents), the same Audible author id or identical books. The goal is one spelling in Latin script.') }}{% endif %}</p></div>
+ <p class="muted small" style="margin-top:-8px">{% if k == 'reihen' %}{{ _('Merged automatically only with equal names (or matching numbers), a shared author, the same edition and no overlapping numbers.') }}{% else %}{{ _('Unified only with evidence for the same person (spelling, Audible author id, identical books).') }}{% endif %}</p></div>
 <h3>{{ _('Uncertain - your decision') }} ({{ s.review|length }})</h3>
 {% for x in s.review %}<div class="card mcard">
  <div class="mpair">{{ side(x.series, x.series_books if k == 'reihen' else '', x.series_titles, x.series_authors, _('Candidate')) }}<div class="marrow">{{ icon('arrow-right', 14) }}</div>{{ side(x.other, x.other_books if k == 'reihen' else '', x.other_titles, x.other_authors, _('Target')) }}</div>
@@ -49,7 +49,7 @@
 </div>{% endfor %}
 
 <div class="sec" data-sec="sonstiges">
-<div class="card"><h2 style="margin-top:0">{{ _('Other') }}</h2><p class="muted small" style="margin-top:-8px">{{ _('The same recording twice in the library (same author, same narrator, runtime equal to 2 seconds). The script changes nothing here - clean up in ABS itself.') }}</p></div>
+<div class="card"><h2 style="margin-top:0">{{ _('Other') }}</h2><p class="muted small" style="margin-top:-8px">{{ _('The same recording twice (author, narrator and runtime equal). Clean up in ABS itself.') }}</p></div>
 <h3>{{ _('Book in a series of another author') }} ({{ secs.sonstiges.foreign|length }})</h3>
 {% for x in secs.sonstiges.foreign %}<div class="card mcard"><div class="row" style="justify-content:space-between">
  <div class="small"><a href="{{ url_for('problem', key=x.key) }}"><b>{{ x.title }}</b></a> – {{ x.authors|join(', ') }}<br>

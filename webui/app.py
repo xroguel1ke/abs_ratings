@@ -206,7 +206,7 @@ def dashboard():
              'history': core.history_count()}
     return render_template('dashboard.html', tab=tab, tiles=tiles, problems=problems, merged=merged, review=rv, queue=queue,
                            last=last, gr_note=gr_note, status_filter=status_filter, q=q, counts=counts,
-                           settings=core.load_settings())
+                           settings=core.load_settings(), **status_context())
 
 
 @app.route('/problem/<key>', methods=['GET', 'POST'])
@@ -595,10 +595,15 @@ def books():
 @app.route('/status')
 @login_required
 def status():
+    return redirect(url_for('dashboard') + '#coverage')
+
+
+def status_context():
     rows, generated = core.coverage()
     trend = core.coverage_trend()
     first = {k: v for k, v in (trend[0]['pct'] if len(trend) > 1 else {}).items()}
-    return render_template('status.html', rows=rows, generated=generated, api=core.api_status(), isbn_bad=core.isbn_report(), locks=core.lock_report(), first=first, first_ts=(trend[0]['ts'] if len(trend) > 1 else ''), points=len(trend))
+    return dict(rows=rows, generated=generated, api=core.api_status(), isbn_bad=core.isbn_report(), locks=core.lock_report(), first=first,
+                first_ts=(trend[0]['ts'] if len(trend) > 1 else ''), points=len(trend), health=core.health())
 
 
 @app.route('/report')

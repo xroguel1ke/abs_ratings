@@ -99,7 +99,7 @@ def fold_accents(s):
     return "".join(c for c in unicodedata.normalize("NFKD", s or "") if not unicodedata.combining(c))
 
 def is_latin(name):
-    return not re.search(r"[^\x00-\u024F]", name or "")
+    return not any(c.isalpha() and "LATIN" not in unicodedata.name(c, "") for c in (name or ""))  # letters only: "86—EIGHTY-SIX" (em dash) is Latin
 
 LATIN_LANGS = {'english', 'eng', 'en', 'german', 'deu', 'ger', 'de', 'deutsch', '', None}
 def latin_books(g):
@@ -294,7 +294,7 @@ def collect_records(ctx):
             if d.get('mediaType', 'book') != 'book': continue
             raw_tags = (d.get('tags') or []) + (media.get('tags') or []) + (md.get('tags') or [])
             records.append({
-                'id': d['id'], 'lib': lib, 'title': md.get('title') or '?',
+                'id': d['id'], 'lib': lib, 'title': md.get('title') or '?', 'path': d.get('relPath') or '',
                 'authors': [a.get('name') if isinstance(a, dict) else a for a in (md.get('authors') or []) if a],
                 'narrators': md.get('narrators') or [], 'asin': md.get('asin'), 'isbn': md.get('isbn'), 'publisher': md.get('publisher'), 'year': md.get('publishedYear'), 'subtitle': md.get('subtitle'),
                 'series': [{'name': s.get('name'), 'sequence': s.get('sequence')} for s in (md.get('series') or []) if s.get('name')],
@@ -700,6 +700,7 @@ def build_report(ctx, records, merges, rejected, extra):
         'author_variants_library': author_var,
         'author_fixes': [{'from': k, 'to': v} for k, v in sorted(extra.get('author_fixes', {}).items())], 'author_variants_audible': extra.get('author_notes', []),
         'unmapped_genres': sorted(extra.get('unmapped_genres', [])),
+        'health': library_health(records, os.path.join(os.path.dirname(ctx['report_dir']), 'results.json')),
         'missing': {
             'asin': missing(lambda r: not r['asin']), 'cover': missing(lambda r: not r['cover']),
             'description': missing(lambda r: not re.sub(r'<[^>]+>|\s', '', no_desc_re.sub('', r['description']))),
@@ -715,6 +716,55 @@ def build_report(ctx, records, merges, rejected, extra):
     with open(os.path.join(ctx['report_dir'], 'library_report.html'), 'w', encoding='utf-8') as f:
         f.write(render_html(rep))
     return rep
+
+
+LANG_STORE = {'english': 'com', 'eng': 'com', 'en': 'com', 'german': 'de', 'deu': 'de', 'ger': 'de', 'de': 'de', 'deutsch': 'de'}
+
+def library_health(records, results_path=None):
+    """Checks of the whole library after every scan (ABS data + results.json, no Audible request) - what was checked by hand on
+    2026-11-08: no ASIN, an ASIN on several books, ASIN not from the preferred store, non-Latin series names, a series number held by
+    3+ different books, the book folder naming another volume, series spellings that differ only in case/spaces."""
+    try: results = json.load(open(results_path, encoding='utf-8')) if results_path and os.path.exists(results_path) else {}
+    except (OSError, ValueError): results = {}
+    out = defaultdict(list)
+    key = lambda r: f"{r['lib']}_{r['id']}"
+    add = lambda k, r, why='': out[k].append({'key': key(r), 'title': r['title'], 'why': why})
+    by_asin, by_title, seq_titles, names = defaultdict(list), defaultdict(list), defaultdict(set), defaultdict(set)
+    for r in records:
+        if 'lock_all' in r['tags']: continue
+        lang = str(r.get('language') or '').strip().lower()
+        if not r['asin']: add('no_asin', r)
+        else: by_asin[(r['lib'], r['asin'])].append(r)
+        want = LANG_STORE.get(lang)
+        log = ' '.join((results.get(key(r)) or {}).get('log') or [])
+        dom = re.findall(r'SUCCESS on www\.audible\.([a-z.]+)', log)
+        if want and dom and dom[-1] != want and 'lock_asin' not in r['tags']: add('wrong_store', r, f".{dom[-1]} ({r.get('language')})")
+        if want and any(not is_latin(x['name']) for x in r['series']): add('non_latin_series', r, ', '.join(x['name'] for x in r['series'] if not is_latin(x['name'])))
+        if r['authors']: by_title[(r['lib'], author_key(r['authors'][0]), re.sub(r'\W+', ' ', r['title'].lower()).strip())].append(r)
+        for x in r['series']:
+            names[(r['lib'], x['name'].strip().lower())].add(x['name'])
+            if x.get('sequence'): seq_titles[(r['lib'], x['name'], str(x['sequence']), lang)].add(re.sub(r'\W+', ' ', r['title'].lower()).strip())  # per language: a translation in two parts is no junk
+    for (_, a), rs in by_asin.items():
+        if len(rs) > 1:
+            for r in rs: add('shared_asin', r, a)
+    junk = {k[:3] for k, t in seq_titles.items() if len(t) >= 3}
+    for r in records:
+        hit = [f"{x['name']} #{x['sequence']}" for x in r['series'] if (r['lib'], x['name'], str(x.get('sequence'))) in junk]
+        if hit and 'lock_all' not in r['tags']: add('junk_number', r, ', '.join(hit))
+    for rs in by_title.values():
+        if len(rs) < 2: continue
+        for r in rs:
+            parts = [p for p in r.get('path', '').split('/') if p]
+            m = re.match(r'^(?:book\s*)?(\d+(?:\.\d+)?)\s+-\s+', parts[-1]) if len(parts) >= 3 else None
+            if not m: continue
+            nums = {parse_seq(x.get('sequence')) for x in r['series']} - {None}
+            nums |= {float(v) for v in re.findall(r'(?i)\b(?:vol(?:ume)?\.?|book|part)\s*(\d+)\b', r['title'])}
+            if nums and float(m.group(1)) not in nums: add('folder_conflict', r, f"folder {m.group(1)}, ABS {', '.join(f'{n:g}' for n in sorted(nums))}")
+    for (lib, low), ns in names.items():
+        if len(ns) > 1:
+            for r in records:
+                if r['lib'] == lib and any(x['name'] in ns for x in r['series']): add('case_variants', r, ' / '.join(sorted(ns)))
+    return {k: v for k, v in out.items()}
 
 
 def render_html(rep):

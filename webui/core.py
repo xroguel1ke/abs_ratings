@@ -531,6 +531,16 @@ def _coverage_trend(rows, stamp):
         hist[-1] = snap; _save_json(path, hist[-120:])
 
 
+HEALTH_LABELS = {'no_asin': 'Without ASIN', 'shared_asin': 'ASIN on several books', 'wrong_store': 'ASIN not from the preferred store',
+                 'non_latin_series': 'Series name not English/German', 'junk_number': 'Series number on 3+ different books',
+                 'folder_conflict': 'Book folder names another volume', 'case_variants': 'Series spelled in several ways'}
+
+def health():
+    """Library checks of the last report (abs_series.library_health): [(key, label, entries)], worst first."""
+    h = (_load_json(os.path.join(REPORT_DIR, 'library_report.json'), {}) or {}).get('health')
+    if h is None: return None
+    return [(k, HEALTH_LABELS[k], h.get(k) or []) for k in HEALTH_LABELS]
+
 def coverage_trend():
     return _load_json(os.path.join(CONFIG_DIR, 'coverage_history.json'), [])
 
