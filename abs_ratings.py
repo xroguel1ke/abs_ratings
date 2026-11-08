@@ -470,6 +470,9 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
         others_ok = any(listed(y['name']) or (folder and same(y['name'], folder)) for y in others)
         if aud_series and others_ok and (fact(n)['n'] <= 2 or non_latin_name(n)):
             missing = [a for a in aud_series if not any(same(y['name'], a['name']) for y in out)]
+            near = [a for a in missing if non_latin_name(n) or difflib.SequenceMatcher(None, _k(n), _k(a['name'])).ratio() >= 0.75]
+            if missing and not near: continue  # an own sub-series ('Hoid's Travails') next to a missing Audible series: leave it
+            missing = near
             if missing:  # 'Realms of the Elderlings' #14 while Audible's 'Realm of the Elderlings' is not on the book: take Audible's
                 a = missing[0]; canon = canonical_series(lib, a['name'], book_authors, book_variant)[0]
                 x['name'], x['sequence'] = canon, a.get('sequence') or x.get('sequence')
