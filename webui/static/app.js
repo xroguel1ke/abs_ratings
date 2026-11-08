@@ -26,54 +26,74 @@ function T(s) { return (window.I18N && window.I18N[s]) || s; }
       theme = theme === 'dark' ? 'light' : 'dark';
       store.set('abs_theme', theme); applyTheme(theme);
     });
-    if (document.querySelector('[data-tour]') && !store.get('abs_tour_done')) setTimeout(function () { Tour.start(); }, 400);
+    var step = parseInt(store.get('abs_tour_step') || '', 10);
+    if (document.querySelector('[data-tour]') && !isNaN(step)) setTimeout(function () { window.ABSTour.resume(step); }, 300);
+    else if (document.querySelector('[data-tour]') && !store.get('abs_tour_done')) setTimeout(function () { window.ABSTour.start(); }, 400);
   });
 
   // ---- onboarding tour ----
   var STEPS = [
-    { sel: null, t: T('Welcome to ABS Ratings'), p: T('ABS Ratings writes Audible and Hardcover ratings into your book descriptions and repairs metadata: ASIN, series, authors, titles, covers. This tour shows the pages (10 steps). You can restart it under Settings.') },
-    { sel: '[data-tour=dashboard]', t: T('Overview'), p: T('Your start page: what needs a decision, the last and the next scan, the library tiles (click one to filter), the library check after every scan and the coverage of every field.') },
-    { sel: '[data-tour=dashboard]', t: T('Library check'), p: T('Orange dots mark problems the script found but could not fix safely: missing ASIN, an ASIN on several books, series names in another language, folder and volume that disagree. Open a line to see the books.') },
-    { sel: '[data-tour=runs]', t: T('Scans'), p: T('Start a scan here and follow it live: progress, time left, expected end and what changed. Start with a test run: nothing is written, you review the planned changes and apply only what you want.') },
-    { sel: '[data-tour=runs]', t: T('Changes written'), p: T('The second tab of Scans lists everything that was really written to ABS. Every change can be undone - one field, one book or a whole scan; replaced covers come back from the backup.') },
-    { sel: '[data-tour=books]', t: T('Books'), p: T('Every checked book with its status and how certain the match is. A book page shows ABS next to Audible and Hardcover, why each decision was made, and lets you set an ASIN by hand or test one book.') },
-    { sel: '[data-tour=review]', t: T('Review list'), p: T('Only what the script could not verify on its own. Each suggestion shows ABS next to the suggestion (title, authors, narrators, runtime, series) - green dots agree. Apply or discard, also for all entries of one kind at once. Done entries disappear by themselves.') },
-    { sel: '[data-tour=settings]', t: T('Settings'), p: T('Connection to ABS, schedule, sources (Audible, Hardcover, Goodreads), how the rating block looks, series and author rules, notifications and the language.') },
-    { sel: null, t: T('Protect what you curated'), p: T('Lock tags in ABS keep the script away from a field: lock_series, lock_title, lock_asin, lock_authors ... or lock_all for the whole book. Everything else the script may correct.') },
-    { sel: '#theme-toggle', t: T('Design'), p: T('Light or dark. On the first visit the system setting is used, then the browser remembers your choice.') }
+    { page: 'dashboard', sel: null, t: T('Welcome to ABS Ratings'), p: T('ABS Ratings writes Audible and Hardcover ratings into your book descriptions and repairs metadata. This tour walks through every page and points at the important parts. You can restart it under Settings.') },
+    { page: 'dashboard', sel: '.hero', t: T('Overview: at a glance'), p: T('What waits for your decision, the last scan and the next scheduled one. A click on a card opens the page behind it.') },
+    { page: 'dashboard', sel: '#health', t: T('Library check'), p: T('After every scan the whole library is checked: books without ASIN, an ASIN on several books, series names in another language, folder and volume that disagree. Orange = something to look at; open a line to see the books.') },
+    { page: 'dashboard', sel: '#coverage', t: T('Coverage'), p: T('How many books have each field (ASIN, series, narrators, cover …) and how that changed. "without" lists the books and can check them again in a test run.') },
+    { page: 'runs', sel: '#startform', t: T('Start a scan'), p: T('Choose the tasks (metadata & ratings, authors, series …) and start. Keep "test run" ticked at first: nothing is written, you see every planned change and apply only what you want.') },
+    { page: 'runs', sel: '.tabs', t: T('Scans and changes written'), p: T('The list of all scans with live progress (time left, expected end, changes so far). The second tab shows what was really written to ABS.') },
+    { page: 'history', sel: '.card.tablewrap', t: T('Undo'), p: T('Every written change, per scan. Open a scan to undo one field, one book or the whole scan; replaced covers come back from the backup.') },
+    { page: 'books', sel: 'form.card', t: T('Books'), p: T('Every checked book. Search, filter by status and sort by certainty - how sure the script is that the ASIN is exactly this book.') },
+    { page: 'books', sel: '.card.tablewrap', t: T('Book page'), p: T('A click on a title shows ABS next to Audible and Hardcover, the reasoning of every decision, and lets you set an ASIN by hand or test this one book.') },
+    { page: 'review', sel: '.snav', t: T('Review list'), p: T('Only what the script could not verify on its own, in sections: books, series, authors. Done entries disappear by themselves after the next scan.') },
+    { page: 'review', sel: '.spanel', t: T('Deciding'), p: T('Each suggestion shows ABS next to the suggestion - green dots agree, orange ones differ. Apply or discard; "Apply all" / "Discard all" handles every entry of one kind at once.') },
+    { page: 'settings', sel: '.snav', t: T('Settings'), p: T('Sections on the left: connection, run and schedule, sources (Audible, Hardcover, Goodreads), metadata and rating block, series & authors, notifications, language. Each section has its own save button.') },
+    { page: 'settings', sel: null, t: T('Protect what you curated'), p: T('Lock tags in ABS keep the script away from a field: lock_series, lock_title, lock_asin, lock_authors … or lock_all for the whole book. Everything else the script may correct.') },
+    { page: 'settings', sel: '#theme-toggle', t: T('Design'), p: T('Light or dark. On the first visit the system setting is used, then the browser remembers your choice.') }
   ];
   var i = 0, dim = null, box = null, hl = null;
+  function pageUrl(pg) {
+    var a = document.querySelector('a[data-tour=' + (pg === 'history' ? 'runs' : pg) + ']'); if (!a) return null;
+    var h = a.getAttribute('href'); return pg === 'history' ? h.replace(/runs\/?$/, 'history') : h;
+  }
+  function onPage(pg) { var u = pageUrl(pg); return u && (location.pathname === u || location.pathname === u.replace(/\/$/, '')); }
   function clear() { if (hl) hl.classList.remove('tour-hl'); hl = null; }
-  function end() { clear(); if (dim) dim.remove(); if (box) box.remove(); dim = box = null; store.set('abs_tour_done', '1'); }
+  function end() { clear(); if (dim) dim.remove(); if (box) box.remove(); dim = box = null; store.set('abs_tour_done', '1'); store.set('abs_tour_step', ''); }
+  function go(n) {
+    i = n; var s = STEPS[i];
+    if (!onPage(s.page)) { var u = pageUrl(s.page); if (u) { store.set('abs_tour_step', String(i)); location.href = u; return; } }
+    show();
+  }
   function show() {
     clear();
     var s = STEPS[i], el = s.sel ? document.querySelector(s.sel) : null;
-    if (s.sel && !el) { if (i < STEPS.length - 1) { i++; return show(); } return end(); }
-    if (el) { el.classList.add('tour-hl'); hl = el; }
+    if (s.sel && !el) { if (i < STEPS.length - 1) return go(i + 1); return end(); }
+    if (el) { el.classList.add('tour-hl'); hl = el; el.scrollIntoView({block: 'center', behavior: 'smooth'}); }
     box.innerHTML = '<h3></h3><p></p><div class="row"><button type="button" data-a="skip">' + T('Skip') + '</button>' +
       '<span class="row">' + (i > 0 ? '<button type="button" data-a="back">' + T('Back') + '</button>' : '') +
       '<button type="button" class="primary" data-a="next">' + (i === STEPS.length - 1 ? T('Done') : T('Next')) + '</button></span></div>' +
       '<div class="muted small" style="margin-top:8px">' + (i + 1) + ' / ' + STEPS.length + '</div>';
     box.querySelector('h3').textContent = s.t; box.querySelector('p').textContent = s.p;
-    var r = el ? el.getBoundingClientRect() : null, w = Math.min(340, window.innerWidth - 24);
-    box.style.width = w + 'px';
-    if (r) { box.style.top = Math.min(r.bottom + 12, window.innerHeight - 200) + 'px'; box.style.left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12)) + 'px'; }
-    else { box.style.top = '20vh'; box.style.left = Math.max(12, (window.innerWidth - w) / 2) + 'px'; }
+    setTimeout(function () {
+      var r = el ? el.getBoundingClientRect() : null, w = Math.min(360, window.innerWidth - 24);
+      box.style.width = w + 'px';
+      if (r) {
+        var below = r.bottom + 12, top = below + 220 < window.innerHeight ? below : Math.max(12, r.top - 232);
+        box.style.top = top + 'px'; box.style.left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12)) + 'px';
+      } else { box.style.top = '20vh'; box.style.left = Math.max(12, (window.innerWidth - w) / 2) + 'px'; }
+    }, el ? 350 : 0);
+  }
+  function open() {
+    dim = document.createElement('div'); dim.className = 'tour-dim'; document.body.appendChild(dim);
+    box = document.createElement('div'); box.className = 'tour-box'; box.setAttribute('role', 'dialog'); document.body.appendChild(box);
+    box.addEventListener('click', function (e) {
+      var a = e.target.getAttribute('data-a');
+      if (a === 'skip') end();
+      else if (a === 'back') go(Math.max(0, i - 1));
+      else if (a === 'next') { if (i === STEPS.length - 1) end(); else go(i + 1); }
+    });
+    dim.addEventListener('click', end);
   }
   var Tour = {
-    start: function () {
-      end(); i = 0;
-      dim = document.createElement('div'); dim.className = 'tour-dim'; document.body.appendChild(dim);
-      box = document.createElement('div'); box.className = 'tour-box'; box.setAttribute('role', 'dialog'); document.body.appendChild(box);
-      box.addEventListener('click', function (e) {
-        var a = e.target.getAttribute('data-a');
-        if (a === 'skip') end();
-        else if (a === 'back') { i = Math.max(0, i - 1); show(); }
-        else if (a === 'next') { if (i === STEPS.length - 1) end(); else { i++; show(); } }
-      });
-      dim.addEventListener('click', end);
-      show();
-    }
+    start: function () { end(); store.set('abs_tour_done', ''); open(); go(0); },
+    resume: function (n) { open(); i = n; show(); }
   };
   window.ABSTour = Tour;
 })();
