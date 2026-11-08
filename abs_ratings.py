@@ -756,11 +756,24 @@ def _series_pairs(series):
         if k: out.append((k, _seq_num(s.get("sequence") if s.get("sequence") not in (None, "") else s.get("part"))))
     return out
 
+def _novella_range(v):
+    """'0.1 - 0.5' (Audible: The Assassin's Blade = Throne of Glass novellas 0.1-0.5) -> (0.1, 0.5). Only ranges spanning less than
+    one volume: a box set '1-3' is several books and stays a different number."""
+    m = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*[-\u2013]\s*(\d+(?:\.\d+)?)\s*", str(v or ""))
+    return (float(m.group(1)), float(m.group(2))) if m and 0 < float(m.group(2)) - float(m.group(1)) < 1 else None
+
 def series_seq_conflict(abs_series, cand_series):
-    """True if ABS and a candidate both state a number for the same series and the numbers differ (-> other volume)."""
+    """True if ABS and a candidate both state a number for the same series and the numbers differ (-> other volume).
+    An ABS number inside a candidate's novella range ('0.1 - 0.5' vs 0.5) is no conflict."""
+    rng = {}
+    for s in cand_series or []:
+        if r_ := _novella_range(s.get("sequence") if s.get("sequence") not in (None, "") else s.get("part")):
+            from abs_series import series_key
+            rng[series_key(s.get("name") or s.get("title") or "")] = r_
     for ak, an in _series_pairs(abs_series):
         for ck, cn in _series_pairs(cand_series):
             if an is not None and cn is not None and (ak == ck or difflib.SequenceMatcher(None, ak, ck).ratio() >= 0.9) and an != cn:
+                if ck in rng and rng[ck][0] <= an <= rng[ck][1]: continue
                 return True
     return False
 
