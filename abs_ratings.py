@@ -521,6 +521,54 @@ def series_seq_conflict(abs_series, cand_series):
                 return True
     return False
 
+_SERIES_SEQ, _ASIN_TITLE = {}, {}  # (host, series asin) -> [(child asin, sequence)]; (host, asin) -> title (cached per run)
+
+def _series_members(host, series_asin):
+    """Children of an Audible series with their numbers and titles (2 requests per series, cached)."""
+    if (host, series_asin) not in _SERIES_SEQ:
+        hdr = {"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}
+        throttle('audible_api', host)
+        try:
+            r = requests.get(f"https://{host}/1.0/catalog/products/{series_asin}", params={"response_groups": "relationships"}, headers=hdr, timeout=15)
+            rel = ((r.json().get('product') or {}).get('relationships') or []) if r.status_code == 200 else None
+        except (requests.RequestException, ValueError): rel = None
+        if rel is None: return None  # unknown: never used as proof
+        kids = [(x['asin'], str(x.get('sequence') or '').strip()) for x in rel if x.get('relationship_to_product') == 'child' and x.get('asin')]
+        need = [a for a, _ in kids if (host, a) not in _ASIN_TITLE]
+        for i in range(0, len(need), 50):
+            throttle('audible_api', host)
+            try:
+                r = requests.get(f"https://{host}/1.0/catalog/products", params={"asins": ",".join(need[i:i + 50]), "response_groups": "product_desc"},
+                                 headers=hdr, timeout=20)
+                prods = (r.json().get('products') or []) if r.status_code == 200 else None
+            except (requests.RequestException, ValueError): prods = None
+            if prods is None: return None
+            for p in prods: _ASIN_TITLE[(host, p.get('asin'))] = p.get('title') or ''
+        _SERIES_SEQ[(host, series_asin)] = kids
+    return [(a, q, _ASIN_TITLE.get((host, a), '')) for a, q in _SERIES_SEQ[(host, series_asin)]]
+
+def abs_number_disproved(abs_series, cand, cand_title, cand_series, host):
+    """ABS states another number for this series than Audible does. The ABS number is PROVABLY wrong (user wish 2026-11-08) only if
+    Audible's own series list has no OTHER volume with this title (The Hunter's Code 1 and 2 share title and narrator) and the ABS
+    number belongs to another title there or does not exist in that series. Returns {series key: Audible number} or None.
+    The caller additionally requires the same recording (identical title, runtime ±2 min, a shared narrator)."""
+    fixes = {}
+    nt = normalize_title_text(cand_title)
+    for ak, an in _series_pairs(abs_series):
+        for s in cand_series or []:
+            ck, cn = (_series_pairs([s]) or [(None, None)])[0]
+            if an is None or cn is None or an == cn or not (ak == ck or difflib.SequenceMatcher(None, ak, ck).ratio() >= 0.9): continue
+            if not s.get('asin'): return None
+            members = _series_members(host, s['asin'])
+            if not members: return None
+            num = lambda q: float(q) if re.fullmatch(r'\d+(\.\d+)?', str(q or '').strip()) else None
+            # another VOLUME with this title (other number: The Hunter's Code 1/2) -> no proof; the same number = another edition, fine
+            if any(a != cand and normalize_title_text(t) == nt and num(q) != cn for a, q, t in members): return None
+            at_abs = [t for a, q, t in members if num(q) == an]
+            if any(normalize_title_text(t) == nt for t in at_abs): return None
+            fixes[ck] = s.get('part') or s.get('sequence')
+    return fixes or None
+
 def series_number_hit(abs_series, cand_series):
     """ABS and the candidate list the same series (name equal after normalisation) with the SAME number."""
     return any(an is not None and cn is not None and an == cn and (ak == ck or difflib.SequenceMatcher(None, ak, ck).ratio() >= 0.9)
@@ -1613,7 +1661,14 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 exact_rt = bool(duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120)
                 # NOTE 2026-11-08: 'same title + runtime ±2 min + narrator' is NOT enough to ignore the ABS number - The Hunter's Code
                 # 1 and 2 share title and narrator and differ by 2 minutes (regress reg_syn_21). Do not add that exception again.
-                if not (SEARCH_CTX.get('dup_claim') and exact_rt):
+                same_rec = exact_rt and normalize_title_text(title) == normalize_title_text(found_title) and bool(
+                    {re.sub(r'[^a-z]', '', n.lower()) for n in (narrators or []) if n} & {re.sub(r'[^a-z]', '', n.lower()) for n in (p.get('narrators_raw') or []) if n})
+                proven = abs_number_disproved(abs_series, cand, found_title, (p.get('meta_raw') or {}).get('series'), host) if same_rec else None
+                if proven:
+                    fx_ = SEARCH_CTX.get('seq_fix') or {}; fx_[cand] = proven; SEARCH_CTX['seq_fix'] = fx_  # used only if THIS candidate becomes the ASIN
+                    logging.info(f"        🔢 '{found_title}' [{cand}]: ABS series number is provably wrong (Audible's series list has this book at "
+                                 f"{', '.join(f'#{v}' for v in proven.values())}, the ABS number belongs to another title) - number corrected later")
+                if not ((SEARCH_CTX.get('dup_claim') and exact_rt) or proven):
                     logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (series number differs from ABS)")
                     continue
                 dup_resolved = True
@@ -3387,8 +3442,12 @@ def process_queue(work_queue, history, failed, recheck):
                                     if why: logging.info(f"        🔗 Series '{s_name}' -> '{canon}' ({'alias list' if why == 'alias' else 'existing ABS series'})")
                                     if not existing.get('sequence') and s_seq: existing['sequence'] = s_seq
                                     elif s_seq and existing.get('sequence') and str(existing['sequence']) != str(s_seq):
+                                        proven_fix = ((SEARCH_CTX.get('seq_fix') or {}).get(asin) or {}) if asin_from_search else {}
                                         if ver and seq_shared(lib_id, existing['name'], existing['sequence']):  # ABS number is no evidence
                                             logging.info(f"        🔢 Series '{canon}': ABS #{existing['sequence']} is shared by several books -> Audible #{s_seq}")
+                                            existing['sequence'] = s_seq
+                                        elif ver and any(k == ck_ or difflib.SequenceMatcher(None, k, ck_).ratio() >= 0.9 for k in proven_fix for ck_, _ in _series_pairs([{'name': existing['name']}])):
+                                            logging.info(f"        🔢 Series '{canon}': ABS #{existing['sequence']} was proven wrong by Audible's series list -> #{s_seq}")
                                             existing['sequence'] = s_seq
                                         else:
                                             logging.info(f"        ℹ️ Series '{canon}': ABS #{existing['sequence']} vs Audible #{s_seq} (ABS kept)")

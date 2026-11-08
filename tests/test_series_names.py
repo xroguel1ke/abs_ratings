@@ -31,6 +31,38 @@ def test_series_in_library_exact():
     assert not A.series_in_library('l', 'The Stormlight Archive', ['Someone Else'])
 
 
+
+
+def _members(m):
+    A._series_members = lambda host, sa: m
+
+
+def test_abs_number_hunters_code_is_never_disproved():  # book 1 and 2 share the title (regress reg_syn_21)
+    _members([('B1', '1', "The Hunter's Code"), ('B2', '2', "The Hunter's Code")])
+    abs_s = [{'name': "The Hunter's Code", 'sequence': '2'}]
+    cand_s = [{'name': "The Hunter's Code", 'part': '1', 'asin': 'S1'}]
+    assert A.abs_number_disproved(abs_s, 'B1', "The Hunter's Code", cand_s, 'h') is None
+
+
+def test_abs_number_from_another_numbering_is_disproved():  # Discworld #11 for The Light Fantastic (Audible #2, #11 = Reaper Man)
+    _members([('C1', '1', 'The Colour of Magic'), ('L2', '2', 'The Light Fantastic'), ('L2old', '2', 'The Light Fantastic'), ('R11', '11', 'Reaper Man')])
+    abs_s = [{'name': 'Discworld', 'sequence': '11'}]
+    cand_s = [{'name': 'Discworld', 'part': '2', 'asin': 'S'}]
+    assert A.abs_number_disproved(abs_s, 'L2', 'The Light Fantastic', cand_s, 'h') == {'discworld': '2'}
+
+
+def test_abs_number_not_in_series_is_disproved():  # Heritage of Shannara #16 (chronological) vs Audible #3
+    _members([('D2', '2', 'The Druid of Shannara'), ('E3', '3', 'The Elf Queen of Shannara')])
+    assert A.abs_number_disproved([{'name': 'Heritage of Shannara', 'sequence': '16'}], 'E3', 'The Elf Queen of Shannara',
+                                  [{'name': 'The Heritage of Shannara', 'part': '3', 'asin': 'S'}], 'h')
+
+
+def test_no_series_list_means_no_proof():
+    _members(None)
+    assert A.abs_number_disproved([{'name': 'Discworld', 'sequence': '11'}], 'L2', 'The Light Fantastic',
+                                  [{'name': 'Discworld', 'part': '2', 'asin': 'S'}], 'h') is None
+
+
 if __name__ == '__main__':
     for n, f in list(globals().items()):
         if n.startswith('test_'): f(); print('ok', n)

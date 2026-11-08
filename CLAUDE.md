@@ -33,7 +33,11 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
 - **Titles:** only replaced for messy file-name titles (`The Book of the New Sun 05 Title`, zero-padded numbers only;
   `X: X: Subtitle`; `01 Title`). A new ASIN alone never changes a title (Audible titles carry marketing suffixes).
 - **ASIN search:** different volume numbers = always reject (also an ABS series number: same title + runtime ±2 min + narrator is NOT
-  enough to ignore it - The Hunter's Code 1 and 2 share title and narrator and differ by 2 min, regress reg_syn_21). Subtitle never adds containment points. A longer Audible
+  enough to ignore it - The Hunter's Code 1 and 2 share title and narrator and differ by 2 min, regress reg_syn_21).
+  ONLY exception (user wish 2026-11-08): the ABS number is PROVABLY wrong - same recording (identical title, runtime ±2 min, a shared
+  narrator) AND Audible's own series list (relationships) has no other VOLUME with this title (same title + same number = another
+  edition, fine) AND the ABS number belongs to another title there or does not exist. Then the ASIN is taken and the ABS number is
+  replaced by Audible's (Discworld #11 -> The Light Fantastic #2, Heritage of Shannara #15 -> #2). No series list -> no proof. Subtitle never adds containment points. A longer Audible
   title only counts if the ABS title has the number or the extra words are a marketing suffix (`MARKETING_WORDS`).
   Replacing an *existing* ASIN is strict: title ≥0.85, author, runtime (±10 min) and narrator (if known) must match.
 - **Marketplaces** (user rule 2026-11-08): English books ask audible.com FIRST, German books audible.de (1 request). Not there -> strict
