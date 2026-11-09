@@ -1016,6 +1016,12 @@ def api_test(what):
         url = request.form.get('url') or s.get('apprise_url')
         ok = core.notify(dict(s, apprise_url=url), 'ABS Ratings: Test', T('Notifications work.'), force=True)
         msg = T('Test message sent.') if ok else T('Sending failed (check the URL).')
+        if ok:  # ntfy: read the topic back - a redirect or a missing permission looks like success to Apprise
+            for u in [x for x in re.split(r'[\s,]+', url or '') if x.startswith('ntfy') or re.match(r'https?://[^/]*ntfy[^/]*/[^/]+', x)]:
+                u = re.sub(r'^http(s?)://', lambda m: 'ntfys://' if m.group(1) else 'ntfy://', u)
+                chk = core.ntfy_check(u, 'ABS Ratings: Test')
+                if chk == 'redirect': ok, msg = False, T('ntfy: the server redirects http to https - use ntfys:// (nothing arrived).')
+                elif chk == 'not_stored': ok, msg = False, T('ntfy: the server did not store the message - no permission for this topic? (with a login: user:password@ or tk_token@ before the host)')
     elif what == 'cron':
         tmp = dict(s, schedule_enabled=True, schedule_mode='cron', schedule_cron=request.form.get('cron', ''))
         nxt = core.next_run_time(tmp)

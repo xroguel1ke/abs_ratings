@@ -489,6 +489,25 @@ def notify(s, title, body, is_error=None, force=False):
         return False
 
 
+def ntfy_check(url, title):
+    """After a test: did the ntfy server really store the message? Apprise reports success for an http:// address that is only
+    redirected to https (nothing stored) - so the topic is read back. Returns None (no ntfy / not readable), True or a reason."""
+    m = re.match(r'(ntfys?)://(?:([^@/]+)@)?([^/]+)/([^?\s,]+)', url or '')
+    if not m: return None
+    scheme, cred, host, topic = ('https' if m.group(1) == 'ntfys' else 'http'), m.group(2) or '', m.group(3), m.group(4)
+    auth = {'headers': {'Authorization': f'Bearer {cred}'}} if cred.startswith('tk_') else {'auth': tuple(cred.split(':', 1))} if ':' in cred else {}
+    try:
+        if scheme == 'http':  # a GET only reads - it shows the redirect without publishing anything
+            h = requests.get(f"http://{host}/{topic}/json", params={'poll': 1, 'since': '1s'}, timeout=10, allow_redirects=False, **auth)
+            if h.status_code in (301, 302, 307, 308): return 'redirect'
+        g = requests.get(f"{scheme}://{host}/{topic}/json", params={'poll': 1, 'since': '2m'}, timeout=10, **auth)
+        if g.status_code in (401, 403): return 'not_stored'  # no read permission -> most likely no write permission either
+        if g.status_code != 200: return None
+        return True if any(json.loads(l).get('title') == title for l in g.text.splitlines() if l.strip()) else 'not_stored'
+    except Exception:
+        return None
+
+
 def notify_run(s, run):
     """After a full / library scan: one message with the lines of every chosen event that happened."""
     ev, summ = notify_events(s), run.get('summary') or ''
