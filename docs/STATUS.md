@@ -48,6 +48,8 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [U] Lock feature kept but de-emphasised; lock report | ✅ | status page: lock tags with books (11 in the library) |
 | [U] Parallel books (WORKERS=3): max 1 request in flight per host, MIN_INTERVAL across threads, same author in one worker, per-book log blocks | ✅ | regress identical with 1 and 3 workers (first try found a shared search context -> 2 wrong ASINs, fixed); H12 14.5 min vs ~22 |
 | [U] Fix loop round 6/7 (2026-11-08): sibling-series cache (30 days), Audible sequence 'N, Subtitle' = no number, unnumbered leading series split via the ABS series list, novella range '0.1 - 0.5', accent-insensitive narrators, author without space, Part P Volume V = #P.V | ✅ | Stolen Heir / Assassin's Blade / Chain of Feathers / Blue Core 3 / Bookworm P1V3; regress + damage sim green |
+| [A] Counting batches after the 2026-11-08/09 rule changes (100 EN + 80 DE synthetic, Hardcover on, new cases year prefix / ISO code / wrong narrator + book folders) | ✅ | 52-64: fixes after 53, 55, 59, 60; 61-64 clean = Audible streak 4, Hardcover streak 4 |
+| [U] Library rounds 6-9 | ✅ | round 9: 0 changes, 0 errors; audit in ABS clean (3 accepted number pairs: split German volumes, two recordings of Mistborn 1) |
 
 ## Goodreads (experimental)
 | Item | State | Note |
