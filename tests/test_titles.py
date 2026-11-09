@@ -26,3 +26,12 @@ def test_search_score_title_with_audible_subtitle():
     assert s('Homeland: Legend of Drizzt', 'Homeland', 'Legend of Drizzt: Dark Elf Trilogy, Book 1') >= 0.85
     assert s('Dune: Messiah', 'Dune', 'Dune Chronicles, Book 1') < 0.85
     assert s('Homeland: Legend', 'Homeland', 'Legend of Drizzt') < 0.85  # one tail word is too little
+
+
+def test_series_name_appended_to_title():
+    h = A.series_tail_head
+    assert h('Hogfather: Discworld', ['Discworld'], 'Hogfather') == 'Hogfather'
+    assert h('Mark of the Crijik 4: The Burning Lake: Mark of the Crijik', ['Mark of the Crijik'], 'Mark of the Crijik 4: The Burning Lake') == 'Mark of the Crijik 4: The Burning Lake'
+    assert h('Casual Farming 2: Sowing Season', ['Sowing Season'], 'Casual Farming 2: A Slow Living LitRPG') == 'Casual Farming 2'
+    assert h('Dune: Messiah', ['Dune'], 'Dune Messiah') is None  # the tail is not the series name
+    assert h('Discworld', ['Discworld'], 'Discworld') is None

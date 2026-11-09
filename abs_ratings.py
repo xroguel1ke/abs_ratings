@@ -1242,6 +1242,16 @@ RE_SERIES_PREFIX = re.compile(r'^\s*(.{4,}?)\s+(0\d{1,2}(?:-\d{1,2}|\.\d{1,2})?)
 
 RE_LEADING_NUM = re.compile(r'^\s*(0\d{1,2})\s*[-.:]?\s+(.{3,})$')  # '01 Nightside the Long Sun' (zero-padded only)
 
+def series_tail_head(title, abs_series, aud_title):
+    """'X: <one of the book's series names>' whose head X starts like Audible's title (same recording) -> X, else None."""
+    n = lambda x: normalize_title_text(x or '')
+    for sn in abs_series or []:
+        if sn and ':' in (title or '') and n(title).endswith(' ' + n(sn)) and re.search(r'(?i):\s*' + re.escape(sn.strip()) + r'\s*$', title):
+            head = re.sub(r'(?i)\s*:\s*' + re.escape(sn.strip()) + r'\s*$', '', title).strip()
+            if head and n(head) != n(title) and (n(head) + ' ').startswith(n(aud_title) + ' ') or n(aud_title).startswith(n(head) + ' ') and head:
+                return head
+    return None
+
 def glued_subtitle(title, abs_sub, aud_title, aud_sub, abs_series=None):
     """The ABS title is Audible's title + ': ' + Audible's subtitle (once or the subtitle twice) -> 'title' (title only) or 'subtitle' (title
     and the subtitle field: it is empty or names a series the book is not in - 'Moreta' had 'Victor of Tucson, Book 4'). Else None.
@@ -3374,7 +3384,8 @@ def note_listing_item(lib_id, it):
             pp_ = str(it.get('relPath') or '').split('/')
             if len(pp_) >= 3: f_['folders'].add(pp_[1].strip().lower())
         if sn_ and q_:
-            SEQ_TITLES.setdefault((lib_id, sn_.lower(), q_.strip()), set()).add(normalize_title_text(md_.get('title') or ''))
+            # title + ASIN: two volumes with the SAME title ('Reborn to Master the Blade' 3 and 4, both #4 in ABS) are two books
+            SEQ_TITLES.setdefault((lib_id, sn_.lower(), q_.strip()), set()).add(normalize_title_text(md_.get('title') or '') + ('|' + md_['asin'] if md_.get('asin') else ''))
             SEQ_WORKS.setdefault((lib_id, sn_.lower(), q_.strip(), map_language(md_.get('language')) or ''), set()).add(normalize_title_text(md_.get('title') or ''))
 
 def build_queue(lib_id, history, recheck):
@@ -4230,6 +4241,17 @@ def process_queue(work_queue, history, failed, recheck):
                         elif new_t != title:
                             abs_updates['title'] = new_t
                             log_updates.append(f"Title: '{title}' -> '{new_t}' (was another volume's title)")
+                    elif aud_title and same_recording(abs_dur, meta.get('narrators'), aud_data) and (head_ := series_tail_head(title, [s_.get('name') for s_ in (meta.get('series') or [])], aud_title)):
+                        # round 1 (2026-11-09): the book's own series name appended to the title ('Hogfather: Discworld', 'Mark of the Crijik 4:
+                        # The Burning Lake: Mark of the Crijik') - the title without it; Audible's own title when the rest is title + subtitle
+                        new_t = aud_title if (aud_sub and glued_subtitle(head_, aud_sub, aud_title, aud_sub)) else head_
+                        if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{new_t}'")
+                        elif new_t != title:
+                            abs_updates['title'] = new_t
+                            log_updates.append(f"Title: '{title}' -> '{new_t}' (series name appended to the title)")
+                            if aud_sub and not meta.get('subtitle') and 'lock_subtitle' not in tags and new_t == aud_title:
+                                abs_updates['subtitle'] = aud_sub
+                                log_updates.append(f"Subtitle: '' -> '{aud_sub}'")
                     elif aud_title and aud_sub and (glued := glued_subtitle(title, meta.get('subtitle'), aud_title, aud_sub, [s_.get('name') for s_ in (meta.get('series') or [])])):
                         # library 2026-11-09: the subtitle glued into the title ('Sojourn: Legend of Drizzt: Dark Elf Trilogy, Book 3' with that
                         # subtitle, 'Defiance of the Fall 4: A LitRPG Adventure: A LitRPG Adventure') - ABS title = Audible title + subtitle
@@ -4265,9 +4287,15 @@ def process_queue(work_queue, history, failed, recheck):
 
                     if 'lock_year' not in tags:
                         new_year = parse_release_year(md_raw.get('releaseDate')) if same_rec_rt else None
+                        cur_y = re.match(r'\s*(\d{4})', str(meta.get('publishedYear') or ''))
                         if new_year and not meta.get('publishedYear'):
                             abs_updates['publishedYear'] = new_year
                             log_updates.append(f"Year: '{meta.get('publishedYear')}' -> '{new_year}'")
+                        elif new_year and cur_y and int(cur_y.group(1)) > datetime.now().year and str(new_year) != cur_y.group(1) and int(str(new_year)[:4]) <= datetime.now().year:
+                            # a year in the future cannot be right for a file you already have (Baptism of Fire 2027 = the year of an
+                            # unreleased re-release whose ASIN the book had): the same recording's release year (round 1, 2026-11-09)
+                            abs_updates['publishedYear'] = new_year
+                            log_updates.append(f"Year: '{meta.get('publishedYear')}' -> '{new_year}' (year in the future)")
                     else:
                         new_year = parse_release_year(md_raw.get('releaseDate'))
                         if new_year and not meta.get('publishedYear'): logging.info(f"        🔒 Year Update Skipped (Locked): '{new_year}'")
@@ -4394,7 +4422,7 @@ def process_queue(work_queue, history, failed, recheck):
                                 if part_txt := s_obj.get('part'):
                                     if m := re.search(r'(\d+(?:\.\d+)?)', str(part_txt)): s_seq = m.group(1)
                                 rng_ = re.match(r'\s*(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)\s*$', str(part_txt or ''))
-                                if s_seq is not None and rng_:
+                                if s_seq is not None and rng_ and (is_boxset_title(title) or re.search(r"(?i)\b(?:pack|omnibus|collection|complete|bundle|books?\s+\d+\s*[-–&,]|box)\b", f"{title} {aud_data.get('title_raw') or ''} {aud_data.get('subtitle_raw') or ''}")):
                                     # user decision 2026-11-09: a pack / omnibus keeps Audible's own range as its number ('1-2' for Publisher's
                                     # Pack 1, '3-4' for Pack 2) - it says exactly which volumes the book holds
                                     s_seq = f"{rng_.group(1)}-{rng_.group(2)}"
@@ -4425,6 +4453,9 @@ def process_queue(work_queue, history, failed, recheck):
                                 if existing:
                                     if why: logging.info(f"        🔗 Series '{s_name}' -> '{canon}' ({'alias list' if why == 'alias' else 'existing ABS series'})")
                                     if not existing.get('sequence') and s_seq: existing['sequence'] = s_seq
+                                    elif s_seq and existing.get('sequence') and str(existing['sequence']) != str(s_seq) and re.fullmatch(r'0+\d+(?:\.\d+)?', str(existing['sequence']).strip()) \
+                                            and str(existing['sequence']).strip().lstrip('0') == str(s_seq).strip():
+                                        existing['sequence'] = s_seq  # '04' -> '4' (a zero-padded file-name number, same value)
                                     elif s_seq and existing.get('sequence') and str(existing['sequence']) != str(s_seq):
                                         proven_fix = ((SEARCH_CTX.get('seq_fix') or {}).get(asin) or {}) if asin_from_search else {}
                                         if ver and (seq_shared(lib_id, existing['name'], existing['sequence']) or (folder_fix and (asin_from_search or folder_fix.get('same')))):  # ABS number is no evidence
