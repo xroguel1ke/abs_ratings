@@ -694,12 +694,12 @@ def scheduler_loop():
             s = load_settings()
             nxt = next_run_time(s)
             if planned and datetime.now() >= planned:
-                if RUNNER.running(): pass  # previous run still busy: skip this slot
-                else: RUNNER.start('full', trigger='schedule', label='Scheduled scan')
+                # switched off just before the slot: no run; previous run still busy: this slot is skipped
+                if s.get('schedule_enabled') and not RUNNER.running(): RUNNER.start('full', trigger='schedule', label='Scheduled scan')
                 planned = None
             quick_poll(s)
             weekly_summary(s)
-            if planned is None or (nxt and nxt < planned) or not s.get('schedule_enabled'):
+            if planned is None or planned > datetime.now():  # a changed time / day / cron moves the planned slot (later too, not only earlier)
                 planned = nxt
             cleanup_logs(s)
         except Exception:
