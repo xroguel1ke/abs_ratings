@@ -454,6 +454,23 @@ def folder_volume_conflict(item_data, key, title, meta):
     if not nums or f_num in nums: return None
     return {'title': f_title, 'num': strip_lead0(m.group(1))}
 
+def tag_volume_conflict(item_data, title, meta):
+    """The embedded tags of the audio file (title / album, set by the publisher or the download tool) name ANOTHER volume than the
+    ABS title: 'Publisher's Pack 3: Books 5-6' (grouping '#5') in a file whose ABS title and folder say 'Publisher's Pack 1' (2026-11-09).
+    Returns {'title', 'num'} like folder_volume_conflict (the search then needs the runtime to ±2 min) or None."""
+    files = ((item_data or {}).get('media') or {}).get('audioFiles') or []
+    tags_ = (files[0].get('metaTags') or {}) if files else {}
+    t_title = (tags_.get('tagTitle') or tags_.get('tagAlbum') or '').strip()
+    if not t_title or normalize_title_text(t_title) == normalize_title_text(title): return None
+    head = lambda t: normalize_title_text(re.split(r'\s*[:(]\s*', t)[0])
+    if head(t_title) != head(title): return None  # another book altogether - only another VOLUME of the same title counts
+    t_vols, a_vols = extract_volume(t_title.split(':')[0] + ':' + t_title.split(':')[1] if t_title.count(':') else t_title), extract_volume(title)
+    if not t_vols or not a_vols or t_vols & a_vols: return None
+    gm = re.search(r'#\s*(\d+(?:\.\d+)?)', tags_.get('tagGrouping') or '')
+    nums = {str(x.get('sequence')).strip() for x in meta.get('series') or [] if x.get('sequence')}
+    if gm and gm.group(1) in nums: return None  # the grouping agrees with ABS: no proof
+    return {'title': re.sub(r'(:\s*[^:]+)\1$', r'\1', t_title), 'num': gm.group(1) if gm else None}
+
 def seq_shared(lib, name, seq):
     """Two or more DIFFERENT books of the library hold this number in this series (an ABS rescan put three Witcher books at #0.5)."""
     q = str(seq or '').strip()
@@ -3985,6 +4002,10 @@ def process_queue(work_queue, history, failed, recheck):
                         add_review(key, title, "title", aud_data.get("title_raw"), "ASIN confirmed by runtime and narrator; ABS title/author differ", plaus_why,
                                    ctx={'iid': iid, 'cand_asin': asin, 'aud_title': aud_data.get('title_raw'), 'abs_series': [list(p) for p in _series_pairs(meta.get('series'))], 'tags': sorted(tags), 'lang': lang})
                 folder_fix = folder_volume_conflict(item_data, key, title, meta) if 'lock_asin' not in tags else None
+                if not folder_fix and not asin and 'lock_asin' not in tags and (tfix_ := tag_volume_conflict(item_data, title, meta)):
+                    logging.info(f"      -> 🏷️ The audio file's own tags name '{tfix_['title']}', not '{title}': searching with the tag title (runtime must match to ±2 min)")
+                    folder_fix = dict(tfix_, num=tfix_['num'] or next(iter(sorted(extract_volume(tfix_['title']))), None))
+                if folder_fix and folder_fix.get('num') is None: folder_fix = None
                 if folder_fix:
                     logging.info(f"      -> 📁 Title '{title}' is shared by several library books and the book folder names '{folder_fix['title']}' "
                                  f"(#{folder_fix['num']}): ABS holds another volume's data, searching with the folder title (runtime must match to ±2 min)")
@@ -4367,7 +4388,12 @@ def process_queue(work_queue, history, failed, recheck):
                                 s_seq = None
                                 if part_txt := s_obj.get('part'):
                                     if m := re.search(r'(\d+(?:\.\d+)?)', str(part_txt)): s_seq = m.group(1)
-                                if s_seq is not None and is_boxset_title(title):  # 'Trilogie 1-3' is not book 5
+                                rng_ = re.match(r'\s*(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)\s*$', str(part_txt or ''))
+                                if s_seq is not None and rng_:
+                                    # user decision 2026-11-09: a pack / omnibus keeps Audible's own range as its number ('1-2' for Publisher's
+                                    # Pack 1, '3-4' for Pack 2) - it says exactly which volumes the book holds
+                                    s_seq = f"{rng_.group(1)}-{rng_.group(2)}"
+                                elif s_seq is not None and is_boxset_title(title):  # 'Trilogie 1-3' is not book 5
                                     logging.info(f"        ℹ️ Series '{s_name}': no number for a box set / collection ('{title}')")
                                     s_seq = None
                                 elif s_seq is None and not is_boxset_title(title):
@@ -4402,6 +4428,10 @@ def process_queue(work_queue, history, failed, recheck):
                                                 new_q = folder_fix['num']  # Audible counts parts ('#2' for Vol. 8): the folder and the title agree on the volume
                                             logging.info(f"        🔢 Series '{canon}': ABS #{existing['sequence']} is shared by several books / belongs to another volume -> #{new_q}")
                                             existing['sequence'] = new_q
+                                        elif rng_ and ver and re.fullmatch(r'\s*' + re.escape(rng_.group(1)) + r'(?:\.0)?\s*', str(existing['sequence'])):
+                                            # the ABS number is the first volume of Audible's range (Publisher's Pack 4 = #7): the range says more ('7-8')
+                                            logging.info(f"        🔢 Series '{canon}': #{existing['sequence']} -> #{s_seq} (the pack holds volumes {s_seq})")
+                                            existing['sequence'] = s_seq
                                         elif ver and any(k == ck_ or difflib.SequenceMatcher(None, k, ck_).ratio() >= 0.9 for k in proven_fix for ck_, _ in _series_pairs([{'name': existing['name']}])):
                                             logging.info(f"        🔢 Series '{canon}': ABS #{existing['sequence']} was proven wrong by Audible's series list -> #{s_seq}")
                                             existing['sequence'] = s_seq
