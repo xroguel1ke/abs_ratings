@@ -17,12 +17,16 @@
  {% if k in ('asin', 'hardcover') %}<form method="post" action="{{ url_for('queue_bulk', kind=k, action='accept') }}" data-confirm="{{ _('Apply all %(n)s?', n=n) }}"><button>{{ _('Apply all') }}</button></form>{% endif %}
  <form method="post" action="{{ url_for('queue_bulk', kind=k, action='reject') }}" data-confirm="{{ _('Discard all %(n)s?', n=n) }}"><button>{{ _('Discard all') }}</button></form>
 {% endif %}{% endfor %}</div>{% endif %}</div>
+{% if secs.buecher.entries %}<div class="row small selbar"><label class="chk"><input type="checkbox" id="selall" onchange="document.querySelectorAll('.qsel').forEach(c=>c.checked=this.checked)"> {{ _('Select all') }}</label>
+ <button type="button" onclick="qSelected('accept')">{{ _('Apply selected') }}</button><button type="button" onclick="qSelected('reject')">{{ _('Discard selected') }}</button>
+ <span class="muted">{{ _('Keys: J/K next/previous · A apply · D discard · X select') }}</span></div>
+<form id="qselform" method="post" style="display:none"><input type="hidden" name="ids" id="qselids"></form>{% endif %}
 {% for x in secs.buecher.entries %}{% set r = x.res %}{% set store = r.domain or 'www.audible.com' %}
-<div class="card mcard">
- <div class="row" style="justify-content:space-between"><div><span class="badge warn">{{ {'asin': 'ASIN', 'isbn': 'ISBN', 'title': _('Title'), 'hardcover': 'Hardcover', 'series': _('Series')}.get(x.kind, x.kind) }}</span>
+<div class="card mcard qentry" tabindex="-1">
+ <div class="row" style="justify-content:space-between"><div><input type="checkbox" class="qsel" value="{{ x.id }}" aria-label="{{ _('Select') }}"> <span class="badge warn">{{ {'asin': 'ASIN', 'isbn': 'ISBN', 'title': _('Title'), 'hardcover': 'Hardcover', 'series': _('Series')}.get(x.kind, x.kind) }}</span>
   <a href="{{ url_for('problem', key=x.key) }}"><b>{{ x.title }}</b></a></div>
-  <div class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('queue_action', qid=x.id, action='accept') }}"><button class="primary">{{ _('Apply') }}</button></form>
-  <form method="post" action="{{ url_for('queue_action', qid=x.id, action='reject') }}"><button>{{ _('Discard') }}</button></form></div></div>
+  <div class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('queue_action', qid=x.id, action='accept') }}" class="qacc"><button class="primary">{{ _('Apply') }}</button></form>
+  <form method="post" action="{{ url_for('queue_action', qid=x.id, action='reject') }}" class="qrej"><button>{{ _('Discard') }}</button></form></div></div>
  {% set rid = r.id or x.key.split('_', 1)[1] %}
  {% set newk, newid = ('audible', x.candidate) if x.kind == 'asin' and x.candidate else ('abs', rid) %}
  <div class="covers"><figure><a href="{{ url_for('cover', kind='abs', ident=rid, full=1) }}" target="_blank" title="{{ _('Open cover') }}"><img src="{{ url_for('cover', kind='abs', ident=rid) }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></a><figcaption>{{ _('now') }}</figcaption></figure>
@@ -92,6 +96,21 @@
 
 </div></div>
 <script>
+function qSelected(action){
+  const ids=[...document.querySelectorAll('.qsel:checked')].map(c=>c.value); if(!ids.length) return;
+  if(!confirm(ids.length+' × '+(action==='accept'?'{{ _('Apply') }}':'{{ _('Discard') }}')+'?')) return;
+  const f=document.getElementById('qselform'); f.action='{{ url_for('queue_selected', action='ACTION') }}'.replace('ACTION', action);
+  document.getElementById('qselids').value=ids.join(','); f.submit();
+}
+(function(){ let cur=-1; const ent=()=>[...document.querySelectorAll('.qentry')].filter(e=>e.offsetParent);
+  document.addEventListener('keydown', e=>{
+    if(e.target.matches('input,textarea,select')||e.ctrlKey||e.metaKey||e.altKey) return;
+    const L=ent(); if(!L.length) return; const k=e.key.toLowerCase();
+    if(k==='j'||k==='k'){ cur=Math.max(0,Math.min(L.length-1,cur+(k==='j'?1:-1))); L.forEach(x=>x.classList.remove('kfocus')); L[cur].classList.add('kfocus'); L[cur].focus(); L[cur].scrollIntoView({block:'center'}); e.preventDefault(); }
+    else if(cur>=0&&L[cur]&&(k==='a'||k==='d')){ L[cur].querySelector(k==='a'?'.qacc':'.qrej').submit(); }
+    else if(cur>=0&&L[cur]&&k==='x'){ const c=L[cur].querySelector('.qsel'); c.checked=!c.checked; }
+  });
+})();
 (function(){ const secs=[...document.querySelectorAll('.spanel > .sec')], links=[...document.querySelectorAll('.snav a')], nav=document.querySelector('.snav');
  function show(id){ if(!secs.some(c=>c.dataset.sec===id)) id=secs[0].dataset.sec; secs.forEach(c=>c.classList.toggle('on', c.dataset.sec===id)); links.forEach(a=>a.classList.toggle('active', a.dataset.sec===id)); }
  links.forEach(a=>a.addEventListener('click', e=>{ e.preventDefault(); history.replaceState(null,'','#'+a.dataset.sec); show(a.dataset.sec); nav.classList.remove('open'); }));

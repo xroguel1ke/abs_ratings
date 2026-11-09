@@ -448,6 +448,45 @@ def queue_bulk(kind, action):
     return redirect(url_for('review_page') + '#buecher')
 
 
+@app.route('/queue-selected/<action>', methods=['POST'])
+@login_required
+def queue_selected(action):
+    """Review list: the same decision for the selected entries. Accept: ASIN/Hardcover overrides are saved and ONE real scan of these
+    books writes them; title/ISBN/authors entries go through the single-entry path one by one is not possible in one request, so
+    they are written by that scan too (title/isbn/authors: planned changes applied together)."""
+    if action not in ('accept', 'reject'): abort(400)
+    ids = set((request.form.get('ids') or '').split(','))
+    items = [x for x in core.open_queue() if x['id'] in ids]
+    planned, keys = [], []
+    for x in items:
+        if action == 'accept' and x.get('candidate'):
+            if x.get('kind') in ('asin', 'hardcover'):
+                ov_ = {x['kind']: x['candidate']}
+                if x['kind'] == 'asin' and (str(x.get('reason') or '').startswith('runtime (to the minute) and narrator match') or 'author differs' in str(x.get('reason') or '')):
+                    ov_['identity'] = True
+                core.save_override(x['key'], ov_); keys.append(x['key'])
+            elif x.get('kind') in ('title', 'authors'):
+                iid = x['key'].split('_', 1)[1]
+                try: old = ((core.abs_get(core.load_settings(), f'/api/items/{iid}').json().get('media') or {}).get('metadata') or {}).get(x['kind'])
+                except Exception: old = None
+                new = [{'name': n.strip()} for n in x['candidate'].split(',') if n.strip()] if x['kind'] == 'authors' else x['candidate']
+                planned.append({'item': iid, 'key': x['key'], 'title': x.get('title'), 'field': x['kind'], 'old': old, 'new': new})
+        core.set_queue_decision(x['id'], action)
+    if action == 'accept' and planned:
+        rid = 'review-' + datetime.now().strftime('%Y%m%d-%H%M%S')
+        os.makedirs(core.REPORT_DIR, exist_ok=True)
+        with open(os.path.join(core.REPORT_DIR, f'planned_changes_{rid}.jsonl'), 'w', encoding='utf-8') as f:
+            for p in planned: f.write(json.dumps(dict(p, run=rid, ts=datetime.now().isoformat(timespec='seconds'), source='review_list', dry_run=True), ensure_ascii=False) + '\n')
+        new_id, err = core.RUNNER.start('apply', undo_args=['--run', rid, '--apply'], label=f"{len(planned)} × from the review list", run_settings={'ABS_BACKUP': False})
+        if not err and not keys: return redirect(url_for('run_view', run_id=new_id))
+    if action == 'accept' and keys:
+        new_id, err = core.RUNNER.start('item', dry_run=False, only_items=keys, label=f"{len(keys)} × ASIN/Hardcover from the review list", run_settings={'ABS_BACKUP': False})
+        if not err: return redirect(url_for('run_view', run_id=new_id))
+        flash(T('Saved. A scan is running right now: it is written for this book with the next scan.'), 'ok')
+    else: flash(T('%(n)s entries done.', n=len(items)), 'ok')
+    return redirect(url_for('review_page') + '#buecher')
+
+
 @app.route('/queue/<path:qid>/<action>', methods=['POST'])
 @login_required
 def queue_action(qid, action):

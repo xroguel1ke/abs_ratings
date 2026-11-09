@@ -270,3 +270,5 @@ table.mtable td.rel{width:150px;text-align:right;white-space:nowrap;font-variant
 .badge.err{background:rgba(200,60,50,.12);color:#c0392b;box-shadow:inset 0 0 0 1px rgba(200,60,50,.45);text-decoration:none}
 .badge.ok .ico{color:#2e8b57}
 .sercard{margin:0 0 8px}.sercard[open]{padding-bottom:14px}
+
+.selbar{gap:8px;margin:0 0 8px;flex-wrap:wrap}.qentry{outline:none}.qentry.kfocus{box-shadow:0 0 0 2px var(--accent)}
