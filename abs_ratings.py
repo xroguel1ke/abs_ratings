@@ -575,7 +575,12 @@ def folder_narrators(item_data):
     base = str((item_data or {}).get('relPath') or '').replace('\\', '/').split('/')[-1]
     parts = [p.strip() for p in base.split(' - ')]
     if len(parts) < 3 or not re.match(r'^(?:book\s*)?\d', parts[0], re.I): return []
-    names = [n.strip() for n in re.split(r'\s*\+\s*|\s*,\s*|\s+&\s+', re.sub(r'\{[^}]*\}', '', parts[-1])) if n.strip() and not re.search(r'(?i)full cast', n)]
+    # everything after the title: '... - Brian Sutherland + Donald Katz - introduction' (a role suffix splits at ' - ' too, batch 84)
+    from abs_series import is_role_credit as _irc, role_base as _rbase
+    tail = parts[-1]
+    if len(parts) >= 4 and _irc(f"X - {parts[-1]}"): tail = ' - '.join(parts[-2:])  # the last part is only a role ('introduction')
+    names = [n.strip() for n in re.split(r'\s*\+\s*|\s*,\s*|\s+&\s+', re.sub(r'\{[^}]*\}', '', tail)) if n.strip() and not re.search(r'(?i)full cast', n)]
+    names = [_rbase(n) if _irc(n) else n for n in names]
     # '09 - Volume 09 - The Town of Strife II': the last part is a TITLE, not a narrator (regress wl01 2026-11-09) -> person names only
     # function words only in lower case ('Eric A. Shelman' is a name: an initial 'A.' is no article - batch 60), an article only first
     person = lambda n: 1 <= len(n.split()) <= 4 and not re.search(r'\d', n) and not re.search(
