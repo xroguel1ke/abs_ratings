@@ -623,7 +623,8 @@ def normalize_genres(ctx, records):
     '1750488324482') and genres in a non-Latin script on English/German books are removed. Order kept, lock_genres respected."""
     from collections import Counter
     abs_update, dry = ctx['abs_update'], ctx['dry_run']
-    cnt = Counter(g.strip() for r in records for g in r['genres'] if isinstance(g, str) and g.strip())
+    split_ = lambda g: [x.strip() for x in re.split(r'\s*;\s*|\s*\|\s*|\s+/\s+|(?<=\S):(?=\S)', g) if x.strip()]
+    cnt = Counter(x for r in records for g in r['genres'] if isinstance(g, str) for x in split_(g))
     best = {}
     for g, n in cnt.items():
         k, cur = genre_key(g), best.get(genre_key(g))
@@ -633,7 +634,13 @@ def normalize_genres(ctx, records):
         if not r['genres'] or 'lock_genres' in r['tags'] or 'lock_all' in r['tags']: continue
         en_de = str(r.get('language') or '').strip().lower() in ('english', 'german', 'eng', 'deu', 'ger', 'en', 'de')
         out, seen = [], set()
+        parts_ = []
         for g in r['genres']:
+            # round 5 (2026-11-09): several genres glued into one ('Epic; Action & Adventure', 'A|B', 'Science Fiction & Fantasy / Science
+            # Fiction / Military', 'X:Y:Z') are split; 'Audiobook' (1341 books), 'General', 'Unknown' are no genres
+            parts_ += [x.strip() for x in re.split(r'\s*;\s*|\s*\|\s*|\s+/\s+|(?<=\S):(?=\S)', g) if x.strip()] if isinstance(g, str) else [g]
+        for g in parts_:
+            if isinstance(g, str) and g.strip().lower() in ('audiobook', 'audiobooks', 'hörbuch', 'hörbücher', 'general', 'unknown', 'books', 'genre'): continue
             k = genre_key(g) if isinstance(g, str) else ''
             if not k or k.isdigit() or k in seen or (en_de and not is_latin(g)): continue
             seen.add(k); out.append(best.get(k, g.strip()))

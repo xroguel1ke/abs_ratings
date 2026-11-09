@@ -845,6 +845,7 @@ def is_boxset_title(t): return bool(t and BOXSET_RE.search(t))
 ASIN_OWNERS = {}  # asin -> set of item keys (ABS library + ASINs planned in this run); an ASIN is never given to a second book
 ISBN_OWNERS = {}  # isbn -> set of item keys (an ISBN is never given to a second book)
 TITLE_OWNERS = {}  # (lib, normalized title) -> item keys: a title held by several books says nothing about WHICH volume it is
+KEY_ASIN = {}  # item key -> ABS ASIN (an ISBN shared by two books with different ASINs is wrong on at least one)
 KEY_DUR = {}  # item key -> ABS duration (s): tells a duplicate (owner = same recording) from an owner with a wrong ASIN
 
 def aud_part(q):
@@ -2209,7 +2210,13 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 if re.search(r'[^\x00-ɏ]', cand_auth) and not any(re.search(r'[^\x00-ɏ]', a) for a in authors_list):
                     auth_ok = True
                     logging.info(f"        ℹ️ Author '{cand_auth}' is written in another script; narrator and runtime agree, so it is not treated as a mismatch")
-            if a_narr and c_narr and not a_narr & c_narr:  # other recording (e.g. UK vs US narrator): known and different narrators veto the hit, with or without an existing ASIN
+            # author and narrator swapped in ABS (file tags: Overlord 13 had the narrator as author and the author as narrator, round 5):
+            # the ABS narrator is the candidate's author AND the ABS author its narrator -> one recording, roles crossed
+            swapped_ = bool(a_narr and c_narr and narr_keys(p.get('authors_raw')) & a_narr and narr_keys(authors_list) & c_narr)
+            if swapped_:
+                auth_ok = True
+                logging.info(f"        ℹ️ '{found_title}' [{cand}]: author and narrator are swapped in ABS - the roles match crosswise")
+            if a_narr and c_narr and not a_narr & c_narr and not swapped_:  # other recording (e.g. UK vs US narrator): known and different narrators veto the hit, with or without an existing ASIN
                 logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (narrator {', '.join(p.get('narrators_raw') or [])} differs)")
                 continue
             # same narrator + runtime inside the library tolerance (15 % / 20 min): same recording, ABS file just differs a little
@@ -2327,6 +2334,8 @@ def find_missing_asin(title, authors_list, duration, lang, raw_title=None, requi
                       only_domain=None, narrators=None, abs_series=None):
     logging.info(f"      -> 🔎 Searching Replacement ASIN for '{title}'{f' on {only_domain}' if only_domain else ''}"
                  f"{' (strict: title, author, runtime and narrator must match)' if strict else ''}...")
+    if narrators and authors_list and all(any(same_person_name(n, a) for a in authors_list) for n in narrators if n):
+        narrators = None  # the 'narrator' is only the author (file tags of a self-read book or a tagging error): no evidence (Overlord 13)
     if USE_AUDIBLE_API:
         res = search_audible_api(title, authors_list, duration, lang, raw_title, required_lang, strict, only_domain, narrators, abs_series)
         if only_domain: return res or None  # preferred-store search: no web fallback, keep the existing ASIN
@@ -3421,6 +3430,7 @@ def note_listing_item(lib_id, it):
             from collections import Counter as _C
             NARR_SPELL.setdefault(narr_fold(n_), _C())[n_] += 1
     if a := md_.get('asin'): ASIN_OWNERS.setdefault(a, set()).add(key)
+    KEY_ASIN[key] = md_.get('asin')
     KEY_DUR[key] = (it.get('media') or {}).get('duration')
     if t_ := normalize_title_text(md_.get('title') or ''): TITLE_OWNERS.setdefault((lib_id, t_), set()).add((key, _first_author(md_.get('authorName'))))
     if i_ := normalize_isbn(md_.get('isbn')): ISBN_OWNERS.setdefault(i_, set()).add(key)
@@ -4294,6 +4304,14 @@ def process_queue(work_queue, history, failed, recheck):
                         elif new_t != title:
                             abs_updates['title'] = new_t
                             log_updates.append(f"Title: '{title}' -> '{new_t}' (was another volume's title)")
+                    elif aud_title and aud_title != title and same_recording(abs_dur, meta.get('narrators'), aud_data) and (
+                            re.sub(r'(?i)\s*\((?:unabridged|ungek(?:ü|ue)rzt)\)\s*$', '', title) == aud_title
+                            or re.sub(r'\b0+(\d)', r'\1', title) == re.sub(r'\b0+(\d)', r'\1', aud_title) and re.search(r'\b0\d', title) and not re.search(r'\b0\d', aud_title)):
+                        # round 5 (2026-11-09): 'Witch King (Unabridged)', 'Ishura, Vol. 05: ...' - Audible's title of the same recording
+                        if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{aud_title}'")
+                        else:
+                            abs_updates['title'] = aud_title
+                            log_updates.append(f"Title: '{title}' -> '{aud_title}' (format label / zero-padded number)")
                     elif aud_title and same_recording(abs_dur, meta.get('narrators'), aud_data) and normalize_title_text(aud_title) != normalize_title_text(title) \
                             and any(re.fullmatch(r'(?i)\s*' + re.escape(str(s_.get('name') or '').strip()) + r'\s*#\s*\d+(?:\.\d+)?\s*', title)  # only the '#N' label: 'Beware of Chicken 2' IS the title (Audible adds marketing)
                                     for s_ in (meta.get('series') or []) if s_.get('name')):
@@ -4352,6 +4370,9 @@ def process_queue(work_queue, history, failed, recheck):
                         if new_year and not meta.get('publishedYear'):
                             abs_updates['publishedYear'] = new_year
                             log_updates.append(f"Year: '{meta.get('publishedYear')}' -> '{new_year}'")
+                        elif new_year and not re.fullmatch(r'\s*\d{4}\s*', str(meta.get('publishedYear'))):
+                            abs_updates['publishedYear'] = new_year  # 'April 27, 2018 (07-16-24)' from file tags is no year
+                            log_updates.append(f"Year: '{meta.get('publishedYear')}' -> '{new_year}' (not a year)")
                         elif new_year and cur_y and int(cur_y.group(1)) > datetime.now().year and str(new_year) != cur_y.group(1) and int(str(new_year)[:4]) <= datetime.now().year:
                             # a year in the future cannot be right for a file you already have (Baptism of Fire 2027 = the year of an
                             # unreleased re-release whose ASIN the book had): the same recording's release year (round 1, 2026-11-09)
@@ -4807,6 +4828,15 @@ def process_queue(work_queue, history, failed, recheck):
 
                 isbn_written = False
                 bad_isbn = isbn_bad_reason(meta.get('isbn'))
+                if not bad_isbn and (i_c := normalize_isbn(meta.get('isbn'))):
+                    # round 5 (2026-11-09): a German edition's ISBN on an English book (Dungeon Crawler Carl 978-3-7480...), a French one on a
+                    # German book, or the same ISBN on several different books (Ishura 2 = Overlord 9): replaced only by a verified ISBN below
+                    l_c = map_language(meta.get('language')) if meta.get('language') else None
+                    foreign_ = ('9782', '9783', '9784', '97884', '97888', '97890', '97894')
+                    if len(i_c) == 13 and ((l_c == 'English' and i_c.startswith(foreign_)) or (l_c == 'German' and i_c.startswith(tuple(x for x in foreign_ if x != '9783')))):
+                        bad_isbn = f"registration group {i_c[:4]} does not fit a {l_c} book"
+                    elif any(KEY_ASIN.get(o) and KEY_ASIN.get(o) != asin for o in ISBN_OWNERS.get(i_c, set()) - {key}):
+                        bad_isbn = 'the same ISBN is on another book of the library'
                 empty_isbn = not str(meta.get('isbn') or '').strip()
                 # ISBN = the PRINT edition (user decision 2026-11-04: the audiobook is identified by the ASIN). Wrong ISBNs are replaced and
                 # empty ones filled, both only with the ISBN-13 of a print edition of the verified book (Hardcover), same language.
