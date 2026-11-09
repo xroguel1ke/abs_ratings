@@ -1929,7 +1929,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
     title_first = bool(extract_volume(title))
     if title_first: queries.insert(0, {"title": title})  # numbered title: the exact-title query first (keyword queries return the OTHER volumes and the loop stops after 4 candidates)
     if prim_auth: queries.append({"title": title, "author": prim_auth})
-    if short and short != title and len(short) >= 4:
+    if short and short != title and (len(short) >= 4 or (prim_auth and len(short) >= 2)):  # 'WAR' + author is precise enough (batch 80)
         queries.append({"title": short, "author": prim_auth} if prim_auth else {"keywords": short})
     if raw_title and raw_title != title: queries.append({"keywords": raw_title})
     queries.append({"keywords": title})
