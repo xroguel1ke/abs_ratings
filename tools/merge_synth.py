@@ -217,6 +217,12 @@ def evaluate(batch, data):
         names = set(c['names'])
         hit = [m for m in merged if m[0] == c['kind'] and ({m[1], m[2]} & names)]
         in_rev = any(r[0] == c['kind'] and {r[1], r[2]} == names for r in review)
+        if c['case'] == 'lock_series':
+            # user rule 2026-11-08 (was: a lock on either side blocks): lock_series protects the BOOK - when all locked books sit in ONE
+            # series, that series is the target and only unlocked books move. Good: no merge, or a merge INTO the locked name.
+            if any(m[2] != c['names'][1] for m in hit): wrong += 1; print('  WRONG lock_series target', c['names'], '->', hit)
+            else: ok += 1
+            continue
         if c['expect'] == 'merge':
             good = any({m[1], m[2]} == names for m in hit)
             if c['case'] == 'author_accent' and good and not any(m[2] == c['names'][0] for m in hit):  # direction: the accented name must be the target

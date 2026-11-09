@@ -15,6 +15,10 @@ echo "== 2d change monitoring (real-run mode vs fake ABS)"; tools/watch_test.sh 
 echo "== 2c Hardcover matches of the hand-checked batches"; tools/hc_golden_check.sh || fail=1
 echo "== 3 library-wide series/author decisions"; py tools/lib_check.py > /tmp/claude-0/lib_check.out 2>&1; rc=$?; [ $rc -eq 139 -o $rc -eq 135 ] && { echo "lib_check crashed ($rc) - one retry"; py tools/lib_check.py > /tmp/claude-0/lib_check.out 2>&1; rc=$?; }; [ $rc -ne 0 ] && { fail=1; echo "lib_check exit code $rc (0-byte output = container did not start; see docker events)"; }; tail -4 /tmp/claude-0/lib_check.out
 echo "== 3b damage simulation (repairs on damaged copies, undamaged books unchanged)"; tools/damage_test.sh 2 > /tmp/claude-0/damage_reg.out 2>&1 || fail=1; grep "damage repaired" /tmp/claude-0/damage_reg.out; grep -c "  HARM" /tmp/claude-0/damage_reg.out | sed "s/^/harm: /"
+echo "== 3c synthetic series/author merge batches (fake ABS, own library)"
+for f in tests/synthetic/merge_*.json; do n=$(basename $f .json | sed 's/merge_//'); [[ $n =~ ^[0-9]+$ ]] || continue
+  ( out=$(timeout 300 tools/merge_round.sh $n 2>&1 | tail -1); echo "$out" | grep -q "wrong 0 | missed 0" || { echo "merge batch $n: $out"; exit 1; } ) &
+done; wait_ok=0; for j in $(jobs -p); do wait $j || wait_ok=1; done; [ $wait_ok = 0 ] && echo "merge batches: all clean" || fail=1
 echo "== 4 golden rounds"
 i=0
 for k in tests/private/round*_keys.txt tests/private/wl0*_keys.txt; do
@@ -25,7 +29,7 @@ done
 # synthetic batches (books NOT in the library, EN + DE): replayed from recordings, expected ASIN known
 for sf in tests/synthetic/batch_*.json; do
   n=$(basename $sf .json | sed 's/batch_//'); i=$((i+1)); r=reg_syn_$n
-  docker ps --format '{{.Names}}' | grep -q "^abs_ratings_test_h$n$" && { echo "-- skip batch $n (still being recorded)"; continue; }
+  docker ps --format "{{.Names}}" | grep -qE "^abs_ratings_test_(h|syn_)$n$" && { echo "-- skip batch $n (still being recorded)"; continue; }
   jq '{books: (.expected|map_values(del(.case)))}' $sf > /tmp/claude-0/syn_golden_$n.json; jq -r '.expected|keys[]' $sf > /tmp/claude-0/syn_keys_$n.txt
   rm -rf /mnt/user/appdata/abs_scripts_test/$r
   ( RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com SYNTH=$n HARDCOVER_OFF=1 REUSE=1 FAKE_PORT=$((19100+i)) tools/run_round.sh $r tests/private/none_keys.txt record > /tmp/claude-0/regress_$r.out 2>&1 ) &
