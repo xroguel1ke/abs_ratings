@@ -58,6 +58,12 @@
 
 <div class="sec" data-sec="sonstiges">
 <div class="card"><h2 style="margin-top:0">{{ _('Other') }}</h2><p class="muted small" style="margin-top:-8px">{{ _('The same recording twice (author, narrator and runtime equal). Clean up in ABS itself.') }}</p></div>
+<div class="card"><h3 style="margin-top:0">{{ _('Wrong language') }} ({{ secs.sonstiges.languages|length }})</h3>
+<p class="muted small" style="margin-top:-8px">{{ _('The language of these books is unknown or not one of your book languages (Settings → Audible), and the script could not prove the right one. Set it in ABS; the entry disappears with the next scan.') }}</p>
+{% for x in secs.sonstiges.languages[:200] %}<div class="small"><a href="{{ url_for('problem', key=x.key) }}"><b>{{ x.title }}</b></a> – {{ x.authors|join(', ') }}{% if x.narrators %} · {{ _('read by') }} {{ x.narrators|join(', ') }}{% endif %} ·
+ {{ _('language') }}: <code>{{ x.language or '–' }}</code>{% if x.locked %} <span class="badge">lock_language</span>{% endif %}
+ {% if abs_base %}<a href="{{ abs_base }}/item/{{ x.key.split('_', 1)[1] }}" target="_blank">ABS {{ icon('arrow-up-right', 14) }}</a>{% endif %}</div>
+{% else %}<div class="muted small">{{ _('None.') }}</div>{% endfor %}</div>
 <h3>{{ _('Book in a series of another author') }} ({{ secs.sonstiges.foreign|length }})</h3>
 {% for x in secs.sonstiges.foreign %}<div class="card mcard"><div class="row" style="justify-content:space-between">
  <div class="small"><a href="{{ url_for('problem', key=x.key) }}"><b>{{ x.title }}</b></a> – {{ x.authors|join(', ') }}<br>

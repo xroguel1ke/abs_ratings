@@ -365,4 +365,7 @@ add({  # page tour 2026-11-08
     'same': 'gleich', 'different': 'anders', 'unknown': 'unbekannt',
     'Languages of your books': 'Sprachen deiner Bücher',
     'Comma list, e.g. English, German. Audible editions in other languages are never taken; empty = any language': 'Mit Komma getrennt, z. B. English, German. Audible-Ausgaben in anderen Sprachen werden nie übernommen; leer = jede Sprache',
+    'Wrong language': 'Falsche Sprache', 'read by': 'gelesen von', 'language': 'Sprache',
+    'The language of these books is unknown or not one of your book languages (Settings → Audible), and the script could not prove the right one. Set it in ABS; the entry disappears with the next scan.':
+        'Die Sprache dieser Bücher ist unbekannt oder keine deiner Buchsprachen (Einstellungen → Audible), und das Skript konnte die richtige nicht sicher belegen. Bitte in ABS setzen; der Eintrag verschwindet mit dem nächsten Scan.',
 })

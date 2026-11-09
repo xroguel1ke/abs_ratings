@@ -681,6 +681,20 @@ def fix_languages(ctx, records, allowed):
     return changed
 
 
+def wrong_languages(records, allowed):
+    """Review list (user 2026-11-09): books whose language is unknown or not one of BOOK_LANGUAGES after every automatic fix."""
+    if not allowed: return []
+    out = []
+    for r in records:
+        if 'lock_all' in r['tags']: continue
+        l = LANG_NAMES.get(str(r.get('language') or '').strip().lower(), str(r.get('language') or '').strip())
+        if l not in allowed:
+            out.append({'id': f"lang|{r['lib']}|{r['id']}", 'key': f"{r['lib']}_{r['id']}", 'title': r['title'], 'language': r.get('language') or '',
+                        'authors': r['authors'][:2], 'narrators': r['narrators'][:2], 'path': r.get('path') or '',
+                        'locked': 'lock_language' in r['tags']})
+    return sorted(out, key=lambda x: x['title'].lower())
+
+
 def remove_role_credits(ctx, records, known_roles=()):
     """Only real authors in the author field: role credits ('X - illustrator', 'Y - translator', 'Z - Übersetzer', ...) are removed
     when at least one real author remains. A plain name counts as a role credit when it was seen WITH a role suffix somewhere
@@ -966,6 +980,7 @@ def run(ctx):
     other_review = foreign_series_books(records, ctx['decisions'])
     _save(ctx.get('merges_file'), ctx['merge_history'])
     _save(ctx.get('review_file'), {'series': series_review, 'authors': author_review, 'other': other_review,
+                                   'languages': wrong_languages(records, ctx.get('book_languages') or []),
                                    'generated': datetime.now().strftime('%Y-%m-%d %H:%M')})
     if not ctx['dry_run']: _save(ctx.get('decisions_file'), ctx['decisions'])
     if ctx['report']:

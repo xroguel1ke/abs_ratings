@@ -350,10 +350,11 @@ def review_page():
         'buecher': {'label': T('Books'), 'entries': queue},
         'reihen': {'label': T('Series'), 'review': rv.get('series') or []},
         'autoren': {'label': T('Authors'), 'review': rv.get('authors') or []},
-        'sonstiges': {'label': T('Other'), 'dups': rep.get('duplicate_recordings') or [], 'same_asin': core.same_asin_groups(core.load_settings()), 'foreign': rv.get('other') or []},
+        'sonstiges': {'label': T('Other'), 'dups': rep.get('duplicate_recordings') or [], 'same_asin': core.same_asin_groups(core.load_settings()), 'foreign': rv.get('other') or [],
+                      'languages': rv.get('languages') or []},
     }
     counts = {'buecher': len(queue), 'reihen': len(secs['reihen']['review']), 'autoren': len(secs['autoren']['review']),
-              'sonstiges': len(secs['sonstiges']['foreign']) + len(secs['sonstiges']['dups']) + len(secs['sonstiges']['same_asin'])}
+              'sonstiges': len(secs['sonstiges']['foreign']) + len(secs['sonstiges']['dups']) + len(secs['sonstiges']['same_asin']) + len(secs['sonstiges']['languages'])}
     return render_template('review.html', secs=secs, counts=counts, generated=rv.get('generated'))
 
 
