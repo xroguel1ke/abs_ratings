@@ -24,9 +24,10 @@
   <div class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('queue_action', qid=x.id, action='accept') }}"><button class="primary">{{ _('Apply') }}</button></form>
   <form method="post" action="{{ url_for('queue_action', qid=x.id, action='reject') }}"><button>{{ _('Discard') }}</button></form></div></div>
  {% set rid = r.id or x.key.split('_', 1)[1] %}
- <div class="covers"><figure><img src="{{ url_for('cover', kind='abs', ident=rid) }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><figcaption>{{ _('now') }}</figcaption></figure>
+ {% set newk, newid = ('audible', x.candidate) if x.kind == 'asin' and x.candidate else ('abs', rid) %}
+ <div class="covers"><figure><a href="{{ url_for('cover', kind='abs', ident=rid, full=1) }}" target="_blank" title="{{ _('Open cover') }}"><img src="{{ url_for('cover', kind='abs', ident=rid) }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></a><figcaption>{{ _('now') }}</figcaption></figure>
   <span class="marrow">{{ icon('arrow-right', 14) }}</span>
-  <figure><img src="{{ url_for('cover', kind='audible', ident=x.candidate) if x.kind == 'asin' and x.candidate else url_for('cover', kind='abs', ident=rid) }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+  <figure><a href="{{ url_for('cover', kind=newk, ident=newid, full=1) }}" target="_blank" title="{{ _('Open cover') }}"><img src="{{ url_for('cover', kind=newk, ident=newid) }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></a>
   <figcaption>{{ _('after Apply') if x.kind == 'asin' else _('unchanged') }}</figcaption></figure></div>
  <p class="small" style="margin:8px 0 2px"><b>{{ x.explain.what }}</b></p>
  <p class="small" style="margin:0 0 2px">{{ x.explain.why|de }}</p>
@@ -42,7 +43,7 @@
  <div class="links small">{% if r.asin %}<a href="https://{{ store }}/pd/{{ r.asin }}" target="_blank">Audible ({{ _('current') }}) {{ icon('arrow-up-right', 14) }}</a>{% endif %}
   {% if x.kind == 'asin' and x.candidate %}<a href="https://{{ store }}/pd/{{ x.candidate }}" target="_blank">{{ _('Suggestion on Audible') }} {{ icon('arrow-up-right', 14) }}</a>{% if '.de' not in store %}<a href="https://www.audible.de/pd/{{ x.candidate }}" target="_blank">.de {{ icon('arrow-up-right', 14) }}</a>{% endif %}{% endif %}
   {% if r.goodreads %}<a href="{{ r.goodreads }}" target="_blank">Goodreads {{ icon('arrow-up-right', 14) }}</a>{% endif %}{% if r.hardcover %}<a href="{{ r.hardcover }}" target="_blank">Hardcover {{ icon('arrow-up-right', 14) }}</a>{% endif %}
-  {% if abs_base and r.id %}<a href="{{ abs_base }}/item/{{ r.id }}" target="_blank">ABS {{ icon('arrow-up-right', 14) }}</a>{% endif %}</div>
+  {% if abs_base %}<a href="{{ abs_base }}/item/{{ rid }}" target="_blank"><b>{{ _('Open in ABS') }}</b> {{ icon('arrow-up-right', 14) }}</a>{% endif %}</div>
 </div>{% else %}<div class="card muted">{{ _('No open books.') }}</div>{% endfor %}
 </div>
 

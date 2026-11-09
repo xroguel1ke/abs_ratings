@@ -214,7 +214,7 @@ def dashboard():
 def cover(kind, ident):
     """Book covers through the web UI (cached): 'abs' = current ABS cover of an item, 'audible' = cover of an Audible product."""
     if kind not in ('abs', 'audible'): abort(404)
-    p, mt = core.cover_file(kind, ident, 3600 if kind == 'abs' else 7 * 86400)
+    p, mt = core.cover_file(kind, ident, 3600 if kind == 'abs' else 7 * 86400, full=request.args.get('full') == '1')
     if not p: abort(404)
     resp = send_file(p, mimetype=mt or 'image/jpeg'); resp.headers['Cache-Control'] = 'private, max-age=3600'
     return resp

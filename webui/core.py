@@ -278,27 +278,28 @@ def abs_get(s, path, timeout=10):
 COVER_DIR = os.path.join(CONFIG_DIR, 'cache', 'covers')
 
 
-def cover_file(kind, ident, max_age):
+def cover_file(kind, ident, max_age, full=False):
     """Cover image for the web UI, cached on disk (the ABS token never reaches the browser).
     kind 'abs': the book's current ABS cover (ident = item id, 1 h); 'audible': the cover of an Audible product (ident = ASIN, 7 days).
     Returns (path, mimetype) or (None, None)."""
     import time
     if not re.fullmatch(r'[A-Za-z0-9_-]{6,64}', ident or ''): return None, None
     os.makedirs(COVER_DIR, exist_ok=True)
-    p = os.path.join(COVER_DIR, f"{kind}_{ident}.img")
+    p = os.path.join(COVER_DIR, f"{kind}_{ident}{'_full' if full else ''}.img")
     if os.path.exists(p) and time.time() - os.path.getmtime(p) < max_age and os.path.getsize(p) > 0: return p, 'image/jpeg'
     try:
         if kind == 'abs':
-            r = abs_get(load_settings(), f'/api/items/{ident}/cover?width=400', timeout=15)
+            r = abs_get(load_settings(), f'/api/items/{ident}/cover' + ('' if full else '?width=400'), timeout=20)
         else:
-            api = requests.get(f'https://api.audible.com/1.0/catalog/products/{ident}', params={'response_groups': 'media', 'image_sizes': '500'},
+            size = '1215' if full else '500'
+            api = requests.get(f'https://api.audible.com/1.0/catalog/products/{ident}', params={'response_groups': 'media', 'image_sizes': size},
                                headers={'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'}, timeout=15)
-            url = ((api.json().get('product') or {}).get('product_images') or {}).get('500') if api.status_code == 200 else None
+            url = ((api.json().get('product') or {}).get('product_images') or {}).get(size) if api.status_code == 200 else None
             if not url:
                 for dom in ('de', 'co.uk'):  # other stores (German books)
-                    api = requests.get(f'https://api.audible.{dom}/1.0/catalog/products/{ident}', params={'response_groups': 'media', 'image_sizes': '500'},
+                    api = requests.get(f'https://api.audible.{dom}/1.0/catalog/products/{ident}', params={'response_groups': 'media', 'image_sizes': size},
                                        headers={'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'}, timeout=15)
-                    url = ((api.json().get('product') or {}).get('product_images') or {}).get('500') if api.status_code == 200 else None
+                    url = ((api.json().get('product') or {}).get('product_images') or {}).get(size) if api.status_code == 200 else None
                     if url: break
             r = requests.get(url, timeout=15) if url else None
         if r is None or r.status_code != 200 or not r.content: return (p, 'image/jpeg') if os.path.exists(p) else (None, None)
