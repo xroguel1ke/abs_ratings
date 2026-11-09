@@ -49,12 +49,14 @@ def main():
     ap.add_argument('--item', help="ABS item id to undo")
     ap.add_argument('--field', help="only undo this field")
     ap.add_argument('--merge-id', help="undo one series/author merge (web UI)")
+    ap.add_argument('--ids-file', help="JSON list of journal entry ids to undo (web UI history search)")
     ap.add_argument('--apply', action='store_true', help="really write to ABS (default: only show)")
     a = ap.parse_args()
 
     changes = load(CHANGES_FILE)
     done = {x['id'] for x in load(UNDONE_FILE)}
-    if a.list or not (a.run or a.item or a.merge_id):
+    ids = set(json.load(open(a.ids_file, encoding='utf-8'))) if a.ids_file else None
+    if a.list or not (a.run or a.item or a.merge_id or ids):
         runs = Counter(e['run'] for e in changes if entry_id(e) not in done)
         if not runs: print("No changes recorded (or everything was undone already)."); return
         print("Run id            Changes")
@@ -63,7 +65,7 @@ def main():
 
     sel = [e for e in changes if entry_id(e) not in done
            and (not a.run or e['run'] == a.run) and (not a.item or e['item'] == a.item)
-           and (not a.field or e['field'] == a.field) and (not a.merge_id or e.get('merge_id') == a.merge_id)]
+           and (not a.field or e['field'] == a.field) and (not a.merge_id or e.get('merge_id') == a.merge_id) and (ids is None or entry_id(e) in ids)]
     if not sel: print("Nothing to undo for this selection."); return
 
     url = re.sub(r'[^A-Za-z0-9:/._\-\[\]%]', '', os.getenv('ABS_URL', '')).rstrip('/')

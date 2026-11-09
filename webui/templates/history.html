@@ -1,7 +1,7 @@
 {% extends 'base.html' %}{% block title %}{{ _('History') }}{% endblock %}{% block body %}
 {% set FL = {'asin': 'ASIN', 'title': _('Title'), 'subtitle': _('Subtitle'), 'description': _('Description'), 'genres': _('Genres'), 'cover': _('Cover'), 'language': _('Language'), 'publisher': _('Publisher'), 'publishedYear': _('Year'), 'narrators': _('Narrators'), 'authors': _('Authors'), 'series': _('Series'), 'isbn': 'ISBN', 'explicit': 'Explicit', 'abridged': _('Abridged'), 'tags': 'Tags', 'author': _('Empty author')} %}
 <h1>{{ _('Scans') }}</h1><div class="tabs"><a href="{{ url_for('runs') }}" class="{{ 'active' if request.endpoint=='runs' }}">{{ _('Scans') }}</a><a href="{{ url_for('history') }}" class="{{ 'active' if request.endpoint=='history' }}">{{ _('Changes written') }}</a></div>
-<p class="muted small">{{ _('Written to ABS. Each change can be undone - per field, book or scan.') }}</p>
+<p class="muted small">{{ _('Written to ABS. Each change can be undone - per field, book or scan.') }} <a href="{{ url_for('history_search') }}">{{ icon('search', 14) }} {{ _('Search all changes') }}</a></p>
 <div class="card tablewrap"><table><tr><th>{{ _('Scan') }}</th><th>{{ _('Books') }}</th><th>{{ _('Changes') }}</th><th>{{ _('Fields') }}</th><th>{{ _('Undone') }}</th></tr>
 {% for r in runs %}<tr><td><a href="{{ url_for('history_run', run_id=r.run) }}">{{ r.start|dt }}</a><div class="muted small">{{ r.run }}</div></td>
 <td>{{ r.books }}</td><td>{{ r.changes }}</td>

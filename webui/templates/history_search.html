@@ -1,0 +1,19 @@
+{% extends 'base.html' %}{% import '_values.html' as V %}{% block title %}{{ _('History') }}{% endblock %}{% block body %}
+<p><a href="{{ url_for('history') }}">{{ icon('arrow-left', 14) }} {{ _('History') }}</a></p>
+<h1>{{ _('Search all changes') }}</h1>
+<form method="get" class="row small" style="gap:8px;flex-wrap:wrap">
+ <input type="search" name="q" value="{{ q }}" placeholder="{{ _('Book title') }}" style="max-width:260px">
+ <select name="field"><option value="">{{ _('All fields') }}</option>{% for f in fields %}<option value="{{ f }}" {{ 'selected' if f == field }}>{{ f }}</option>{% endfor %}</select>
+ <select name="source"><option value="">{{ _('Everyone') }}</option><option value="script" {{ 'selected' if source == 'script' }}>{{ _('Script') }}</option><option value="you" {{ 'selected' if source == 'you' }}>{{ _('You (review list, book page, manual)') }}</option></select>
+ <label>{{ _('from') }} <input type="date" name="since" value="{{ since }}"></label><label>{{ _('to') }} <input type="date" name="until" value="{{ until }}"></label>
+ <button class="primary">{{ _('Filter') }}</button></form>
+<div class="row small" style="justify-content:space-between;margin:10px 0"><span class="muted">{{ _('%(n)s changes', n=total) }}{% if total > entries|length %} ({{ _('showing %(n)s', n=entries|length) }}){% endif %}</span>
+{% if entries %}<form method="post" data-confirm="{{ _('Undo all %(n)s shown changes?', n=entries|rejectattr('undone')|list|length) }}">
+ {% for k in ('q', 'field', 'source', 'since', 'until') %}<input type="hidden" name="{{ k }}" value="{{ request.values.get(k, '') }}">{% endfor %}
+ <button class="danger">{{ icon('arrow-left', 14) }} {{ _('Undo all shown') }}</button></form>{% endif %}</div>
+<div class="card tablewrap"><table class="diff"><tr><th>{{ _('Time') }}</th><th>{{ _('Book') }}</th><th>{{ _('Field') }}</th><th>{{ _('Old') }}</th><th>{{ _('New') }}</th><th></th></tr>
+{% for e in entries %}<tr><td class="small">{{ e.ts|dt }}</td><td class="small"><a href="{{ url_for('problem', key=e.key) }}">{{ e.title }}</a></td><td class="small">{{ e.field }}</td>
+<td class="small">{{ V.show(e.field, e.old, False, e.new) }}</td><td class="small">{{ V.show(e.field, e.new, True, e.old) }}</td>
+<td>{% if e.undone %}<span class="badge warn">{{ _('undone') }}</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">{{ _('No changes found.') }}</td></tr>{% endfor %}</table></div>
+{% endblock %}

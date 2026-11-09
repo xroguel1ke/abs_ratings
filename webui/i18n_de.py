@@ -410,4 +410,8 @@ add({  # page tour 2026-11-08
     'new ASIN': 'neue ASIN', 'series': 'Reihen', 'titles': 'Titel', 'covers': 'Cover', 'review list': 'Prüfliste', 'errors': 'Fehler', 'done around': 'fertig gegen', 'books/min': 'Bücher/min',
     'switched off': 'abgeschaltet', 'blocked': 'blockiert', 'not used': 'nicht genutzt', '%(n)s requests left today': 'noch %(n)s Anfragen heute', 'last scan': 'letzter Scan',
     '%(a)s books · %(b)s series/authors · %(c)s other': '%(a)s Bücher · %(b)s Reihen/Autoren · %(c)s Sonstiges',
+    'Search all changes': 'Alle Änderungen durchsuchen', 'Book title': 'Buchtitel', 'All fields': 'Alle Felder', 'Everyone': 'Alle', 'Script': 'Skript',
+    'You (review list, book page, manual)': 'Du (Prüfliste, Buchseite, manuell)', 'from': 'von', 'to': 'bis', 'Filter': 'Filtern', '%(n)s changes': '%(n)s Änderungen',
+    'showing %(n)s': '%(n)s angezeigt', 'Undo all %(n)s shown changes?': 'Alle %(n)s angezeigten Änderungen rückgängig machen?', 'Undo all shown': 'Alle angezeigten rückgängig',
+    'No changes found.': 'Keine Änderungen gefunden.', 'Nothing to undo.': 'Nichts rückgängig zu machen.', 'Book': 'Buch',
 })

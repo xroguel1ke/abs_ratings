@@ -325,6 +325,25 @@ def history():
     return render_template('history.html', runs=core.history())
 
 
+@app.route('/history/search', methods=['GET', 'POST'])
+@login_required
+def history_search():
+    """All written changes, filtered; 'undo all shown' undoes exactly the listed entries (abs_undo --ids-file)."""
+    a = request.values
+    q, field, source, since, until = a.get('q', ''), a.get('field', ''), a.get('source', ''), a.get('since', ''), a.get('until', '')
+    entries, total = core.history_search(q, field, source, since, until)
+    if request.method == 'POST':
+        ids = [core.entry_id(e) for e in entries if not e.get('undone')]
+        if not ids: flash(T('Nothing to undo.'), 'ok'); return redirect(url_for('history_search', **{k: v for k, v in a.items() if k in ('q', 'field', 'source', 'since', 'until')}))
+        p = os.path.join(core.REPORT_DIR, f"undo_ids_{datetime.now():%Y%m%d-%H%M%S}.json")
+        os.makedirs(core.REPORT_DIR, exist_ok=True); json.dump(ids, open(p, 'w', encoding='utf-8'))
+        run_id_u, err = core.RUNNER.start('undo', undo_args=['--ids-file', p, '--apply'], label=f"Undo: {len(ids)} changes (search)")
+        if err: flash(T(err), 'error'); return redirect(url_for('history_search'))
+        return redirect(url_for('run_view', run_id=run_id_u))
+    return render_template('history_search.html', entries=entries, total=total, q=q, field=field, source=source, since=since, until=until,
+                           fields=['asin', 'title', 'subtitle', 'authors', 'narrators', 'series', 'language', 'genres', 'publisher', 'publishedYear', 'isbn', 'cover', 'description', 'explicit', 'abridged'])
+
+
 @app.route('/history/<run_id>')
 @login_required
 def history_run(run_id):

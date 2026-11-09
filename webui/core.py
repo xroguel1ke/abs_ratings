@@ -778,6 +778,30 @@ def history_entries(run_id, q='', field=''):
     return out
 
 
+def history_search(q='', field='', source='', since='', until='', limit=500):
+    """Applied changes across all scans (newest first): filter by book title, field, source (script, review list, manual ...) and date."""
+    undone, out = _undone_ids(), []
+    try:
+        with open(os.path.join(CONFIG_DIR, 'changes.jsonl'), encoding='utf-8') as f: lines = f.readlines()
+    except OSError: return [], 0
+    total = 0
+    for l in reversed(lines):
+        try: e = json.loads(l)
+        except ValueError: continue
+        if e.get('dry_run'): continue
+        if q and q.lower() not in (e.get('title') or '').lower(): continue
+        if field and e.get('field') != field: continue
+        src = str(e.get('source') or '')
+        if source == 'script' and (src.startswith(('applied:', 'review', 'manual', 'series_page')) or src == 'review_list'): continue
+        if source == 'you' and not (src.startswith(('applied:', 'manual', 'series_page')) or src == 'review_list'): continue
+        d = str(e.get('ts') or '')[:10]
+        if since and d < since: continue
+        if until and d > until: continue
+        total += 1
+        if len(out) < limit: e['undone'] = entry_id(e) in undone; out.append(e)
+    return out, total
+
+
 def book_changes(key, limit=200):
     """All journal entries of one book: applied changes (changes.jsonl, with undo state) + the newest planned-changes file."""
     out, undone = [], set()
