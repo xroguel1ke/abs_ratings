@@ -339,9 +339,11 @@ DETAIL_FIELDS = ['title', 'subtitle', 'authors', 'narrators', 'series', 'languag
 def book_detail(key, domain=None):
     """Book page: every ABS field next to Audible's value for the ASIN (Audible answer cached 1 day). -> (rows, tags, item) or (None, ...)."""
     import time
-    s = load_settings(); iid = key.split('_', 1)[1]
+    s = load_settings(); iid = key.split('_', 1)[-1]
+    if not s.get('ABS_URL') or not s.get('API_TOKEN'): return None, [], {}
     try: it = abs_get(s, f'/api/items/{iid}?expanded=1', timeout=15).json()
     except Exception: return None, [], {}
+    if not isinstance(it, dict) or not it.get('media'): return None, [], {}
     md = (it.get('media') or {}).get('metadata') or {}
     tags = sorted(t for t in (it.get('media') or {}).get('tags') or [] if t.startswith('lock_'))
     aud = {}
@@ -379,7 +381,7 @@ def book_detail(key, domain=None):
 
 def set_lock(key, lock, on):
     """Add/remove a lock_<field> tag on the book (ABS media tags)."""
-    s = load_settings(); iid = key.split('_', 1)[1]
+    s = load_settings(); iid = key.split('_', 1)[-1]
     it = abs_get(s, f'/api/items/{iid}', timeout=15).json()
     tags = list((it.get('media') or {}).get('tags') or [])
     tags = sorted(set(tags) | {lock}) if on else [t for t in tags if t != lock]

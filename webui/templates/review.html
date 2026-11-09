@@ -27,7 +27,7 @@
   <a href="{{ url_for('problem', key=x.key) }}"><b>{{ x.title }}</b></a></div>
   <div class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('queue_action', qid=x.id, action='accept') }}" class="qacc"><button class="primary">{{ _('Apply') }}</button></form>
   <form method="post" action="{{ url_for('queue_action', qid=x.id, action='reject') }}" class="qrej"><button>{{ _('Discard') }}</button></form></div></div>
- {% set rid = r.id or x.key.split('_', 1)[1] %}
+ {% set rid = r.id or x.key.split('_', 1)[-1] %}
  {% set newk, newid = ('audible', x.candidate) if x.kind == 'asin' and x.candidate else ('abs', rid) %}
  <div class="covers"><figure><a href="{{ url_for('cover', kind='abs', ident=rid, full=1) }}" target="_blank" title="{{ _('Open cover') }}"><img src="{{ url_for('cover', kind='abs', ident=rid) }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></a><figcaption>{{ _('now') }}</figcaption></figure>
   <span class="marrow">{{ icon('arrow-right', 14) }}</span>
@@ -72,7 +72,7 @@
 <p class="muted small" style="margin-top:-8px">{{ _('Language unknown or not one of your book languages. A button sets it right away.') }}</p>
 {% for x in secs.sonstiges.languages[:200] %}<div class="small"><a href="{{ url_for('problem', key=x.key) }}"><b>{{ x.title }}</b></a> – {{ x.authors|join(', ') }}{% if x.narrators %} · {{ _('read by') }} {{ x.narrators|join(', ') }}{% endif %} ·
  {{ _('language') }}: <code>{{ x.language or '–' }}</code>{% if x.locked %} <span class="badge">lock_language</span>{% endif %}
- {% if abs_base %}<a href="{{ abs_base }}/item/{{ x.key.split('_', 1)[1] }}" target="_blank">ABS {{ icon('arrow-up-right', 14) }}</a>{% endif %}
+ {% if abs_base %}<a href="{{ abs_base }}/item/{{ x.key.split('_', 1)[-1] }}" target="_blank">ABS {{ icon('arrow-up-right', 14) }}</a>{% endif %}
  {% if not x.locked %}{% for l in secs.sonstiges.lang_choices %}<form method="post" action="{{ url_for('set_language', key=x.key, lang_name=l) }}" style="display:inline"><button class="small">{{ _('Set %(l)s', l=l) }}</button></form>{% endfor %}{% endif %}</div>
 {% else %}<div class="muted small">{{ _('None.') }}</div>{% endfor %}</div>
 <h3>{{ _('Book in a series of another author') }} ({{ secs.sonstiges.foreign|length }})</h3>

@@ -8,7 +8,7 @@
  <form method="post" class="row" style="flex-wrap:nowrap"><button class="primary" name="action" value="scan">{{ icon('play', 14) }} {{ _('Scan this book') }}</button>
  <button name="action" value="scan_test">{{ _('Test run') }}</button></form></div>
 <div class="card"><div class="row" style="gap:20px;align-items:flex-start">
- {% set bid = r.id or key.split('_', 1)[1] %}
+ {% set bid = r.id or key.split('_', 1)[-1] %}
  <a href="{{ url_for('cover', kind='abs', ident=bid, full=1) }}" target="_blank" title="{{ _('Open cover') }}"><img class="bookcover" src="{{ url_for('cover', kind='abs', ident=bid) }}" alt="" loading="lazy" onerror="this.style.display='none'"></a>
  <div class="row" style="gap:20px;flex:1">
  <span><span class="badge {{ r.status }}">{{ status_label.get(r.status, r.status) }}</span></span>
@@ -16,7 +16,7 @@
  {% if r.goodreads %}<a href="{{ r.goodreads }}" target="_blank">Goodreads {{ icon('arrow-up-right', 14) }}</a>{% endif %}
  {% if r.hardcover %}<a href="{{ r.hardcover }}" target="_blank">Hardcover {{ icon('arrow-up-right', 14) }}</a>{% endif %}
  {% if r.asin and r.domain %}<a href="https://{{ r.domain }}/pd/{{ r.asin }}" target="_blank">Audible {{ icon('arrow-up-right', 14) }}</a>{% endif %}
- {% if abs_base %}<a href="{{ abs_base }}/item/{{ r.id or key.split('_', 1)[1] }}" target="_blank"><b>{{ _('Open in ABS') }}</b> {{ icon('arrow-up-right', 14) }}</a>{% endif %}
+ {% if abs_base %}<a href="{{ abs_base }}/item/{{ r.id or key.split('_', 1)[-1] }}" target="_blank"><b>{{ _('Open in ABS') }}</b> {{ icon('arrow-up-right', 14) }}</a>{% endif %}
  <span class="muted small">{{ _('checked') }}: {{ r.ts|dt }}{{ (' (' ~ _('test run') ~ ')') if r.dry_run }}</span></div></div>
  {% if ov %}<p class="small">{{ _('Manual overrides') }}: {% for k, v in ov.items() %}<span class="badge">{{ k }}: {{ v }}</span> {% endfor %}</p>{% endif %}
 </div>

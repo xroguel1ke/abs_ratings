@@ -284,7 +284,7 @@ def book_field(key, field, action):
     rid = 'book-' + datetime.now().strftime('%Y%m%d-%H%M%S')
     os.makedirs(core.REPORT_DIR, exist_ok=True)
     with open(os.path.join(core.REPORT_DIR, f'planned_changes_{rid}.jsonl'), 'w', encoding='utf-8') as f:
-        f.write(json.dumps({'run': rid, 'ts': datetime.now().isoformat(timespec='seconds'), 'item': key.split('_', 1)[1], 'key': key,
+        f.write(json.dumps({'run': rid, 'ts': datetime.now().isoformat(timespec='seconds'), 'item': key.split('_', 1)[-1], 'key': key,
                             'title': ((it.get('media') or {}).get('metadata') or {}).get('title'), 'field': field, 'old': old, 'new': new,
                             'source': 'book_page', 'dry_run': True}, ensure_ascii=False) + '\n')
     new_id, err = core.RUNNER.start('apply', undo_args=['--run', rid, '--apply'], label=f"{field} from Audible: {it.get('media', {}).get('metadata', {}).get('title')}",
@@ -595,7 +595,7 @@ def set_language(key, lang_name):
     s = core.load_settings()
     allowed = [x.strip() for x in str(s.get('BOOK_LANGUAGES') or 'English, German').split(',') if x.strip()]
     if lang_name not in allowed: abort(400)
-    iid = key.split('_', 1)[1]
+    iid = key.split('_', 1)[-1]
     try: md = (core.abs_get(s, f'/api/items/{iid}').json().get('media') or {}).get('metadata') or {}
     except Exception: flash(T('ABS not reachable.'), 'error'); return redirect(url_for('review_page') + '#sonstiges')
     rid = 'review-' + datetime.now().strftime('%Y%m%d-%H%M%S')
