@@ -585,6 +585,8 @@ def folder_narrators(item_data):
     # function words only in lower case ('Eric A. Shelman' is a name: an initial 'A.' is no article - batch 60), an article only first
     person = lambda n: 1 <= len(n.split()) <= 4 and not re.search(r'\d', n) and not re.search(
         r"\b(?:the|of|and|a|an|in|to|on|for|der|die|das|und|des)\b|^(?:The|Der|Die|Das|A|An)\s|(?i:\b(?:vol|volume|book|part|teil|band)\b)|\b[IVX]{2,}\b", n)
+    if len(names) > 1 and '+' in tail:  # an explicit 'A + B' list is the downloader's narrator list: keep the person names in it
+        return [n for n in names if person(n)]  # ('Casey Wayman + Mind Control and Manipulation Studio' -> Casey Wayman, batch 86)
     return names if names and all(person(n) for n in names) else []
 
 def series_by_membership(lib, asin, host, book_authors, title=None, all_hits=False):

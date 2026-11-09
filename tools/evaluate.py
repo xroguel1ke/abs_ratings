@@ -23,7 +23,7 @@ for key, g in golden.items():
     # 2026-11-09: the other repairs of a synthetic case (expect_* keys; older batches have none)
     fl = by_key.get(key, {})
     last = lambda f: (fl[f][-1]['new'] if fl.get(f) else None)
-    nt = lambda t: ''.join(ch for ch in str(t or '').lower() if ch.isalnum())
+    nt = lambda t: ''.join(ch for ch in __import__('re').sub(r'\([^)]*\)', '', str(t or '')).lower() if ch.isalnum())  # '(Tokyo Empire)' = series, moved to the series field
     nn = lambda xs: sorted(nt(x.get('name') if isinstance(x, dict) else x) for x in (xs or []))
     if g.get('expect_title') and nt(last('title')) != nt(g['expect_title']):
         bad.append((g.get('title') or key, f"title {g['expect_title']!r}", last('title'), g.get('note'))); continue
