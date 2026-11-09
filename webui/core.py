@@ -603,6 +603,9 @@ class RunManager:
             if run_settings: s = {**s, **{k: v for k, v in run_settings.items() if k in RUN_OVERRIDABLE}}
             if not s.get('ABS_URL') or not s.get('API_TOKEN'): return None, 'ABS URL and token are missing (settings).'
             run_id = datetime.now().strftime('%Y%m%d-%H%M%S')
+            known = {r.get('id') for r in self.runs()[:20]}
+            while run_id in known:  # two quick runs in the same second (review list clicks): never share logs / the run entry
+                time.sleep(1); run_id = datetime.now().strftime('%Y%m%d-%H%M%S')
             dry = s['DRY_RUN'] if dry_run is None else dry_run
             if kind == 'apply': dry = False
             extra = {'RUN_ID': run_id, 'DRY_RUN': 'true' if dry else 'false'}
