@@ -520,7 +520,7 @@ def notify_run(s, run):
         lines += [p.strip() for p in summ.split('|') if ' off: ' in p]
     if 'volumes_new' in ev and 'New volumes' in summ: lines += [p.strip() for p in summ.split('|') if 'New volumes' in p]
     if 'review_new' in ev:
-        n = sum(1 for x in review_queue() if x.get('run') == run.get('id') and x.get('status', 'open') == 'open')
+        n = sum(1 for x in review_queue() if x.get('created_run', x.get('run')) == run.get('id') and x.get('status', 'open') == 'open')  # 'run' is refreshed for old ones
         if n: lines.append(f"📝 {n} new entr{'y' if n == 1 else 'ies'} on the review list")
     if 'scan_done' in ev: lines.append(summ or run['status'])
     if lines: notify(s, run.get('subject') or f"ABS Ratings: {run['label']}", '\n'.join(dict.fromkeys(lines)), force=True)
@@ -640,7 +640,12 @@ class RunManager:
     def _wait(self, run, out, s):
         rc = self.proc.wait()
         out.close()
-        summary = parse_env_summary() if run['kind'] != 'undo' else {}
+        # last_run.env is written by abs_ratings.py only: an apply / undo run, or a scan that died before writing it, must not show
+        # (and be marked 'error' by) the summary of an EARLIER scan
+        envp = os.path.join(CONFIG_DIR, 'last_run.env')
+        try: fresh = os.path.getmtime(envp) >= datetime.fromisoformat(run['start']).timestamp() - 1
+        except (OSError, ValueError, KeyError): fresh = False
+        summary = parse_env_summary() if run['kind'] in ('full', 'series', 'item') and fresh else {}
         if not os.path.exists(os.path.join(LOG_DIR, run['log'])): run['log'] = run['console']
         run.update(end=datetime.now().isoformat(timespec='seconds'), returncode=rc,
                    status='stopped' if rc in (-15, -9) else ('ok' if rc == 0 and summary.get('ABS_ICON') != 'alert' else 'error'),

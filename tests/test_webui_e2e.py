@@ -180,3 +180,15 @@ def test_7_undo_of_an_old_change_keeps_a_newer_one():
     client().post(f'/history/{run_a}/undo', data={})
     wait_run()
     assert item('it3')['metadata']['publisher'] == 'Pub B', 'the newer change must survive the undo of the older one'
+
+
+def test_8_apply_run_does_not_inherit_an_old_scan_alert():
+    with open(os.path.join(cfg, 'last_run.env'), 'w', encoding='utf-8') as f:  # an earlier scan that ended with an alert
+        f.write("ABS_ICON='alert'\nABS_SUBJECT='old scan failed'\nABS_REPORT_BODY='old body'\n")
+    os.utime(os.path.join(cfg, 'last_run.env'), (time.time() - 3600, time.time() - 3600))
+    time.sleep(1.1)
+    base = {'item': 'it3', 'key': f'{LIB}_it3', 'title': 'Third Night', 'field': 'publishedYear', 'source': 'test'}
+    _apply_plan('20990101-000004', [dict(base, old=None, new='2001')])
+    from webui import core
+    run = core.RUNNER.runs()[0]
+    assert run['kind'] == 'apply' and run['status'] == 'ok' and 'old' not in (run.get('summary') or '') + (run.get('subject') or ''), run

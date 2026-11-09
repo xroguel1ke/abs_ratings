@@ -1892,7 +1892,7 @@ def _add_review(key, title, kind, candidate, reason, evidence=None, ctx=None):
                 rw_json(REVIEW_FILE, q)
             return
     q.append({'key': key, 'title': title, 'kind': kind, 'candidate': candidate, 'reason': reason, 'evidence': evidence or [],
-              'run': RUN_ID, 'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'status': 'open'})
+              'run': RUN_ID, 'created_run': RUN_ID, 'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'status': 'open'})
     if ctx: q[-1]['ctx'] = ctx
     rw_json(REVIEW_FILE, q)
 
