@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>abs-ratings</Name>
-  <Repository>ghcr.io/xroguel1ke/abs_ratings:web-ui</Repository>
+  <Repository>ghcr.io/xroguel1ke/abs_ratings:latest</Repository>
   <Registry>https://github.com/xroguel1ke/abs_ratings/pkgs/container/abs_ratings</Registry>
   <Network>bridge</Network>
   <Shell>bash</Shell>

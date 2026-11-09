@@ -11,7 +11,7 @@ metadata clean (ASIN repair, titles, series, authors, genres, language, covers).
 | `abs_series.py` | ABS-only task at the end: series merge, author normalization, library report, merge history/review files. |
 | `abs_undo.py` | Undo from `changes.jsonl` (`--run`, `--item`, `--field`, `--merge-id`, `--apply`). |
 | `webui/` | Flask web UI (`python -m webui.app`, port 47823). `core.py` = settings, RunManager (starts the script as subprocess), scheduler, Apprise, file readers. |
-| `Dockerfile`, `.github/workflows/docker.yml`, `unraid/abs-ratings.xml` | Container: image `ghcr.io/xroguel1ke/abs_ratings:<tag>` (`web-ui` branch → `:web-ui`, main → `:latest`). |
+| `Dockerfile`, `.github/workflows/docker.yml`, `unraid/abs-ratings.xml` | Container: image `ghcr.io/xroguel1ke/abs_ratings:<tag>` (only `main` is built → `:latest`; since 2026-11-09 all work happens on main, the claude/* branches were merged and deleted). |
 | `userscript.sh` | Old way (Unraid User Scripts + temporary container). Still works. |
 
 Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf/abs_scripts` on the server):
@@ -167,13 +167,13 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   (ROADMAP). Web UI was tested with a fake ABS (Flask) + Playwright.
 
 ## Running
-- Container: `docker run -p 47823:47823 -v /mnt/user/appdata/audiobookshelf/abs_scripts:/config ghcr.io/xroguel1ke/abs_ratings:web-ui`
+- Container: `docker run -p 47823:47823 -v /mnt/user/appdata/audiobookshelf/abs_scripts:/config ghcr.io/xroguel1ke/abs_ratings:latest`
 - Web UI without Docker: `pip install -r requirements.txt && CONFIG_DIR=/path/to/data python -m webui.app`
 - Script without UI: env vars as in `userscript.sh` / README, `DATA_DIR=/path/to/data python abs_ratings.py`.
 
 ## Open work
 All ROADMAP / STATUS items are done (2026-11-05). See docs/STATUS.md and docs/CHANGES.md (merge overview). Next: the user's first real
-full run (test run first, apply selectively), then the merge into claude/web-ui / main.
+full run (test run first, apply selectively), done: merged into main 2026-11-09.
 
 ## Counting batches (user rule – do not weaken, do not change without the user's explicit OK)
 - Every counting batch = **100 NEW library books** (never in an earlier counting batch) + **60 EN + 20 DE synthetic books** (real Audible products NOT in the library, fresh seed each batch). **When no new library books remain (since 2026-11-04): 100 EN + 80 DE synthetic books** (user decision; reusing library books is pointless). Hardcover batches use the same mix (Hardcover ON).

@@ -2,7 +2,7 @@ name: Build container image
 
 on:
   push:
-    branches: ["main", "claude/web-ui", "claude/matching-loop"]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
