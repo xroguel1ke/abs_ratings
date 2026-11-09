@@ -2191,7 +2191,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
         res = search_audible_api(title, authors_list, duration, lang, raw_title, required_lang, strict, only_domain, narrators, abs_series, only_queries=[q_ for q_ in (nq, nq2) if q_])
         if res: return res
         if rel_before and not LAST_SEARCH['related']: LAST_SEARCH['related'] = rel_before
-    if api_ok and not only_queries and not only_extra and queries and (nt_ := normalize_title_text(raw_title or title)):
+    if api_ok and not only_queries and not only_extra and queries and (nt_ := {normalize_title_text(t_) for t_ in (title, raw_title) if t_} - {''}):
         # nothing accepted: a long run of look-alike titles ('Terrifying Towns: ...' x 14) can push the EXACT title beyond the 5 hits
         # looked at. One deeper look at the first query (titles included); only exact-title products are checked (batch 79, 2026-11-09)
         dom0 = domains[0]; host0 = AUDIBLE_API_HOSTS[dom0]
@@ -2200,7 +2200,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             r2 = requests.get(f"https://{host0}/1.0/catalog/products", params={"num_results": 25, **queries[0], "response_groups": "product_desc"},
                               headers={"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}, timeout=15)
             exact_ = [x['asin'] for x in ((r2.json().get('products') or []) if r2.status_code == 200 else [])
-                      if x.get('asin') and normalize_title_text(x.get('title') or '') == nt_]
+                      if x.get('asin') and normalize_title_text(x.get('title') or '') in nt_]  # the search title (cleaned '06 X' = 'X', batch 97) or the raw one
         except (requests.RequestException, ValueError): exact_ = []
         if exact_:
             res = search_audible_api(title, authors_list, duration, lang, raw_title, required_lang, strict, dom0, narrators, abs_series,
