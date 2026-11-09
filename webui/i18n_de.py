@@ -419,4 +419,5 @@ add({  # page tour 2026-11-08
     'Locked: the script never changes this field.': 'Gesperrt: Das Skript ändert dieses Feld nie.', 'Unlocked.': 'Entsperrt.',
     'Back to the default value (save to keep it)': 'Zurück auf den Standardwert (zum Behalten speichern)', 'default': 'Standard', 'on': 'an', 'off': 'aus',
     'Show the expert settings (intervals, tolerances, fine tuning)': 'Experten-Einstellungen zeigen (Intervalle, Toleranzen, Feinabstimmung)', 'Expert settings': 'Experten-Einstellungen',
+    'books changed': 'Bücher geändert', 'new on the review list': 'neu auf der Prüfliste', 'new volumes released': 'neue Bände erschienen', 'Since your last visit': 'Seit deinem letzten Besuch',
 })

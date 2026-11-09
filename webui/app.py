@@ -726,6 +726,30 @@ def api_run_log(run_id):
     return jsonify(text=text, offset=off, status=run['status'])
 
 
+@app.route('/api/whatsnew')
+@login_required
+def api_whatsnew():
+    """Overview banner: what happened since the last visit (browser time, ISO)."""
+    since = (request.args.get('since') or '')[:19]
+    if not since: return jsonify(changes=0, books=0, review=0, volumes=0)
+    from datetime import timezone as _tz
+    try: since_utc = datetime.fromisoformat(since).astimezone(_tz.utc).isoformat()[:19] if 'T' in since else since
+    except ValueError: since_utc = since
+    ch, books = 0, set()
+    try:
+        with open(os.path.join(core.CONFIG_DIR, 'changes.jsonl'), encoding='utf-8') as f:
+            for l in f:
+                if '"dry_run": true' in l: continue
+                try: e = json.loads(l)
+                except ValueError: continue
+                if str(e.get('ts') or '')[:19] > since_utc and e.get('field') != 'description': ch += 1; books.add(e.get('key'))
+    except OSError: pass
+    rv = sum(1 for x in core.open_queue() if str(x.get('ts') or '')[:19] > since_utc)
+    rep = core._load_json(os.path.join(core.REPORT_DIR, 'missing_in_series.json'), {})
+    vol = sum(1 for s in rep.get('series') or [] for m in s.get('missing') or [] if m.get('new')) if (rep.get('generated') or '') > since[:16].replace('T', ' ') else 0
+    return jsonify(changes=ch, books=len(books), review=rv, volumes=vol)
+
+
 @app.route('/api/status')
 @login_required
 def api_status():

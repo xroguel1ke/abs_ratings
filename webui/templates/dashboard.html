@@ -21,6 +21,17 @@
 {% if sources %}<div class="row small srcbar">{% for k, lab in (('audible', 'Audible'), ('hardcover', 'Hardcover'), ('goodreads', 'Goodreads')) %}{% set v = sources.get(k) or {} %}
  <span class="badge src-{{ v.status or 'disabled' }}" title="{{ v.why or '' }}"><span class="dot"></span>{{ lab }}: {{ {'ok': _('OK'), 'off': _('switched off'), 'blocked': _('blocked'), 'disabled': _('not used')}.get(v.status, '–') }}{% if k == 'hardcover' and v.daily_left is not none and v.status == 'ok' %} · {{ _('%(n)s requests left today', n=v.daily_left) }}{% endif %}</span>{% endfor %}
  <span class="muted">{{ _('last scan') }} {{ sources.ts }}</span></div>{% endif %}
+<div class="card newsbar" id="newsbar" style="display:none"></div>
+<script>(function(){ let last=null; try{last=localStorage.getItem('abs_last_visit')}catch(e){}
+  const now=new Date().toISOString(); try{localStorage.setItem('abs_last_visit', now)}catch(e){}
+  if(!last) return;
+  fetch('/api/whatsnew?since='+encodeURIComponent(last)).then(r=>r.json()).then(j=>{
+    const p=[]; if(j.books) p.push('<a href="{{ url_for('history_search') }}?since='+last.slice(0,10)+'">'+j.books+' {{ _('books changed') }}</a>');
+    if(j.review) p.push('<a href="{{ url_for('review_page') }}">'+j.review+' {{ _('new on the review list') }}</a>');
+    if(j.volumes) p.push('<a href="{{ url_for('missing_page') }}">'+j.volumes+' {{ _('new volumes released') }}</a>');
+    if(!p.length) return; const b=document.getElementById('newsbar');
+    b.innerHTML='<b>{{ _('Since your last visit') }}:</b> '+p.join(' · '); b.style.display='';
+  }).catch(()=>{}); })();</script>
 <div class="hero">
  <a class="card herocard" href="{{ url_for('review_page') }}">
   <div class="muted small">{{ _('To review') }}</div><div class="v">{{ tiles.queue + tiles.review + tiles.other }}</div>
