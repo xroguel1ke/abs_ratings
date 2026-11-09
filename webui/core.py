@@ -730,12 +730,21 @@ def cleanup_logs(s):
     if time.time() - _last_cleanup['t'] < 3600: return
     _last_cleanup['t'] = time.time()
     limit = time.time() - int(s.get('LOG_RETENTION_DAYS') or 30) * 86400
-    for d, pat in ((LOG_DIR, r'.*\.log$'), (REPORT_DIR, r'planned_changes_.*\.jsonl$')):
+    # logs, planned changes of old test runs and the helper files of web UI actions (selections, undo lists). The journal
+    # (changes.jsonl) and the cover backups stay: undo needs them.
+    for d, pat in ((LOG_DIR, r'.*\.log$'), (REPORT_DIR, r'(planned_changes_.*\.jsonl|apply_select_.*\.json|undo_ids_.*\.json)$')):
         try:
             for name in os.listdir(d):
                 p = os.path.join(d, name)
                 if re.match(pat, name) and name != 'debug_latest.log' and os.path.getmtime(p) < limit: os.remove(p)
         except OSError: pass
+    import shutil  # old per-run debug folders of the first script version (debug_logs/<date>_<asin>/)
+    dd = os.path.join(CONFIG_DIR, 'debug_logs')
+    try:
+        for name in os.listdir(dd):
+            p = os.path.join(dd, name)
+            if os.path.isdir(p) and os.path.getmtime(p) < limit: shutil.rmtree(p, ignore_errors=True)
+    except OSError: pass
 
 
 def start_scheduler():

@@ -17,3 +17,10 @@ def test_glued_subtitle():
     assert g('Mistborn: The Final Empire', None, 'Mistborn', 'The Final Empire') is None
     assert g('Mistborn: The Final Empire', 'My own', 'Mistborn', 'The Final Empire') is None
     assert g('Mistborn', 'The Final Empire', 'Mistborn', 'The Final Empire') is None
+
+
+def test_search_score_title_with_audible_subtitle():
+    s = A.search_match_score
+    assert s('Homeland: Legend of Drizzt', 'Homeland', 'Legend of Drizzt: Dark Elf Trilogy, Book 1') >= 0.85
+    assert s('Dune: Messiah', 'Dune', 'Dune Chronicles, Book 1') < 0.85
+    assert s('Homeland: Legend', 'Homeland', 'Legend of Drizzt') < 0.85  # one tail word is too little

@@ -1476,6 +1476,9 @@ def get_audible_api(asin, domain):
     is not available there, or None on errors (caller falls back to web scraping)."""
     host = AUDIBLE_API_HOSTS.get(domain)
     if not host: return None
+    if (host, asin) in AUD_PREFETCH:  # loaded in bulk at the start of the run (aud_prefetch)
+        p = AUD_PREFETCH[(host, asin)]
+        return audible_result(p, asin, domain) if p.get('title') else 'missing'
     throttle('audible_api', host)
     url = f"https://{host}/1.0/catalog/products/{asin}"
     try:
@@ -1494,7 +1497,40 @@ def get_audible_api(asin, domain):
         logging.warning(f"        🌐 Audible API returned no JSON on {host}")
         return None
     if not p.get('title'): return 'missing'  # Product not sold in this marketplace
+    return audible_result(p, asin, domain)
 
+
+AUD_PREFETCH = {}  # (api host, asin) -> catalog product of this run (bulk request, 50 per request)
+
+
+def aud_prefetch(items):
+    """The product of every queued book from its preferred store in bulk (50 ASINs per request instead of one request per book -
+    each single request waits for the per-host throttle). A product the bulk answer does not contain is asked singly as before."""
+    by_host = {}
+    for it in items:
+        md = (it.get('media') or {}).get('metadata') or {}
+        a = str(md.get('asin') or '').strip()
+        if not re.fullmatch(r'[A-Z0-9]{10}', a): continue
+        dom = f"www.audible.{MARKET_BY_LANG.get(map_language(md.get('language')) if md.get('language') else None, 'com')}"
+        if dom in AUDIBLE_API_HOSTS: by_host.setdefault(AUDIBLE_API_HOSTS[dom], set()).add(a)
+    n = 0
+    for host, asins in by_host.items():
+        asins = sorted(asins)
+        for i in range(0, len(asins), 50):
+            throttle('audible_api', host)
+            try:
+                r = requests.get(f"https://{host}/1.0/catalog/products", params={"asins": ",".join(asins[i:i + 50]), "response_groups": AUDIBLE_API_GROUPS,
+                                 "image_sizes": "500,1215"}, headers={"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}, timeout=30)
+                prods = r.json().get('products') if r.status_code == 200 else None
+            except (requests.RequestException, ValueError): prods = None
+            if prods is None: break  # throttled / blocked / not recorded: the books are asked one by one as before
+            for p in prods:
+                if p.get('asin') in asins[i:i + 50]: AUD_PREFETCH[(host, p['asin'])] = p; n += 1
+    if n: logging.info(f"Audible: {n} product(s) loaded in bulk ({sum(len(v) for v in by_host.values())} queued books with an ASIN).")
+
+
+def audible_result(p, asin, domain):
+    """Catalog product -> result dict (same shape as the web scraper)."""
     res = {'domain': domain, 'source': 'API', 'page_ok': True, 'title_raw': p.get('title'), 'asin': p.get('asin') or asin,
            'authors_raw': [a.get('name') for a in (p.get('authors') or []) if a.get('name')],
            'authors_asin': [{'name': a.get('name'), 'asin': a.get('asin')} for a in (p.get('authors') or []) if a.get('name') and a.get('asin')],
@@ -1731,6 +1767,9 @@ def search_match_score(abs_title, found_title, found_sub):
         if sep in (abs_title or ''):
             for head, tail in {tuple(abs_title.split(sep, 1)), tuple(abs_title.rsplit(sep, 1))}:  # first AND last separator ('Fate Hollow Academy: Term 1: A Gripping LitRPG Adventure')
                 if normalize_title_text(head) == nf and set(normalize_title_text(tail).split()) & MARKETING_WORDS: score = max(score, 0.9)
+    if ':' in (abs_title or '') and found_sub:  # the ABS title carries Audible's subtitle (start): 'Homeland: Legend of Drizzt' = 'Homeland' + 'Legend of Drizzt: Dark Elf Trilogy, Book 1'
+        head, tail = (normalize_title_text(x) for x in abs_title.split(':', 1))
+        if head == nf and len(tail.split()) >= 2 and (normalize_title_text(found_sub) + ' ').startswith(tail + ' '): score = max(score, 0.9)
     head_last = (abs_title or '').rsplit(':', 1)[0] if ':' in (abs_title or '') else ''  # everything before the LAST colon ('Fate Hollow Academy: Term 1')
     if extract_volume(found_title) and not (extract_volume(abs_title) | extract_volume(re.split(r'\s*[:\u2013-]\s+', abs_title or '')[0]) | extract_volume(head_last)):  # the number may sit in the title head ('Gangster 2: A Gripping LitRPG Adventure')
         score = min(score, 0.75)  # 'Hell Mode' vs 'Hell Mode, Volume 3': could be any volume
@@ -2071,7 +2110,8 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 if not same_rec_ and not abs_k & {_skl(x.get('name') or '') for x in ((p.get('meta_raw') or {}).get('series') or [])}:
                     # (the same recording - runtime 2 min AND a shared narrator - may sit in an Audible series named otherwise: House Harkonnen)
                     logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (series listing: not in the book's series)"); continue
-            part_ = lambda t: set(re.findall(r'(?i)\b(?:part|pt\.?|teil)\s*(\d+)\b', t or ''))
+            # 'Part 2', 'Teil 2' and '(1 of 2)' (dramatized adaptations in two parts, batch 106): the brackets are dropped by the title normalisation
+            part_ = lambda t: set(re.findall(r'(?i)\b(?:part|pt\.?|teil)\s*(\d+)\b', t or '')) | set(re.findall(r'(?i)\((\d+)\s+(?:of|von)\s+\d+\)', t or ''))
             if part_(title) and part_(found_title) and not part_(title) & part_(found_title):
                 # 'The Desert Prince (Part 1 of 3)' vs '(Part 2 of 3)': the title normalisation drops the brackets, the part number decides
                 logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (part {','.join(sorted(part_(found_title)))} vs {','.join(sorted(part_(title)))})")
@@ -3799,6 +3839,7 @@ def rating_only_pass(item, key, idx, total):
 def process_queue(work_queue, history, failed, recheck):
     total = len(work_queue)
     if HARDCOVER_ENABLED: hc_prefetch([f"{it['_lib']}_{it['id']}" for it in work_queue])
+    if USE_AUDIBLE_API and 'audible' not in SOURCE_DOWN: aud_prefetch([it for it in work_queue if not it.get('_rating_only')])
     start = datetime.now()
     consecutive_rl = 0
 
@@ -3820,7 +3861,12 @@ def process_queue(work_queue, history, failed, recheck):
                 if item.get('_rating_only') and not ONLY_ITEMS:
                     needs_sleep = rating_only_pass(item, key, idx, total)
                     break
-                item_data = abs_session.get(f"{ABS_URL}/api/items/{iid}", params={"expanded": 1}).json()  # expanded: includes media.duration (also in single-book mode)
+                r_item = abs_session.get(f"{ABS_URL}/api/items/{iid}", params={"expanded": 1})  # expanded: includes media.duration (also in single-book mode)
+                if r_item.status_code == 404:  # deleted in ABS (single-book mode / a stale web UI entry): no error, it leaves the result list
+                    logging.info(f"      -> 🗑️ Book is no longer in ABS - skipped")
+                    with IO_LOCK: RESULTS.pop(key, None)
+                    break
+                item_data = r_item.json()
                 from abs_series import expand_locks
                 tags = expand_locks(item_tags(item_data))
                 meta = item_data['media']['metadata']
@@ -4111,7 +4157,8 @@ def process_queue(work_queue, history, failed, recheck):
                         add_review(key, title, "asin", asin, "ASIN belongs to another book and no safe replacement was found", plaus_why)
                         aud_data, skip_meta = None, True
                     rel = LAST_SEARCH.get('related')
-                    if rel and not (max(title_similarity(search_title, rel.get('title_raw') or ''), title_similarity(title, rel.get('title_raw') or '')) >= 0.8
+                    if rel and not (max(title_similarity(search_title, rel.get('title_raw') or ''), title_similarity(title, rel.get('title_raw') or ''),
+                                        search_match_score(title, rel.get('title_raw') or '', rel.get('subtitle_raw'))) >= 0.8
                                     and match_author(authors, ', '.join(rel.get('authors_raw') or []))):  # safety net: never the ratings of ANOTHER book
                         logging.warning(f"        ⛔ Other-edition candidate '{rel.get('title_raw')}' does not fit '{title}' (title/author): not used")
                         rel = None
