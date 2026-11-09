@@ -86,6 +86,10 @@ def main():
         items[iid] = {'id': iid, 'libraryId': lib, 'mediaType': 'book', 'media': media, 'tags': [], 'relPath': folder}
         lst.append({'id': iid, 'libraryId': lib, 'mediaType': 'book', 'media': dict(media), 'relPath': folder})
         expected[f'{lib}_{iid}'] = {'asin': exp, 'status': 'confirmed', 'title': p['title'], 'note': f'synthetic case {case}; true product {asin}', 'case': case}
+        # what else the run must repair (2026-11-09: not only the ASIN)
+        if case in ('messy_number_prefix', 'duplicate_title', 'year_prefix', 'messy_series_prefix') and title != p['title']: expected[f'{lib}_{iid}']['expect_title'] = p['title']
+        if case == 'iso_language': expected[f'{lib}_{iid}']['expect_lang'] = 'English' if lg == 'en' else 'German'
+        if case == 'wrong_narrator': expected[f'{lib}_{iid}']['expect_narr'] = real_narr
     json.dump({'library': lib, 'items': items, 'list': lst, 'expected': expected}, open(a.out, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     print(f'{len(items)} synthetic books -> {a.out} (candidates seen: {len(cands)}); cases: ' + ', '.join(f'{c}={sum(1 for e in expected.values() if e["case"] == c)}' for c in dict.fromkeys(CASES)))
 

@@ -18,10 +18,22 @@ bad, ok = [], 0
 for key, g in golden.items():
     got = by_key.get(key, {}).get('asin')
     new = got[-1]['new'] if got else None
-    if new == g.get('asin') or (new and new in (g.get('alt') or [])): ok += 1  # 'alt' = same product, ASIN of another store
-    else: bad.append((g.get('title') or key, g.get('asin'), new, g.get('note') or g.get('status')))
+    if not (new == g.get('asin') or (new and new in (g.get('alt') or []))):  # 'alt' = same product, ASIN of another store
+        bad.append((g.get('title') or key, f"asin {g.get('asin')}", new, g.get('note') or g.get('status'))); continue
+    # 2026-11-09: the other repairs of a synthetic case (expect_* keys; older batches have none)
+    fl = by_key.get(key, {})
+    last = lambda f: (fl[f][-1]['new'] if fl.get(f) else None)
+    nt = lambda t: ''.join(ch for ch in str(t or '').lower() if ch.isalnum())
+    nn = lambda xs: sorted(nt(x.get('name') if isinstance(x, dict) else x) for x in (xs or []))
+    if g.get('expect_title') and nt(last('title')) != nt(g['expect_title']):
+        bad.append((g.get('title') or key, f"title {g['expect_title']!r}", last('title'), g.get('note'))); continue
+    if g.get('expect_lang') and last('language') != g['expect_lang']:
+        bad.append((g.get('title') or key, f"language {g['expect_lang']}", last('language'), g.get('note'))); continue
+    if g.get('expect_narr') and nn(last('narrators')) != nn(g['expect_narr']):
+        bad.append((g.get('title') or key, f"narrators {g['expect_narr']}", last('narrators'), g.get('note'))); continue
+    ok += 1
 print(f"golden: {ok}/{len(golden)} ok, {len(bad)} deviations")
-for t, exp, got, why in bad: print(f"  DEVIATION {t[:50]!r}: expected asin {exp}, got {got}  ({why})")
+for t, exp, got, why in bad: print(f"  DEVIATION {t[:50]!r}: expected {exp}, got {str(got)[:80]}  ({why})")
 
 risky = collections.Counter()
 for key, fields in by_key.items():

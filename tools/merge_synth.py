@@ -192,11 +192,39 @@ def make(seed, out):
         s2, a2 = k2; add(groups[k2][0], s2, a2); items[-1]['media']['metadata']['authors'].append({'id': 'au-dt', 'name': 'Dual Talent - illustrator'})
         role_cases.append({'case': 'role_suffix', 'item': items[-1]['id'], 'remove': 'Dual Talent - illustrator'})
         role_cases.append({'case': 'real_author_kept', 'item': items[-2]['id'], 'remove': None})
+    # 2026-11-09 library-task cases: genre spellings, folder number in a numbered series, series language, wrong language
+    extra = []
+    k = take(min_books=3)
+    if k:
+        s, a = k
+        for i, b in enumerate(groups[k][:3]):
+            add(b, s, a); items[-1]['media']['metadata']['genres'] = ['Fantasy Romance', 'Adventure'] if i < 2 else ['fantasy romance', 'Adventure', 'FANTASY ROMANCE']
+        extra.append({'case': 'genre_spelling', 'item': items[-1]['id'], 'field': 'genres', 'expect': ['Fantasy Romance', 'Adventure']})
+    k = take(lambda k: plain(k), 4)
+    if k:
+        s, a = k
+        for i, b in enumerate(groups[k]):
+            add(b, s, a); items[-1]['relPath'] = f"{a}/{s}/{b['seq']} - {b['title']} - {(b['narrators'] or ['N'])[0]}"
+            if i == 1: items[-1]['media']['metadata']['series'][0]['sequence'] = None; gap = (items[-1]['id'], b['seq'])
+        extra.append({'case': 'folder_number_gap', 'item': gap[0], 'field': 'series', 'expect': gap[1]})
+    k = take(lambda k: all((b.get('language') or 'English') == 'English' and b['narrators'] for b in groups[k]), 3)
+    if k:
+        s, a = k
+        for i, b in enumerate(groups[k]):
+            add(b, s, a)
+            if i == 0: items[-1]['media']['metadata']['language'] = 'und'; und = items[-1]['id']
+        extra.append({'case': 'language_consensus', 'item': und, 'field': 'language', 'expect': 'English'})
+    k = take(lambda k: all((b.get('language') or 'English') == 'English' for b in groups[k]))
+    if k:
+        s, a = k
+        b = groups[k][0]; add(dict(b, narrators=['Nobody Shared']), s, a); items[-1]['media']['metadata']['language'] = 'French'
+        extra.append({'case': 'wrong_language_review', 'item': items[-1]['id'], 'field': 'review', 'expect': 'languages'})
     empty = [{'id': f'au-empty-{i}', 'name': f'Empty Leftover {i}'} for i in range(3)]
     snap = {'libraries': {'libraries': [{'id': LIB, 'name': 'Synthetic merge test', 'mediaType': 'book'}]},
             'lists': {LIB: {'results': items}}, 'items': {x['id']: x for x in items}}
     snap['empty_authors'] = empty
-    json.dump({'seed': seed, 'snapshot': snap, 'cases': cases, 'role_cases': role_cases, 'empty_authors': [e['name'] for e in empty]}, open(out, 'w', encoding='utf-8'), ensure_ascii=False)
+    json.dump({'seed': seed, 'snapshot': snap, 'cases': cases, 'role_cases': role_cases, 'empty_authors': [e['name'] for e in empty], 'extra_cases': extra},
+              open(out, 'w', encoding='utf-8'), ensure_ascii=False)
     print(f"{len(items)} books, {len(cases)} cases -> {out}: " + ', '.join(f"{c}={sum(1 for x in cases if x['case'] == c)}" for c in dict.fromkeys(x['case'] for x in cases)))
 
 
@@ -251,7 +279,15 @@ def evaluate(batch, data):
     if del_names - exp_del: wrong += 1; print('  WRONG deleted authors that have books:', del_names - exp_del)
     elif exp_del - del_names: missed += 1; print('  MISSED empty authors:', exp_del - del_names)
     elif exp_del: ok += 1
-    n_all = len(cases) + len(batch_d.get('role_cases') or []) + (1 if exp_del else 0)
+    for c in batch_d.get('extra_cases') or []:
+        es = [e for e in plan if e.get('item') == c['item'] and e.get('field') == c['field']]
+        new = es[-1]['new'] if es else None
+        if c['field'] == 'series': good = bool(new) and any(str(x.get('sequence')) == c['expect'] for x in new)
+        elif c['field'] == 'review': good = any(x.get('key', '').endswith(c['item']) for x in rv.get('languages') or [])
+        else: good = new == c['expect']
+        if good: ok += 1
+        else: missed += 1; print('  MISSED', c['case'], c['item'], 'got', str(new)[:80])
+    n_all = len(cases) + len(batch_d.get('role_cases') or []) + (1 if exp_del else 0) + len(batch_d.get('extra_cases') or [])
     print(f"merge batch: {ok}/{n_all} ok | wrong {wrong} | missed {missed}")
     return 0 if not wrong and not missed else 1
 
