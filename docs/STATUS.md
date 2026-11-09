@@ -50,6 +50,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [U] Fix loop round 6/7 (2026-11-08): sibling-series cache (30 days), Audible sequence 'N, Subtitle' = no number, unnumbered leading series split via the ABS series list, novella range '0.1 - 0.5', accent-insensitive narrators, author without space, Part P Volume V = #P.V | ✅ | Stolen Heir / Assassin's Blade / Chain of Feathers / Blue Core 3 / Bookworm P1V3; regress + damage sim green |
 | [A] Counting batches after the 2026-11-08/09 rule changes (100 EN + 80 DE synthetic, Hardcover on, new cases year prefix / ISO code / wrong narrator + book folders) | ✅ | 52-64: fixes after 53, 55, 59, 60; 61-64 clean = Audible streak 4, Hardcover streak 4 |
 | [U] Library rounds 6-9 | ✅ | round 9: 0 changes, 0 errors; audit in ABS clean (3 accepted number pairs: split German volumes, two recordings of Mistborn 1) |
+| [A] Night 2026-11-09: genre cleanup (188 books, stable next round), Hardcover edition label in subtitle, library-task writes stamp history, race fix, folder narrator names | ✅ | rounds 10-12 0 errors; batches 65-68 clean (streak 4 again); ASIN audit of all 1907 ASINs: 1900 ok, 7 gone (known) |
 
 ## Goodreads (experimental)
 | Item | State | Note |
