@@ -385,4 +385,5 @@ add({  # page tour 2026-11-08
     'Set %(l)s': '%(l)s setzen',
     'The language of these books is unknown or not one of your book languages (Settings → Audible), and the script could not prove the right one. A button sets it right away (can be undone).':
         'Die Sprache dieser Bücher ist unbekannt oder keine deiner Buchsprachen (Einstellungen → Audible), und das Skript konnte die richtige nicht sicher belegen. Ein Knopf setzt sie sofort (rückgängig machbar).',
+    'Scan this book': 'Dieses Buch scannen', 'Test run': 'Testlauf', 'after Apply': 'nach Übernehmen', 'unchanged': 'unverändert', 'now': 'jetzt',
 })

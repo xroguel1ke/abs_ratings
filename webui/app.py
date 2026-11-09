@@ -209,6 +209,17 @@ def dashboard():
                            settings=core.load_settings(), **status_context())
 
 
+@app.route('/cover/<kind>/<ident>')
+@login_required
+def cover(kind, ident):
+    """Book covers through the web UI (cached): 'abs' = current ABS cover of an item, 'audible' = cover of an Audible product."""
+    if kind not in ('abs', 'audible'): abort(404)
+    p, mt = core.cover_file(kind, ident, 3600 if kind == 'abs' else 7 * 86400)
+    if not p: abort(404)
+    resp = send_file(p, mimetype=mt or 'image/jpeg'); resp.headers['Cache-Control'] = 'private, max-age=3600'
+    return resp
+
+
 @app.route('/problem/<key>', methods=['GET', 'POST'])
 @login_required
 def problem(key):
@@ -223,6 +234,11 @@ def problem(key):
         if action == 'unignore':
             core.save_override(key, {'ignore': False}); flash(T('No longer ignored.'), 'ok')
             return redirect(url_for('problem', key=key))
+        if action in ('scan', 'scan_test'):  # scan only this book (real or test run), no ABS backup for one book
+            run_id, err = core.RUNNER.start('item', dry_run=(action == 'scan_test'), only_items=[key],
+                                            label=f"{'Test run' if action == 'scan_test' else 'Scan'}: {res.get('title')}", run_settings={'ABS_BACKUP': False})
+            if err: flash(T(err), 'error'); return redirect(url_for('problem', key=key))
+            return redirect(url_for('run_view', run_id=run_id, back=key))
         if action == 'remove_ratings':
             rm = [src for src in ('audible', 'goodreads', 'hardcover') if request.form.get(f'rm_{src}') == 'on']
             if not rm: flash(T('Please choose at least one source.'), 'error'); return redirect(url_for('problem', key=key))
@@ -241,7 +257,7 @@ def problem(key):
             flash(T('Please enter an ASIN or a link.'), 'error'); return redirect(url_for('problem', key=key))
         if data: core.save_override(key, data)
         run_id, err = core.RUNNER.start('item', dry_run=(action == 'test'), only_items=[key],
-                                        label=f"Single book: {res.get('title')}")
+                                        label=f"Single book: {res.get('title')}", run_settings={'ABS_BACKUP': False})
         if err: flash(T(err), 'error'); return redirect(url_for('problem', key=key))
         return redirect(url_for('run_view', run_id=run_id, back=key))
     return render_template('problem.html', key=key, r=res, ov=ov, changes=core.book_changes(key))

@@ -4,15 +4,19 @@
 {# compare keys are stored in German by the script #}
 {% set CK = {'Titel': _('Title'), 'Autor': _('Author'), 'Laufzeit': _('Runtime'), 'Sprecher': _('Narrator'), 'Reihe': _('Series'), 'Verlag': _('Publisher'), 'Jahr': _('Year'), 'Sprache': _('Language')} %}
 <p><a href="{{ url_for('books') }}">{{ icon('arrow-left', 14) }} {{ _('Books') }}</a> · <a href="{{ url_for('dashboard') }}">{{ _('Overview') }}</a></p>
-<h1>{{ r.title }}</h1>
-<div class="card"><div class="row" style="gap:20px">
+<div class="row" style="justify-content:space-between;align-items:flex-start"><h1>{{ r.title }}</h1>
+ <form method="post" class="row" style="flex-wrap:nowrap"><button class="primary" name="action" value="scan">{{ icon('play', 14) }} {{ _('Scan this book') }}</button>
+ <button name="action" value="scan_test">{{ _('Test run') }}</button></form></div>
+<div class="card"><div class="row" style="gap:20px;align-items:flex-start">
+ {% if r.id %}<img class="bookcover" src="{{ url_for('cover', kind='abs', ident=r.id) }}" alt="" loading="lazy" onerror="this.style.display='none'">{% endif %}
+ <div class="row" style="gap:20px;flex:1">
  <span><span class="badge {{ r.status }}">{{ status_label.get(r.status, r.status) }}</span></span>
  <span>{{ _('Author') }}: {{ r.author or '–' }}</span><span>ASIN: {% if r.asin %}<code>{{ r.asin }}</code>{% else %}–{% endif %}{% if r.domain %} <span class="muted small">({{ r.domain }})</span>{% endif %}</span>
  {% if r.goodreads %}<a href="{{ r.goodreads }}" target="_blank">Goodreads {{ icon('arrow-up-right', 14) }}</a>{% endif %}
  {% if r.hardcover %}<a href="{{ r.hardcover }}" target="_blank">Hardcover {{ icon('arrow-up-right', 14) }}</a>{% endif %}
  {% if r.asin and r.domain %}<a href="https://{{ r.domain }}/pd/{{ r.asin }}" target="_blank">Audible {{ icon('arrow-up-right', 14) }}</a>{% endif %}
  {% if abs_base %}<a href="{{ abs_base }}/item/{{ r.id }}" target="_blank">{{ _('Open in ABS') }} {{ icon('arrow-up-right', 14) }}</a>{% endif %}
- <span class="muted small">{{ _('checked') }}: {{ r.ts|dt }}{{ (' (' ~ _('test run') ~ ')') if r.dry_run }}</span></div>
+ <span class="muted small">{{ _('checked') }}: {{ r.ts|dt }}{{ (' (' ~ _('test run') ~ ')') if r.dry_run }}</span></div></div>
  {% if ov %}<p class="small">{{ _('Manual overrides') }}: {% for k, v in ov.items() %}<span class="badge">{{ k }}: {{ v }}</span> {% endfor %}</p>{% endif %}
 </div>
 

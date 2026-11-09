@@ -23,6 +23,11 @@
   <a href="{{ url_for('problem', key=x.key) }}"><b>{{ x.title }}</b></a></div>
   <div class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('queue_action', qid=x.id, action='accept') }}"><button class="primary">{{ _('Apply') }}</button></form>
   <form method="post" action="{{ url_for('queue_action', qid=x.id, action='reject') }}"><button>{{ _('Discard') }}</button></form></div></div>
+ {% set rid = r.id or x.key.split('_', 1)[1] %}
+ <div class="covers"><figure><img src="{{ url_for('cover', kind='abs', ident=rid) }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><figcaption>{{ _('now') }}</figcaption></figure>
+  <span class="marrow">{{ icon('arrow-right', 14) }}</span>
+  <figure><img src="{{ url_for('cover', kind='audible', ident=x.candidate) if x.kind == 'asin' and x.candidate else url_for('cover', kind='abs', ident=rid) }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+  <figcaption>{{ _('after Apply') if x.kind == 'asin' else _('unchanged') }}</figcaption></figure></div>
  <p class="small" style="margin:8px 0 2px"><b>{{ x.explain.what }}</b></p>
  <p class="small" style="margin:0 0 2px">{{ x.explain.why|de }}</p>
  <p class="muted small" style="margin:0 0 4px">{{ x.explain.does }}</p>
