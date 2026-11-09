@@ -3215,6 +3215,7 @@ def note_listing_item(lib_id, it):
                                                                      'lang': map_language(md_.get('language')), 'author': _first_author(md_.get('authorName')), 'name': sn_})
             f_ = SERIES_FACTS.setdefault((lib_id, sn_.lower()), {'n': 0, 'authors': set(), 'folders': set(), 'name': sn_, 'langs': {}})
             f_['n'] += 1; f_['authors'] |= {_first_author(md_.get('authorName'))}
+            if q_: f_['numbered'] = f_.get('numbered', 0) + 1
             if (l_ := map_language(md_.get('language'))) and str(md_.get('language')).lower() not in ('und', 'mul', 'zxx'):
                 f_['langs'][l_] = f_['langs'].get(l_, 0) + 1
             pp_ = str(it.get('relPath') or '').split('/')
@@ -4144,8 +4145,12 @@ def process_queue(work_queue, history, failed, recheck):
                                 elif not base_list and not non_latin_script(canon):
                                     if why: logging.info(f"        🔗 Series '{s_name}' -> '{canon}' ({'alias list' if why == 'alias' else 'existing ABS series'})")
                                     new_list.append({"name": canon, "sequence": s_seq})
-                                elif (ver or normalize_title_text(title) == normalize_title_text(aud_data.get('title_raw') or '')) and s_seq \
+                                elif (ver or normalize_title_text(title) == normalize_title_text(aud_data.get('title_raw') or '')) \
+                                        and (s_seq or ((f_u := SERIES_FACTS.get((lib_id, canon.strip().lower())) or {}).get('n', 0) >= 2
+                                                       and f_u.get('numbered', 0) <= 0.25 * f_u.get('n', 0))) \
                                         and not non_latin_script(canon) and series_in_library(lib_id, canon, authors, exact=True):
+                                    # an UNNUMBERED Audible series too when the library holds it for 2+ books, mostly unnumbered there = an umbrella
+                                    # ('The Cosmere' on The Final Empire); never into a numbered series (Witchwood Crown is no 'Memory, Sorrow & Thorn' #1)
                                     # user rule 2026-11-08: a series of THIS recording that already exists in the library for this author
                                     # is added although the book has other series (Way of Kings back into 'The Stormlight Archive')
                                     logging.info(f"        ➕ Series '{canon}' #{s_seq}: Audible lists it and it exists in the library for this author")
@@ -4247,7 +4252,12 @@ def process_queue(work_queue, history, failed, recheck):
                         # hygiene: ABS lists the AUTHOR as narrator (file tags) while the same recording on Audible has other narrators
                         k_ = lambda xs: {re.sub(r'[^a-z]', '', fold_accents_s(x).lower()) for x in xs if x}
                         fn_ = folder_narrators(item_data) or []
-                        if k_(meta['narrators']) and k_(meta['narrators']) <= k_(authors) and not (k_(aud_narr) & k_(authors)):
+                        ko_ = lambda xs: {''.join(sorted(re.findall(r'[a-z]+', fold_accents_s(x).lower()))) for x in xs if x}  # 'Isshiki Ichika' = 'Ichika Isshiki'
+                        def typo_(a_, b_):  # 'Cliff Kurt' (ABS) vs 'Cliff Kirk' (Audible, same recording): same first name, last name one letter off
+                            ta, tb = fold_accents_s(a_).lower().split(), fold_accents_s(b_).lower().split()
+                            return len(ta) == len(tb) >= 2 and ta[:-1] == tb[:-1] and ta[-1] != tb[-1] and ta[-1][0] == tb[-1][0] and abs(len(ta[-1]) - len(tb[-1])) <= 1 \
+                                and sum(x != y for x, y in zip(ta[-1], tb[-1])) + abs(len(ta[-1]) - len(tb[-1])) <= 2
+                        if k_(meta['narrators']) and (k_(meta['narrators']) <= k_(authors) or ko_(meta['narrators']) <= ko_(authors)) and not (k_(aud_narr) & k_(authors)):
                             if 'lock_narrators' in tags: logging.info(f"        🔒 Narrators Update Skipped (Locked): {aud_narr}")
                             else:
                                 abs_updates['narrators'] = aud_narr
@@ -4261,6 +4271,12 @@ def process_queue(work_queue, history, failed, recheck):
                                 abs_updates['narrators'] = aud_narr
                                 FILLED_NARR.add(key)
                                 log_updates.append(f"Narrators: {meta['narrators']} -> {aud_narr} (book folder and Audible's same recording agree)")
+                        elif len(meta['narrators']) == len(aud_narr) and not (k_(meta['narrators']) & k_(aud_narr)) \
+                                and all(any(typo_(a_, b_) for b_ in aud_narr) for a_ in meta['narrators']):
+                            if 'lock_narrators' in tags: logging.info(f"        🔒 Narrators Update Skipped (Locked): {aud_narr}")
+                            else:
+                                abs_updates['narrators'] = aud_narr
+                                log_updates.append(f"Narrators: {meta['narrators']} -> {aud_narr} (spelling of the same recording's narrator)")
                     if not aud_data.get('related_edition'): note_author_links(authors, aud_data)
                     aud_auth = aud_data.get('authors_raw') or []
                     from abs_series import is_role_credit, author_key as _ak
@@ -4277,6 +4293,12 @@ def process_queue(work_queue, history, failed, recheck):
                             if re.sub(r'[^a-z]', '', fold_accents(an).lower()) not in abs_norm and match_author(authors, an):
                                 AUTHOR_NOTES.append({'title': title, 'abs': authors, 'audible': an})
                                 logging.info(f"        ℹ️ Author spelling differs: ABS {authors} vs Audible '{an}' (not changed, listed in report)")
+                        if not match_author(authors, ', '.join(aud_auth)) and not any(re.search(r'[^\x00-ɏ]', a_) for a_ in aud_auth) \
+                                and 'lock_authors' not in tags and same_recording(abs_dur, meta.get('narrators'), aud_data):
+                            # same recording (runtime 2 min + narrator), but NO author in common ('War of the Spider Queen' books by Thomas M.
+                            # Reid & co. listed under the series editor R.A. Salvatore): a person is never replaced automatically -> review list
+                            add_review(key, title, 'authors', ', '.join(aud_auth), f"Audible names other authors for the same recording (ABS: {', '.join(authors)})")
+                            logging.info(f"        ⚠️ Authors: ABS {authors} vs Audible {aud_auth} for the same recording: review list")
                     # Explicit: only ever set to True when Audible marks the product as adult
                     if aud_data.get('adult') and not meta.get('explicit'):
                         if 'lock_explicit' in tags: logging.info("        🔒 Explicit Update Skipped (Locked)")

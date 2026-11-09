@@ -379,12 +379,16 @@ def explain_entry(x, res_all):
                 p=round(float(m_.group(1)) * 100), a={'✓': T('same'), '✗': T('different')}.get(m_.group(2), T('unknown'))) if m_ else reason
     elif kind == 'series':
         what, why = T('Series "%(s)s" looks wrong for this book.', s=cand), reason
+    elif kind == 'authors':
+        what = T('Audible names %(a)s as author(s) of exactly this recording (same runtime and narrator).', a=cand)
+        why = reason + ' ' + T('A person is never replaced automatically (pen names, editors, translations).')
     else:
         what, why = T('Suggestion: %(c)s', c=cand), reason
     does = {'asin': T('Apply: the ASIN is written with the next scan and locked. Discard: the book stays as it is and is not suggested again.'),
             'hardcover': T('Apply: this Hardcover page is used for the rating. Discard: no Hardcover rating for this book.'),
             'title': T('Apply: the title is written right away (can be undone). Discard: the title stays.'),
-            'isbn': T('Apply: the ISBN is written right away (can be undone). Discard: the ISBN stays.')}.get(kind, T('Discard: the book stays as it is.'))
+            'isbn': T('Apply: the ISBN is written right away (can be undone). Discard: the ISBN stays.'),
+            'authors': T("Apply: Audible's authors are written right away (can be undone). Discard: the authors stay.")}.get(kind, T('Discard: the book stays as it is.'))
     return {'what': what, 'why': why, 'does': does}
 
 
@@ -435,7 +439,7 @@ def queue_action(qid, action):
     elif action == 'accept' and item.get('kind') == 'hardcover' and item.get('candidate'):
         core.save_override(item['key'], {'hardcover': item['candidate']})
         flash(T('Hardcover link saved: it is used for this book from the next scan on.'), 'ok')
-    elif action == 'accept' and item.get('kind') in ('title', 'isbn') and item.get('candidate'):
+    elif action == 'accept' and item.get('kind') in ('title', 'isbn', 'authors') and item.get('candidate'):
         # write through abs_apply.py (value check against ABS, journal, undo) - no new Audible request
         field = item['kind']
         rid = 'review-' + datetime.now().strftime('%Y%m%d-%H%M%S')
@@ -445,6 +449,10 @@ def queue_action(qid, action):
                 flash(T('%(c)s is no valid ISBN - nothing written.', c=item['candidate']), 'error'); return redirect(url_for('review_page') + '#buecher')
             try: old = ((core.abs_get(core.load_settings(), f'/api/items/{iid}').json().get('media') or {}).get('metadata') or {}).get('isbn')
             except Exception: flash(T('ABS not reachable.'), 'error'); return redirect(url_for('review_page') + '#buecher')
+        elif field == 'authors':
+            try: old = ((core.abs_get(core.load_settings(), f'/api/items/{iid}').json().get('media') or {}).get('metadata') or {}).get('authors')
+            except Exception: flash(T('ABS not reachable.'), 'error'); return redirect(url_for('review_page') + '#buecher')
+            item = dict(item, candidate=[{'name': n.strip()} for n in item['candidate'].split(',') if n.strip()])
         else: old = item.get('title')
         os.makedirs(core.REPORT_DIR, exist_ok=True)
         with open(os.path.join(core.REPORT_DIR, f'planned_changes_{rid}.jsonl'), 'w', encoding='utf-8') as f:

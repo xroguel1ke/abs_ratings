@@ -376,4 +376,7 @@ add({  # page tour 2026-11-08
     'List missing volumes of your series': 'Fehlende Bände deiner Reihen auflisten', 'Audible series lists are checked once a week (a few hundred requests)': 'Audible-Reihenlisten werden einmal pro Woche geprüft (einige hundert Anfragen)',
     'Missing volumes: include novellas (0.5, 2.5 ...)': 'Fehlende Bände: Novellen einbeziehen (0.5, 2.5 …)',
     'announced': 'angekündigt',
+    'Audible names %(a)s as author(s) of exactly this recording (same runtime and narrator).': 'Audible nennt %(a)s als Autor(en) genau dieser Aufnahme (gleiche Laufzeit und gleicher Sprecher).',
+    'A person is never replaced automatically (pen names, editors, translations).': 'Eine Person wird nie automatisch ersetzt (Pseudonyme, Herausgeber, Übersetzungen).',
+    "Apply: Audible's authors are written right away (can be undone). Discard: the authors stay.": 'Übernehmen: Die Autoren von Audible werden sofort geschrieben (rückgängig machbar). Verwerfen: Die Autoren bleiben.',
 })
