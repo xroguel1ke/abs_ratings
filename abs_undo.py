@@ -18,6 +18,19 @@ import requests
 SCRIPT_DIR = os.getenv('DATA_DIR') or os.path.dirname(os.path.abspath(__file__))
 CHANGES_FILE = os.path.join(SCRIPT_DIR, "changes.jsonl")
 UNDONE_FILE = os.path.join(SCRIPT_DIR, "undone.jsonl")
+LAST_WRITTEN_FILE = os.path.join(SCRIPT_DIR, "last_written.json")
+
+
+def forget_written(undone):
+    """An undone field is no longer 'ours': drop it from the change monitoring (last_written.json), else the next scan sees the old
+    value as a change outside / a reverted value and writes the undone change again."""
+    try: lw = json.load(open(LAST_WRITTEN_FILE, encoding='utf-8'))
+    except (OSError, ValueError): return
+    for key, field in undone:
+        if field in (lw.get(key) or {}): lw[key].pop(field, None)
+    tmp = LAST_WRITTEN_FILE + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f: json.dump(lw, f, ensure_ascii=False, indent=4)
+    os.replace(tmp, LAST_WRITTEN_FILE)
 
 
 def load(path):
@@ -60,7 +73,7 @@ def main():
     sess.headers.update({"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
 
     print(f"{'UNDO' if a.apply else 'Would undo (add --apply to execute)'}: {len(sel)} changes")
-    ok = fail = 0
+    ok = fail = 0; undone_fields = []
     for e in sorted(sel, key=lambda x: x['ts'], reverse=True):  # newest first
         old_show = e['old'] if e['field'] != 'description' else f"<{len(e['old'] or '')} chars>"
         print(f"  [{e['run']}] {e['title']}: {e['field']} -> {json.dumps(old_show, ensure_ascii=False)[:120]}")
@@ -83,13 +96,14 @@ def main():
             else:
                 r = sess.patch(f"{url}/api/items/{e['item']}/media", json={"metadata": {e['field']: e['old']}}, timeout=30)
             if r.status_code == 200:
-                ok += 1
+                ok += 1; undone_fields.append((e.get('key'), e.get('field')))
                 with open(UNDONE_FILE, 'a', encoding='utf-8') as f:
                     f.write(json.dumps({'id': entry_id(e)}) + "\n")
             else:
                 fail += 1; print(f"     ❌ HTTP {r.status_code}: {r.text[:150]}")
         except requests.RequestException as ex:
             fail += 1; print(f"     ❌ {ex}")
+    if a.apply and undone_fields: forget_written(undone_fields)
     if a.apply: print(f"Done: {ok} undone, {fail} failed.")
 
 

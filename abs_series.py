@@ -681,6 +681,44 @@ def fix_languages(ctx, records, allowed):
     return changed
 
 
+FOLDER_NUM_RE = re.compile(r"^(?:book\s*)?0*(\d+(?:\.\d+)?)\s+-\s+")
+
+
+def fill_folder_numbers(ctx, records):
+    """A book sits in series S without a number, and its folder is 'Author/S/N - Title' (the series folder IS the series): the folder
+    number N becomes the series number - only in a series that is otherwise numbered (>= 75 %), only when N is unique in that folder (Elfhame/1 holds The Cruel Prince AND The Stolen Heir:
+    the numbers belong to sub-series, the umbrella stays unnumbered) and no other book of S holds N. lock_series respected."""
+    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    folder_nums, held, counts = {}, {}, {}
+    for r in records:
+        for s in r['series']:
+            c_ = counts.setdefault((r['lib'], series_key(s['name'])), [0, 0]); c_[0] += 1; c_[1] += bool(s.get('sequence'))
+        parts = [p for p in str(r.get('path') or '').replace('\\', '/').split('/') if p.strip()]
+        if len(parts) >= 3 and (m := FOLDER_NUM_RE.match(parts[-1])):
+            folder_nums.setdefault((r['lib'], parts[-3].lower(), parts[-2].lower()), []).append(m.group(1))
+        for s in r['series']:
+            if s.get('sequence'): held.setdefault((r['lib'], series_key(s['name'])), set()).add(_n(float(s['sequence'])) if re.fullmatch(r"\d+(\.\d+)?", str(s['sequence'])) else s['sequence'])
+    changed = 0
+    for r in records:
+        if 'lock_series' in r['tags'] or 'lock_all' in r['tags'] or 'lock_metadata' in r['tags']: continue
+        parts = [p for p in str(r.get('path') or '').replace('\\', '/').split('/') if p.strip()]
+        if len(parts) < 3 or not (m := FOLDER_NUM_RE.match(parts[-1])): continue
+        num = _n(float(m.group(1)))
+        if folder_nums.get((r['lib'], parts[-3].lower(), parts[-2].lower()), []).count(m.group(1)) != 1: continue
+        new, did = [], None
+        for s in r['series']:
+            tot, numbered = counts.get((r['lib'], series_key(s['name'])), [0, 0])
+            # only a GAP in a numbered series (an umbrella like 'The Cosmere' is unnumbered on purpose; the folder order is the user's)
+            if not s.get('sequence') and series_key(s['name']) == series_key(parts[-2]) and num not in held.get((r['lib'], series_key(s['name'])), set()) \
+                    and numbered >= 2 and numbered >= 0.75 * tot:
+                s = dict(s, sequence=num); did = s['name']
+            new.append(s)
+        if did and abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'series': new}, {'series': r['series']}, 'folder_number'):
+            changed += 1; held.setdefault((r['lib'], series_key(did)), set()).add(num); r['series'] = new
+            logging.info(f"   🔢 NUMBER{' (DRY_RUN)' if dry else ''}: '{r['title']}': '{did}' #{num} (book folder '{parts[-1][:40]}')")
+    return changed
+
+
 def wrong_languages(records, allowed):
     """Review list (user 2026-11-09): books whose language is unknown or not one of BOOK_LANGUAGES after every automatic fix."""
     if not allowed: return []
@@ -967,6 +1005,8 @@ def run(ctx):
         ctx['empty_authors_removed'] = remove_empty_authors(ctx)
     if ctx.get('book_languages'):
         ctx['languages_fixed'] = fix_languages(ctx, records, ctx['book_languages'])
+    if ctx.get('merge'):
+        ctx['folder_numbers'] = fill_folder_numbers(ctx, records)
     if ctx.get('genre_cleanup'):
         ctx['genres_cleaned'] = normalize_genres(ctx, records)
         logging.info(f"   Genre spellings cleaned: {ctx['genres_cleaned']} books")

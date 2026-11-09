@@ -43,6 +43,9 @@ def main():
     a = ap.parse_args()
     A.DRY_RUN = not a.apply
     A.setup_logging()
+    # change monitoring: what WE wrote last per field (abs_update keeps it up to date; without loading + saving it, the next scan took a
+    # value written here for 'changed outside' and re-applied the older journal entry - Malice 2026-11-09)
+    A.LAST_WRITTEN.update(A.rw_json(A.LAST_WRITTEN_FILE) or {})
     path = os.path.join(A.REPORT_DIR, f"planned_changes_{a.run}.jsonl")
     if not os.path.exists(path): logging.error(f"No planned changes for run {a.run} ({path})"); return 2
     plan = [dict(json.loads(l), _n=n) for n, l in enumerate(open(path, encoding='utf-8')) if l.strip()]
@@ -93,6 +96,7 @@ def main():
                 else: res['failed'] += len(updates)
             else:
                 res['would'] += len(updates); logging.info(f"  ✓ {title}: would write {', '.join(updates)}")
+    if a.apply and res['applied']: A.rw_json(A.LAST_WRITTEN_FILE, A.LAST_WRITTEN)
     logging.info(f"SUMMARY: {dict(res)}" + (f" | undo: python3 abs_undo.py --run {A.RUN_ID} --apply" if a.apply else ''))
     return 0 if not res['failed'] else 1
 
