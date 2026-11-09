@@ -18,7 +18,8 @@
      <button type="button" class="iconbtn" data-mv="-1">{{ icon('chevron-up') }}</button><button type="button" class="iconbtn" data-mv="1">{{ icon('chevron-down') }}</button></span>{% endfor %}</span></span>
   {% elif ftype.startswith('choice:') %}<select name="{{ key }}">{% for o in ftype[7:].split('|') %}<option value="{{ o }}" {{ 'selected' if s[key]==o }}>{{ choice_label(o) }}</option>{% endfor %}</select>
   {% else %}<input type="{{ 'number' if ftype in ('int','float') else 'text' }}" {{ 'step=any' if ftype=='float' }} name="{{ key }}" id="{{ key }}" value="{{ s[key] }}">{% endif %}
-  {% if help_ %}<span class="h">{{ _(help_) }}</span>{% endif %}</label>
+  {% if help_ %}<span class="h">{{ _(help_) }}</span>{% endif %}
+  {% if ftype in ('int', 'float', 'str', 'bool') or ftype.startswith('choice:') %}<button type="button" class="linkbtn resetbtn" data-key="{{ key }}" data-default="{{ default|lower if ftype == 'bool' else default }}" data-type="{{ ftype }}" title="{{ _('Back to the default value (save to keep it)') }}">{{ _('default') }}: {{ (_('on') if default else _('off')) if ftype == 'bool' else (default if default not in ('', none) else '–') }}</button>{% endif %}</label>
  {% endif %}
 {% endmacro %}
 {% macro group_card(group) %}{% set fields = groups.get(group, []) %}{% set pv = providers.get(group) %}
@@ -34,7 +35,7 @@
 </div>{% endmacro %}
 {% macro save(sec) %}<p class="savebar"><input type="hidden" name="section" value="{{ sec }}"><button class="primary">{{ _('Save %(s)s', s=_(sec)) }}</button></p>{% endmacro %}
 
-<div class="row" style="justify-content:space-between"><h1>{{ _('Settings') }}</h1><button type="button" class="iconbtn snav-toggle" aria-label="{{ _('Sections') }}" onclick="document.querySelector('.snav').classList.toggle('open')">{{ icon('menu') }} {{ _('Sections') }}</button></div>
+<div class="row" style="justify-content:space-between"><h1>{{ _('Settings') }}</h1><label class="chk small" title="{{ _('Show the expert settings (intervals, tolerances, fine tuning)') }}"><input type="checkbox" id="expertToggle"> {{ _('Expert settings') }}</label><button type="button" class="iconbtn snav-toggle" aria-label="{{ _('Sections') }}" onclick="document.querySelector('.snav').classList.toggle('open')">{{ icon('menu') }} {{ _('Sections') }}</button></div>
 <div class="slayout">
 <nav class="snav" aria-label="{{ _('Sections') }}">{% for sec, grps in sections.items() %}<a href="#{{ slug(sec) }}" data-sec="{{ slug(sec) }}">{{ _(sec) }}</a>{% endfor %}</nav>
 <div class="spanel">
@@ -96,4 +97,14 @@ document.querySelectorAll('.orderlist').forEach(function(list){ const out=docume
   if(b.dataset.mv==='-1' && it.previousElementSibling) it.parentNode.insertBefore(it, it.previousElementSibling);
   if(b.dataset.mv==='1' && it.nextElementSibling) it.parentNode.insertBefore(it.nextElementSibling, it); save(); });
  list.addEventListener('change', save); });
-</script>{% endblock %}
+</script><script>
+document.querySelectorAll('.resetbtn').forEach(b=>b.addEventListener('click',()=>{
+  const el=document.querySelector('[name="'+b.dataset.key+'"]'); if(!el) return;
+  if(b.dataset.type==='bool') el.checked=(b.dataset.default==='true'); else el.value=b.dataset.default;
+  el.dispatchEvent(new Event('change',{bubbles:true})); b.classList.add('done');
+}));
+(function(){ const t=document.getElementById('expertToggle'); if(!t) return; let on=false; try{on=localStorage.getItem('abs_expert')==='1'}catch(e){}
+  const apply=v=>{document.querySelectorAll('details.adv').forEach(d=>{d.open=v; d.style.display=v?'':'none'})}; t.checked=on; apply(on);
+  t.addEventListener('change',()=>{apply(t.checked); try{localStorage.setItem('abs_expert',t.checked?'1':'0')}catch(e){}}); })();
+</script>
+{% endblock %}

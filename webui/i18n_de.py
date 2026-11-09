@@ -417,4 +417,6 @@ add({  # page tour 2026-11-08
     'Take the Audible value for this field? (can be undone)': 'Den Audible-Wert für dieses Feld übernehmen? (rückgängig machbar)', 'Take Audible': 'Audible übernehmen',
     'unlock': 'entsperren', 'lock': 'sperren', 'Locked fields are never changed by the script.': 'Gesperrte Felder ändert das Skript nie.',
     'Locked: the script never changes this field.': 'Gesperrt: Das Skript ändert dieses Feld nie.', 'Unlocked.': 'Entsperrt.',
+    'Back to the default value (save to keep it)': 'Zurück auf den Standardwert (zum Behalten speichern)', 'default': 'Standard', 'on': 'an', 'off': 'aus',
+    'Show the expert settings (intervals, tolerances, fine tuning)': 'Experten-Einstellungen zeigen (Intervalle, Toleranzen, Feinabstimmung)', 'Expert settings': 'Experten-Einstellungen',
 })
