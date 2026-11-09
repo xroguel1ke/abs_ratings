@@ -1,5 +1,6 @@
 <!doctype html><html lang="{{ lang }}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}ABS Ratings{% endblock %}</title><link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon.svg') }}"><link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}"><meta name="theme-color" content="#9a5b13"><link rel="apple-touch-icon" href="{{ url_for('static', filename='icon.png') }}">
 <script>window.I18N = {{ js_i18n|tojson }}; window.ICONS = {light: {{ icon('moon')|tojson }}, dark: {{ icon('sun')|tojson }}};</script>
 <script src="{{ url_for('static', filename='app.js') }}"></script></head><body>
 {% if session.auth %}<header><div class="nav"><span class="brand"><img src="{{ url_for('static', filename='icon.svg') }}" alt="" class="logo">ABS Ratings</span><button type="button" class="iconbtn navtoggle" aria-label="{{ _('Menu') }}" onclick="this.closest('.nav').classList.toggle('open')">{{ icon('menu') }}</button>
@@ -21,4 +22,11 @@
 <a class="iconbtn" href="{{ url_for('logout') }}" title="{{ _('Log out') }}" aria-label="{{ _('Log out') }}">{{ icon('log-out') }}</a></span></div></header>{% endif %}
 <main>{% with msgs = get_flashed_messages(with_categories=true) %}{% for c, m in msgs %}<div class="flash {{ c }}">{{ m }}</div>{% endfor %}{% endwith %}
 {% block body %}{% endblock %}</main>
+{% if session.auth %}{% set ep = request.endpoint %}<nav class="bottomnav" aria-label="{{ _('Menu') }}">
+ <a href="{{ url_for('dashboard') }}" class="{{ 'active' if ep in ('dashboard','status') }}">{{ icon('headphones', 18) }}<span>{{ _('Overview') }}</span></a>
+ <a href="{{ url_for('review_page') }}" class="{{ 'active' if ep=='review_page' }}">{{ icon('circle-check', 18) }}<span>{{ _('Review list') }}</span></a>
+ <a href="{{ url_for('series_page') }}" class="{{ 'active' if ep=='series_page' }}">{{ icon('book-open', 18) }}<span>{{ _('Series') }}</span></a>
+ <a href="{{ url_for('missing_page') }}" class="{{ 'active' if ep=='missing_page' }}">{{ icon('search', 18) }}<span>{{ _('Missing') }}</span></a>
+ <a href="{{ url_for('runs') }}" class="{{ 'active' if ep in ('runs','run_view','history','history_run','history_search') }}">{{ icon('play', 18) }}<span>{{ _('Scans') }}</span></a></nav>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('{{ url_for('sw') }}').catch(()=>{})}</script>{% endif %}
 {% if session.auth %}<footer class="muted small">ABS Ratings {{ app_version }}{% if update_available %} · <span class="badge warn">{{ _('Update available') }}</span>{% endif %}</footer>{% endif %}</body></html>

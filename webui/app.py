@@ -726,6 +726,13 @@ def api_run_log(run_id):
     return jsonify(text=text, offset=off, status=run['status'])
 
 
+@app.route('/sw.js')
+def sw():
+    """Service worker at the site root (scope '/') so the web UI can be installed as an app."""
+    resp = send_file(os.path.join(app.static_folder, 'sw.js'), mimetype='application/javascript'); resp.headers['Cache-Control'] = 'no-cache'
+    return resp
+
+
 @app.route('/api/whatsnew')
 @login_required
 def api_whatsnew():
