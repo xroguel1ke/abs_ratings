@@ -198,12 +198,33 @@ def lock_report():
     return dict(sorted(out.items()))
 
 
-def same_asin_groups():
-    """Books that share ONE ASIN (last results): usually the same book twice in the library. Show only."""
+def same_asin_groups(s=None):
+    """Books that share ONE ASIN (last results), checked against ABS (user question 2026-11-09: 'do I have these twice?'): books that
+    are gone from ABS are left out, every book gets its folder, runtime and size, and the group a verdict:
+    'same_folder' (ABS lists one folder twice), 'copy' (two folders, same runtime: the audiobook is stored twice),
+    'editions' (runtimes differ: two recordings share one ASIN, one ASIN is wrong). Show only."""
     by = {}
     for k, r in results().items():
         if r.get('asin') and r.get('status') != 'ignored': by.setdefault(r['asin'], []).append({'key': k, 'title': r.get('title'), 'author': r.get('author')})
-    return sorted(([a, v] for a, v in by.items() if len(v) > 1), key=lambda x: x[1][0]['title'] or '')
+    out = []
+    for a, v in by.items():
+        if len(v) < 2: continue
+        if s is not None:
+            for b in v:
+                try:
+                    resp = abs_get(s, f"/api/items/{b['key'].split('_', 1)[1]}?expanded=1", timeout=10)
+                    if resp.status_code == 404: b['gone'] = True; continue
+                    it = resp.json(); m = it.get('media') or {}
+                    b.update(path=it.get('relPath') or it.get('path') or '', minutes=round((m.get('duration') or 0) / 60), size_mb=round((it.get('size') or m.get('size') or 0) / 1e6))
+                except Exception: pass
+            v = [b for b in v if not b.get('gone')]
+            if len(v) < 2: continue
+        paths, mins = {b.get('path') for b in v if b.get('path')}, [b['minutes'] for b in v if b.get('minutes')]
+        verdict = None
+        if len(paths) == 1 and len(mins) == len(v): verdict = 'same_folder'
+        elif mins and len(mins) == len(v): verdict = 'copy' if max(mins) - min(mins) <= 2 else 'editions'
+        out.append([a, v, verdict])
+    return sorted(out, key=lambda x: x[1][0]['title'] or '')
 
 
 def isbn_valid(v):

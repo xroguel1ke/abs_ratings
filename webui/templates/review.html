@@ -4,7 +4,7 @@
  <div class="small">{% if books %}{{ _('Volumes') }} {{ books }}{% endif %}{% if authors %} · {{ authors|join(', ') }}{% endif %}</div>{{ titles(tl) }}</div>{% endmacro %}
 
 <div class="row" style="justify-content:space-between"><h1>{{ _('Review list') }}</h1><button type="button" class="iconbtn snav-toggle" onclick="document.querySelector('.snav').classList.toggle('open')">{{ icon('menu') }} {{ _('Sections') }}</button></div>
-<p class="muted small">{{ _('Only what needs a decision from you, plus the automatically merged series and authors to confirm or undo. Nothing uncertain is written without you.') }}</p>
+<p class="muted small">{{ _('Only what needs a decision from you. Nothing uncertain is written without you; automatic merges are in the History (with undo).') }}</p>
 <div class="slayout">
 <nav class="snav" aria-label="{{ _('Sections') }}">{% for k, s in secs.items() %}<a href="#{{ k }}" data-sec="{{ k }}">{{ s.label }} <span class="badge {{ 'warn' if counts[k] else '' }}" style="margin-left:auto">{{ counts[k] }}</span></a>{% endfor %}</nav>
 <div class="spanel">
@@ -23,7 +23,9 @@
   <a href="{{ url_for('problem', key=x.key) }}"><b>{{ x.title }}</b></a></div>
   <div class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('queue_action', qid=x.id, action='accept') }}"><button class="primary">{{ _('Apply') }}</button></form>
   <form method="post" action="{{ url_for('queue_action', qid=x.id, action='reject') }}"><button>{{ _('Discard') }}</button></form></div></div>
- <p class="small" style="margin:8px 0 4px">{{ _('Suggestion') }}: <code>{{ x.candidate }}</code> – {{ x.reason|de }}</p>
+ <p class="small" style="margin:8px 0 2px"><b>{{ x.explain.what }}</b></p>
+ <p class="small" style="margin:0 0 2px">{{ x.explain.why|de }}</p>
+ <p class="muted small" style="margin:0 0 4px">{{ x.explain.does }}</p>
  {% if x.evidence %}<p class="muted small" style="margin:0">{{ _('Evidence') }}: {{ x.evidence|join(', ') }}</p>{% endif %}
  {% set ca, ab = (x.ctx or {}).cand, (x.ctx or {}).abs %}{% if ca and ab %}
  <table class="cmp small"><tr><th></th><th>{{ _('In ABS') }}</th><th>{{ _('Suggestion') }}</th></tr>
@@ -51,13 +53,6 @@
   <form method="post" action="{{ url_for('review_action', mid=x.id, action='merge_as') }}"><button title="{{ _('Merge, but keep this name') }}">{{ _('Merge as') }} „{{ x.series|truncate(28) }}“</button></form>
   <form method="post" action="{{ url_for('review_action', mid=x.id, action='keep') }}"><button>{{ _('Keep separate') }}</button></form></span></div>
 </div>{% else %}<div class="card muted">{{ _('No uncertain cases.') }}</div>{% endfor %}
-<h3>{{ _('Merged automatically') }} ({{ s.merged|length }})</h3>
-{% for m in s.merged %}<div class="card mcard">
- <div class="mpair">{{ side(m.member, m.member_books, m.member_titles, m.member_authors, _('before')) }}<div class="marrow">{{ icon('arrow-right', 14) }}</div>{{ side(m.target, m.target_books, m.target_titles, m.target_authors, _('now')) }}</div>
- <div class="row" style="justify-content:space-between;margin-top:8px"><span class="small"><span class="badge {{ 'ok' if m.status == 'applied' else 'warn' }}">{{ _('applied') if m.status == 'applied' else _('planned (test run)') }}</span> {{ _('%(n)s book(s)', n=m.member_count) }} · {{ {'exact': _('same name after cleaning'), 'similar': _('almost the same name, numbers complement'), 'spelling': _('same person, different spelling')}.get(m.relation, m.relation) }} · {{ m.last_seen }}</span>
-  <span class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('merged_action', mid=m.id, action='confirm') }}"><button>{{ icon('check') }} {{ _('Correct') }}</button></form>
-  <form method="post" action="{{ url_for('merged_action', mid=m.id, action='undo') }}" data-confirm="{{ _('Undo this merge? The old names are restored and these will not be merged again.') }}"><button class="danger">{{ icon('undo-2') }} {{ _('Undo') }}</button></form></span></div>
-</div>{% else %}<div class="card muted">{{ _('Nothing open.') }}</div>{% endfor %}
 {% if generated %}<p class="muted small">{{ _('As of') }}: {{ generated }}</p>{% endif %}
 </div>{% endfor %}
 
@@ -70,13 +65,13 @@
  <span class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('review_action', mid=x.id, action='remove_series') }}" data-confirm="{{ _('Remove the series from this book? (can be undone in the History)') }}"><button class="primary">{{ _('Remove from series') }}</button></form>
  <form method="post" action="{{ url_for('review_action', mid=x.id, action='keep') }}"><button>{{ _('Keep') }}</button></form></span></div></div>
 {% else %}<div class="card muted">{{ _('None.') }}</div>{% endfor %}
-<div class="card"><h3 style="margin-top:0">{{ _('Changed by you in ABS') }} ({{ secs.sonstiges.manual|length }})</h3>
-<p class="muted small" style="margin-top:-8px">{{ _('After the script wrote these fields you (or another tool) changed them in ABS. They are respected and never overwritten again.') }}</p>
-{% for m in secs.sonstiges.manual[:200] %}<div class="small"><a href="{{ url_for('problem', key=m.key) }}">{{ m.title }}</a> – {{ field_label(m.field) }}: <b>{{ m.value }}</b> <span class="muted">({{ m.ts|dt }})</span></div>
-{% else %}<div class="muted small">{{ _('None.') }}</div>{% endfor %}</div>
 <div class="card"><h3 style="margin-top:0">{{ _('Same ASIN twice') }} ({{ secs.sonstiges.same_asin|length }})</h3>
-<p class="muted small" style="margin-top:-8px">{{ _('Several books in the library carry the same ASIN - usually one book twice (other format, copy). Nothing is changed automatically.') }}</p>
-{% for a, books in secs.sonstiges.same_asin[:200] %}<div class="small"><code>{{ a }}</code>: {% for b in books %}<a href="{{ url_for('problem', key=b.key) }}">{{ b.title }}</a>{{ ' · ' if not loop.last }}{% endfor %}</div>
+<p class="muted small" style="margin-top:-8px">{{ _('Several books in the library carry the same ASIN. Folder and runtime show what it is. Nothing is changed automatically.') }}</p>
+{% for a, books, verdict in secs.sonstiges.same_asin[:200] %}<div class="mcard" style="margin-top:8px"><div class="small"><code>{{ a }}</code> –
+ <b>{{ {'same_folder': _('ABS lists the same folder twice (a scan duplicate): remove one entry in ABS, the files are there only once.'),
+        'copy': _('The audiobook is stored twice (two folders, same runtime): delete one copy.'),
+        'editions': _('Two different recordings (runtimes differ) share one ASIN: one of them has the wrong ASIN.')}.get(verdict, _('Could not check ABS - compare the books.')) }}</b></div>
+ <table class="cmp small">{% for b in books %}<tr><td><a href="{{ url_for('problem', key=b.key) }}">{{ b.title }}</a></td><td class="muted">{{ b.path or '–' }}</td><td>{{ (b.minutes ~ ' min') if b.minutes else '–' }}</td><td class="muted">{{ (b.size_mb ~ ' MB') if b.size_mb else '' }}</td></tr>{% endfor %}</table></div>
 {% else %}<div class="muted small">{{ _('None.') }}</div>{% endfor %}</div>
 {% for d in secs.sonstiges.dups %}<div class="card mcard small"><b>{{ d.titles|join(' · ') }}</b><div class="muted">{{ (d.seconds // 60) }} min · ASIN {{ d.asins|join(' / ') }}</div></div>
 {% else %}<div class="card muted">{{ _('No duplicates found.') }}</div>{% endfor %}

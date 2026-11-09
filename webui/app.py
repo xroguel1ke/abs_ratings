@@ -343,17 +343,48 @@ def review_page():
     rv = core.review()
     queue = core.open_queue()
     res_all = core.results()
-    for x in queue: x['res'] = res_all.get(x['key']) or {}
+    for x in queue: x['res'] = res_all.get(x['key']) or {}; x['explain'] = explain_entry(x, res_all)
     rep = core._load_json(os.path.join(core.REPORT_DIR, 'library_report.json'), {})
+    # user 2026-11-09: automatic merges are safe by rule and are in the History (with undo) - not shown here again
     secs = {
         'buecher': {'label': T('Books'), 'entries': queue},
-        'reihen': {'label': T('Series'), 'review': rv.get('series') or [], 'merged': [m for m in merged if m['kind'] == 'series']},
-        'autoren': {'label': T('Authors'), 'review': rv.get('authors') or [], 'merged': [m for m in merged if m['kind'] == 'author']},
-        'sonstiges': {'label': T('Other'), 'dups': rep.get('duplicate_recordings') or [], 'manual': core.manual_fields(), 'same_asin': core.same_asin_groups(), 'foreign': rv.get('other') or []},
+        'reihen': {'label': T('Series'), 'review': rv.get('series') or []},
+        'autoren': {'label': T('Authors'), 'review': rv.get('authors') or []},
+        'sonstiges': {'label': T('Other'), 'dups': rep.get('duplicate_recordings') or [], 'same_asin': core.same_asin_groups(core.load_settings()), 'foreign': rv.get('other') or []},
     }
-    counts = {'buecher': len(queue), 'reihen': len(secs['reihen']['review']) + len(secs['reihen']['merged']),
-              'autoren': len(secs['autoren']['review']) + len(secs['autoren']['merged']), 'sonstiges': len(secs['sonstiges']['foreign']) + len(secs['sonstiges']['dups']) + len(secs['sonstiges']['same_asin'])}
+    counts = {'buecher': len(queue), 'reihen': len(secs['reihen']['review']), 'autoren': len(secs['autoren']['review']),
+              'sonstiges': len(secs['sonstiges']['foreign']) + len(secs['sonstiges']['dups']) + len(secs['sonstiges']['same_asin'])}
     return render_template('review.html', secs=secs, counts=counts, generated=rv.get('generated'))
+
+
+def explain_entry(x, res_all):
+    """Review list (user 2026-11-09: 'entries are very unclear'): what was found, why it is not done automatically, what Apply does."""
+    kind, cand, reason = x.get('kind'), x.get('candidate') or '', str(x.get('reason') or '')
+    ctx = (x.get('ctx') or {}).get('cand') or {}
+    owner = next((r.get('title') for k, r in res_all.items() if cand and r.get('asin') == cand and k != x.get('key')), None)
+    if kind == 'asin' and reason.startswith('ASIN already belongs'):
+        what = T('Audible suggests the ASIN %(a)s for this book, but "%(o)s" in your library already has it.', a=cand, o=owner or '?')
+        why = T('One ASIN belongs to one recording: either one of the two books is a duplicate, or one of them has the wrong ASIN.')
+    elif kind == 'asin' and reason.startswith('runtime (to the minute) and narrator match'):
+        what = T('Audible has a recording with the same runtime and the same narrator, but under the title "%(t)s".', t=ctx.get('title') or cand)
+        why = T('Title and author differ too much for an automatic change. It can be the same audiobook under another title - or another book. Compare below.')
+        if owner: why += ' ' + T('Note: "%(o)s" in your library already has this ASIN - this book may be a second copy of it.', o=owner)
+    elif kind == 'asin':
+        what, why = T('Audible suggests the ASIN %(a)s.', a=cand), reason
+    elif kind == 'hardcover':
+        what = T('A Hardcover page was found for the rating, but it does not match the Audible book well enough.')
+        m_ = re.search(r'title ([\d.]+), author (\S+?)\)', reason)
+        why = T('Hardcover lists it under another title than Audible (titles agree to %(p)s %%; author: %(a)s). Open both links and check that it is the same book.',
+                p=round(float(m_.group(1)) * 100), a={'✓': T('same'), '✗': T('different')}.get(m_.group(2), T('unknown'))) if m_ else reason
+    elif kind == 'series':
+        what, why = T('Series "%(s)s" looks wrong for this book.', s=cand), reason
+    else:
+        what, why = T('Suggestion: %(c)s', c=cand), reason
+    does = {'asin': T('Apply: the ASIN is written with the next scan and locked. Discard: the book stays as it is and is not suggested again.'),
+            'hardcover': T('Apply: this Hardcover page is used for the rating. Discard: no Hardcover rating for this book.'),
+            'title': T('Apply: the title is written right away (can be undone). Discard: the title stays.'),
+            'isbn': T('Apply: the ISBN is written right away (can be undone). Discard: the ISBN stays.')}.get(kind, T('Discard: the book stays as it is.'))
+    return {'what': what, 'why': why, 'does': does}
 
 
 @app.route('/merged/<path:mid>/<action>', methods=['POST'])

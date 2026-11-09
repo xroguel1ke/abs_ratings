@@ -7,6 +7,7 @@ import re, json, random, difflib, logging, urllib.parse, unicodedata
 import html as html_lib
 import recorder
 import source_state as SST; recorder.install()
+import source_health as SH
 import threading, queue as _queue_mod
 from concurrent.futures import ThreadPoolExecutor
 import atexit
@@ -386,6 +387,9 @@ RE_RAW_COUNT = re.compile(r'count="(\d+)"')
 
 stats = _Stats({k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred", "cover_added", "desc_filled", "series_merged", "other_edition", "hc_found", "hc_missing", "rating_only"]})
 stats['aborted_ratelimit'] = False
+SOURCE_DOWN = {}  # source -> reason: failed canary check or tripped breaker (source_health.py); nothing is counted or written from it
+BREAKER = None
+SOURCE_CANARY = os.getenv('SOURCE_CANARY', 'true').lower() == 'true'  # tests replaying recordings switch it off (no live canary request)
 GR_STATE = {'blocked': False, 'cooldowns': 0, 'searches': 0, 'pages': 0, 'pages_blocked': False}
 GR_CACHE = {}  # Filled in main()  # Set once Goodreads blocks us; GR is then skipped for the rest of the run
 reports = {"audible": {}, "goodreads": {}, "isbn": {}}
@@ -533,6 +537,23 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
             add = {'name': canonical_series(lib, a['name'], book_authors, book_variant)[0], 'sequence': a.get('sequence')}
             if not any(same(y['name'], add['name']) for y in out):  # ADD only: 'Mistborn, Era 2' stays next to 'The Mistborn Saga'
                 out.append(add); notes.append(f"'{add['name']}' #{add['sequence'] or '-'} added (folder and Audible name this series)")
+    # user rule 2026-11-09: a series never mixes languages. A non-English book sits in a series that library books of ANOTHER language
+    # hold, Audible does not list that series for this book (same edition) but lists its own series -> Audible's series replaces it
+    # (Der Drachenbeinthron: 'Memory, Sorrow & Thorn' -> 'Das Geheimnis der Großen Schwerter'; Malice (French) -> 'Le livre des Terres Bannies')
+    bl = map_language(book_lang)
+    if bl and bl != 'English' and aud_series:
+        for x in list(out):
+            if listed(x['name']) or x not in out: continue
+            other = sum(v for l_, v in (fact(x['name']).get('langs') or {}).items() if l_ and l_ != bl)
+            if not other: continue
+            a = next((a for a in aud_series if a.get('name') and not same(a['name'], x['name'])), None)
+            if not a: continue
+            canon = canonical_series(lib, a['name'], book_authors, book_variant)[0]
+            if same(canon, x['name']): continue  # an alias maps Audible's name back to this series: nothing to split
+            i_ = out.index(x)
+            if any(same(y['name'], canon) for y in out): out.pop(i_)
+            else: out[i_] = {'name': canon, 'sequence': a.get('sequence') or x.get('sequence')}
+            notes.append(f"'{x['name']}' -> '{canon}' #{a.get('sequence') or x.get('sequence') or '-'} ({other} book(s) of that series are in another language; Audible's {bl} series)")
     return out, notes
 
 def folder_narrators(item_data):
@@ -1043,6 +1064,7 @@ def write_env_file(log_file, start_time, error=None):
     dur = f"{int((datetime.now() - start_time).total_seconds() // 60)}m {int((datetime.now() - start_time).total_seconds() % 60)}s"
     if error: sub, icon, head = "ABS Ratings: Start failed ❌", "alert", "Error"
     elif stats['aborted_ratelimit']: sub, icon, head = "ABS Ratings: Aborted 🛑", "alert", "Rate Limit detected!"
+    elif SOURCE_DOWN: sub, icon, head = "ABS Ratings: Source problem ⚠️", "alert", f"{', '.join(s.capitalize() for s in SOURCE_DOWN)} switched off"
     elif stats['failed'] > 0: sub, icon, head = "ABS Ratings: Error ❌", "alert", "Error occurred!"
     elif any(stats[k] > 0 for k in ['success', 'recycled', 'asin_found', 'asin_migrated', 'isbn_added', 'meta_updated', 'series_merged']): sub, icon, head = "ABS Ratings: Success ✅", "normal", "Update complete"
     else: sub, icon, head = "ABS Ratings: Info ℹ️", "normal", "No changes"
@@ -1051,6 +1073,7 @@ def write_env_file(log_file, start_time, error=None):
     if GR_STATE['blocked']: body += " | ⚠️ Goodreads blocked"
     if stats['gr_deferred']: body += f" | GR deferred: {stats['gr_deferred']}"
     if stats['aborted_ratelimit']: body += " | ⚠️ ABORTED (Rate Limit)"
+    for s_, why in SOURCE_DOWN.items(): body += f" | ⚠️ {s_.capitalize()} off: {why}"
     if DRY_RUN: body += " | DRY RUN"
     if error: body = error.replace("'", "")
     
@@ -3152,8 +3175,10 @@ def note_listing_item(lib_id, it):
     if i_ := normalize_isbn(md_.get('isbn')): ISBN_OWNERS.setdefault(i_, set()).add(key)
     for sn_, q_ in split_series_name(md_.get('seriesName'), LIB_SERIES_NAMES.get(lib_id)):
         if sn_:
-            f_ = SERIES_FACTS.setdefault((lib_id, sn_.lower()), {'n': 0, 'authors': set(), 'folders': set(), 'name': sn_})
+            f_ = SERIES_FACTS.setdefault((lib_id, sn_.lower()), {'n': 0, 'authors': set(), 'folders': set(), 'name': sn_, 'langs': {}})
             f_['n'] += 1; f_['authors'] |= {_first_author(md_.get('authorName'))}
+            if (l_ := map_language(md_.get('language'))) and str(md_.get('language')).lower() not in ('und', 'mul', 'zxx'):
+                f_['langs'][l_] = f_['langs'].get(l_, 0) + 1
             pp_ = str(it.get('relPath') or '').split('/')
             if len(pp_) >= 3: f_['folders'].add(pp_[1].strip().lower())
         if sn_ and q_:
@@ -3176,6 +3201,12 @@ def build_queue(lib_id, history, recheck):
 
     load_series_names(lib_id)
     for it in items: note_listing_item(lib_id, it)
+    if items:  # books deleted in ABS leave the web UI's result list (they showed up as 'same ASIN twice', 2026-11-09)
+        alive = {f"{lib_id}_{it['id']}" for it in items}
+        with IO_LOCK:
+            gone = [k for k in RESULTS if k.startswith(lib_id + '_') and k not in alive]
+            for k in gone: RESULTS.pop(k, None)
+        if gone: logging.info(f"Results of {len(gone)} book(s) no longer in ABS removed from the result list")
 
     for item in items:
         key = f"{lib_id}_{item['id']}"
@@ -3359,13 +3390,43 @@ def enabled_sources():
     return ['audible'] + (['hardcover'] if HARDCOVER_ENABLED else []) + (['goodreads'] if GOODREADS_ENABLED else [])
 
 def sst_record(key, source, status, hits=None, aud_facts=None):
-    """Remember what a source gave for this book (real runs only, like history)."""
+    """Remember what a source gave for this book (real runs only, like history). A long run of books without a result makes the
+    breaker suspect the source: the check book decides whether it is broken (switched off, streak taken back) or fine."""
+    outcome = 'found' if status == 'found' else SST.outcome_of(status, hits)
+    with IO_LOCK:
+        if source in SOURCE_DOWN: return
+        suspect = bool(BREAKER and BREAKER.note(key, source, outcome, dict((SOURCE_STATE.get(key) or {}).get(source) or {}) or None))
+    if suspect:  # canary outside the lock (network)
+        bad = source_canaries(only=source) if source in ('audible', 'hardcover') else 'no check book for this source'
+        with IO_LOCK:
+            if source in SOURCE_DOWN: return
+            if bad: source_down(source, BREAKER.trip(SOURCE_STATE if not DRY_RUN else {}, source, bad)); return
+            BREAKER.clear(source)
+        logging.info(f"        ℹ️ {source.capitalize()}: many books in a row without a result, but the check book is fine - carrying on")
     if DRY_RUN: return
     with IO_LOCK:
-        e = SST.record(SOURCE_STATE, key, source, 'found' if status == 'found' else SST.outcome_of(status, hits))
+        e = SST.record(SOURCE_STATE, key, source, outcome)
         if aud_facts: SOURCE_STATE[key]['aud'] = SST.audible_facts(aud_facts)
     if e and e.get('st') == 'paused' and status != 'found':
         logging.info(f"        ⏸️ {source.capitalize()}: {e.get('why')} - paused for {REFRESH_DAYS} days")
+
+def source_down(source, why):
+    """Switch a source off for the rest of the run (failed check / tripped breaker): no misses, no writes from it, alert in the summary."""
+    SOURCE_DOWN[source] = why
+    logging.error(f"🚨 {source.capitalize()} switched off for this run: {why}")
+    if source == 'hardcover': HC_STATE['disabled'] = f"source check: {why}"
+    elif source == 'goodreads': GR_STATE['blocked'] = True
+
+def source_canaries(only=None):
+    """One known book per source must come back with every field the rules need (source_health.py). Before the per-book part
+    (only=None: failed sources are switched off) and when the breaker suspects a source (only=<source>: returns the problem or '')."""
+    if not SOURCE_CANARY or not USE_AUDIBLE_API: return '' if only else None
+    hc_search = (lambda q: hc_query("query($q:String!){ search(query:$q, query_type:\"Book\", per_page:8, page:1){ results } }", {'q': q})) \
+        if HARDCOVER_ENABLED and not HC_STATE['disabled'] else None
+    down = SH.run_canaries(get_audible_api, hc_search, log=logging.warning, only=only)
+    if only: return down.get(only, '')
+    for s_, why in down.items(): source_down(s_, why)
+    logging.info(f"Source check: {'all OK' if not down else 'PROBLEM - ' + '; '.join(f'{k}: {v}' for k, v in down.items())}")
 
 def source_note(key, source):
     e = (SOURCE_STATE.get(key) or {}).get(source) or {}
@@ -3440,7 +3501,7 @@ def process_queue(work_queue, history, failed, recheck):
 
     def one(idx, item):
         nonlocal consecutive_rl
-        if stats['aborted_ratelimit']: return
+        if stats['aborted_ratelimit'] or 'audible' in SOURCE_DOWN: return
         lib_id = item['_lib']
         
         eta_str = eta_text(idx, total) if not LOG_ROUTER or WORKERS <= 1 else '…'  # parallel: the log router writes the real ETA when the book is finished
@@ -4401,6 +4462,7 @@ def log_run_summary(start_time, series_result):
         f"Author spellings unified: {series_result.get('author_fixes', 0)} ({series_result.get('authors_changed', 0)} books)",
         hc_line,
         f"Errors: {s['failed']}{' | Goodreads blocked' if GR_STATE['blocked'] else ''}{' | ABORTED (rate limit)' if s['aborted_ratelimit'] else ''}",
+        *([f"SOURCE PROBLEM: {'; '.join(f'{k}: {v}' for k, v in SOURCE_DOWN.items())}"] if SOURCE_DOWN else []),
         f"Duration: {dur}",
     ]
     logging.info("=" * 60)
@@ -4538,6 +4600,10 @@ def main():
         log_run_summary(start_time, {}); write_env_file(log_file, start_time); write_debug_bundle(log_file)
         return
     if not SERIES_ONLY:
+        global BREAKER
+        BREAKER = SH.Breaker(SOURCE_STATE, SST.SOURCES)
+        source_canaries()
+        if 'audible' in SOURCE_DOWN: logging.error("🚨 Per-book part skipped: the Audible check failed (see above). The library task still runs.")
         run_libraries(history, failed, recheck)
         group_confirm()
         if not DRY_RUN: rw_json(HISTORY_FILE, history); rw_json(FAILED_FILE, failed); rw_json(RECHECK_FILE, recheck); rw_json(HC_CACHE_FILE, HC_CACHE)
