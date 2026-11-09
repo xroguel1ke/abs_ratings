@@ -19,6 +19,8 @@ echo "== 3c synthetic series/author merge batches (fake ABS, own library)"
 for f in tests/synthetic/merge_*.json; do n=$(basename $f .json | sed 's/merge_//'); [[ $n =~ ^[0-9]+$ ]] || continue
   ( out=$(timeout 300 tools/merge_round.sh $n 2>&1 | tail -1); echo "$out" | grep -q "wrong 0 | missed 0" || { echo "merge batch $n: $out"; exit 1; } ) &
 done; wait_ok=0; for j in $(jobs -p); do wait $j || wait_ok=1; done; [ $wait_ok = 0 ] && echo "merge batches: all clean" || fail=1
+echo "== 3d missing volumes against real Audible series lists"
+for f in tests/synthetic/missing_*.json; do py tools/missing_test.py eval $f | tail -1 | grep -q "missing volumes: \([0-9]*\)/\1 ok" || { echo "missing-volume test $f deviates"; py tools/missing_test.py eval $f | tail -5; fail=1; }; done; echo "missing volumes: checked $(ls tests/synthetic/missing_*.json | wc -l) files"
 echo "== 4 golden rounds"
 i=0
 for k in tests/private/round*_keys.txt tests/private/wl0*_keys.txt; do

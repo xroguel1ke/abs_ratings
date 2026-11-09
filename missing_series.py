@@ -39,20 +39,35 @@ def compare(lib_books, members, lib_variant=frozenset(), language=None, with_nov
         if m_ := re.fullmatch(r"\s*(\d+)(?:\.\d+)?\s*[-–]\s*(\d+)(?:\.\d+)?\s*", str(b.get('num') or '')):
             have_nums |= {float(i) for i in range(int(m_.group(1)), int(m_.group(2)) + 1)}
     have_asins = {b.get('asin') for b in lib_books if b.get('asin')}
-    have_titles = {norm_title(b.get('title')) for b in lib_books if b.get('title')}
-    def held(t):
+    have_titles = {}
+    for b in lib_books:
+        if b.get('title'):
+            e_ = have_titles.setdefault(norm_title(b.get('title')), [False, set()])
+            e_[0] |= bool(BOX_RE.search(b.get('title') or '') or '/' in (b.get('title') or ''))
+            e_[1].add(num_of(b.get('num')))
+    def held(t, n=None):
         nt = norm_title(t)
         if not nt: return False
         base = re.sub(r"\s+part \d+$", "", nt)  # 'To Green Angel Tower, Part 2' = the library's 'To Green Angel Tower'
-        return any(nt == h or base == h or (len(nt) >= 5 and f" {nt} " in f" {h} ") or (len(h) >= 5 and nt.startswith(h + ' ')) for h in have_titles)
+        for h, (omnibus, h_nums) in have_titles.items():
+            if nt == h or base == h: return True
+            # a contained / prefix title only for a library book WITHOUT another number: 'Life Reset' (#1) holds no 'Life Reset: Conquest' (#5)
+            if not omnibus and not (None in h_nums or n in h_nums): continue
+            # contained titles count only without another NUMBER around them ('Defiance of the Fall 6' is not the library's
+            # 'Defiance of the Fall'), except inside an omnibus title ('Dämonenblut / Nachtfeuer / Perlmond ... Trilogie 1-3')
+            if len(nt) >= 5 and f" {nt} " in f" {h} " and (omnibus or not re.search(r"\d", h.replace(nt, '', 1))): return True
+            if len(h) >= 5 and nt.startswith(h + ' ') and not re.search(r"\d", nt[len(h):]): return True  # 'Title' = Audible's 'Title: A Novel'
+        return False
     by_num = {}
     for m in members:
         n = num_of(m.get('num'))
         if n is None or (n != int(n) and not with_novellas): continue
         if BOX_RE.search(m.get('title') or '') or (EDITION_RE.search(m.get('title') or '') and not lib_variant): continue
         if language and m.get('language') and str(m['language']).lower() != str(language).lower(): continue
-        if n in have_nums or m.get('asin') in have_asins or held(m.get('title')): by_num[n] = None; continue
-        if n in by_num: continue  # first listing per number (other editions of the same volume are not extra gaps)
+        if n in have_nums or m.get('asin') in have_asins or held(m.get('title'), n): by_num[n] = None; continue
+        rel_ = str(m.get('release') or '')[:10]
+        if n in by_num and not (by_num[n] and by_num[n]['upcoming'] and rel_ and '2100' > rel_ <= today): continue
+        # first listing per number (other editions are no extra gaps); a RELEASED listing replaces an announced placeholder of the same number
         rel = str(m.get('release') or '')[:10]
         announced = rel >= '2100'  # Audible's placeholder date for an announced volume without a release date
         by_num[n] = {'num': (str(int(n)) if n == int(n) else str(n)), 'title': m.get('title') or '', 'asin': m.get('asin'),
