@@ -279,6 +279,16 @@ COVER_DIR = os.path.join(CONFIG_DIR, 'cache', 'covers')
 
 
 _SERIES_CACHE = {'ts': 0, 'data': None}
+MISSING_HIDDEN_FILE = os.path.join(CONFIG_DIR, 'missing_hidden.json')
+
+
+def missing_hidden(): return _load_json(MISSING_HIDDEN_FILE, {'series': [], 'volumes': []})
+
+
+def set_missing_hidden(kind, ident, hide=True):
+    h = missing_hidden(); lst = set(h.get(kind) or [])
+    (lst.add if hide else lst.discard)(ident); h[kind] = sorted(lst); _save_json(MISSING_HIDDEN_FILE, h)
+    _SERIES_CACHE['data'] = None
 
 
 def library_series(force=False):
@@ -288,7 +298,9 @@ def library_series(force=False):
     if not force and _SERIES_CACHE['data'] is not None and time.time() - _SERIES_CACHE['ts'] < 300: return _SERIES_CACHE['data']
     s = load_settings()
     rep = _load_json(os.path.join(REPORT_DIR, 'missing_in_series.json'), {})
-    miss = {(m.get('lib'), m.get('series')): m for m in rep.get('series') or []}
+    hid = missing_hidden(); hid_s, hid_v = set(hid.get('series') or []), set(hid.get('volumes') or [])
+    miss = {(m.get('lib'), m.get('series')): dict(m, missing=[x for x in m.get('missing') or [] if x.get('asin') not in hid_v])
+            for m in rep.get('series') or [] if f"{m.get('lib')}|{m.get('series')}" not in hid_s}
     known = set(rep.get('checked') or [])
     out = []
     for lib in [x.strip() for x in str(s.get('LIBRARY_IDS') or '').split(',') if x.strip()]:

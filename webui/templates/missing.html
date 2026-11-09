@@ -5,7 +5,8 @@
 <div class="row small" style="gap:12px;margin-bottom:8px">
  <span class="badge {{ 'warn' if total else '' }}" id="mcount" data-all="{{ _('%(n)s volumes in %(s)s series', n=total, s=series|length) }}"
   data-rel="{{ _('%(n)s volumes in %(s)s series', n=total_rel, s=series|selectattr('n_rel')|list|length) }}">{{ _('%(n)s volumes in %(s)s series', n=total, s=series|length) }}</span>
- <label class="chk"><input type="checkbox" id="hideUp" onchange="hideUpcoming(this.checked)"> {{ _('Hide not yet released') }}</label></div>
+ <label class="chk"><input type="checkbox" id="hideUp" onchange="hideUpcoming(this.checked)"> {{ _('Hide not yet released') }}</label>
+ {% if n_hidden %}<a href="{{ url_for('missing_page', hidden=None if show_hidden else 1) }}">{{ _('Hide hidden') if show_hidden else _('Show hidden (%(n)s)', n=n_hidden) }}</a>{% endif %}</div>
 <script>
 function hideUpcoming(on){
   document.querySelectorAll('.upcoming').forEach(e=>e.style.display=on?'none':'');
@@ -17,11 +18,17 @@ document.addEventListener('DOMContentLoaded',()=>{let on=false;try{on=localStora
   const b=document.getElementById('hideUp'); if(b&&on){b.checked=true;hideUpcoming(true)}});
 </script>
 {% for s in series %}<div class="card mcard" id="s-{{ s.series|urlencode }}" data-rel="{{ s.n_rel }}">
- <div class="row" style="justify-content:space-between"><div><b>{{ s.series }}</b> <span class="muted small">– {{ s.author }} · {{ s.language }} · {{ _('%(n)s in your library', n=s.have) }}</span></div></div>
+ <div class="row" style="justify-content:space-between"><div><b>{{ s.series }}</b> <span class="muted small">– {{ s.author }} · {{ s.language }} · {{ _('%(n)s in your library', n=s.have) }}</span></div>
+  <form method="post" action="{{ url_for('missing_hide') }}"><input type="hidden" name="kind" value="series"><input type="hidden" name="id" value="{{ s.sid }}">
+   <input type="hidden" name="hide" value="{{ 0 if s.hidden else 1 }}"><input type="hidden" name="back_hidden" value="{{ 1 if show_hidden else '' }}">
+   <button class="small" title="{{ _('Not interested: hide this series') }}">{{ _('Show again') if s.hidden else _('Hide series') }}</button></form></div>
  <table class="mtable small" style="margin-top:6px">{% for m in s.missing %}<tr class="{{ 'upcoming' if m.upcoming }}"><td class="num">#{{ m.num }}</td>
   {# an announced volume without a date has no product page yet (Audible placeholder): the search finds it once it is listed #}
   <td>{% if m.upcoming and not m.release %}<a href="https://{{ s.store }}/search?keywords={{ (m.title or s.series)|urlencode }}" target="_blank">{{ m.title or s.series }} {{ icon('search', 14) }}</a>
-   {% else %}<a href="https://{{ s.store }}/pd/{{ m.asin }}" target="_blank">{{ m.title }} {{ icon('arrow-up-right', 14) }}</a>{% endif %}</td>
+   {% else %}<a href="https://{{ s.store }}/pd/{{ m.asin }}" target="_blank">{{ m.title }} {{ icon('arrow-up-right', 14) }}</a>{% endif %}{% if m.new %} <span class="badge ok">{{ _('new') }}</span>{% endif %}</td>
+  <td class="hidecol"><form method="post" action="{{ url_for('missing_hide') }}"><input type="hidden" name="kind" value="volumes"><input type="hidden" name="id" value="{{ m.asin }}">
+   <input type="hidden" name="hide" value="{{ 0 if m.hidden else 1 }}"><input type="hidden" name="anchor" value="{{ s.series|urlencode }}"><input type="hidden" name="back_hidden" value="{{ 1 if show_hidden else '' }}">
+   <button class="linkbtn" title="{{ _('Not interested: hide this volume') }}">{{ _('show') if m.hidden else _('hide') }}</button></form></td>
   <td class="muted rel">{% if m.upcoming and m.release %}{{ _('releases %(d)s', d=m.release) }}{% elif m.upcoming %}{{ _('announced') }}{% elif m.release %}{{ m.release[:4] }}{% endif %}</td></tr>{% endfor %}</table>
 </div>{% else %}<div class="card muted">{{ _('Nothing missing - or no scan has made the list yet.') }}</div>{% endfor %}
 {% endblock %}

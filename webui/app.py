@@ -761,8 +761,27 @@ def series_rename():
 def missing_page():
     """Missing volumes of the library's series (reports/missing_in_series.json, written by every full / library scan)."""
     d = core._load_json(os.path.join(core.REPORT_DIR, 'missing_in_series.json'), {})
-    series = [dict(s, n=len(s.get('missing') or []), n_rel=sum(1 for m in s.get('missing') or [] if not m.get('upcoming'))) for s in d.get('series') or []]
-    return render_template('missing.html', series=sorted(series, key=lambda s: (s.get('series') or '').lower()), generated=d.get('generated'))
+    hid = core.missing_hidden(); hid_s, hid_v = set(hid.get('series') or []), set(hid.get('volumes') or [])
+    show_hidden = request.args.get('hidden') == '1'
+    series = []
+    for s in d.get('series') or []:
+        sid = f"{s.get('lib')}|{s.get('series')}"
+        ms = [dict(m, hidden=m.get('asin') in hid_v) for m in s.get('missing') or []]
+        if not show_hidden: ms = [m for m in ms if not m['hidden']]
+        if (sid in hid_s and not show_hidden) or not ms: continue
+        series.append(dict(s, sid=sid, hidden=sid in hid_s, missing=ms, n=len(ms), n_rel=sum(1 for m in ms if not m.get('upcoming'))))
+    n_hidden = len(hid_s) + len(hid_v)
+    return render_template('missing.html', series=sorted(series, key=lambda s: (s.get('series') or '').lower()), generated=d.get('generated'),
+                           show_hidden=show_hidden, n_hidden=n_hidden)
+
+
+@app.route('/missing/hide', methods=['POST'])
+@login_required
+def missing_hide():
+    kind, ident, hide = request.form.get('kind'), request.form.get('id') or '', request.form.get('hide') != '0'
+    if kind not in ('series', 'volumes') or not ident: abort(400)
+    core.set_missing_hidden(kind, ident, hide)
+    return redirect(url_for('missing_page', hidden=request.form.get('back_hidden') or None) + (f"#s-{request.form.get('anchor')}" if request.form.get('anchor') else ''))
 
 
 @app.route('/books')

@@ -272,3 +272,6 @@ table.mtable td.rel{width:150px;text-align:right;white-space:nowrap;font-variant
 .sercard{margin:0 0 8px}.sercard[open]{padding-bottom:14px}
 
 .selbar{gap:8px;margin:0 0 8px;flex-wrap:wrap}.qentry{outline:none}.qentry.kfocus{box-shadow:0 0 0 2px var(--accent)}
+
+table.mtable td.hidecol{width:64px;text-align:right}.linkbtn{background:none;border:0;padding:0;color:var(--muted);cursor:pointer;font:inherit;text-decoration:underline dotted}
+.linkbtn:hover{color:var(--accent)}

@@ -396,6 +396,7 @@ stats = _Stats({k: 0 for k in ["processed", "success", "failed", "no_data", "ski
 stats['aborted_ratelimit'] = False
 IDENTITY_DESC_FILE = os.path.join(SCRIPT_DIR, 'identity_desc.json')  # books whose description was replaced after a confirmed other-book ASIN
 IDENTITY_DESC = set()
+NEW_VOLUMES = []  # missing volumes that became available since the last report (run summary / notification)
 SOURCE_DOWN = {}  # source -> reason: failed canary check or tripped breaker (source_health.py); nothing is counted or written from it
 BREAKER = None
 SOURCE_CANARY = os.getenv('SOURCE_CANARY', 'true').lower() == 'true'  # tests replaying recordings switch it off (no live canary request)
@@ -1115,6 +1116,7 @@ def write_env_file(log_file, start_time, error=None):
     if stats['gr_deferred']: body += f" | GR deferred: {stats['gr_deferred']}"
     if stats['aborted_ratelimit']: body += " | ⚠️ ABORTED (Rate Limit)"
     for s_, why in SOURCE_DOWN.items(): body += f" | ⚠️ {s_.capitalize()} off: {why}"
+    if NEW_VOLUMES: body += f" | 📚 New volumes of your series: {', '.join(NEW_VOLUMES[:5])}{' …' if len(NEW_VOLUMES) > 5 else ''}"
     if DRY_RUN: body += " | DRY RUN"
     if error: body = error.replace("'", "")
     
@@ -3525,6 +3527,9 @@ def missing_in_series_task():
     """User request 2026-11-09: missing volumes of the library's series (only real gaps, see missing_series.py) -> reports/missing_in_series.json."""
     from abs_series import series_key as _k, series_variant as _v
     cache = rw_json(SERIES_MEMBERS_FILE) or {}
+    prev = rw_json(os.path.join(REPORT_DIR, 'missing_in_series.json')) or {}
+    prev_rel = {m.get('asin') for x in prev.get('series') or [] for m in x.get('missing') or [] if not m.get('upcoming')}
+    first_report = not prev.get('series')
     if not SERIES_BOOKS:  # series-only scan: the per-book part did not load the listing
         for lib in LIBRARY_IDS:
             try:
@@ -3552,6 +3557,8 @@ def missing_in_series_task():
         miss = MS.compare(books, members, _v(name), lang, MISSING_NOVELLAS)
         # a volume the library has OUTSIDE this series (other series name, no series, other ASIN) is no gap: ASIN or title anywhere
         miss = [m for m in miss if not ASIN_OWNERS.get(m.get('asin')) and not TITLE_OWNERS.get((lib, normalize_title_text(m.get('title') or '')))]
+        for m in miss:  # newly released since the last report (announced before, or a new listing): flagged + counted for the notification
+            if not m['upcoming'] and not first_report and m.get('asin') not in prev_rel: m['new'] = True; NEW_VOLUMES.append(f"{name} #{m['num']}")
         if miss: out.append({'lib': lib, 'series': name, 'author': books[0].get('author_name') or books[0].get('author'), 'language': lang, 'have': len(books), 'store': store, 'missing': miss})
     rw_json(SERIES_MEMBERS_FILE, cache)
     rw_json(os.path.join(REPORT_DIR, 'missing_in_series.json'), {'generated': datetime.now().strftime('%Y-%m-%d %H:%M'), 'series': out, 'checked': sorted(set(checked))})

@@ -405,4 +405,6 @@ add({  # page tour 2026-11-08
     'Rename / merge': 'Umbenennen / zusammenführen', 'An existing name merges the series.': 'Ein bestehender Name führt die Reihen zusammen.', 'No series found.': 'Keine Reihen gefunden.',
     'Select all': 'Alle auswählen', 'Apply selected': 'Auswahl übernehmen', 'Discard selected': 'Auswahl verwerfen', 'Select': 'Auswählen',
     'Keys: J/K next/previous · A apply · D discard · X select': 'Tasten: J/K weiter/zurück · A übernehmen · D verwerfen · X auswählen',
+    'Hide hidden': 'Ausgeblendete verbergen', 'Show hidden (%(n)s)': 'Ausgeblendete zeigen (%(n)s)', 'Not interested: hide this series': 'Kein Interesse: Reihe ausblenden',
+    'Show again': 'Wieder zeigen', 'Hide series': 'Reihe ausblenden', 'Not interested: hide this volume': 'Kein Interesse: Band ausblenden', 'show': 'zeigen', 'hide': 'ausblenden', 'new': 'neu',
 })
