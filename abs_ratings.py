@@ -204,7 +204,7 @@ REWRITE_RATING_SYMBOLS = os.getenv('REWRITE_RATING_SYMBOLS', 'false').lower() ==
 RATING_SYMBOL_SETS = {'moons': ('🌕', '🌗', '🌑'), 'stars': ('★', '⯪', '☆'), 'circles': ('●', '◐', '○'), 'squares': ('■', '◧', '□'), 'diamonds': ('◆', '⬖', '◇'),
                       # colourful emoji (user 2026-11-09): emoji have no half symbol, the middle one stands for the half step
                       'yellow_stars': ('⭐', '✨', '☆'), 'hearts': ('❤️', '💗', '🤍'), 'traffic': ('🟢', '🟡', '⚪'), 'green_squares': ('🟩', '🟨', '⬜'),
-                      'orange_circles': ('🟠', '🟡', '⚪')}
+                      'orange_circles': ('🟠', '🟡', '⚪'), 'stars_dark': ('⭐', '✨', '⚫')}
 RATING_LABELS = os.getenv('RATING_LABELS', 'en').lower()         # en | de
 RATING_POSITION = os.getenv('RATING_POSITION', 'top').lower()    # top | bottom of the description
 RATING_MIN_COUNT = int(os.getenv('RATING_MIN_COUNT', 0) or 0)    # a source with fewer ratings is not shown
