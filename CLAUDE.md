@@ -32,6 +32,9 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   full-cast/dramatized/GraphicAudio/abridged/manga series to a normal edition. Names go through aliases + series index.
 - **Titles:** only replaced for messy file-name titles (`The Book of the New Sun 05 Title`, zero-padded numbers only;
   `X: X: Subtitle`; `01 Title`). A new ASIN alone never changes a title (Audible titles carry marketing suffixes).
+  Glued subtitle (library 2026-11-09, 49 books checked by hand): ABS title = Audible title + ': ' + Audible subtitle AND the ABS subtitle
+  field is Audible's (shown twice), a series label of a series the book is not in, or empty with the subtitle twice in the title
+  -> Audible's title (`glued_subtitle`). 'Mistborn: The Final Empire' without subtitle field stays.
 - **ASIN search:** different volume numbers = always reject (also an ABS series number: same title + runtime ±2 min + narrator is NOT
   enough to ignore it - The Hunter's Code 1 and 2 share title and narrator and differ by 2 min, regress reg_syn_21).
   ONLY exception (user wish 2026-11-08): the ABS number is PROVABLY wrong - same recording (identical title, runtime ±2 min, a shared

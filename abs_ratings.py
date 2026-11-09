@@ -1217,6 +1217,20 @@ RE_SERIES_PREFIX = re.compile(r'^\s*(.{4,}?)\s+(0\d{1,2}(?:-\d{1,2}|\.\d{1,2})?)
 
 RE_LEADING_NUM = re.compile(r'^\s*(0\d{1,2})\s*[-.:]?\s+(.{3,})$')  # '01 Nightside the Long Sun' (zero-padded only)
 
+def glued_subtitle(title, abs_sub, aud_title, aud_sub, abs_series=None):
+    """The ABS title is Audible's title + ': ' + Audible's subtitle (once or the subtitle twice) -> 'title' (title only) or 'subtitle' (title
+    and the subtitle field: it is empty or names a series the book is not in - 'Moreta' had 'Victor of Tucson, Book 4'). Else None.
+    The ABS subtitle must be Audible's, a foreign series label, or empty with the subtitle twice in the title: an own subtitle (or none:
+    'Mistborn: The Final Empire' is a normal title) keeps the title as it is."""
+    n = lambda x: normalize_title_text(x or '')
+    if not (title and aud_title and aud_sub) or n(aud_title) == n(title) or ':' not in title: return None
+    if n(title) not in (n(f"{aud_title}: {aud_sub}"), n(f"{aud_title}: {aud_sub}: {aud_sub}")): return None
+    if n(abs_sub) == n(aud_sub): return 'title'  # the subtitle is shown twice in ABS (title + subtitle field)
+    if not abs_sub: return 'subtitle' if n(title) == n(f"{aud_title}: {aud_sub}: {aud_sub}") else None  # 'Mistborn: The Final Empire' alone is a normal title
+    m = re.match(r'^(.+?),?\s+(?:Book|Volume|Vol\.|Band|Teil|Part)\s+\d+(?:\.\d+)?$', abs_sub.strip(), re.I)
+    if m and not any(title_similarity(m.group(1), x) >= 0.85 for x in abs_series or [] if x) and title_similarity(m.group(1), aud_sub) < 0.85: return 'subtitle'
+    return None
+
 def parse_messy_title(t, abs_series_names=None):
     """Detect broken (file name style) titles.
     'Series 05 Title' -> title='Title', series='Series', sequence='5'
@@ -4103,6 +4117,16 @@ def process_queue(work_queue, history, failed, recheck):
                         elif new_t != title:
                             abs_updates['title'] = new_t
                             log_updates.append(f"Title: '{title}' -> '{new_t}' (was another volume's title)")
+                    elif aud_title and aud_sub and (glued := glued_subtitle(title, meta.get('subtitle'), aud_title, aud_sub, [s_.get('name') for s_ in (meta.get('series') or [])])):
+                        # library 2026-11-09: the subtitle glued into the title ('Sojourn: Legend of Drizzt: Dark Elf Trilogy, Book 3' with that
+                        # subtitle, 'Defiance of the Fall 4: A LitRPG Adventure: A LitRPG Adventure') - ABS title = Audible title + subtitle
+                        if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{aud_title}'")
+                        else:
+                            abs_updates['title'] = aud_title
+                            log_updates.append(f"Title: '{title}' -> '{aud_title}' (subtitle was glued into the title)")
+                            if glued == 'subtitle' and 'lock_subtitle' not in tags:
+                                abs_updates['subtitle'] = aud_sub
+                                log_updates.append(f"Subtitle: '{meta.get('subtitle') or ''}' -> '{aud_sub}'")
                     elif aud_title and aud_title != title and messy:  # only broken titles are replaced
                         candidates = [search_title]
                         if messy and messy.get('subtitle'): candidates.append(f"{messy['title']}: {messy['subtitle']}")
