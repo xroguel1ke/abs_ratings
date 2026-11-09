@@ -958,7 +958,7 @@ def settings():
             s['schedule_cron'] = (request.form.get('schedule_cron') or '').strip() or '30 2 * * *'
         if sec == 'Notifications':
             s['apprise_url'] = (request.form.get('apprise_url') or '').strip()
-            s['notify_on'] = request.form.get('notify_on', 'errors')
+            s['notify_events'] = [e for e in core.NOTIFY_EVENTS if request.form.get('ev_' + e) == 'on']
         if sec not in core.SECTIONS: flash(T('Unknown section.'), 'error'); return redirect(url_for('settings'))
         core.save_settings(s)
         flash(T('%(s)s: saved.', s=T(sec)), 'ok')
@@ -966,7 +966,7 @@ def settings():
     libs = core.abs_libraries(s) if s.get('ABS_URL') and s.get('API_TOKEN') else []
     groups = {}
     for f in core.FIELDS: groups.setdefault(f[5], []).append(f)
-    return render_template('settings.html', s=s, groups=groups, sections=core.SECTIONS, slug=core.section_slug, adv=core.ADVANCED, providers=core.PROVIDERS,
+    return render_template('settings.html', notify_events=core.notify_events(s), s=s, groups=groups, sections=core.SECTIONS, slug=core.section_slug, adv=core.ADVANCED, providers=core.PROVIDERS,
                            libs=libs, selected=set((s.get('LIBRARY_IDS') or '').split(',')), next_run=core.next_run_time(s))
 
 
@@ -1014,7 +1014,7 @@ def api_test(what):
         ok, msg = core.hardcover_test(request.form.get('token') or s.get('HARDCOVER_TOKEN', ''), T)
     elif what == 'notify':
         url = request.form.get('url') or s.get('apprise_url')
-        ok = core.notify(dict(s, apprise_url=url, notify_on='always'), 'ABS Ratings: Test', T('Notifications work.'), False)
+        ok = core.notify(dict(s, apprise_url=url), 'ABS Ratings: Test', T('Notifications work.'), force=True)
         msg = T('Test message sent.') if ok else T('Sending failed (check the URL).')
     elif what == 'cron':
         tmp = dict(s, schedule_enabled=True, schedule_mode='cron', schedule_cron=request.form.get('cron', ''))

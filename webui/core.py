@@ -462,15 +462,65 @@ def hardcover_test(token, t=_t):
 
 
 # ---------------------------------------------------------------- notifications
-def notify(s, title, body, is_error):
-    url = (s.get('apprise_url') or '').strip()
-    if not url or (s.get('notify_on') == 'errors' and not is_error): return False
+NOTIFY_EVENTS = ['scan_done', 'errors', 'source_off', 'review_new', 'volumes_new', 'weekly']
+
+
+def notify_events(s):
+    """Chosen notification events; the old 'notify_on' (errors / always) maps onto them."""
+    ev = s.get('notify_events')
+    if isinstance(ev, list): return set(ev)
+    return {'errors', 'source_off'} | ({'scan_done'} if s.get('notify_on') == 'always' else set())
+
+
+def notify(s, title, body, is_error=None, force=False):
+    """Send to every Apprise URL (several targets: comma / space / new line separated)."""
+    urls = [u for u in re.split(r'[\s,]+', (s.get('apprise_url') or '').strip()) if u]
+    if not urls: return False
+    if not force and is_error is not None and not (is_error and 'errors' in notify_events(s)) and 'scan_done' not in notify_events(s): return False
     try:
         import apprise
-        a = apprise.Apprise(); a.add(url)
+        a = apprise.Apprise()
+        for u in urls: a.add(u)
         return bool(a.notify(title=title, body=body))
     except Exception:
         return False
+
+
+def notify_run(s, run):
+    """After a full / library scan: one message with the lines of every chosen event that happened."""
+    ev, summ = notify_events(s), run.get('summary') or ''
+    lines = []
+    if 'errors' in ev and run['status'] != 'ok': lines.append(f"❌ {run.get('subject') or 'Error'}")
+    if 'source_off' in ev and 'switched off' in summ or ('source_off' in ev and ' off: ' in summ):
+        lines += [p.strip() for p in summ.split('|') if ' off: ' in p]
+    if 'volumes_new' in ev and 'New volumes' in summ: lines += [p.strip() for p in summ.split('|') if 'New volumes' in p]
+    if 'review_new' in ev:
+        n = sum(1 for x in review_queue() if x.get('run') == run.get('id') and x.get('status', 'open') == 'open')
+        if n: lines.append(f"📝 {n} new entr{'y' if n == 1 else 'ies'} on the review list")
+    if 'scan_done' in ev: lines.append(summ or run['status'])
+    if lines: notify(s, run.get('subject') or f"ABS Ratings: {run['label']}", '\n'.join(dict.fromkeys(lines)), force=True)
+
+
+def weekly_summary(s):
+    """Monday morning: changes of the last 7 days, open review entries, missing volumes (once per week)."""
+    if 'weekly' not in notify_events(s): return
+    now = datetime.now(); wk = now.strftime('%G-W%V')
+    if now.weekday() != 0 or now.hour < 8 or s.get('weekly_sent') == wk: return
+    since = (now - timedelta(days=7)).strftime('%Y-%m-%d')
+    ch, books = 0, set()
+    try:
+        with open(os.path.join(CONFIG_DIR, 'changes.jsonl'), encoding='utf-8') as f:
+            for l in f:
+                if '"dry_run": true' in l: continue
+                try: e = json.loads(l)
+                except ValueError: continue
+                if str(e.get('ts') or '')[:10] >= since and e.get('field') != 'description': ch += 1; books.add(e.get('key'))
+    except OSError: pass
+    rep = _load_json(os.path.join(REPORT_DIR, 'missing_in_series.json'), {})
+    rel = sum(1 for x in rep.get('series') or [] for m in x.get('missing') or [] if not m.get('upcoming'))
+    body = f"Last 7 days: {ch} changes in {len(books)} books\nReview list: {len(open_queue())} open\nMissing volumes (released): {rel}"
+    if notify(s, 'ABS Ratings: weekly summary', body, force=True):
+        s2 = load_settings(); s2['weekly_sent'] = wk; save_settings(s2)
 
 
 # ---------------------------------------------------------------- runs
@@ -571,7 +621,7 @@ class RunManager:
         self._save_run(run)
         self.current = None
         if run['kind'] in ('full', 'series'):
-            notify(s, run.get('subject') or f"ABS Ratings: {run['label']}", run['summary'] or run['status'], run['status'] != 'ok')
+            notify_run(s, run)
 
     def stop(self):
         if self.running():
@@ -615,6 +665,7 @@ def scheduler_loop():
                 else: RUNNER.start('full', trigger='schedule', label='Scheduled scan')
                 planned = None
             quick_poll(s)
+            weekly_summary(s)
             if planned is None or (nxt and nxt < planned) or not s.get('schedule_enabled'):
                 planned = nxt
             cleanup_logs(s)

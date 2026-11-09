@@ -424,4 +424,7 @@ add({  # page tour 2026-11-08
     'Change all rating symbols': 'Alle Bewertungssymbole ändern', 'Save the new choice first.': 'Neue Auswahl vorher speichern.',
     'New and refreshed ratings use these; "Change all rating symbols" rewrites the existing ones': 'Neue und aufgefrischte Bewertungen nutzen diese; „Alle Bewertungssymbole ändern“ schreibt die bestehenden um',
     'missing': 'fehlen', 'Nothing found': 'Nichts gefunden',
+    'Scan finished': 'Scan fertig', 'Errors': 'Fehler', 'Source switched off': 'Quelle abgeschaltet', 'New review entries': 'Neue Prüflisten-Einträge',
+    'New volume released': 'Neuer Band erschienen', 'Weekly summary (Monday)': 'Wochenzusammenfassung (Montag)',
+    'Several targets: separate the Apprise URLs with a space or comma.': 'Mehrere Ziele: Apprise-URLs mit Leerzeichen oder Komma trennen.',
 })

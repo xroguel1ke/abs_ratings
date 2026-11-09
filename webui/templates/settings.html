@@ -68,7 +68,10 @@
 <form method="post" class="sec" data-sec="{{ slug('Notifications') }}"><div class="card"><h2 style="margin-top:0">{{ _('Notifications') }}</h2>
  <label class="f"><span>{{ _('Apprise URL') }}</span><span class="row"><input type="text" name="apprise_url" id="apprise_url" value="{{ s.apprise_url }}" placeholder="{{ _('e.g. ntfy://ntfy.sh/my-topic or discord://webhook_id/token') }}" style="flex:1"><button type="button" onclick="test('notify')">{{ _('Test') }}</button></span>
  <span class="h">{{ _('Empty = off. Supports ntfy, Discord, Telegram, Gotify, e-mail and many more') }} (<a href="https://github.com/caronc/apprise/wiki" target="_blank">{{ _('formats') }}</a>)</span></label>
- <label class="f"><span>{{ _('Notify on') }}</span><select name="notify_on"><option value="errors" {{ 'selected' if s.notify_on=='errors' }}>{{ _('errors only') }}</option><option value="always" {{ 'selected' if s.notify_on=='always' }}>{{ _('every scan') }}</option></select></label>
+ <div class="f"><span>{{ _('Notify on') }}</span><div class="row small" style="gap:6px;flex-wrap:wrap">
+ {% set evs = notify_events %}{% for e, lab in (('scan_done', _('Scan finished')), ('errors', _('Errors')), ('source_off', _('Source switched off')), ('review_new', _('New review entries')), ('volumes_new', _('New volume released')), ('weekly', _('Weekly summary (Monday)'))) %}
+ <label class="badge"><input type="checkbox" name="ev_{{ e }}" {{ 'checked' if e in evs }}> {{ lab }}</label>{% endfor %}</div>
+ <span class="h">{{ _('Several targets: separate the Apprise URLs with a space or comma.') }}</span></div>
  <p class="small" id="test_notify"></p>
 </div>{{ save('Notifications') }}</form>
 
