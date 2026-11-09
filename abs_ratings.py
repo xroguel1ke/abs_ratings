@@ -203,7 +203,8 @@ REWRITE_RATING_SYMBOLS = os.getenv('REWRITE_RATING_SYMBOLS', 'false').lower() ==
 # (full, half, empty) per symbol set; the order of the keys is the order in the web UI
 RATING_SYMBOL_SETS = {'moons': ('🌕', '🌗', '🌑'), 'stars': ('★', '⯪', '☆'), 'circles': ('●', '◐', '○'), 'squares': ('■', '◧', '□'), 'diamonds': ('◆', '⬖', '◇'),
                       # colourful emoji (user 2026-11-09): emoji have no half symbol, the middle one stands for the half step
-                      'yellow_stars': ('⭐', '✨', ''),  # no fitting empty yellow star: only the earned ones are shown (user 2026-11-09) 'hearts': ('❤️', '💗', '🤍'), 'traffic': ('🟢', '🟡', '⚪'), 'green_squares': ('🟩', '🟨', '⬜'),
+                      'yellow_stars': ('⭐', '✨', ''),  # no fitting empty yellow star: only the earned ones are shown (user 2026-11-09)
+                      'hearts': ('❤️', '💗', '🤍'), 'traffic': ('🟢', '🟡', '⚪'), 'green_squares': ('🟩', '🟨', '⬜'),
                       'orange_circles': ('🟠', '🟡', '⚪')}
 RATING_SYMBOL_SETS['stars_dark'] = RATING_SYMBOL_SETS['yellow_stars']  # short-lived option, same look now
 RATING_LABELS = os.getenv('RATING_LABELS', 'en').lower()         # en | de
@@ -381,7 +382,11 @@ RE_ASIN_JSON = re.compile(r'"asin"\s*:\s*"([A-Z0-9]{10})"')
 RE_URL_ASIN = re.compile(r'(?:creativeASIN|asin)=([A-Z0-9]{10})')
 # Old blocks are searched only inside our rating block. ABS stores '<br />' and '&amp;'.
 RE_BLOCK_HEAD = re.compile(r'^(Audible|Goodreads|Hardcover) \(')  # first line of one source inside the rating block
-RE_RATING_BLOCK = re.compile(r'(?s)(?:<br\s*/?>\s*)*⭐\s*(?:Ratings|Bewertungen).*?⭐(?:\s|<br\s*/?>)*')  # top or bottom, EN or DE head
+# Block frame: '─── Ratings & Infos ───' ... '───────────' (user 2026-11-09: the old '⭐' frame looked like a rating with the yellow-star set).
+# The old frame is still recognised; its end is a LINE of its own ('<br>⭐'), so a yellow-star rating line never ends the block early.
+BLOCK_RULE = '─' * 3
+BLOCK_END = '─' * 15
+RE_RATING_BLOCK = re.compile(r'(?s)(?:<br\s*/?>\s*)*(?:⭐|─{3,})\s*(?:Ratings|Bewertungen)\b.*?<br\s*/?>\s*(?:⭐|─{3,})(?=\s*(?:<|$))(?:\s|<br\s*/?>)*')  # top or bottom, EN or DE head
 RE_CLEAN_TITLE = re.compile(r'(?i)\b(unabridged|abridged|audiobook|graphic audio|dramatized adaptation)\b|[\(\[].*?[\)\]]')
 RE_VOL = re.compile(r'(?i)(?:\b(?:book|vol\.?|volume|part|no\.?)|#)\s*(\d+)')
 RE_TEXT_RATING = re.compile(r'([0-9]+[.,]?[0-9]*)\s*(?:out of|von)\s*5\s*(?:stars|Sternen)', re.IGNORECASE)
@@ -3072,7 +3077,7 @@ def parse_rating_block(desc):
     out, cur = {}, None
     for line in re.split(r'<br\s*/?>', block):
         line = line.strip()
-        if line.startswith('⭐'): cur = None; continue
+        if line.startswith(('⭐', '─')): cur = None; continue
         if m := RE_BLOCK_HEAD.match(line): cur = m.group(1); out[cur] = [line]
         elif cur and line: out[cur].append(line)
     return {k: '<br>'.join(v) for k, v in out.items()}
@@ -3097,7 +3102,7 @@ def source_lines(src, d):
 def build_description(current_desc, fresh, old):
     """fresh: {source: data from this run}, old: {source: text from the existing block} (kept if nothing new).
     Sources appear in RATING_ORDER."""
-    lines = [f"⭐ {LABELS.get(RATING_LABELS, LABELS['en'])['head']}"]
+    lines = [f"{BLOCK_RULE} {LABELS.get(RATING_LABELS, LABELS['en'])['head']} {BLOCK_RULE}"]
     for src in RATING_ORDER:
         if new := source_lines(src, fresh.get(src)): lines += new
         elif old.get(src):
@@ -3107,7 +3112,7 @@ def build_description(current_desc, fresh, old):
     clean_d = re.sub(r'(?s)\*\*Audible\*\*.*?---\s*\n*', '', clean_d)
     clean_d = re.sub(r'^(?:\s|<br\s*/?>)+', '', clean_d, flags=re.I).strip()
     if len(lines) == 1: return clean_d  # No ratings at all: don't write an empty rating block
-    lines.append("⭐")
+    lines.append(BLOCK_END)
     if RATING_POSITION == 'bottom':
         clean_d = re.sub(r'(?:\s|<br\s*/?>)+$', '', clean_d, flags=re.I).strip()
         return (clean_d + "<br><br>" if clean_d else "") + "<br>".join(lines)
@@ -3394,6 +3399,17 @@ def gr_book_series(meta, aud):
         if n and m_: out.append((n, m_.group(0)))
     return list(dict.fromkeys(out))
 
+def rewrite_block(block, swap):
+    """One rating block with swapped symbols (swap: old symbol -> new) and the line frame instead of the old '⭐' frame."""
+    # 5 symbols in a row ('🌕🌕🌕🌗🌑'): only those runs are swapped, never a symbol in the user's own text
+    tok = '(?:' + '|'.join(re.escape(k) for k in sorted(swap, key=len, reverse=True)) + ')'  # emoji may be 2 code points (❤️)
+    # the symbols of one rating line: after the line icon (🏆 🎙️ 📖), before the value - 1-5 of them (sets without an empty one)
+    nb = re.sub(f'((?:🏆|🎙️|🎙|📖) )((?:{tok}){{1,5}})(?= \\d)', lambda x: x.group(1) + ''.join(swap[t] for t in re.findall(tok, x.group(2))), block)
+    # the old '⭐' frame becomes the line frame (head and end line)
+    nb = re.sub(r'^((?:<br\s*/?>\s*)*)⭐\s*((?:Ratings|Bewertungen)[^<]*?)\s*(?=<br)', lambda x: f"{x.group(1)}{BLOCK_RULE} {x.group(2)} {BLOCK_RULE}", nb)
+    nb = re.sub(r'(<br\s*/?>\s*)⭐(?=\s*(?:<|$))', lambda x: x.group(1) + BLOCK_END, nb)
+    return nb
+
 def rewrite_symbols_pass():
     """'Change all rating symbols' (user 2026-11-09): every rating block gets the symbols of RATING_ICONS - the existing values are kept,
     only full / half / empty symbols are swapped (any known set, also the old 5-star one). Journaled; lock_description respected."""
@@ -3419,10 +3435,7 @@ def rewrite_symbols_pass():
         m = RE_RATING_BLOCK.search(cur)
         if not m: continue
         block = m.group(0)
-        # 5 symbols in a row ('🌕🌕🌕🌗🌑'): only those runs are swapped, never a symbol in the user's own text
-        tok = '(?:' + '|'.join(re.escape(k) for k in sorted(swap, key=len, reverse=True)) + ')'  # emoji may be 2 code points (❤️)
-        # the symbols of one rating line: after the line icon (🏆 🎙️ 📖), before the value - 1-5 of them (sets without an empty one)
-        nb = re.sub(f'((?:🏆|🎙️|🎙|📖) )((?:{tok}){{1,5}})(?= \\d)', lambda x: x.group(1) + ''.join(swap[t] for t in re.findall(tok, x.group(2))), block)
+        nb = rewrite_block(block, swap)
         if nb == block: continue
         if 'lock_description' in expand_locks(item_tags(it)): n_locked += 1; continue
         if abs_update(iid, key, meta.get('title'), {'description': cur.replace(block, nb)}, meta, 'rating_symbols'):

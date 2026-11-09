@@ -847,7 +847,7 @@ def build_report(ctx, records, merges, rejected, extra):
     author_var = [sorted(v) for v in variants.values() if len(v) > 1]
 
     def missing(pred): return sorted(r['title'] for r in records if pred(r) and 'lock_all' not in r['tags'])
-    no_desc_re = re.compile(r'(?s)⭐\s*Ratings.*?⭐')
+    no_desc_re = re.compile(r'(?s)(?:⭐|─{3,})\s*(?:Ratings|Bewertungen)\b.*?<br\s*/?>\s*(?:⭐|─{3,})(?=\s*(?:<|$))')
     rep.update({
         'merges': [{'target': m['target'].name, 'target_books': fmt_seqs(m['target'].seqs),
                     'merged': [{'name': s.name, 'books': fmt_seqs(s.seqs), 'count': len(s.entries), 'match': s.relation} for s in m['members']]} for m in merges],
