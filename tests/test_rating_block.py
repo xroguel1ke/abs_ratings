@@ -19,7 +19,7 @@ def test_default_unchanged():
 
 def test_stars_german_bottom_min_count_and_hidden_source():
     d = build(RATING_ICONS='stars', RATING_LABELS='de', RATING_POSITION='bottom', RATING_MIN_COUNT=10, RATING_ORDER=['Audible', 'Goodreads'])
-    assert d.startswith('Text of the book.<br><br>⭐ Bewertungen & Infos<br>Audible (120):<br>🏆 ★★★★★ 4.6 / 5 - Gesamt'), d
+    assert d.startswith('Text of the book.<br><br>⭐ Bewertungen & Infos<br>Audible (120):<br>🏆 ★★★★⯪ 4.6 / 5 - Gesamt'), d
     assert 'Goodreads' not in d, 'below the minimum count'
     again = A.build_description(d, {'Audible': AUD}, A.parse_rating_block(d))  # block at the bottom is found and replaced, not doubled
     assert again.count('Bewertungen & Infos') == 1 and again.startswith('Text of the book.'), again

@@ -726,6 +726,16 @@ def api_run_log(run_id):
     return jsonify(text=text, offset=off, status=run['status'])
 
 
+@app.route('/ratings/rewrite-symbols', methods=['POST'])
+@login_required
+def rewrite_symbols():
+    """Settings: rewrite the symbols of EVERY rating block to the saved 'Rating symbols' (values kept, journaled, undoable)."""
+    run_id, err = core.RUNNER.start('full', dry_run=request.form.get('dry') == 'on', label=f"Change all rating symbols ({core.load_settings().get('RATING_ICONS')})",
+                                    run_settings={'REWRITE_RATING_SYMBOLS': True, 'ABS_BACKUP': request.form.get('backup') == 'on'})
+    if err: flash(T(err), 'error'); return redirect(url_for('settings') + '#metadata')
+    return redirect(url_for('run_view', run_id=run_id))
+
+
 @app.route('/sw.js')
 def sw():
     """Service worker at the site root (scope '/') so the web UI can be installed as an app."""

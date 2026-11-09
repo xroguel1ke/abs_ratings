@@ -61,7 +61,7 @@ FIELDS = [
     ('GR_MISSING_RECHECK_DAYS', 'Re-check books without Goodreads (days)', 'int', 30, '', 'Goodreads'),
 
     ('RATING_ORDER', 'Sources in the rating block', 'order:audible|goodreads|hardcover', 'audible,goodreads,hardcover', 'Ticked sources are shown, top to bottom (all enabled sources are still asked)', 'Metadata'),
-    ('RATING_ICONS', 'Rating symbols', 'choice:moons|stars', 'moons', '', 'Metadata'),
+    ('RATING_ICONS', 'Rating symbols', 'choice:moons|stars|circles|squares|diamonds', 'moons', 'New and refreshed ratings use these; "Change all rating symbols" rewrites the existing ones', 'Metadata'),
     ('RATING_LABELS', 'Rating block language', 'choice:en|de', 'en', '', 'Metadata'),
     ('RATING_POSITION', 'Rating block position', 'choice:top|bottom', 'top', '', 'Metadata'),
     ('RATING_MIN_COUNT', 'Minimum number of ratings', 'int', 0, 'A source with fewer ratings is not shown (0 = all)', 'Metadata'),
@@ -82,7 +82,7 @@ FIELDS = [
 
     ('UI_LANGUAGE', 'Language', 'choice:en|de', 'en', '', 'Interface'),
 ]
-CHOICE_LABELS = {'en': 'English', 'de': 'Deutsch', 'moons': '🌕🌕🌕🌕🌗', 'stars': '★★★★★', 'top': 'Above the description', 'bottom': 'Below the description',
+CHOICE_LABELS = {'en': 'English', 'de': 'Deutsch', 'moons': '🌕🌕🌕🌗🌑', 'stars': '★★★⯪☆', 'circles': '●●●◐○', 'squares': '■■■◧□', 'diamonds': '◆◆◆⬖◇', 'top': 'Above the description', 'bottom': 'Below the description',
                  'keep': 'Keep as delivered', 'auto': 'Automatic', 'buildup': 'Build-up (whole library)', 'maintain': 'Maintenance (new and changed books)',
                  'INFO': 'Normal', 'DEBUG': 'Debug (detailed)'}
 # rarely changed: shown folded ("Advanced") inside their card
@@ -535,6 +535,7 @@ class RunManager:
             if kind == 'item' or (kind == 'full' and only_items): extra['ONLY_ITEMS'] = ','.join(only_items or [])
             env = script_env(s, extra)
             if (run_settings or {}).get('REMOVE_RATINGS'): env['REMOVE_RATINGS'] = run_settings['REMOVE_RATINGS']  # remove-ratings task
+            if (run_settings or {}).get('REWRITE_RATING_SYMBOLS'): env['REWRITE_RATING_SYMBOLS'] = 'true'  # rewrite all rating symbols
             os.makedirs(LOG_DIR, exist_ok=True)
             if kind == 'undo':
                 cmd = [sys.executable, '-u', os.path.join(APP_DIR, 'abs_undo.py')] + list(undo_args or [])

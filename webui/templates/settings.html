@@ -30,6 +30,10 @@
  {% set more = fields|selectattr(0, 'in', adv)|list %}
  {% if more %}<details class="adv"><summary class="small muted">{{ _('Advanced') }} ({{ more|length }})</summary>
   {% for key, label, ftype, default, help_, g in more %}{{ field(key, label, ftype, default, help_) }}{% endfor %}</details>{% endif %}
+{% if group == 'Metadata' %}<div class="row small" style="margin-top:8px;gap:8px">
+ <button type="submit" form="rewritesym" class="btn" data-confirm="{{ _('Change the rating symbols of ALL books to the saved choice? (values stay, can be undone)') }}">{{ _('Change all rating symbols') }}</button>
+ <label class="chk"><input type="checkbox" form="rewritesym" name="dry"> {{ _('Test run') }}</label><label class="chk"><input type="checkbox" form="rewritesym" name="backup"> {{ _('ABS backup') }}</label>
+ <span class="muted">{{ _('Save the new choice first.') }}</span></div>{% endif %}
 {% if group == 'Logs' %}<p><a class="btn" href="{{ url_for('logs') }}">{{ _('View and download logs') }} {{ icon('arrow-right', 14) }}</a></p>{% endif %}
  {% if group == 'Connection' %}<p class="small" id="test_abs"></p>{% elif group == 'Hardcover' %}<p class="small" id="test_hardcover"></p>{% endif %}
 </div>{% endmacro %}
@@ -107,4 +111,5 @@ document.querySelectorAll('.resetbtn').forEach(b=>b.addEventListener('click',()=
   const apply=v=>{document.querySelectorAll('details.adv').forEach(d=>{d.open=v; d.style.display=v?'':'none'})}; t.checked=on; apply(on);
   t.addEventListener('change',()=>{apply(t.checked); try{localStorage.setItem('abs_expert',t.checked?'1':'0')}catch(e){}}); })();
 </script>
+<form id="rewritesym" method="post" action="{{ url_for('rewrite_symbols') }}"></form>
 {% endblock %}

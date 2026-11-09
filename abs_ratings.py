@@ -198,7 +198,10 @@ HC_CACHE_FILE = os.path.join(SCRIPT_DIR, "hardcover_cache.json")  # key -> {'id'
 RATING_SOURCES = ['Audible', 'Goodreads', 'Hardcover']
 RATING_ORDER = [s for s in (x.strip().capitalize() for x in os.getenv('RATING_ORDER', 'audible,goodreads,hardcover').split(',')) if s in RATING_SOURCES]
 RATING_ORDER = RATING_ORDER or list(RATING_SOURCES)  # only the listed sources are SHOWN in the block (all enabled ones are still asked)
-RATING_ICONS = os.getenv('RATING_ICONS', 'moons').lower()        # moons | stars
+RATING_ICONS = os.getenv('RATING_ICONS', 'moons').lower()        # moons | stars | circles | squares | diamonds (all with half steps)
+REWRITE_RATING_SYMBOLS = os.getenv('REWRITE_RATING_SYMBOLS', 'false').lower() == 'true'  # task: rewrite the symbols of every rating block
+# (full, half, empty) per symbol set; the order of the keys is the order in the web UI
+RATING_SYMBOL_SETS = {'moons': ('🌕', '🌗', '🌑'), 'stars': ('★', '⯪', '☆'), 'circles': ('●', '◐', '○'), 'squares': ('■', '◧', '□'), 'diamonds': ('◆', '⬖', '◇')}
 RATING_LABELS = os.getenv('RATING_LABELS', 'en').lower()         # en | de
 RATING_POSITION = os.getenv('RATING_POSITION', 'top').lower()    # top | bottom of the description
 RATING_MIN_COUNT = int(os.getenv('RATING_MIN_COUNT', 0) or 0)    # a source with fewer ratings is not shown
@@ -1146,11 +1149,9 @@ def normalize_title_text(t):
     return re.sub(r'\s+', ' ', t).strip()
 
 def moon_rating(v):
-    if RATING_ICONS == 'stars':
-        n = int(round(safe_float(v)))
-        return '★' * min(n, 5) + '☆' * (5 - min(n, 5))
+    full_s, half_s, empty_s = RATING_SYMBOL_SETS.get(RATING_ICONS, RATING_SYMBOL_SETS['moons'])
     v = safe_float(v)
-    if v == 0: return "🌑" * 5
+    if v == 0: return empty_s * 5
     full, decimal = int(v), v - int(v)
     if decimal >= 0.75:
         full += 1
@@ -1159,7 +1160,8 @@ def moon_rating(v):
         half = 1
     else:
         half = 0
-    return ("🌕" * min(full, 5) + "🌗" * half).ljust(5, "🌑")[:5]
+    full = min(full, 5); half = half if full < 5 else 0
+    return full_s * full + half_s * half + empty_s * (5 - full - half)
 
 def parse_release_year(rel_date):
     """Extract a 4-digit year from Audible dates like 'YYYY-MM-DD', 'MM-DD-YYYY' or 'MM-DD-YY'."""
@@ -3376,6 +3378,37 @@ def gr_book_series(meta, aud):
         if n and m_: out.append((n, m_.group(0)))
     return list(dict.fromkeys(out))
 
+def rewrite_symbols_pass():
+    """'Change all rating symbols' (user 2026-11-09): every rating block gets the symbols of RATING_ICONS - the existing values are kept,
+    only full / half / empty symbols are swapped (any known set, also the old 5-star one). Journaled; lock_description respected."""
+    new = RATING_SYMBOL_SETS.get(RATING_ICONS, RATING_SYMBOL_SETS['moons'])
+    swap = {}
+    for st in RATING_SYMBOL_SETS.values():
+        for i, ch in enumerate(st): swap[ch] = new[i]
+    keys = []
+    for lib in LIBRARY_IDS:
+        try: keys += [f"{lib}_{it['id']}" for it in abs_session.get(f"{ABS_URL}/api/libraries/{lib}/items").json().get('results') or []]
+        except Exception as e: logging.error(f"Library {lib}: {e}")
+    logging.info(f"Rating symbols -> {RATING_ICONS} ({''.join(new)}) for {len(keys)} book(s){' - DRY RUN' if DRY_RUN else ''}")
+    n_changed = n_locked = 0
+    from abs_series import expand_locks
+    for key in keys:
+        lib, _, iid = key.partition('_')
+        try: it = abs_session.get(f"{ABS_URL}/api/items/{iid}").json()
+        except Exception as e: logging.warning(f"  {key}: {e}"); continue
+        meta = (it.get('media') or {}).get('metadata') or {}
+        cur = meta.get('description') or ''
+        m = RE_RATING_BLOCK.search(cur)
+        if not m: continue
+        block = m.group(0)
+        # 5 symbols in a row ('🌕🌕🌕🌗🌑'): only those runs are swapped, never a symbol in the user's own text
+        nb = re.sub('[' + re.escape(''.join(swap)) + ']{5}', lambda x: ''.join(swap.get(c, c) for c in x.group(0)), block)
+        if nb == block: continue
+        if 'lock_description' in expand_locks(item_tags(it)): n_locked += 1; continue
+        if abs_update(iid, key, meta.get('title'), {'description': cur.replace(block, nb)}, meta, 'rating_symbols'):
+            n_changed += 1
+    logging.info(f"Rating symbols changed in {n_changed} book(s){' (planned, DRY RUN)' if DRY_RUN else ''}; {n_locked} locked book(s) kept")
+
 def remove_ratings_pass():
     """Remove the rating lines of REMOVE_RATINGS from the rating block of every book (ONLY_ITEMS or all libraries).
     Journaled like every write (undo restores the old description); lock_description respected. The source is paused for the
@@ -4848,6 +4881,10 @@ def main():
     logging.getLogger().addHandler(ITEM_LOG)
     if ABS_BACKUP and not DRY_RUN and not create_abs_backup():
         return fail_early(log_file, start_time, "ABS backup failed - nothing was written. Check ABS: Settings -> Backups (backup path, disk space) or set ABS_BACKUP=false to run without a backup.")
+    if REWRITE_RATING_SYMBOLS:
+        rewrite_symbols_pass()
+        log_run_summary(start_time, {}); write_env_file(log_file, start_time); write_debug_bundle(log_file)
+        return
     if REMOVE_RATINGS:
         remove_ratings_pass()
         log_run_summary(start_time, {}); write_env_file(log_file, start_time); write_debug_bundle(log_file)
