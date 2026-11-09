@@ -406,6 +406,8 @@ RE_RAW_COUNT = re.compile(r'count="(\d+)"')
 
 stats = _Stats({k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred", "cover_added", "desc_filled", "series_merged", "other_edition", "hc_found", "hc_missing", "rating_only"]})
 stats['aborted_ratelimit'] = False
+SUMMARY_INDEX_FILE = os.path.join(SCRIPT_DIR, 'summary_index.json')  # asin -> [title, start of Audible's summary] (description of another book)
+SUMMARY_INDEX = {}
 IDENTITY_DESC_FILE = os.path.join(SCRIPT_DIR, 'identity_desc.json')  # books whose description was replaced after a confirmed other-book ASIN
 IDENTITY_DESC = set()
 NEW_VOLUMES = []  # missing volumes that became available since the last report (run summary / notification)
@@ -1605,6 +1607,8 @@ def audible_result(p, asin, domain):
         if leaf and leaf not in categories: categories.append(leaf)
     res['narrators_raw'] = [n.get('name') for n in (p.get('narrators') or []) if n.get('name')]
     res['summary'] = p.get('publisher_summary') or p.get('merchandising_summary')
+    if res['summary'] and p.get('asin'):
+        with IO_LOCK: SUMMARY_INDEX[p['asin']] = [p.get('title') or '', _sum_norm(res['summary'])[:800]]
     res['adult'] = bool(p.get('is_adult_product'))
     imgs = {k: v for k, v in (p.get('product_images') or {}).items() if str(k).isdigit() and v}
     if imgs: res['cover_url'] = imgs[max(imgs, key=int)]
@@ -3161,6 +3165,29 @@ def _plain_text(html_text):
     t = re.sub(r'<[^>]+>', ' ', html_lib.unescape(html_text or ''))
     return re.sub(r'\s+', ' ', t).strip()
 
+def _sum_norm(t):
+    return re.sub(r'[^a-z0-9]+', ' ', re.sub(r'<[^>]+>', ' ', html_lib.unescape(t or '')).lower()).strip()
+
+def description_of_other_book(own, asin, title):
+    """The ABS description (without our block) is Audible's summary of ANOTHER book (round 3, 2026-11-09: 86 Vol. 4 had Vol. 5's text,
+    Tom Sawyer had Iron Gold's): it differs from this book's own summary, matches another product's (>= 0.75, 6-word phrases shared)
+    and does not name this book's title (a publisher template like 'The audiobook of The Light Fantastic is read by...' does).
+    Returns that book's title or None."""
+    n = _sum_norm(own)
+    if len(n) < 120 or not asin: return None
+    mine = (SUMMARY_INDEX.get(asin) or [None, ''])[1]
+    if mine and difflib.SequenceMatcher(None, n[:400], mine[:400]).ratio() >= 0.3: return None
+    nt = normalize_title_text(re.split(r'\s*[:(]', title or '')[0])
+    sh = set(zip(*[n[:800].split()[i:] for i in range(6)]))
+    best = None
+    for a2, (t2, s2) in list(SUMMARY_INDEX.items()):
+        if a2 == asin or not s2: continue
+        if len(sh & set(zip(*[s2[:800].split()[i:] for i in range(6)]))) < 4: continue
+        r = difflib.SequenceMatcher(None, n[:400], s2[:400]).ratio()
+        own_named = len(nt) >= 6 and f' {nt} ' in f' {n} ' and f' {nt} ' not in f' {normalize_title_text(t2)} '  # 'The audiobook of The Light Fantastic...'
+        if r >= 0.75 and not own_named and (not mine or difflib.SequenceMatcher(None, mine[:400], s2[:400]).ratio() < 0.5) and (best is None or r > best[0]): best = (r, t2)
+    return best[1] if best else None
+
 def description_replaceable(own, audible):
     """Is the ABS description (without our rating block) provably not the user's own text, so Audible's complete summary may
     replace it? (a) it is a truncated beginning of Audible's text, or (b) very short (< 30 % of Audible's and < 300 characters).
@@ -4253,6 +4280,14 @@ def process_queue(work_queue, history, failed, recheck):
                         elif new_t != title:
                             abs_updates['title'] = new_t
                             log_updates.append(f"Title: '{title}' -> '{new_t}' (was another volume's title)")
+                    elif aud_title and same_recording(abs_dur, meta.get('narrators'), aud_data) and normalize_title_text(aud_title) != normalize_title_text(title) \
+                            and any(re.fullmatch(r'(?i)\s*' + re.escape(str(s_.get('name') or '').strip()) + r'\s*#\s*\d+(?:\.\d+)?\s*', title)  # only the '#N' label: 'Beware of Chicken 2' IS the title (Audible adds marketing)
+                                    for s_ in (meta.get('series') or []) if s_.get('name')):
+                        # round 3 (2026-11-09): the title is only the series label ('The Dark Tower #1') - Audible's title of the same recording
+                        if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{aud_title}'")
+                        else:
+                            abs_updates['title'] = aud_title
+                            log_updates.append(f"Title: '{title}' -> '{aud_title}' (the title was only the series name and number)")
                     elif aud_title and same_recording(abs_dur, meta.get('narrators'), aud_data) and (head_ := series_tail_head(title, [s_.get('name') for s_ in (meta.get('series') or [])], aud_title)):
                         # round 1 (2026-11-09): the book's own series name appended to the title ('Hogfather: Discworld', 'Mark of the Crijik 4:
                         # The Burning Lake: Mark of the Crijik') - the title without it; Audible's own title when the rest is title + subtitle
@@ -4828,10 +4863,19 @@ def process_queue(work_queue, history, failed, recheck):
                         base_desc = summary
                         stats['desc_filled'] += 1
                         logging.info("        📝 Empty description filled with Audible summary")
+                    elif summary and aud_data and not aud_data.get('related_edition') and (same_recording(abs_dur, meta.get('narrators'), aud_data)
+                                                                                    or title_similarity(title, aud_data.get('title_raw') or '') >= 0.7) \
+                            and (other_d := description_of_other_book(strip_rating_block(cur_desc), asin, title)):
+                        base_desc = summary  # provably not the user's own text: another book's summary
+                        stats['desc_filled'] += 1
+                        logging.info(f"        📝 Description replaced by Audible's summary (it was the description of '{other_d}')")
                     elif summary and (why_d := description_replaceable(strip_rating_block(cur_desc), summary)):
                         base_desc = summary  # user rule 2026-11-03: only a provably truncated / very short text, never an own long one
                         stats['desc_filled'] += 1
                         logging.info(f"        📝 Description replaced by Audible's complete summary ({why_d})")
+                    if not summary and (other_d := description_of_other_book(strip_rating_block(cur_desc), asin, title)):
+                        logging.info(f"        ⚠️ The description is the one of '{other_d}' and Audible has no summary for this book: review list")
+                        add_review(key, title, 'description', other_d, f"description belongs to '{other_d}' - Audible has no text for this book, please replace it in ABS")
                     final_desc = build_description(base_desc, {'Audible': aud_data, 'Goodreads': gr_data, 'Hardcover': hc_data}, old_blocks)
 
                     has_aud = bool(aud_data and int(aud_data.get('count', 0)) > 0)
@@ -5130,6 +5174,7 @@ def main():
     LAST_WRITTEN.update(rw_json(LAST_WRITTEN_FILE) or {}); MANUAL_FIELDS.update(rw_json(MANUAL_FIELDS_FILE) or {})
     FILLED_NARR.update(rw_json(FILLED_NARR_FILE) or [])
     IDENTITY_DESC.update(rw_json(IDENTITY_DESC_FILE) or [])
+    SUMMARY_INDEX.update(rw_json(SUMMARY_INDEX_FILE) or {})
     try:  # also every narrator fill already in the journal (runs before this file existed)
         with open(CHANGES_FILE, encoding='utf-8') as f_:
             FILLED_NARR.update(json.loads(l)['key'] for l in f_ if '"field": "narrators"' in l and json.loads(l).get('source') == 'audible_meta')
@@ -5207,6 +5252,7 @@ def main():
     write_env_file(log_file, start_time)
     log_run_summary(start_time, series_result)
     logging.info(f"Debug bundle (send this one for troubleshooting): {os.path.join(LOG_DIR, 'debug_latest.log')}")
+    if SUMMARY_INDEX: rw_json(SUMMARY_INDEX_FILE, SUMMARY_INDEX)  # Audible summaries seen (description of another book)
     write_debug_bundle(log_file)
 
 if __name__ == "__main__": main()
