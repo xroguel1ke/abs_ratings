@@ -599,7 +599,7 @@ def series_by_membership(lib, asin, host, book_authors, title=None, all_hits=Fal
 SIBLING_FILE = os.path.join(SCRIPT_DIR, 'sibling_series.json')  # {asin: {'ts': iso, 'extra': [...]}}: series of other recordings (30 days)
 SIBLING_CACHE, SIBLING_DAYS = {}, 30
 
-def sibling_series(asin, domain, series_list, title):
+def sibling_series(asin, domain, series_list, title, authors=None):
     """Cached wrapper (round 6 2026-11-08 was ~25 % slower: series lists + sibling products for every book): an ASIN is asked again
     after SIBLING_DAYS only."""
     with IO_LOCK:
@@ -607,14 +607,14 @@ def sibling_series(asin, domain, series_list, title):
         c = SIBLING_CACHE.get(asin)
     if c:
         try:
-            if datetime.now(timezone.utc) - datetime.fromisoformat(c['ts']) < timedelta(days=SIBLING_DAYS): return c['extra']
+            if datetime.now(timezone.utc) - datetime.fromisoformat(c['ts']) < timedelta(days=SIBLING_DAYS) and (c.get('v') == 2 or not authors): return c['extra']
         except (KeyError, ValueError): pass
-    extra = _sibling_series(asin, domain, series_list, title)
+    extra = _sibling_series(asin, domain, series_list, title, authors)
     with IO_LOCK:
-        SIBLING_CACHE[asin] = {'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'extra': extra}
+        SIBLING_CACHE[asin] = {'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'extra': extra, 'v': 2 if authors else 1}
     return extra
 
-def _sibling_series(asin, domain, series_list, title):
+def _sibling_series(asin, domain, series_list, title, authors=None):
     """Series of OTHER recordings of the same work: Audible lists the new Lucy Tregear recording of 'Ship of Magic' only in 'Liveship
     Traders'; the older recording in the same Audible series list (same title, same number) is also 'Realm of the Elderlings' #4.
     A series belongs to the work, not the recording. Returns extra series dicts like md_raw['series'] (name, part, asin)."""
@@ -630,6 +630,23 @@ def _sibling_series(asin, domain, series_list, title):
                 nm = (x.get('name') or '').strip()
                 if nm and nm.lower() not in have:
                     have.add(nm.lower()); extra.append({'name': nm, 'part': x.get('part'), 'asin': x.get('asin'), 'sibling': a})
+    if not extra and host and authors and nt:
+        # the series list holds only THIS edition (the full-cast 'Tiffany Aching' list has no standard recordings): other recordings of
+        # the same title by the same author from the catalog search, e.g. the standard 'The Wee Free Men' = Discworld #30 (2026-11-09)
+        throttle('audible_api', host)
+        try:
+            r = requests.get(f"https://{host}/1.0/catalog/products", params={"title": title, "author": authors[0], "num_results": 20,
+                             "response_groups": "series,contributors,product_desc,product_attrs"}, headers={"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}, timeout=15)
+            prods = (r.json().get('products') or []) if r.status_code == 200 else []
+        except (requests.RequestException, ValueError): prods = []
+        for p in prods:
+            if p.get('asin') == asin or normalize_title_text(p.get('title') or '') != nt: continue
+            if not match_author(authors, ', '.join(a_.get('name') or '' for a_ in p.get('authors') or [])): continue
+            if is_boxset_title(p.get('title') or ''): continue
+            for x in p.get('series') or []:
+                nm = (x.get('title') or '').strip()
+                if nm and nm.lower() not in have:
+                    have.add(nm.lower()); extra.append({'name': nm, 'part': aud_part(x.get('sequence')), 'asin': x.get('asin'), 'sibling': p.get('asin')})
     return extra
 
 def canonical_series(lib, name, book_authors, book_variant=None):
@@ -4037,7 +4054,10 @@ def process_queue(work_queue, history, failed, recheck):
                                 abs_updates['series'] = cl0
                                 log_updates.append("Series: " + (", ".join(f"'{x['name']}'" + (f" #{x['sequence']}" if x.get('sequence') else '') for x in cl0) or '(none)'))
                         if (series_list := md_raw.get('series')) and ((same_rec_rt and bool(abs_dur and aud_data.get('runtime_sec'))) or normalize_title_text(title) == normalize_title_text(aud_data.get('title_raw') or '')):
-                            sib_ = sibling_series(asin, aud_data.get('domain'), series_list, aud_data.get('title_raw') or title)
+                            from abs_series import series_key as _skx
+                            aud_keys_ = {_skx(x.get('name') or '') for x in series_list}
+                            need_ = any(_skx(x.get('name') or '') not in aud_keys_ for x in (meta.get('series') or []))  # ABS has a series Audible does not list
+                            sib_ = sibling_series(asin, aud_data.get('domain'), series_list, aud_data.get('title_raw') or title, authors if need_ else None)
                             if sib_:
                                 logging.info(f"        ➕ Other recording(s) of this book are also in: {', '.join(x['name'] + (' #' + str(x['part']) if x.get('part') else '') for x in sib_)}")
                                 series_list = list(series_list) + sib_
