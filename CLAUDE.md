@@ -137,6 +137,20 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   narrator); unresolved -> review list 'wrong language'. Source health (source_health.py): canary per source + breaker. Missing volumes
   (missing_series.py, reports/missing_in_series.json, page /missing). Test containers run with --cpuset-cpus=0-9,12-31 (core 20 defect).
 - **Narrator = author** in ABS is replaced by Audible's narrators of the same recording (runtime 2 min) only.
+- 2026-11-09 evening (bug hunt on the live library):
+  - Rating block frame '─── Ratings & Infos ───' ... '───────────────' (the '⭐' frame looked like a rating with yellow stars; the old
+    frame is still recognised, its END must be a line of its own - the old regex stopped at the first yellow star -> doubled blocks).
+  - A rating block that vanished from the description (ABS rescan reloads the old text; description is not in last_written) makes
+    the book due again (`block_lost`).
+  - ASIN not released yet (release date in the future, re-release): strict search for the released edition, else its ratings.
+  - Series number conflict only when NO candidate entry of the same series agrees ('Dune' #1 + 'The Dune Sequence' #12, both key 'dune').
+  - Hardcover cross-check: both titles carry a volume number and share none -> another volume (rejected).
+  - Our own later writes (apply, symbol rewrite, library task; journal ts) are no 'manual update' (the symbol rewrite would have
+    re-queued all 1917 books). A value the user UNDID is never written again by the script (`_UNDONE_VAL`), unless the user applies it.
+  - Undo skips a field that changed again since (newer run / by hand) - `abs_undo.py --force` to override. abs_apply: the same field
+    twice in one test run applies the final value.
+  - Web UI e2e tests against the fake ABS: tests/test_webui_e2e.py (rename + undo, lock, symbol rewrite, remove ratings, apply selection,
+    undo conflict, no inherited alert).
 
 ## Testing
 - **pytest:** `tools/pytest_all.sh` (one process per test file; also step 2a of the gate).
