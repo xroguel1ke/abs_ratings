@@ -31,7 +31,10 @@ def lib_items(lib):
 def lib_series(lib):  # names only (the script uses them to split the listing's seriesName)
     names = sorted({x['name'] for it in SNAP['items'].values() if it.get('libraryId') == lib
                     for x in (it.get('media') or {}).get('metadata', {}).get('series') or [] if x.get('name')})
-    return jsonify(results=[{'id': f"ser{i}", 'name': n} for i, n in enumerate(names)], total=len(names))
+    listing = {e['id']: e for e in (SNAP['lists'].get(lib) or {}).get('results') or []}
+    books = lambda n: [listing[i] for i, it in SNAP['items'].items() if i in listing and it.get('libraryId') == lib
+                       and any(x.get('name') == n for x in (it.get('media') or {}).get('metadata', {}).get('series') or [])]
+    return jsonify(results=[{'id': f"ser{i}", 'name': n, 'books': books(n)} for i, n in enumerate(names)], total=len(names))
 
 @app.get('/api/items/<iid>')
 def item(iid):

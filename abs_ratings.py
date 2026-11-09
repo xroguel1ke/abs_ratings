@@ -1037,6 +1037,12 @@ def abs_update(iid, key, title, updates, old_meta, source, tags=None, old_tags=N
     # User decision 2026-11-08: only lock_<field> tags protect a field. A value changed in ABS (by you or by an ABS rescan -
     # ABS cannot tell them apart) is checked again and corrected like any other value.
     if not updates and tags is None: return True
+    if updates and key:  # a change YOU undid (history / undo) is your decision: the same value is never written again (2026-11-09)
+        journal_last(key, 'asin')
+        for f_ in [f_ for f_, v_ in updates.items() if listing_value(f_, v_) in _UNDONE_VAL.get((key, f_), ())]:
+            logging.info(f"        ↩️ {f_}: '{listing_value(f_, updates[f_])}' was undone by you before - not written again (lock_{f_} to keep it for good)")
+            updates = {k_: v_ for k_, v_ in updates.items() if k_ != f_}
+        if not updates and tags is None: return False
     if not DRY_RUN:
         payload = {}
         if updates: payload['metadata'] = updates
@@ -3373,8 +3379,12 @@ def build_queue(lib_id, history, recheck):
                     t_str = abs_updated.replace("Z", "+00:00")
                     abs_dt = datetime.fromisoformat(t_str)
                 
-                # Buffer: Ignore updates made by script itself (last run + 60s)
-                if abs_dt > (last_run_dt + timedelta(seconds=60)):
+                # Buffer: Ignore updates made by script itself (last run + 60s; also our later writes: apply, symbol rewrite, library task)
+                journal_last(key, 'asin')
+                try: own_dt = datetime.fromisoformat(_OWN_TS[key]) if key in _OWN_TS else None
+                except ValueError: own_dt = None
+                if own_dt and own_dt.tzinfo is None: own_dt = own_dt.replace(tzinfo=timezone.utc)
+                if abs_dt > (max(last_run_dt, own_dt or last_run_dt) + timedelta(seconds=60)):
                     is_manual_update = True
             except: 
                 pass
@@ -3503,7 +3513,20 @@ def remove_ratings_pass():
 REAPPLY_FIELDS = ('title', 'series', 'authors', 'narrators')
 _JOURNAL_LAST = {}
 _BLOCK_KEYS = {}  # key -> our last description write had a rating block (filled with _JOURNAL_LAST)
+_OWN_TS = {}  # key -> time of our last real write (any task: scan, apply, symbol rewrite...) - not a 'manual update' in the next run
+_UNDONE_VAL = {}  # (key, field) -> values of writes YOU undid: never written again (abs_update)
 
+
+def _undone_ids():
+    if '_ids' not in _UNDONE_VAL:
+        ids = set()
+        try:
+            for l in open(os.path.join(SCRIPT_DIR, 'undone.jsonl'), encoding='utf-8'):
+                try: ids.add(json.loads(l)['id'])
+                except (ValueError, KeyError): pass
+        except OSError: pass
+        _UNDONE_VAL['_ids'] = ids
+    return _UNDONE_VAL['_ids']
 
 def block_lost(key, item):
     """Our rating block is gone from the description (an ABS rescan of the book folder reloads the old description - 86 Vol. 6,
@@ -3525,6 +3548,9 @@ def journal_last(key, field):
                     try: e = json.loads(line)
                     except ValueError: continue
                     if e.get('dry_run'): continue
+                    if e.get('ts') and e.get('key') and e['ts'] > _OWN_TS.get(e['key'], ''): _OWN_TS[e['key']] = e['ts']
+                    if e.get('field') not in ('description', 'cover', 'tags') and f"{e.get('run')}|{e.get('item')}|{e.get('field')}|{e.get('ts')}" in _undone_ids():
+                        _UNDONE_VAL.setdefault((e.get('key'), e['field']), set()).add(listing_value(e['field'], e.get('new')))
                     if e.get('field') == 'description':  # did our last description write carry a rating block? (block_lost)
                         _BLOCK_KEYS[e.get('key')] = 'Infos' in str(e.get('new') or '') and 'undo' not in str(e.get('source') or '')
                     if e.get('field') not in REAPPLY_FIELDS + ('asin',): continue

@@ -1,0 +1,108 @@
+"""Web UI write actions end to end against the fake ABS (tools/fake_abs.py, synthetic books - no private data, no Audible):
+series rename -> undo from the history, field lock, 'change all rating symbols', a second start while a run is busy.
+Run: python -m pytest tests/test_webui_e2e.py"""
+import json, os, socket, subprocess, sys, tempfile, time
+import requests
+
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+cfg = tempfile.mkdtemp()
+os.environ['CONFIG_DIR'] = cfg
+sys.path.insert(0, ROOT)
+LIB = 'lib1'
+OLD_BLOCK = ('⭐ Ratings &amp; Infos<br />Audible (120):<br />🏆 ⭐⭐⭐⭐✨ 4.6 / 5 - Overall<br />Hardcover (20):<br />'
+             '🏆 ⭐⭐⭐⭐ 4.1 / 5 - Rating<br />⭐<br />')
+
+
+def book(i, title, series, seq, desc):
+    md = {'title': title, 'subtitle': None, 'authors': [{'id': 'au1', 'name': 'Test Author'}], 'narrators': ['Test Narrator'],
+          'series': [{'id': f's{i}', 'name': series, 'sequence': seq}], 'description': desc, 'language': 'English', 'asin': None, 'isbn': None,
+          'genres': [], 'publisher': None, 'publishedYear': None}
+    item = {'id': f'it{i}', 'libraryId': LIB, 'path': f'/books/Test Author/{series}/{seq} - {title}', 'updatedAt': 1000,
+            'media': {'metadata': md, 'tags': [], 'duration': 36000}}
+    lst = {'id': f'it{i}', 'libraryId': LIB, 'updatedAt': 1000, 'path': item['path'],
+           'media': {'tags': [], 'duration': 36000, 'metadata': {'title': title, 'authorName': 'Test Author', 'narratorName': 'Test Narrator',
+                                                                 'seriesName': f'{series} #{seq}', 'description': desc, 'language': 'English'}}}
+    return item, lst
+
+
+def setup_module(_):
+    global FAKE, PORT, LOG
+    books = [book(1, 'First Light', 'Test Saga', '1', OLD_BLOCK + 'Story one.'), book(2, 'Second Dawn', 'Test Saga', '2', OLD_BLOCK + 'Story two.'),
+             book(3, 'Third Night', 'Test saga', '3', 'No ratings here.')]
+    snap = {'libraries': {'libraries': [{'id': LIB, 'name': 'Books', 'mediaType': 'book'}]},
+            'lists': {LIB: {'results': [b[1] for b in books], 'total': 3}}, 'items': {b[0]['id']: b[0] for b in books}}
+    sp = os.path.join(cfg, 'snap.json'); json.dump(snap, open(sp, 'w', encoding='utf-8'), ensure_ascii=False)
+    with socket.socket() as s_: s_.bind(('127.0.0.1', 0)); PORT = s_.getsockname()[1]
+    LOG = os.path.join(cfg, 'patches.jsonl')
+    FAKE = subprocess.Popen([sys.executable, os.path.join(ROOT, 'tools', 'fake_abs.py'), '--snapshot', sp, '--port', str(PORT), '--patch-log', LOG],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    for _ in range(100):
+        try: requests.get(f'http://127.0.0.1:{PORT}/ping', timeout=1); break
+        except requests.RequestException: time.sleep(0.1)
+    json.dump({'must_change_password': False, 'ABS_URL': f'http://127.0.0.1:{PORT}', 'API_TOKEN': 'test', 'LIBRARY_IDS': LIB,
+               'RATING_ICONS': 'hearts', 'ABS_BACKUP': False, 'GOODREADS_ENABLED': False, 'HARDCOVER_ENABLED': False},
+              open(os.path.join(cfg, 'settings.json'), 'w'))
+
+
+def teardown_module(_):
+    FAKE.terminate()
+
+
+def client():
+    from webui import app as W
+    c = W.app.test_client()
+    with c.session_transaction() as s: s['auth'] = True
+    return c
+
+
+def wait_run():
+    from webui import core
+    for _ in range(600):
+        if not core.RUNNER.running(): break
+        time.sleep(0.1)
+    time.sleep(0.3)  # the waiter thread stores the summary
+    return core.RUNNER.runs()[0]
+
+
+def patches():
+    if not os.path.exists(LOG): return []
+    return [json.loads(l) for l in open(LOG, encoding='utf-8') if l.strip()]
+
+
+def item(iid): return requests.get(f'http://127.0.0.1:{PORT}/api/items/{iid}', timeout=5).json()['media']
+
+
+def test_1_series_page_and_rename_then_undo():
+    c = client()
+    h = c.get('/series').get_data(as_text=True)
+    assert 'Test Saga' in h and 'Test saga' in h
+    r = c.post('/series/rename', data={'lib': LIB, 'old': 'Test saga', 'new': 'Test Saga'})
+    assert r.status_code == 302, r.status_code
+    run = wait_run()
+    assert run['status'] in ('ok', 'done', 'finished') or run.get('rc') == 0, run
+    assert [x['name'] for x in item('it3')['metadata']['series']] == ['Test Saga'], item('it3')['metadata']['series']
+    # undo the rename from the history page of that run
+    c.post(f"/history/{run['id']}/undo", data={})
+    wait_run()
+    assert [x['name'] for x in item('it3')['metadata']['series']] == ['Test saga'], item('it3')['metadata']['series']
+
+
+def test_2_lock_field_on_book_page():
+    c = client()
+    r = c.post(f'/book/{LIB}_it2/field/series/lock')
+    assert r.status_code == 302
+    assert 'lock_series' in (item('it2').get('tags') or []), item('it2')
+    c.post(f'/book/{LIB}_it2/field/series/unlock')
+    assert 'lock_series' not in (item('it2').get('tags') or [])
+
+
+def test_3_rewrite_symbols_and_busy_runner():
+    c = client()
+    c.post('/ratings/rewrite-symbols', data={})
+    r2 = c.post('/series/rename', data={'lib': LIB, 'old': 'Test Saga', 'new': 'Other'})  # while the first run is busy (or already done)
+    run = wait_run()
+    d1, d3 = item('it1')['metadata']['description'], item('it3')['metadata']['description']
+    assert '─── Ratings' in d1 and '❤️❤️❤️❤️💗 4.6' in d1 and d1.count('Ratings') == 1 and d1.endswith('Story one.'), d1
+    assert d3 == 'No ratings here.'
+    assert all(p['kind'] != 'backup' for p in patches()), 'no ABS backup without the option'
+    assert r2.status_code == 302
