@@ -612,6 +612,39 @@ def role_base(name):
     return ROLE_CREDIT_RE.sub('', name or '').strip()
 
 
+def genre_key(g):
+    """'Post Apocalyptic' = 'Post-Apocalyptic' = 'PostApocalyptic', 'Science fiction' = 'Science Fiction': one genre."""
+    return re.sub(r'[^a-z0-9]', '', fold_accents(str(g or '')).lower())
+
+
+def normalize_genres(ctx, records):
+    """Genre hygiene (audit 2026-11-09: 659 genres, 128 books with the same genre twice in another spelling): spellings of one genre
+    become the library's most used spelling, a genre listed twice in one book once; number-only genres (timestamps like
+    '1750488324482') and genres in a non-Latin script on English/German books are removed. Order kept, lock_genres respected."""
+    from collections import Counter
+    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    cnt = Counter(g.strip() for r in records for g in r['genres'] if isinstance(g, str) and g.strip())
+    best = {}
+    for g, n in cnt.items():
+        k, cur = genre_key(g), best.get(genre_key(g))
+        if k and (cur is None or (n, g[:1].isupper(), g.count(' '), g) > (cnt[cur], cur[:1].isupper(), cur.count(' '), cur)): best[k] = g
+    changed = 0
+    for r in records:
+        if not r['genres'] or 'lock_genres' in r['tags'] or 'lock_all' in r['tags']: continue
+        en_de = str(r.get('language') or '').strip().lower() in ('english', 'german', 'eng', 'deu', 'ger', 'en', 'de')
+        out, seen = [], set()
+        for g in r['genres']:
+            k = genre_key(g) if isinstance(g, str) else ''
+            if not k or k.isdigit() or k in seen or (en_de and not is_latin(g)): continue
+            seen.add(k); out.append(best.get(k, g.strip()))
+        if out and out != r['genres']:
+            if abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'genres': out}, {'genres': r['genres']}, 'genre_cleanup'):
+                changed += 1
+                gone = [g for g in r['genres'] if g not in out]
+                logging.info(f"   🏷️ GENRES{' (DRY_RUN)' if dry else ''}: '{r['title']}': {', '.join(map(str, gone))} -> {len(out)} genres")
+    return changed
+
+
 def remove_role_credits(ctx, records, known_roles=()):
     """Only real authors in the author field: role credits ('X - illustrator', 'Y - translator', 'Z - Übersetzer', ...) are removed
     when at least one real author remains. A plain name counts as a role credit when it was seen WITH a role suffix somewhere
@@ -882,6 +915,9 @@ def run(ctx):
         authors_changed += remove_role_credits(ctx, records, ctx.get('role_names') or ())
     if ctx.get('remove_empty_authors'):
         ctx['empty_authors_removed'] = remove_empty_authors(ctx)
+    if ctx.get('genre_cleanup'):
+        ctx['genres_cleaned'] = normalize_genres(ctx, records)
+        logging.info(f"   Genre spellings cleaned: {ctx['genres_cleaned']} books")
     # Web UI files: merge history, uncertain cases, decisions (a confirmed merge may have been reopened)
     series_review = []
     for r in rejected:

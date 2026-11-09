@@ -51,7 +51,9 @@ add({
     'Only for a verified ASIN (same recording); the old cover is backed up and can be restored': 'Nur bei verifizierter ASIN (gleiche Aufnahme); das alte Cover wird gesichert und kann wiederhergestellt werden',
     'Genre language': 'Genre-Sprache', 'en = translate German Audible genres, keep = unchanged': 'en = deutsche Audible-Genres übersetzen, keep = unverändert',
     'Merge series automatically': 'Reihen automatisch zusammenführen', 'Only safe cases; uncertain ones go to the review list': 'Nur sichere Fälle; unsichere kommen in die Prüfliste',
-    'Unify author spellings': 'Autoren-Schreibweisen vereinheitlichen', 'Keep only real authors': 'Nur echte Autoren behalten',
+    'Unify author spellings': 'Autoren-Schreibweisen vereinheitlichen', 'Keep only real authors': 'Nur echte Autoren behalten', 'Clean up genres': 'Genres bereinigen',
+    'One spelling per genre (the most used one); number-only and foreign-script genres are removed from English/German books':
+        'Eine Schreibweise pro Genre (die häufigste); reine Zahlen und Genres in fremder Schrift werden bei englischen/deutschen Büchern entfernt',
     'Removes illustrators, translators, editors, forewords … from the author field (only when a real author remains); never taken from Audible': 'Entfernt Illustratoren, Übersetzer, Herausgeber, Vorworte … aus dem Autorenfeld (nur wenn ein echter Autor bleibt); werden nie von Audible übernommen',
     'Remove empty authors': 'Leere Autoren entfernen',
     'Deletes only ABS authors without a single book (left-overs after merges); books are never deleted': 'Löscht nur ABS-Autoren ohne ein einziges Buch (Reste nach Zusammenführungen); Bücher werden nie gelöscht',

@@ -139,6 +139,7 @@ RESULTS_FILE = os.path.join(SCRIPT_DIR, "results.json")      # last result per b
 OVERRIDES_FILE = os.path.join(SCRIPT_DIR, "overrides.json")  # manual fixes from the web UI: asin, goodreads, ignore
 ONLY_ITEMS = [x.strip() for x in os.getenv('ONLY_ITEMS', '').split(',') if x.strip()]  # 'libid_itemid' -> single-book mode
 ABS_BACKUP = os.getenv('ABS_BACKUP', 'false').lower() == 'true'  # create an ABS backup before a real run
+GENRE_CLEANUP = os.getenv('GENRE_CLEANUP', 'true').lower() == 'true'  # one spelling per genre, no number-only / foreign-script genres (abs_series.normalize_genres)
 REMOVE_ROLE_CREDITS = os.getenv('REMOVE_ROLE_CREDITS', 'true').lower() == 'true'  # only real authors: remove 'X - illustrator', 'Y - translator', ...
 REMOVE_EMPTY_AUTHORS = os.getenv('REMOVE_EMPTY_AUTHORS', 'true').lower() == 'true'  # delete ABS author objects with 0 books
 ROLE_NAMES_FILE = os.path.join(SCRIPT_DIR, 'role_credits.json')  # names seen with a role suffix on Audible ('Kurone Mishima - illustrator')
@@ -3817,14 +3818,18 @@ def process_queue(work_queue, history, failed, recheck):
                     if 'lock_genres' not in tags:
                         current_genres = meta.get('genres') or []
                         new_genres_list = [g for g in dict.fromkeys(map_genre(c.get('name'), aud_data.get('domain')) for c in (md_raw.get('categories') or []) if c.get('name')) if g]
-                        added_genres = [g for g in new_genres_list if g not in current_genres]
+                        from abs_series import genre_key as _gk
+                        have_g = {_gk(c) for c in current_genres}  # 'Science fiction' already there = 'Science Fiction' (no re-add after the genre cleanup)
+                        added_genres = [g for g in new_genres_list if _gk(g) not in have_g and not have_g.add(_gk(g))]
                         if added_genres:
                             abs_updates['genres'] = current_genres + added_genres
                             log_updates.append(f"Genres: +{added_genres}")
                     else:
                         current_genres = meta.get('genres') or []
                         new_genres_list = [g for g in dict.fromkeys(map_genre(c.get('name'), aud_data.get('domain')) for c in (md_raw.get('categories') or []) if c.get('name')) if g]
-                        added_genres = [g for g in new_genres_list if g not in current_genres]
+                        from abs_series import genre_key as _gk
+                        have_g = {_gk(c) for c in current_genres}  # 'Science fiction' already there = 'Science Fiction' (no re-add after the genre cleanup)
+                        added_genres = [g for g in new_genres_list if _gk(g) not in have_g and not have_g.add(_gk(g))]
                         if added_genres: logging.info(f"        🔒 Genre Update Skipped (Locked): +{added_genres}")
 
                     if 'lock_series' not in tags:
@@ -4554,7 +4559,7 @@ def main():
                 'decisions_file': os.path.join(SCRIPT_DIR, 'merge_decisions.json'), 'merges_file': os.path.join(SCRIPT_DIR, 'merges.json'),
                 'review_file': os.path.join(SCRIPT_DIR, 'merge_review.json'),
                 'author_links': {n: sorted(a) for n, a in AUTHOR_LINKS.items()},
-                'remove_role_credits': REMOVE_ROLE_CREDITS, 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
+                'remove_role_credits': REMOVE_ROLE_CREDITS, 'genre_cleanup': GENRE_CLEANUP, 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
                 'audible_series_names': set(SERIES_ASINS),
                 'extra': {'author_notes': AUTHOR_NOTES, 'unmapped_genres': UNMAPPED_GENRES},
             })

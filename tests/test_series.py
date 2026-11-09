@@ -118,6 +118,20 @@ def test_swapped_target_keeps_a_relation():  # crash 2026-11-07: 'Series' object
     assert all(getattr(s, 'relation', None) for s in merges[0]['members']), [vars(s) for s in merges[0]['members']]
 
 
+
+def test_genre_cleanup():  # audit 2026-11-09: spelling variants, duplicates in one book, timestamps, foreign script
+    def g(i, genres, lang='English', tags=()):
+        return {'id': i, 'lib': 'l', 'title': f't{i}', 'genres': genres, 'language': lang, 'tags': set(tags)}
+    recs = [g(1, ['Science fiction', 'Post Apocalyptic']), g(2, ['Science fiction', 'Post Apocalyptic']),
+            g(3, ['Science Fiction', 'Post-Apocalyptic', 'science fiction', '1750488324482', 'アクション・冒険']),
+            g(4, ['アクション・冒険'], lang='Japanese'), g(5, ['Science Fiction'], tags={'lock_genres'})]
+    writes = {}
+    ctx = {'dry_run': True, 'abs_update': lambda iid, key, title, upd, old, src: writes.__setitem__(iid, upd['genres']) or True}
+    assert S.normalize_genres(ctx, recs) == 1, writes
+    assert writes == {3: ['Science fiction', 'Post Apocalyptic']}, writes
+    assert S.genre_key('Post-Apocalyptic') == S.genre_key('PostApocalyptic')
+
+
 if __name__ == '__main__':
     n = 0
     for name, fn in sorted(globals().items()):
