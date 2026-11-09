@@ -33,6 +33,18 @@ def forget_written(undone):
     os.replace(tmp, LAST_WRITTEN_FILE)
 
 
+def norm(field, v):
+    """Comparable form of an ABS value / journal value (ABS stores '<br />' and '&amp;', sorts lists, adds ids)."""
+    import html
+    if field == 'description': return re.sub(r'\s+', ' ', re.sub(r'<br\s*/?>', '<br>', html.unescape(v or ''))).strip()
+    if field in ('authors', 'narrators', 'genres', 'tags'):
+        return sorted(str((x.get('name') if isinstance(x, dict) else x) or '').strip().lower() for x in (v or []))
+    if field == 'series':
+        return sorted((str(x.get('name') or '').strip().lower(), str(x.get('sequence') or '')) for x in (v or []))
+    if v in (None, '', [], False) and field not in ('explicit', 'abridged'): return None
+    return str(v).strip()
+
+
 def load(path):
     if not os.path.exists(path): return []
     with open(path, encoding='utf-8') as f:
@@ -51,6 +63,7 @@ def main():
     ap.add_argument('--merge-id', help="undo one series/author merge (web UI)")
     ap.add_argument('--ids-file', help="JSON list of journal entry ids to undo (web UI history search)")
     ap.add_argument('--apply', action='store_true', help="really write to ABS (default: only show)")
+    ap.add_argument('--force', action='store_true', help="undo even if the field was changed again since (newer change / by hand)")
     a = ap.parse_args()
 
     changes = load(CHANGES_FILE)
@@ -75,13 +88,30 @@ def main():
     sess.headers.update({"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
 
     print(f"{'UNDO' if a.apply else 'Would undo (add --apply to execute)'}: {len(sel)} changes")
-    ok = fail = 0; undone_fields = []
+    ok = fail = skipped = 0; undone_fields = []
+    current = {}  # (item, field) -> value in ABS now (read once per book, then follows our own undo steps)
+    def now_value(iid, field):
+        if (iid, field) not in current:
+            try:
+                r = sess.get(f"{url}/api/items/{iid}", timeout=30)
+                media = r.json().get('media') or {} if r.status_code == 200 else None
+            except (requests.RequestException, ValueError): media = None
+            if media is None: return '__unknown__'
+            for f_, v_ in (media.get('metadata') or {}).items(): current.setdefault((iid, f_), v_)
+            current.setdefault((iid, 'tags'), media.get('tags') or [])
+            current.setdefault((iid, field), None)
+        return current[(iid, field)]
     for e in sorted(sel, key=lambda x: x['ts'], reverse=True):  # newest first
         old_show = e['old'] if e['field'] != 'description' else f"<{len(e['old'] or '')} chars>"
         print(f"  [{e['run']}] {e['title']}: {e['field']} -> {json.dumps(old_show, ensure_ascii=False)[:120]}")
         if not a.apply: continue
         if e['field'] == 'author':  # an EMPTY author object was deleted (no book had it) - nothing to restore
             print('     (empty author removed - nothing to undo)'); continue
+        if e['field'] != 'cover' and not a.force:
+            cur = now_value(e['item'], e['field'])
+            if cur != '__unknown__' and norm(e['field'], cur) != norm(e['field'], e.get('new')):
+                # a NEWER change (another run, you, an ABS rescan) is in the field: undoing this old one would overwrite it
+                print(f"     ⏭️ changed again since this change - skipped (newer value kept; undo the newer change first or use --force)"); skipped += 1; continue
         try:
             if e['field'] == 'cover' and e.get('old') and os.path.isfile(str(e['old'])):  # replaced cover: upload the backup again
                 data = open(e['old'], 'rb').read()
@@ -98,7 +128,7 @@ def main():
             else:
                 r = sess.patch(f"{url}/api/items/{e['item']}/media", json={"metadata": {e['field']: e['old']}}, timeout=30)
             if r.status_code == 200:
-                ok += 1; undone_fields.append((e.get('key'), e.get('field')))
+                ok += 1; undone_fields.append((e.get('key'), e.get('field'))); current[(e['item'], e['field'])] = e.get('old')
                 with open(UNDONE_FILE, 'a', encoding='utf-8') as f:
                     f.write(json.dumps({'id': entry_id(e)}) + "\n")
             else:
@@ -106,7 +136,7 @@ def main():
         except requests.RequestException as ex:
             fail += 1; print(f"     ❌ {ex}")
     if a.apply and undone_fields: forget_written(undone_fields)
-    if a.apply: print(f"Done: {ok} undone, {fail} failed.")
+    if a.apply: print(f"Done: {ok} undone, {fail} failed{f', {skipped} skipped (changed again since)' if skipped else ''}.")
 
 
 if __name__ == "__main__":

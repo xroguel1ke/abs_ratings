@@ -160,3 +160,23 @@ def test_6_same_field_twice_in_one_test_run():
     assert item('it1')['metadata']['subtitle'] == 'Step Two', item('it1')['metadata']
     last = [json.loads(l) for l in open(os.path.join(cfg, 'changes.jsonl'), encoding='utf-8')][-1]
     assert last['field'] == 'subtitle' and last['old'] is None and last['new'] == 'Step Two', last
+
+
+def _apply_plan(rid, changes):
+    from webui import core
+    with open(os.path.join(core.REPORT_DIR, f'planned_changes_{rid}.jsonl'), 'w', encoding='utf-8') as f:
+        for e in changes: f.write(json.dumps(dict(e, run=rid, dry_run=True, ts='2099-01-01T00:00:00')) + '\n')
+    core.RUNNER._save_run({'id': rid, 'kind': 'full', 'label': rid, 'dry_run': True, 'status': 'ok', 'start': '2099-01-01T00:00:00', 'end': '2099-01-01T00:00:01'})
+    client().post(f'/run/{rid}/apply', data={'mode': 'apply'})
+    return wait_run()['id']
+
+
+def test_7_undo_of_an_old_change_keeps_a_newer_one():
+    base = {'item': 'it3', 'key': f'{LIB}_it3', 'title': 'Third Night', 'field': 'publisher', 'source': 'test'}
+    run_a = _apply_plan('20990101-000002', [dict(base, old=None, new='Pub A')])
+    time.sleep(1.1)  # run ids are per second
+    _apply_plan('20990101-000003', [dict(base, old='Pub A', new='Pub B')])
+    assert item('it3')['metadata']['publisher'] == 'Pub B'
+    client().post(f'/history/{run_a}/undo', data={})
+    wait_run()
+    assert item('it3')['metadata']['publisher'] == 'Pub B', 'the newer change must survive the undo of the older one'
