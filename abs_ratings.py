@@ -4904,6 +4904,13 @@ def main():
     if MISSING_SERIES and not ONLY_ITEMS and USE_AUDIBLE_API and 'audible' not in SOURCE_DOWN:
         try: missing_in_series_task()
         except Exception as e: logging.exception(f"Missing-volumes report failed: {e}")
+    if not ONLY_ITEMS:  # source traffic light for the web UI overview (user 2026-11-09)
+        st_ = lambda s_, on: ({'status': 'off', 'why': SOURCE_DOWN[s_]} if s_ in SOURCE_DOWN else {'status': 'ok' if on else 'disabled'})
+        sh_ = {'ts': datetime.now().strftime('%Y-%m-%d %H:%M'), 'audible': st_('audible', USE_AUDIBLE_API),
+               'hardcover': dict(st_('hardcover', HARDCOVER_ENABLED), daily_left=HC_STATE.get('daily_left'),
+                                 **({'status': 'off', 'why': HC_STATE['disabled']} if HARDCOVER_ENABLED and HC_STATE.get('disabled') and 'hardcover' not in SOURCE_DOWN else {})),
+               'goodreads': {'status': 'blocked' if GR_STATE['blocked'] else ('ok' if GOODREADS_ENABLED else 'disabled')}}
+        rw_json(os.path.join(SCRIPT_DIR, 'source_health.json'), sh_)
     write_env_file(log_file, start_time)
     log_run_summary(start_time, series_result)
     logging.info(f"Debug bundle (send this one for troubleshooting): {os.path.join(LOG_DIR, 'debug_latest.log')}")

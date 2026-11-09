@@ -202,9 +202,10 @@ def dashboard():
              'other_edition': counts.get('other_edition', 0), 'not_found': counts.get('not_found', 0),
              'no_ratings_yet': counts.get('no_ratings_yet', 0), 'ignored': counts.get('ignored', 0),
              'merged': len(merged), 'review': len(rv.get('series', [])) + len(rv.get('authors', [])),
-             'queue': len(queue),
+             'queue': len(queue), 'other': len(rv.get('languages') or []) + len(rv.get('other') or []),
              'history': core.history_count()}
-    return render_template('dashboard.html', tab=tab, tiles=tiles, problems=problems, merged=merged, review=rv, queue=queue,
+    sources = core._load_json(os.path.join(core.CONFIG_DIR, 'source_health.json'), {})
+    return render_template('dashboard.html', sources=sources, tab=tab, tiles=tiles, problems=problems, merged=merged, review=rv, queue=queue,
                            last=last, gr_note=gr_note, status_filter=status_filter, q=q, counts=counts,
                            settings=core.load_settings(), **status_context())
 

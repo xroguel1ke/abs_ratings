@@ -408,4 +408,6 @@ add({  # page tour 2026-11-08
     'Hide hidden': 'Ausgeblendete verbergen', 'Show hidden (%(n)s)': 'Ausgeblendete zeigen (%(n)s)', 'Not interested: hide this series': 'Kein Interesse: Reihe ausblenden',
     'Show again': 'Wieder zeigen', 'Hide series': 'Reihe ausblenden', 'Not interested: hide this volume': 'Kein Interesse: Band ausblenden', 'show': 'zeigen', 'hide': 'ausblenden', 'new': 'neu',
     'new ASIN': 'neue ASIN', 'series': 'Reihen', 'titles': 'Titel', 'covers': 'Cover', 'review list': 'Prüfliste', 'errors': 'Fehler', 'done around': 'fertig gegen', 'books/min': 'Bücher/min',
+    'switched off': 'abgeschaltet', 'blocked': 'blockiert', 'not used': 'nicht genutzt', '%(n)s requests left today': 'noch %(n)s Anfragen heute', 'last scan': 'letzter Scan',
+    '%(a)s books · %(b)s series/authors · %(c)s other': '%(a)s Bücher · %(b)s Reihen/Autoren · %(c)s Sonstiges',
 })

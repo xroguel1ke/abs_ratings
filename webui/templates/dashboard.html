@@ -18,10 +18,13 @@
   document.getElementById('lv-cnt').innerHTML=Object.keys(L).filter(k=>j[k]).map(k=>'<span class="badge'+(k==='errors'?' err':'')+'">'+L[k]+' '+j[k]+'</span>').join('');
  }catch(e){} setTimeout(tick, 4000); } tick(); })();</script>{% endif %}
 
+{% if sources %}<div class="row small srcbar">{% for k, lab in (('audible', 'Audible'), ('hardcover', 'Hardcover'), ('goodreads', 'Goodreads')) %}{% set v = sources.get(k) or {} %}
+ <span class="badge src-{{ v.status or 'disabled' }}" title="{{ v.why or '' }}"><span class="dot"></span>{{ lab }}: {{ {'ok': _('OK'), 'off': _('switched off'), 'blocked': _('blocked'), 'disabled': _('not used')}.get(v.status, '–') }}{% if k == 'hardcover' and v.daily_left is not none and v.status == 'ok' %} · {{ _('%(n)s requests left today', n=v.daily_left) }}{% endif %}</span>{% endfor %}
+ <span class="muted">{{ _('last scan') }} {{ sources.ts }}</span></div>{% endif %}
 <div class="hero">
  <a class="card herocard" href="{{ url_for('review_page') }}">
-  <div class="muted small">{{ _('To review') }}</div><div class="v">{{ tiles.queue + tiles.review + tiles.merged }}</div>
-  <div class="small muted">{{ _('%(a)s books · %(b)s series/authors · %(c)s merges', a=tiles.queue, b=tiles.review, c=tiles.merged) }}</div></a>
+  <div class="muted small">{{ _('To review') }}</div><div class="v">{{ tiles.queue + tiles.review + tiles.other }}</div>
+  <div class="small muted">{{ _('%(a)s books · %(b)s series/authors · %(c)s other', a=tiles.queue, b=tiles.review, c=tiles.other) }}</div></a>
  <div class="card herocard">
   <div class="muted small">{{ _('Last scan') }}</div>
   {% if last %}<div class="v" style="font-size:1.2em"><a href="{{ url_for('run_view', run_id=last.id) }}">{{ last.start|dt }}</a></div>
