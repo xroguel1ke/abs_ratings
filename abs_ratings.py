@@ -4063,7 +4063,19 @@ def process_queue(work_queue, history, failed, recheck):
                                 for n_ in cl0_notes: logging.info(f"        🧹 Series {n_}")
                                 abs_updates['series'] = cl0
                                 log_updates.append("Series: " + (", ".join(f"'{x['name']}'" + (f" #{x['sequence']}" if x.get('sequence') else '') for x in cl0) or '(none)'))
-                        if (series_list := md_raw.get('series')) and ((same_rec_rt and bool(abs_dur and aud_data.get('runtime_sec'))) or normalize_title_text(title) == normalize_title_text(aud_data.get('title_raw') or '')):
+                        if (series_list := md_raw.get('series')) and any(not x.get('part') and x.get('asin') for x in series_list):
+                            # the product lists a series WITHOUT a number, the series' own list has one for this ASIN (The Spine of the World =
+                            # Legend of Drizzt #12, The Magicians' Guild = Black Magician Trilogy #1; audit 2026-11-09)
+                            h_ = AUDIBLE_API_HOSTS.get(aud_data.get('domain') or 'www.audible.com')
+                            fixed_ = []
+                            for x in series_list:
+                                if not x.get('part') and x.get('asin') and h_:
+                                    q_ = next((q for a_, q, _t in (_series_members(h_, x['asin']) or []) if a_ == asin), '')
+                                    if re.fullmatch(r'\d+(\.\d+)?', q_ or ''):
+                                        x = dict(x, part=q_); logging.info(f"        🔢 Series '{x.get('name')}' #{q_}: number from Audible's series list")
+                                fixed_.append(x)
+                            series_list = fixed_
+                        if series_list and ((same_rec_rt and bool(abs_dur and aud_data.get('runtime_sec'))) or normalize_title_text(title) == normalize_title_text(aud_data.get('title_raw') or '')):
                             from abs_series import series_key as _skx
                             aud_keys_ = {_skx(x.get('name') or '') for x in series_list}
                             need_ = any(_skx(x.get('name') or '') not in aud_keys_ for x in (meta.get('series') or []))  # ABS has a series Audible does not list
@@ -4149,7 +4161,9 @@ def process_queue(work_queue, history, failed, recheck):
                                 elif not base_list and not non_latin_script(canon):
                                     if why: logging.info(f"        🔗 Series '{s_name}' -> '{canon}' ({'alias list' if why == 'alias' else 'existing ABS series'})")
                                     new_list.append({"name": canon, "sequence": s_seq})
-                                elif (ver or normalize_title_text(title) == normalize_title_text(aud_data.get('title_raw') or '')) \
+                                elif (ver or normalize_title_text(title) == normalize_title_text(aud_data.get('title_raw') or '')
+                                      or difflib.SequenceMatcher(None, normalize_title_text(title), normalize_title_text(aud_data.get('title_raw') or '')).ratio() >= 0.93
+                                      or title_similarity(title, aud_data.get('title_raw') or '') >= 0.85) \
                                         and (s_seq or ((f_u := SERIES_FACTS.get((lib_id, canon.strip().lower())) or {}).get('n', 0) >= 2
                                                        and f_u.get('numbered', 0) <= 0.25 * f_u.get('n', 0))) \
                                         and not non_latin_script(canon) and series_in_library(lib_id, canon, authors, exact=True):
