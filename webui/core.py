@@ -476,6 +476,8 @@ def notify_events(s):
 def notify(s, title, body, is_error=None, force=False):
     """Send to every Apprise URL (several targets: comma / space / new line separated)."""
     urls = [u for u in re.split(r'[\s,]+', (s.get('apprise_url') or '').strip()) if u]
+    # a plain ntfy web address ('https://ntfy.example.com/topic') is what people copy from the browser: Apprise wants ntfys://
+    urls = [re.sub(r'^http(s?)://', lambda m: 'ntfys://' if m.group(1) else 'ntfy://', u) if re.match(r'https?://[^/]*ntfy[^/]*/[^/]+', u) else u for u in urls]
     if not urls: return False
     if not force and is_error is not None and not (is_error and 'errors' in notify_events(s)) and 'scan_done' not in notify_events(s): return False
     try:
