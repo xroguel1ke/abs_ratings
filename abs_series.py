@@ -645,6 +645,42 @@ def normalize_genres(ctx, records):
     return changed
 
 
+LANG_NAMES = {'en': 'English', 'eng': 'English', 'english': 'English', 'de': 'German', 'deu': 'German', 'ger': 'German', 'german': 'German'}
+
+
+def fix_languages(ctx, records, allowed):
+    """Language consensus (user 2026-11-09: 'only German and English books, everything else is an error'). A book whose language is
+    unknown ('und'), not one of the library's languages, or contradicts its series is set to the language of its series when
+    (a) at least 2 other books of that series (with a known library language) exist and 90 % of them have that one language, and
+    (b) one of them shares a narrator with it
+    (the same narrator reads the series in that language: The Dolphins of Pern 'German', read by Mel Foster like the English Pern books).
+    lock_language respected; only languages from BOOK_LANGUAGES."""
+    if not allowed: return 0
+    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    lang = lambda r: LANG_NAMES.get(str(r.get('language') or '').strip().lower(), str(r.get('language') or '').strip())
+    nk = lambda xs: {re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in xs or [] if x}
+    by = {}
+    for r in records:
+        for s in r['series']: by.setdefault((r['lib'], series_key(s['name'])), []).append(r)
+    changed = 0
+    for r in records:
+        if 'lock_language' in r['tags'] or 'lock_all' in r['tags'] or 'lock_metadata' in r['tags']: continue
+        cur = lang(r)
+        for s in r['series']:
+            others = [o for o in by.get((r['lib'], series_key(s['name'])), []) if o['id'] != r['id'] and lang(o) in allowed]  # 'und'/wrong ones don't vote
+            if len(others) < 2: continue
+            from collections import Counter
+            target, n_ = Counter(lang(o) for o in others).most_common(1)[0]
+            if n_ < 0.9 * len(others): continue  # a mixed series (translations side by side) decides nothing
+            others = [o for o in others if lang(o) == target]
+            if target == cur or not any(nk(o['narrators']) & nk(r['narrators']) for o in others): continue
+            if abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'language': target}, {'language': r.get('language')}, 'language_consensus'):
+                changed += 1; r['language'] = target
+                logging.info(f"   🌐 LANGUAGE{' (DRY_RUN)' if dry else ''}: '{r['title']}': '{cur or '-'}' -> '{target}' (series '{s['name']}': all {len(others)} other books are {target}, same narrator)")
+            break
+    return changed
+
+
 def remove_role_credits(ctx, records, known_roles=()):
     """Only real authors in the author field: role credits ('X - illustrator', 'Y - translator', 'Z - Übersetzer', ...) are removed
     when at least one real author remains. A plain name counts as a role credit when it was seen WITH a role suffix somewhere
@@ -915,6 +951,8 @@ def run(ctx):
         authors_changed += remove_role_credits(ctx, records, ctx.get('role_names') or ())
     if ctx.get('remove_empty_authors'):
         ctx['empty_authors_removed'] = remove_empty_authors(ctx)
+    if ctx.get('book_languages'):
+        ctx['languages_fixed'] = fix_languages(ctx, records, ctx['book_languages'])
     if ctx.get('genre_cleanup'):
         ctx['genres_cleaned'] = normalize_genres(ctx, records)
         logging.info(f"   Genre spellings cleaned: {ctx['genres_cleaned']} books")

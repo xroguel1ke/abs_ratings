@@ -363,4 +363,6 @@ add({  # page tour 2026-11-08
     'Hardcover lists it under another title than Audible (titles agree to %(p)s %%; author: %(a)s). Open both links and check that it is the same book.':
         'Hardcover führt es unter einem anderen Titel als Audible (Titel stimmen zu %(p)s %% überein; Autor: %(a)s). Beide Links öffnen und prüfen, ob es dasselbe Buch ist.',
     'same': 'gleich', 'different': 'anders', 'unknown': 'unbekannt',
+    'Languages of your books': 'Sprachen deiner Bücher',
+    'Comma list, e.g. English, German. Audible editions in other languages are never taken; empty = any language': 'Mit Komma getrennt, z. B. English, German. Audible-Ausgaben in anderen Sprachen werden nie übernommen; leer = jede Sprache',
 })

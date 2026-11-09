@@ -15,6 +15,7 @@ from webui import core  # noqa: E402
 ap = argparse.ArgumentParser()
 ap.add_argument('--only', default='', help='comma separated item keys (single books)')
 ap.add_argument('--dry', action='store_true', help='test run (nothing is written)')
+ap.add_argument('--env', action='append', default=[], help='KEY=VALUE override for this run (tests)')
 ap.add_argument('--series-only', action='store_true', help='only the ABS library task (series, authors, genres, report)')
 ap.add_argument('--clear-stale', action='store_true', help="mark this tool's runs that still say 'running' as stopped (killed run)")
 a = ap.parse_args()
@@ -33,6 +34,7 @@ run_id = datetime.now().strftime('%Y%m%d-%H%M%S')
 extra = {'RUN_ID': run_id, 'DRY_RUN': 'true' if a.dry else 'false'}
 if a.only: extra['ONLY_ITEMS'] = a.only
 if a.series_only: extra['SERIES_ONLY'] = 'true'
+extra.update(dict(x.split('=', 1) for x in a.env))
 env = core.script_env(s, extra)
 env['PYTHONFAULTHANDLER'] = '1'  # a crash (SIGSEGV seen 2026-11-08) prints the Python stack into the console log
 log = f"run_{run_id}.log"

@@ -140,6 +140,7 @@ RESULTS_FILE = os.path.join(SCRIPT_DIR, "results.json")      # last result per b
 OVERRIDES_FILE = os.path.join(SCRIPT_DIR, "overrides.json")  # manual fixes from the web UI: asin, goodreads, ignore
 ONLY_ITEMS = [x.strip() for x in os.getenv('ONLY_ITEMS', '').split(',') if x.strip()]  # 'libid_itemid' -> single-book mode
 ABS_BACKUP = os.getenv('ABS_BACKUP', 'false').lower() == 'true'  # create an ABS backup before a real run
+BOOK_LANGUAGES = []  # filled after LANGUAGE_MAP (below): languages the library holds; an Audible product in another language is never taken
 GENRE_CLEANUP = os.getenv('GENRE_CLEANUP', 'true').lower() == 'true'  # one spelling per genre, no number-only / foreign-script genres (abs_series.normalize_genres)
 REMOVE_ROLE_CREDITS = os.getenv('REMOVE_ROLE_CREDITS', 'true').lower() == 'true'  # only real authors: remove 'X - illustrator', 'Y - translator', ...
 REMOVE_EMPTY_AUTHORS = os.getenv('REMOVE_EMPTY_AUTHORS', 'true').lower() == 'true'  # delete ABS author objects with 0 books
@@ -255,6 +256,8 @@ LANGUAGE_MAP = {
     'dutch': 'Dutch', 'niederländisch': 'Dutch', 'nl': 'Dutch', 'nld': 'Dutch', 'dut': 'Dutch',
     'japanese': 'Japanese', 'japanisch': 'Japanese', 'ja': 'Japanese', 'jpn': 'Japanese',
 }
+
+BOOK_LANGUAGES[:] = [LANGUAGE_MAP.get(x.strip().lower(), x.strip()[:1].upper() + x.strip()[1:]) for x in os.getenv('BOOK_LANGUAGES', '').split(',') if x.strip()]
 
 # audible.de category names -> audible.com names (best effort; unmapped names are kept and listed in the report)
 GENRE_MAP_DE = {
@@ -541,7 +544,7 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
     # hold, Audible does not list that series for this book (same edition) but lists its own series -> Audible's series replaces it
     # (Der Drachenbeinthron: 'Memory, Sorrow & Thorn' -> 'Das Geheimnis der Großen Schwerter'; Malice (French) -> 'Le livre des Terres Bannies')
     bl = map_language(book_lang)
-    if bl and bl != 'English' and aud_series:
+    if bl and bl != 'English' and aud_series and book_lang_allowed(bl):
         for x in list(out):
             if listed(x['name']) or x not in out: continue
             other = sum(v for l_, v in (fact(x['name']).get('langs') or {}).items() if l_ and l_ != bl)
@@ -923,6 +926,10 @@ def retry_after_seconds(r):
         return max(0, int((parsedate_to_datetime(v) - datetime.now(timezone.utc)).total_seconds()))
     except Exception:
         return None
+
+def book_lang_allowed(l):
+    """BOOK_LANGUAGES (user 2026-11-09: 'only German and English books, everything else is an error'): empty = every language."""
+    return not BOOK_LANGUAGES or map_language(l) in BOOK_LANGUAGES
 
 def map_language(raw):
     if not raw: return None
@@ -1945,6 +1952,9 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             cand_lang = map_language((p.get('meta_raw') or {}).get('language'))
             if required_lang and cand_lang and cand_lang != required_lang:
                 logging.info(f"        ↪️ Rejected '{p.get('title_raw')}' [{cand}] (language {cand_lang}, need {required_lang})")
+                continue
+            if cand_lang and not book_lang_allowed(cand_lang):
+                logging.info(f"        ↪️ Rejected '{p.get('title_raw')}' [{cand}] (language {cand_lang}: not one of your book languages)")
                 continue
             found_title = p.get('title_raw') or ''
             t_score = search_match_score(title, found_title, p.get('subtitle_raw'))
@@ -3601,7 +3611,16 @@ def process_queue(work_queue, history, failed, recheck):
 
                 # Language check: ABS and Audible disagree -> who is right?
                 lang_conflict, lang_target, strict_search, search_only = False, None, False, None
-                abs_lang = map_language(lang) if lang and str(lang).strip().lower() not in ('und', 'undetermined', 'mul', 'zxx', 'unknown') else None
+                abs_lang = map_language(lang) if lang and str(lang).strip().lower() not in ('und', 'undetermined', 'mul', 'zxx', 'unknown') and book_lang_allowed(lang) else None
+                if aud_data and new_lang_detected and not book_lang_allowed(new_lang_detected):
+                    # the product behind the ASIN is in a language the library does not have (Malice: the French recording): another edition
+                    lang_conflict_pre = True
+                    logging.info(f"      -> ⚠️ Audible product is {new_lang_detected}, not one of your book languages ({', '.join(BOOK_LANGUAGES)}): "
+                                 f"searching the edition in your languages, nothing is taken from it")
+                    new_lang_detected = None
+                else: lang_conflict_pre = False
+                if lang_conflict_pre:
+                    lang_conflict, lang_target = True, abs_lang
                 if aud_data and new_lang_detected and abs_lang and abs_lang != new_lang_detected:
                     verdict = language_verdict(search_title, meta.get('narrators') or [], aud_data, 'lock_language' in tags,
                                                [x.get('name') for x in (meta.get('series') or [])])
@@ -3722,6 +3741,13 @@ def process_queue(work_queue, history, failed, recheck):
                                 wide = True
                         if not wide:
                             search_only = aud_data.get('domain')  # the current ASIN stays (another store); no wider search
+                            # the language check of the normal path, for the product found in the other store (Fractal Noise: ABS German,
+                            # the file is Jennifer Hale's English recording = this ASIN on .com -> the ABS language is wrong, 2026-11-09)
+                            fb_lang = map_language((aud_data.get('meta_raw') or {}).get('language'))
+                            if fb_lang and abs_lang and fb_lang != abs_lang and book_lang_allowed(fb_lang) and 'lock_language' not in tags \
+                                    and same_recording(abs_dur, meta.get('narrators'), aud_data):  # runtime 2 min + narrator: stronger than a (translated) title
+                                new_lang_detected = fb_lang
+                                logging.info(f"      -> ℹ️ Language mismatch: ABS {abs_lang} vs Audible {fb_lang}, same recording (runtime and narrator): ABS language is corrected.")
                         else:
                             if aud_data is None: logging.info("      -> ⚠️ ASIN not found in any marketplace: searching all stores")
                             search_only, lang_target = None, None
@@ -3791,14 +3817,18 @@ def process_queue(work_queue, history, failed, recheck):
                                     and match_author(authors, ', '.join(rel.get('authors_raw') or []))):  # safety net: never the ratings of ANOTHER book
                         logging.warning(f"        ⛔ Other-edition candidate '{rel.get('title_raw')}' does not fit '{title}' (title/author): not used")
                         rel = None
-                    if not found and rel and not search_only and (not aud_data or int(aud_data.get('count', 0)) == 0):
+                    if rel and not book_lang_allowed((rel.get('meta_raw') or {}).get('language')): rel = None
+                    if not found and rel and not search_only and (not aud_data or int(aud_data.get('count', 0)) == 0 or lang_conflict_pre):
                         aud_data = dict(rel, related_edition=True)
                         skip_meta = True
                         logging.info(f"        📎 Using ratings of another edition: '{rel.get('title_raw')}' [{rel.get('asin')}] on {rel.get('domain')} "
                                      f"(runtime {format_time(rel.get('runtime_sec') or 0)} vs ABS {format_time(abs_dur or 0)}). ASIN and metadata are not changed.")
                         stats['other_edition'] += 1
 
-                if lang_conflict and aud_data and map_language((aud_data.get('meta_raw') or {}).get('language')) not in (None, lang_target):
+                if lang_conflict_pre and aud_data and not aud_data.get('related_edition') and not book_lang_allowed((aud_data.get('meta_raw') or {}).get('language')):
+                    aud_data, skip_meta = None, True  # neither metadata nor ratings of a product in another language
+                    logging.info(f"      -> ⏭️ No edition in your book languages found: nothing is taken from the {(asin or '')} product (ASIN stays as it is)")
+                elif lang_conflict and aud_data and map_language((aud_data.get('meta_raw') or {}).get('language')) not in (None, lang_target):
                     skip_meta = True
                     logging.info(f"      -> ⏭️ Metadata sync skipped: no {lang_target} edition found, ASIN stays as it is. Only ratings are used.")
                 elif aud_data and aud_data.get('title_raw') and volume_conflict(title, aud_data.get('title_raw'), aud_data.get('subtitle_raw')) and not same_recording(abs_dur, meta.get('narrators'), aud_data) \
@@ -3861,8 +3891,8 @@ def process_queue(work_queue, history, failed, recheck):
                         new_year = parse_release_year(md_raw.get('releaseDate'))
                         if new_year and not meta.get('publishedYear'): logging.info(f"        🔒 Year Update Skipped (Locked): '{new_year}'")
                     
-                    if not new_lang_detected and meta.get('language'):
-                        norm = map_language(meta['language'])  # e.g. 'eng' -> 'English'
+                    if not new_lang_detected and meta.get('language') and book_lang_allowed(meta['language']):
+                        norm = map_language(meta['language'])  # e.g. 'eng' -> 'English' ('spa' in an English/German library stays a visible code)
                         if norm != meta['language']: new_lang_detected = norm
                     if 'lock_language' not in tags:
                         if new_lang_detected and new_lang_detected != meta.get('language'):
@@ -4340,6 +4370,7 @@ def process_queue(work_queue, history, failed, recheck):
                 # a pure spelling change, journaled, lock_language respected (audit 2026-11-09: 24 books kept 'eng'/'deu')
                 lang_now = str(meta.get('language') or '').strip()
                 if lang_now and lang_now.lower() in LANGUAGE_MAP and LANGUAGE_MAP[lang_now.lower()] != lang_now and 'lock_language' not in tags \
+                        and book_lang_allowed(lang_now) \
                         and 'language' not in (locals().get('abs_updates') or {}) and not ov.get('ignore'):
                     if abs_update(iid, key, title, {'language': LANGUAGE_MAP[lang_now.lower()]}, meta, 'language_code'):
                         logging.info(f"        🛠️ Language: '{lang_now}' -> '{LANGUAGE_MAP[lang_now.lower()]}' (code spelled out)")
@@ -4634,7 +4665,7 @@ def main():
                 'decisions_file': os.path.join(SCRIPT_DIR, 'merge_decisions.json'), 'merges_file': os.path.join(SCRIPT_DIR, 'merges.json'),
                 'review_file': os.path.join(SCRIPT_DIR, 'merge_review.json'),
                 'author_links': {n: sorted(a) for n, a in AUTHOR_LINKS.items()},
-                'remove_role_credits': REMOVE_ROLE_CREDITS, 'genre_cleanup': GENRE_CLEANUP, 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
+                'remove_role_credits': REMOVE_ROLE_CREDITS, 'genre_cleanup': GENRE_CLEANUP, 'book_languages': list(BOOK_LANGUAGES), 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
                 'audible_series_names': set(SERIES_ASINS),
                 'extra': {'author_notes': AUTHOR_NOTES, 'unmapped_genres': UNMAPPED_GENRES},
             })
