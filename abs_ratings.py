@@ -548,17 +548,21 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
     # hold, Audible does not list that series for this book (same edition) but lists its own series -> Audible's series replaces it
     # (Der Drachenbeinthron: 'Memory, Sorrow & Thorn' -> 'Das Geheimnis der Großen Schwerter'; Malice (French) -> 'Le livre des Terres Bannies')
     bl = map_language(book_lang)
-    if bl and bl != 'English' and aud_series and book_lang_allowed(bl):
+    if bl and aud_series and book_lang_allowed(bl):
         for x in list(out):
             if listed(x['name']) or x not in out: continue
-            other = sum(v for l_, v in (fact(x['name']).get('langs') or {}).items() if l_ and l_ != bl)
+            langs_ = fact(x['name']).get('langs') or {}
+            other = sum(v for l_, v in langs_.items() if l_ and l_ != bl)
             if not other: continue
+            # an ENGLISH book only leaves a series that is (almost) entirely in another language (The Silmarillion in the German 'Middle Earth')
+            if bl == 'English' and (other < 2 or langs_.get('English', 0) > 1): continue
             a = next((a for a in aud_series if a.get('name') and not same(a['name'], x['name'])), None)
             if not a: continue
             canon = canonical_series(lib, a['name'], book_authors, book_variant)[0]
             if same(canon, x['name']): continue  # an alias maps Audible's name back to this series: nothing to split
             i_ = out.index(x)
-            if any(same(y['name'], canon) for y in out): out.pop(i_)
+            if any(same(y['name'], canon) for y in out) or (bl == 'English' and any(listed(y['name']) for y in out if y is not x)):
+                out.pop(i_)  # Audible's series is already there (English: another Audible-listed series of the book stays, the foreign one goes)
             else: out[i_] = {'name': canon, 'sequence': a.get('sequence') or x.get('sequence')}
             notes.append(f"'{x['name']}' -> '{canon}' #{a.get('sequence') or x.get('sequence') or '-'} ({other} book(s) of that series are in another language; Audible's {bl} series)")
     return out, notes
@@ -4281,7 +4285,16 @@ def process_queue(work_queue, history, failed, recheck):
                     aud_auth = aud_data.get('authors_raw') or []
                     from abs_series import is_role_credit, author_key as _ak
                     _roles = {_ak(n) for n in tuple(ROLE_NAMES)}  # tuple(): atomic copy, another worker may add role names meanwhile
+                    from abs_series import role_base as _rb
+                    roles_here = {_ak(_rb(n)) for n in aud_auth if is_role_credit(n)}  # 'Ken Liu - translator' on THIS product
                     aud_auth = [n for i, n in enumerate(aud_auth) if not is_role_credit(n) and not (i > 0 and _ak(n) in _roles)]  # only real authors
+                    if roles_here and authors and 'lock_authors' not in tags and not abs_updates.get('authors'):
+                        keep_ = [a_ for a_ in authors if _ak(a_) not in roles_here]
+                        if keep_ and len(keep_) < len(authors) and {_ak(a_) for a_ in keep_} & {_ak(n) for n in aud_auth}:
+                            # Audible credits this person with a ROLE on exactly this product (The Three-Body Problem: ABS 'Ken Liu, Cixin Liu',
+                            # Audible 'Cixin Liu, Ken Liu - translator'); a real author stays and agrees with Audible
+                            abs_updates['authors'] = [{'name': a_} for a_ in keep_]
+                            log_updates.append(f"Authors: {authors} -> {keep_} (Audible lists {', '.join(a_ for a_ in authors if a_ not in keep_)} with a role)")
                     if aud_auth and not authors:
                         if 'lock_authors' in tags: logging.info(f"        🔒 Authors Update Skipped (Locked): {aud_auth}")
                         else:
