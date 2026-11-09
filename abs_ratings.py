@@ -505,6 +505,18 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
     german_book = map_language(book_lang) == 'German'
     from abs_series import foreign_for_book as _ffb
     fm = re.match(r'^(?:book\s*)?(\d+(?:\.\d+)?)\s+-\s+', parts[-1]) if parts else None
+    # round 2 (2026-11-09): the book sits in a folder named like Audible's series of the same recording ("R.A. Salvatore's War Of The
+    # Spider Queen (Complete Series)/02 - Insurrection") -> that series is added even when the book has another one; an unnumbered
+    # series Audible does not list whose books ALL sit in that folder is a stale name for it ('Forgotten Realms: Anthologies') and goes
+    f_key = _k(re.sub(r'\s*\((?:the\s+)?(?:complete\s+)?(?:series|saga|collection|reihe)\)\s*$', '', folder or '')) if folder else ''
+    for a in aud_series:
+        if f_key and _k(a['name']) == f_key and not any(same(y['name'], a['name']) for y in out):
+            add = {'name': canonical_series(lib, a['name'], book_authors, book_variant)[0], 'sequence': a.get('sequence')}
+            out.append(add); notes.append(f"'{add['name']}'{' #' + str(add['sequence']) if add.get('sequence') else ''} added (Audible's series = the book's folder)")
+            for y in list(out):
+                fy = fact(y['name'])
+                if y is not add and not y.get('sequence') and not listed(y['name']) and fy.get('folders') == {folder} and not same(y['name'], folder):
+                    out.remove(y); notes.append(f"'{y['name']}' removed (unnumbered, Audible does not list it, all its books are in the folder of '{add['name']}')")
     for x in list(out):
         n = x['name']
         if x.get('sequence') and map_language(book_lang) == 'English' and clash_seq(lib, n, x['sequence'], book_lang) \
