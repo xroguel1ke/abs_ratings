@@ -4553,11 +4553,16 @@ def main():
 
     series_result = {}
     if (SERIES_MERGE or LIBRARY_REPORT) and not ONLY_ITEMS:
+        lib_written = set()
+        def lib_update(iid, key, *a, **kw):  # library-task writes are OUR writes: not a 'manual update' in the next run
+            ok = abs_update(iid, key, *a, **kw)
+            if ok and not DRY_RUN: lib_written.add(key)
+            return ok
         try:
             import abs_series
             series_result = abs_series.run({
                 'session': abs_session, 'abs_url': ABS_URL, 'library_ids': LIBRARY_IDS, 'dry_run': DRY_RUN,
-                'abs_update': abs_update, 'report_dir': REPORT_DIR, 'merge': SERIES_MERGE, 'report': LIBRARY_REPORT,
+                'abs_update': lib_update, 'report_dir': REPORT_DIR, 'merge': SERIES_MERGE, 'report': LIBRARY_REPORT,
                 'lock_after_merge': SERIES_LOCK_AFTER_MERGE, 'author_normalize': AUTHOR_NORMALIZE,
                 'aliases': SERIES_ALIASES, 'aliases_file': SERIES_ALIASES_FILE, 'index_file': SERIES_INDEX_FILE,
                 'decisions_file': os.path.join(SCRIPT_DIR, 'merge_decisions.json'), 'merges_file': os.path.join(SCRIPT_DIR, 'merges.json'),
@@ -4568,6 +4573,11 @@ def main():
                 'extra': {'author_notes': AUTHOR_NOTES, 'unmapped_genres': UNMAPPED_GENRES},
             })
             stats['series_merged'] = series_result.get('merges', 0)
+            if lib_written:  # 2026-11-09: 188 genre writes made 193 'manual updates' (full lookups, 1800 Hardcover requests) next run
+                stamp = datetime.now(timezone.utc).isoformat(timespec='seconds')
+                for k_ in lib_written:
+                    if k_ in history: history[k_] = stamp
+                rw_json(HISTORY_FILE, history); rw_json(LAST_WRITTEN_FILE, LAST_WRITTEN)  # watched like the per-book writes
         except ImportError:
             logging.error("abs_series.py not found next to abs_ratings.py - series task skipped.")
         except Exception as e:
