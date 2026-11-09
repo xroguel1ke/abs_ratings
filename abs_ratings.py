@@ -3403,9 +3403,23 @@ def split_series_name(s, known=None):
     if cur.strip(): out.append((cur.strip(), ''))  # unnumbered rest (several unnumbered series cannot be told apart)
     return out
 
+NARR_SPELL = {}  # folded narrator key -> Counter of the spellings in the library (round 4: 'Ramón de Ocampo' / 'Ramon De Ocampo')
+
+def narr_fold(n): return re.sub(r'[^a-z]', '', fold_accents(n or '').lower())
+
+def narrator_canonical(n):
+    """The library's most used spelling of this narrator (ties: the one with accents / initials with periods)."""
+    c = NARR_SPELL.get(narr_fold(n))
+    if not c or len(c) < 2: return n
+    return max(c.items(), key=lambda kv: (kv[1], kv[0] != fold_accents(kv[0]), kv[0].count('.'), kv[0]))[0]
+
 def note_listing_item(lib_id, it):
     """Library-wide facts from the listing: ASIN/ISBN owners (duplicate guards), runtimes, and which books share a series number."""
     key, md_ = f"{lib_id}_{it['id']}", (it.get('media') or {}).get('metadata') or {}
+    for n_ in [x.strip() for x in str(md_.get('narratorName') or '').split(', ') if x.strip()]:
+        with IO_LOCK:
+            from collections import Counter as _C
+            NARR_SPELL.setdefault(narr_fold(n_), _C())[n_] += 1
     if a := md_.get('asin'): ASIN_OWNERS.setdefault(a, set()).add(key)
     KEY_DUR[key] = (it.get('media') or {}).get('duration')
     if t_ := normalize_title_text(md_.get('title') or ''): TITLE_OWNERS.setdefault((lib_id, t_), set()).add((key, _first_author(md_.get('authorName'))))
@@ -4662,6 +4676,15 @@ def process_queue(work_queue, history, failed, recheck):
                             else:
                                 abs_updates['narrators'] = aud_narr
                                 log_updates.append(f"Narrators: {meta['narrators']} -> {aud_narr} (spelling of the same recording's narrator)")
+                    if 'lock_narrators' not in tags and not abs_updates.get('narrators') and meta.get('narrators'):
+                        # round 4 (2026-11-09): one spelling per narrator - the library's most used one; the same person twice on a book goes
+                        new_n = []
+                        for n_ in meta['narrators']:
+                            c_ = narrator_canonical(n_)
+                            if not any(narr_fold(c_) == narr_fold(x_) for x_ in new_n): new_n.append(c_)
+                        if new_n != list(meta['narrators']):
+                            abs_updates['narrators'] = new_n
+                            log_updates.append(f"Narrators: {meta['narrators']} -> {new_n} (one spelling per narrator)")
                     if not aud_data.get('related_edition'): note_author_links(authors, aud_data)
                     aud_auth = aud_data.get('authors_raw') or []
                     from abs_series import is_role_credit, author_key as _ak
