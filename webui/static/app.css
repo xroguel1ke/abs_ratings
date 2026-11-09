@@ -281,3 +281,5 @@ table.mtable td.hidecol{width:64px;text-align:right}.linkbtn{background:none;bor
 
 .srcbar{gap:8px;margin:0 0 14px;flex-wrap:wrap}.srcbar .dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--muted)}
 .src-ok .dot{background:#2e8b57}.src-off .dot{background:#c0392b}.src-blocked .dot{background:#d4a017}.src-disabled{opacity:.7}
+
+table.detail td{vertical-align:top}table.detail tr.diffrow td:nth-child(3){background:var(--accent-soft)}

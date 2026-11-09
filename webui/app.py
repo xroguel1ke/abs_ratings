@@ -261,7 +261,36 @@ def problem(key):
                                         label=f"Single book: {res.get('title')}", run_settings={'ABS_BACKUP': False})
         if err: flash(T(err), 'error'); return redirect(url_for('problem', key=key))
         return redirect(url_for('run_view', run_id=run_id, back=key))
-    return render_template('problem.html', key=key, r=res, ov=ov, changes=core.book_changes(key))
+    detail, locks, _it = core.book_detail(key, res.get('domain'))
+    return render_template('problem.html', key=key, r=res, ov=ov, changes=core.book_changes(key), detail=detail, locks=locks)
+
+
+@app.route('/book/<key>/field/<field>/<action>', methods=['POST'])
+@login_required
+def book_field(key, field, action):
+    """Book page: take Audible's value for ONE field right away (abs_apply: journal, undo, no backup), or lock / unlock the field."""
+    if field not in core.DETAIL_FIELDS: abort(400)
+    rows, _locks, it = core.book_detail(key)
+    row = next((x for x in rows or [] if x['field'] == field), None)
+    if not row: abort(404)
+    if action in ('lock', 'unlock'):
+        ok = core.set_lock(key, row['lock'], action == 'lock')
+        flash(T('Locked: the script never changes this field.') if action == 'lock' and ok else T('Unlocked.') if ok else T('ABS not reachable.'), 'ok' if ok else 'error')
+        return redirect(url_for('problem', key=key) + '#detail')
+    if action != 'apply' or not row['can_apply']: abort(400)
+    new = row['aud']
+    if field == 'authors': new = [{'name': n} for n in new]
+    old = row['abs'] if field not in ('authors',) else [{'name': n} for n in row['abs'] or []]
+    rid = 'book-' + datetime.now().strftime('%Y%m%d-%H%M%S')
+    os.makedirs(core.REPORT_DIR, exist_ok=True)
+    with open(os.path.join(core.REPORT_DIR, f'planned_changes_{rid}.jsonl'), 'w', encoding='utf-8') as f:
+        f.write(json.dumps({'run': rid, 'ts': datetime.now().isoformat(timespec='seconds'), 'item': key.split('_', 1)[1], 'key': key,
+                            'title': ((it.get('media') or {}).get('metadata') or {}).get('title'), 'field': field, 'old': old, 'new': new,
+                            'source': 'book_page', 'dry_run': True}, ensure_ascii=False) + '\n')
+    new_id, err = core.RUNNER.start('apply', undo_args=['--run', rid, '--apply'], label=f"{field} from Audible: {it.get('media', {}).get('metadata', {}).get('title')}",
+                                    run_settings={'ABS_BACKUP': False})
+    if err: flash(T(err), 'error'); return redirect(url_for('problem', key=key) + '#detail')
+    return redirect(url_for('run_view', run_id=new_id, back=key))
 
 
 @app.route('/run/<run_id>/apply', methods=['POST'])

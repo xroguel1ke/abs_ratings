@@ -32,6 +32,15 @@
  {% if r.evidence %}<p class="small" style="margin-top:12px"><b>{{ _('Evidence of the ASIN search') }}:</b> {{ r.evidence|join(', ') }}</p>{% endif %}
 </div>
 
+{% if detail %}<div class="card tablewrap" id="detail"><h2 style="margin-top:0">{{ _('Metadata') }}: ABS {{ icon('arrow-left-right', 14) }} Audible</h2>
+<table class="detail"><tr><th>{{ _('Field') }}</th><th>ABS</th><th>Audible</th><th></th></tr>
+{% for d in detail %}<tr class="{{ '' if d.same else 'diffrow' }}"><td class="muted">{{ FL.get(d.field, d.field) }}{% if d.locked %} <span title="{{ d.lock }}">🔒</span>{% endif %}</td>
+ <td class="small">{{ V.show(d.field, d.abs, False, d.aud) if d.field != 'description' else ((d.abs or '')|striptags|truncate(160)) }}</td>
+ <td class="small">{% if d.aud not in (none, '', []) %}{{ V.show(d.field, d.aud, True, d.abs) if d.field != 'description' else ((d.aud or '')|striptags|truncate(160)) }}{% else %}<span class="muted">–</span>{% endif %}</td>
+ <td class="small" style="white-space:nowrap">{% if d.can_apply and not d.same and not d.locked %}<form method="post" action="{{ url_for('book_field', key=key, field=d.field, action='apply') }}" style="display:inline" data-confirm="{{ _('Take the Audible value for this field? (can be undone)') }}"><button class="small">{{ _('Take Audible') }}</button></form>{% endif %}
+  <form method="post" action="{{ url_for('book_field', key=key, field=d.field, action='unlock' if d.lock in locks else 'lock') }}" style="display:inline"><button class="small linkbtn">{{ _('unlock') if d.lock in locks else _('lock') }}</button></form></td></tr>{% endfor %}
+</table><p class="muted small">{{ _('Locked fields are never changed by the script.') }}</p></div>{% endif %}
+
 {% if r.compare %}<div class="card tablewrap"><h2 style="margin-top:0">{{ _('Comparison') }} ABS {{ icon('arrow-left-right', 14) }} Audible {{ icon('arrow-left-right', 14) }} Hardcover</h2>
 <table><tr><th>{{ _('Field') }}</th><th>ABS</th><th>Audible</th><th></th><th>Hardcover</th></tr>
 {% for f, v in r.compare.items() %}{% if f == 'Laufzeit' and v[0] and v[1] %}{% set same = ((v[0][:-4]|int) - (v[1][:-4]|int))|abs <= 2 %}{% else %}{% set same = (v[0]|lower|replace(' ','')) == (v[1]|lower|replace(' ','')) %}{% endif %}

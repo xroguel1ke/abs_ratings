@@ -414,4 +414,7 @@ add({  # page tour 2026-11-08
     'You (review list, book page, manual)': 'Du (Prüfliste, Buchseite, manuell)', 'from': 'von', 'to': 'bis', 'Filter': 'Filtern', '%(n)s changes': '%(n)s Änderungen',
     'showing %(n)s': '%(n)s angezeigt', 'Undo all %(n)s shown changes?': 'Alle %(n)s angezeigten Änderungen rückgängig machen?', 'Undo all shown': 'Alle angezeigten rückgängig',
     'No changes found.': 'Keine Änderungen gefunden.', 'Nothing to undo.': 'Nichts rückgängig zu machen.', 'Book': 'Buch',
+    'Take the Audible value for this field? (can be undone)': 'Den Audible-Wert für dieses Feld übernehmen? (rückgängig machbar)', 'Take Audible': 'Audible übernehmen',
+    'unlock': 'entsperren', 'lock': 'sperren', 'Locked fields are never changed by the script.': 'Gesperrte Felder ändert das Skript nie.',
+    'Locked: the script never changes this field.': 'Gesperrt: Das Skript ändert dieses Feld nie.', 'Unlocked.': 'Entsperrt.',
 })

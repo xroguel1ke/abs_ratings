@@ -332,6 +332,61 @@ def library_series(force=False):
     return out
 
 
+LANG_NAMES = {'english': 'English', 'german': 'German', 'french': 'French', 'spanish': 'Spanish', 'italian': 'Italian', 'japanese': 'Japanese'}
+DETAIL_FIELDS = ['title', 'subtitle', 'authors', 'narrators', 'series', 'language', 'publisher', 'publishedYear', 'genres', 'isbn', 'asin', 'description']
+
+
+def book_detail(key, domain=None):
+    """Book page: every ABS field next to Audible's value for the ASIN (Audible answer cached 1 day). -> (rows, tags, item) or (None, ...)."""
+    import time
+    s = load_settings(); iid = key.split('_', 1)[1]
+    try: it = abs_get(s, f'/api/items/{iid}?expanded=1', timeout=15).json()
+    except Exception: return None, [], {}
+    md = (it.get('media') or {}).get('metadata') or {}
+    tags = sorted(t for t in (it.get('media') or {}).get('tags') or [] if t.startswith('lock_'))
+    aud = {}
+    if md.get('asin'):
+        cache = os.path.join(CONFIG_DIR, 'cache', f"aud_{md['asin']}.json")
+        if os.path.exists(cache) and time.time() - os.path.getmtime(cache) < 86400: aud = _load_json(cache, {})
+        else:
+            for dom in ([domain] if domain else []) + ['www.audible.com', 'www.audible.de', 'www.audible.co.uk']:
+                try:
+                    r = requests.get(f"https://{dom.replace('www.', 'api.')}/1.0/catalog/products/{md['asin']}",
+                                     params={'response_groups': 'product_desc,product_attrs,contributors,series,category_ladders,product_extended_attrs'},
+                                     headers={'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'}, timeout=15)
+                    p = r.json().get('product') if r.status_code == 200 else None
+                except Exception: p = None
+                if p and p.get('title'):
+                    aud = {'title': p.get('title'), 'subtitle': p.get('subtitle'),
+                           'authors': [a['name'] for a in p.get('authors') or [] if not re.search(r' - (translator|illustrator|editor|introduction|foreword|afterword|Übersetzer)', a.get('name') or '', re.I)],
+                           'narrators': [n['name'] for n in p.get('narrators') or []],
+                           'series': [{'name': x.get('title'), 'sequence': x.get('sequence') or None} for x in p.get('series') or [] if x.get('title')],
+                           'language': LANG_NAMES.get(str(p.get('language') or '').lower(), p.get('language')), 'publisher': p.get('publisher_name'),
+                           'publishedYear': (p.get('release_date') or '')[:4] or None, 'asin': md['asin'], 'description': p.get('publisher_summary'), 'store': dom}
+                    os.makedirs(os.path.dirname(cache), exist_ok=True); json.dump(aud, open(cache, 'w', encoding='utf-8'), ensure_ascii=False); break
+    cur = {'title': md.get('title'), 'subtitle': md.get('subtitle'), 'authors': [a.get('name') for a in md.get('authors') or []], 'narrators': md.get('narrators') or [],
+           'series': [{'name': x.get('name'), 'sequence': x.get('sequence')} for x in md.get('series') or []], 'language': md.get('language'), 'publisher': md.get('publisher'),
+           'publishedYear': md.get('publishedYear'), 'genres': md.get('genres') or [], 'isbn': md.get('isbn'), 'asin': md.get('asin'), 'description': md.get('description')}
+    norm = lambda v: json.dumps(v, sort_keys=True, ensure_ascii=False).lower() if v not in (None, '', []) else ''
+    rows = []
+    for f in DETAIL_FIELDS:
+        a = aud.get(f) if f in aud else None
+        lock = 'lock_title' if f == 'subtitle' else ('lock_year' if f == 'publishedYear' else f'lock_{f}')
+        rows.append({'field': f, 'abs': cur.get(f), 'aud': a, 'same': norm(cur.get(f)) == norm(a) or a in (None, '', []),
+                     'can_apply': f in aud and a not in (None, '', []) and f not in ('asin',), 'lock': lock, 'locked': lock in tags or 'lock_all' in tags or 'lock_metadata' in tags})
+    return rows, tags, it
+
+
+def set_lock(key, lock, on):
+    """Add/remove a lock_<field> tag on the book (ABS media tags)."""
+    s = load_settings(); iid = key.split('_', 1)[1]
+    it = abs_get(s, f'/api/items/{iid}', timeout=15).json()
+    tags = list((it.get('media') or {}).get('tags') or [])
+    tags = sorted(set(tags) | {lock}) if on else [t for t in tags if t != lock]
+    r = requests.patch(f"{s['ABS_URL'].rstrip('/')}/api/items/{iid}/media", json={'tags': tags}, headers={'Authorization': f"Bearer {s['API_TOKEN']}"}, timeout=15)
+    return r.status_code == 200
+
+
 def cover_file(kind, ident, max_age, full=False):
     """Cover image for the web UI, cached on disk (the ABS token never reaches the browser).
     kind 'abs': the book's current ABS cover (ident = item id, 1 h); 'audible': the cover of an Audible product (ident = ASIN, 7 days).
