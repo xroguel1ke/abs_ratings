@@ -542,8 +542,9 @@ def folder_narrators(item_data):
     if len(parts) < 3 or not re.match(r'^(?:book\s*)?\d', parts[0], re.I): return []
     names = [n.strip() for n in re.split(r'\s*\+\s*|\s*,\s*|\s+&\s+', re.sub(r'\{[^}]*\}', '', parts[-1])) if n.strip() and not re.search(r'(?i)full cast', n)]
     # '09 - Volume 09 - The Town of Strife II': the last part is a TITLE, not a narrator (regress wl01 2026-11-09) -> person names only
+    # function words only in lower case ('Eric A. Shelman' is a name: an initial 'A.' is no article - batch 60), an article only first
     person = lambda n: 1 <= len(n.split()) <= 4 and not re.search(r'\d', n) and not re.search(
-        r"(?i)\b(?:the|of|and|a|an|in|to|on|for|der|die|das|und|des|vol|volume|book|part|teil|band|[IVX]{2,})\b", n)
+        r"\b(?:the|of|and|a|an|in|to|on|for|der|die|das|und|des)\b|^(?:The|Der|Die|Das|A|An)\s|(?i:\b(?:vol|volume|book|part|teil|band)\b)|\b[IVX]{2,}\b", n)
     return names if names and all(person(n) for n in names) else []
 
 def series_by_membership(lib, asin, host, book_authors, title=None, all_hits=False):
