@@ -3419,17 +3419,15 @@ def rewrite_symbols_pass():
         for i, ch in enumerate(st):
             if ch: swap.setdefault(ch, new[i])
     swap.update({ch: new[i] for st in RATING_SYMBOL_SETS.values() for i, ch in enumerate(st) if st == new and ch})
-    keys = []
+    # the library listing already carries description + tags: one request per library instead of one per book (user 2026-11-09: was ~7 min)
+    items = []
     for lib in LIBRARY_IDS:
-        try: keys += [f"{lib}_{it['id']}" for it in abs_session.get(f"{ABS_URL}/api/libraries/{lib}/items").json().get('results') or []]
+        try: items += [(lib, it) for it in abs_session.get(f"{ABS_URL}/api/libraries/{lib}/items").json().get('results') or []]
         except Exception as e: logging.error(f"Library {lib}: {e}")
-    logging.info(f"Rating symbols -> {RATING_ICONS} ({''.join(new)}) for {len(keys)} book(s){' - DRY RUN' if DRY_RUN else ''}")
-    n_changed = n_locked = 0
+    logging.info(f"Rating symbols -> {RATING_ICONS} ({''.join(new)}) for {len(items)} book(s){' - DRY RUN' if DRY_RUN else ''}")
     from abs_series import expand_locks
-    for key in keys:
-        lib, _, iid = key.partition('_')
-        try: it = abs_session.get(f"{ABS_URL}/api/items/{iid}").json()
-        except Exception as e: logging.warning(f"  {key}: {e}"); continue
+    todo, n_locked = [], 0
+    for lib, it in items:
         meta = (it.get('media') or {}).get('metadata') or {}
         cur = meta.get('description') or ''
         m = RE_RATING_BLOCK.search(cur)
@@ -3438,8 +3436,13 @@ def rewrite_symbols_pass():
         nb = rewrite_block(block, swap)
         if nb == block: continue
         if 'lock_description' in expand_locks(item_tags(it)): n_locked += 1; continue
-        if abs_update(iid, key, meta.get('title'), {'description': cur.replace(block, nb)}, meta, 'rating_symbols'):
-            n_changed += 1
+        todo.append((it['id'], f"{lib}_{it['id']}", meta, cur.replace(block, nb)))
+    def write(t):
+        iid, key, meta, desc = t
+        return bool(abs_update(iid, key, meta.get('title'), {'description': desc}, meta, 'rating_symbols'))
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=4) as ex:  # ABS handles a few parallel writes well; each PATCH costs ~0.1-0.2 s on its side
+        n_changed = sum(ex.map(write, todo))
     logging.info(f"Rating symbols changed in {n_changed} book(s){' (planned, DRY RUN)' if DRY_RUN else ''}; {n_locked} locked book(s) kept")
 
 def remove_ratings_pass():
