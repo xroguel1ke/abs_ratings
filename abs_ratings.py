@@ -2007,6 +2007,16 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             seq_nums = {str(int(float(s.get('sequence')))) for s in (abs_series or []) if re.fullmatch(r'\d+(\.0)?', str(s.get('sequence') or ''))}
             self_inconsistent = bool(seq_nums & f_nums and duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120
                                      and {re.sub(r'[^a-z]', '', fold_accents(n).lower()) for n in (narrators or []) if n} & {re.sub(r'[^a-z]', '', fold_accents(n).lower()) for n in (p.get('narrators_raw') or []) if n})
+            if only_extra and abs_series and t_score < 0.99:
+                # series-listing candidates also come from LOOSELY named series ('Terrifying Towns: Ghoulsboro' #3 for ABS 'Terrifying Towns:
+                # Haunted Hollow' #1, same runtime by chance - batch 79): without an exact title the candidate must be IN the ABS series
+                from abs_series import series_key as _skl
+                abs_k = {_skl(x.get('name') or '') for x in abs_series if x.get('name')}
+                nk_ = lambda xs: {re.sub(r'[^a-z]', '', fold_accents(n).lower()) for n in (xs or []) if n}
+                same_rec_ = bool(duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120 and nk_(narrators) & nk_(p.get('narrators_raw')))
+                if not same_rec_ and not abs_k & {_skl(x.get('name') or '') for x in ((p.get('meta_raw') or {}).get('series') or [])}:
+                    # (the same recording - runtime 2 min AND a shared narrator - may sit in an Audible series named otherwise: House Harkonnen)
+                    logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (series listing: not in the book's series)"); continue
             part_ = lambda t: set(re.findall(r'(?i)\b(?:part|pt\.?|teil)\s*(\d+)\b', t or ''))
             if part_(title) and part_(found_title) and not part_(title) & part_(found_title):
                 # 'The Desert Prince (Part 1 of 3)' vs '(Part 2 of 3)': the title normalisation drops the brackets, the part number decides
@@ -2154,6 +2164,21 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
         res = search_audible_api(title, authors_list, duration, lang, raw_title, required_lang, strict, only_domain, narrators, abs_series, only_queries=[q_ for q_ in (nq, nq2) if q_])
         if res: return res
         if rel_before and not LAST_SEARCH['related']: LAST_SEARCH['related'] = rel_before
+    if api_ok and not only_queries and not only_extra and queries and (nt_ := normalize_title_text(raw_title or title)):
+        # nothing accepted: a long run of look-alike titles ('Terrifying Towns: ...' x 14) can push the EXACT title beyond the 5 hits
+        # looked at. One deeper look at the first query (titles included); only exact-title products are checked (batch 79, 2026-11-09)
+        dom0 = domains[0]; host0 = AUDIBLE_API_HOSTS[dom0]
+        throttle('audible_api', host0)
+        try:
+            r2 = requests.get(f"https://{host0}/1.0/catalog/products", params={"num_results": 25, **queries[0], "response_groups": "product_desc"},
+                              headers={"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}, timeout=15)
+            exact_ = [x['asin'] for x in ((r2.json().get('products') or []) if r2.status_code == 200 else [])
+                      if x.get('asin') and normalize_title_text(x.get('title') or '') == nt_]
+        except (requests.RequestException, ValueError): exact_ = []
+        if exact_:
+            res = search_audible_api(title, authors_list, duration, lang, raw_title, required_lang, strict, dom0, narrators, abs_series,
+                                     extra_candidates=exact_, only_extra=True)
+            if res: return res
     return None if api_ok else False
 
 def find_missing_asin(title, authors_list, duration, lang, raw_title=None, required_lang=None, strict=False,
