@@ -368,4 +368,12 @@ add({  # page tour 2026-11-08
     'Wrong language': 'Falsche Sprache', 'read by': 'gelesen von', 'language': 'Sprache',
     'The language of these books is unknown or not one of your book languages (Settings → Audible), and the script could not prove the right one. Set it in ABS; the entry disappears with the next scan.':
         'Die Sprache dieser Bücher ist unbekannt oder keine deiner Buchsprachen (Einstellungen → Audible), und das Skript konnte die richtige nicht sicher belegen. Bitte in ABS setzen; der Eintrag verschwindet mit dem nächsten Scan.',
+    'Missing volumes': 'Fehlende Bände', 'Missing': 'Fehlende Bände', 'Hide not yet released': 'Noch nicht erschienene ausblenden',
+    'Volumes of your series that Audible lists but your library does not have. Another edition of a volume counts as present; box sets, dramatized editions, numberless entries and other languages are left out.':
+        'Bände deiner Reihen, die Audible führt, die in deiner Bibliothek aber fehlen. Eine andere Ausgabe eines Bandes zählt als vorhanden; Box-Sets, Hörspielfassungen, Einträge ohne Nummer und andere Sprachen werden nicht gezählt.',
+    '%(n)s volumes in %(s)s series': '%(n)s Bände in %(s)s Reihen', '%(n)s in your library': '%(n)s in deiner Bibliothek', 'releases %(d)s': 'erscheint %(d)s',
+    'Nothing missing - or no scan has made the list yet.': 'Nichts fehlt – oder noch kein Scan hat die Liste erstellt.',
+    'List missing volumes of your series': 'Fehlende Bände deiner Reihen auflisten', 'Audible series lists are checked once a week (a few hundred requests)': 'Audible-Reihenlisten werden einmal pro Woche geprüft (einige hundert Anfragen)',
+    'Missing volumes: include novellas (0.5, 2.5 ...)': 'Fehlende Bände: Novellen einbeziehen (0.5, 2.5 …)',
+    'announced': 'angekündigt',
 })

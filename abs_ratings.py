@@ -8,6 +8,7 @@ import html as html_lib
 import recorder
 import source_state as SST; recorder.install()
 import source_health as SH
+import missing_series as MS
 import threading, queue as _queue_mod
 from concurrent.futures import ThreadPoolExecutor
 import atexit
@@ -141,6 +142,9 @@ OVERRIDES_FILE = os.path.join(SCRIPT_DIR, "overrides.json")  # manual fixes from
 ONLY_ITEMS = [x.strip() for x in os.getenv('ONLY_ITEMS', '').split(',') if x.strip()]  # 'libid_itemid' -> single-book mode
 ABS_BACKUP = os.getenv('ABS_BACKUP', 'false').lower() == 'true'  # create an ABS backup before a real run
 BOOK_LANGUAGES = []  # filled after LANGUAGE_MAP (below): languages the library holds; an Audible product in another language is never taken
+MISSING_SERIES = os.getenv('MISSING_SERIES', 'true').lower() == 'true'  # report missing volumes of the library's series (reports/missing_in_series.json)
+MISSING_NOVELLAS = os.getenv('MISSING_NOVELLAS', 'false').lower() == 'true'
+SERIES_BOOKS = {}  # (lib, series name lower) -> [{'num', 'title', 'asin', 'lang', 'author'}] from the listing
 GENRE_CLEANUP = os.getenv('GENRE_CLEANUP', 'true').lower() == 'true'  # one spelling per genre, no number-only / foreign-script genres (abs_series.normalize_genres)
 REMOVE_ROLE_CREDITS = os.getenv('REMOVE_ROLE_CREDITS', 'true').lower() == 'true'  # only real authors: remove 'X - illustrator', 'Y - translator', ...
 REMOVE_EMPTY_AUTHORS = os.getenv('REMOVE_EMPTY_AUTHORS', 'true').lower() == 'true'  # delete ABS author objects with 0 books
@@ -3185,6 +3189,8 @@ def note_listing_item(lib_id, it):
     if i_ := normalize_isbn(md_.get('isbn')): ISBN_OWNERS.setdefault(i_, set()).add(key)
     for sn_, q_ in split_series_name(md_.get('seriesName'), LIB_SERIES_NAMES.get(lib_id)):
         if sn_:
+            SERIES_BOOKS.setdefault((lib_id, sn_.lower()), []).append({'num': q_, 'title': md_.get('title'), 'asin': md_.get('asin'),
+                                                                     'lang': map_language(md_.get('language')), 'author': _first_author(md_.get('authorName')), 'name': sn_})
             f_ = SERIES_FACTS.setdefault((lib_id, sn_.lower()), {'n': 0, 'authors': set(), 'folders': set(), 'name': sn_, 'langs': {}})
             f_['n'] += 1; f_['authors'] |= {_first_author(md_.get('authorName'))}
             if (l_ := map_language(md_.get('language'))) and str(md_.get('language')).lower() not in ('und', 'mul', 'zxx'):
@@ -3419,6 +3425,74 @@ def sst_record(key, source, status, hits=None, aud_facts=None):
         if aud_facts: SOURCE_STATE[key]['aud'] = SST.audible_facts(aud_facts)
     if e and e.get('st') == 'paused' and status != 'found':
         logging.info(f"        ⏸️ {source.capitalize()}: {e.get('why')} - paused for {REFRESH_DAYS} days")
+
+SERIES_MEMBERS_FILE = os.path.join(SCRIPT_DIR, 'series_members.json')  # {host|series asin: {'ts', 'members'}}, 7 days
+
+def series_members_full(host, sasin, cache):
+    """Audible series list with number, title, release date and language of every volume (cached 7 days). None = unknown."""
+    ck = f"v2|{host}|{sasin}"
+    c = cache.get(ck)
+    try:
+        if c and datetime.now(timezone.utc) - datetime.fromisoformat(c['ts']) < timedelta(days=7): return c['members']
+    except (KeyError, ValueError): pass
+    hdr = {"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}
+    throttle('audible_api', host)
+    try:
+        r = requests.get(f"https://{host}/1.0/catalog/products/{sasin}", params={"response_groups": "relationships"}, headers=hdr, timeout=15)
+        if r.status_code == 404: cache[ck] = {'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'members': []}; return []
+        rel = (r.json().get('product') or {}).get('relationships') if r.status_code == 200 else None
+    except (requests.RequestException, ValueError): rel = None
+    if rel is None: return None
+    kids = [(x['asin'], str(x.get('sequence') or '').strip()) for x in rel if x.get('relationship_to_product') == 'child' and x.get('asin')]
+    info = {}
+    for i in range(0, len(kids), 50):
+        throttle('audible_api', host)
+        try:
+            r = requests.get(f"https://{host}/1.0/catalog/products", params={"asins": ",".join(a for a, _ in kids[i:i + 50]), "response_groups": "product_desc,product_attrs"},
+                             headers=hdr, timeout=20)
+            prods = (r.json().get('products') or []) if r.status_code == 200 else None
+        except (requests.RequestException, ValueError): prods = None
+        if prods is None: return None
+        for p in prods: info[p.get('asin')] = p
+    members = [{'asin': a, 'num': q, 'title': (info.get(a) or {}).get('title') or '', 'release': (info.get(a) or {}).get('release_date') or '',
+                'language': map_language((info.get(a) or {}).get('language'))} for a, q in kids]
+    cache[ck] = {'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'members': members}
+    return members
+
+def missing_in_series_task():
+    """User request 2026-11-09: missing volumes of the library's series (only real gaps, see missing_series.py) -> reports/missing_in_series.json."""
+    from abs_series import series_key as _k, series_variant as _v
+    cache = rw_json(SERIES_MEMBERS_FILE) or {}
+    if not SERIES_BOOKS:  # series-only scan: the per-book part did not load the listing
+        for lib in LIBRARY_IDS:
+            try:
+                load_series_names(lib)
+                for it in abs_session.get(f"{ABS_URL}/api/libraries/{lib}/items").json()['results']: note_listing_item(lib, it)
+            except Exception as e: logging.warning(f"Missing volumes: library {lib} not loaded ({e})")
+    by_key = {}
+    for t, asins in list(SERIES_ASINS.items()): by_key.setdefault(_k(t), set()).update(asins)
+    hosts = {'German': ['api.audible.de'], 'English': ['api.audible.com', 'api.audible.co.uk']}
+    out, asked = [], 0
+    for (lib, _), books in sorted(SERIES_BOOKS.items()):
+        name = books[0]['name']
+        langs = [b['lang'] for b in books if b.get('lang')]
+        lang = max(set(langs), key=langs.count) if langs else None
+        sasins = by_key.get(_k(name)) or set()
+        if not sasins or lang not in hosts or (BOOK_LANGUAGES and lang not in BOOK_LANGUAGES): continue
+        members = None
+        for h in hosts[lang]:
+            for sa in sorted(sasins):
+                m = series_members_full(h, sa, cache); asked += 1
+                if m: members, store = m, h.replace('api.', 'www.'); break
+            if members: break
+        if not members: continue
+        miss = MS.compare(books, members, _v(name), lang, MISSING_NOVELLAS)
+        # a volume the library has OUTSIDE this series (other series name, no series, other ASIN) is no gap: ASIN or title anywhere
+        miss = [m for m in miss if not ASIN_OWNERS.get(m.get('asin')) and not TITLE_OWNERS.get((lib, normalize_title_text(m.get('title') or '')))]
+        if miss: out.append({'lib': lib, 'series': name, 'author': books[0].get('author'), 'language': lang, 'have': len(books), 'store': store, 'missing': miss})
+    rw_json(SERIES_MEMBERS_FILE, cache)
+    rw_json(os.path.join(REPORT_DIR, 'missing_in_series.json'), {'generated': datetime.now().strftime('%Y-%m-%d %H:%M'), 'series': out})
+    logging.info(f"📚 Missing volumes: {sum(len(x['missing']) for x in out)} in {len(out)} series (series lists checked: {asked})")
 
 def source_down(source, why):
     """Switch a source off for the rest of the run (failed check / tripped breaker): no misses, no writes from it, alert in the summary."""
@@ -4679,6 +4753,9 @@ def main():
             logging.error("abs_series.py not found next to abs_ratings.py - series task skipped.")
         except Exception as e:
             logging.exception(f"Series task failed: {e}")
+    if MISSING_SERIES and not ONLY_ITEMS and USE_AUDIBLE_API and 'audible' not in SOURCE_DOWN:
+        try: missing_in_series_task()
+        except Exception as e: logging.exception(f"Missing-volumes report failed: {e}")
     write_env_file(log_file, start_time)
     log_run_summary(start_time, series_result)
     logging.info(f"Debug bundle (send this one for troubleshooting): {os.path.join(LOG_DIR, 'debug_latest.log')}")

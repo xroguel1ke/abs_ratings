@@ -624,6 +624,15 @@ def logs_zip():
                      mimetype='application/zip')
 
 
+@app.route('/missing')
+@login_required
+def missing_page():
+    """Missing volumes of the library's series (reports/missing_in_series.json, written by every full / library scan)."""
+    d = core._load_json(os.path.join(core.REPORT_DIR, 'missing_in_series.json'), {})
+    series = [dict(s, n=len(s.get('missing') or [])) for s in d.get('series') or []]
+    return render_template('missing.html', series=sorted(series, key=lambda s: (s.get('series') or '').lower()), generated=d.get('generated'))
+
+
 @app.route('/books')
 @login_required
 def books():

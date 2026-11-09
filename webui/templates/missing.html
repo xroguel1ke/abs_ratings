@@ -1,0 +1,13 @@
+{% extends 'base.html' %}{% block title %}{{ _('Missing volumes') }}{% endblock %}{% block body %}
+<h1>{{ _('Missing volumes') }}</h1>
+<p class="muted small">{{ _('Volumes of your series that Audible lists but your library does not have. Another edition of a volume counts as present; box sets, dramatized editions, numberless entries and other languages are left out.') }}{% if generated %} {{ _('As of') }}: {{ generated }}{% endif %}</p>
+{% set total = series|sum(attribute='n') %}
+<div class="row small" style="gap:12px;margin-bottom:8px"><span class="badge {{ 'warn' if total else '' }}">{{ _('%(n)s volumes in %(s)s series', n=total, s=series|length) }}</span>
+ <label><input type="checkbox" id="hideUp" onchange="document.querySelectorAll('.upcoming').forEach(e=>e.style.display=this.checked?'none':'')"> {{ _('Hide not yet released') }}</label></div>
+{% for s in series %}<div class="card mcard">
+ <div class="row" style="justify-content:space-between"><div><b>{{ s.series }}</b> <span class="muted small">– {{ s.author }} · {{ s.language }} · {{ _('%(n)s in your library', n=s.have) }}</span></div></div>
+ <table class="cmp small" style="margin-top:6px">{% for m in s.missing %}<tr class="{{ 'upcoming' if m.upcoming }}"><td style="width:56px">#{{ m.num }}</td>
+  <td><a href="https://{{ s.store }}/pd/{{ m.asin }}" target="_blank">{{ m.title }} {{ icon('arrow-up-right', 14) }}</a></td>
+  <td class="muted">{% if m.upcoming and m.release %}{{ _('releases %(d)s', d=m.release) }}{% elif m.upcoming %}{{ _('announced') }}{% elif m.release %}{{ m.release[:4] }}{% endif %}</td></tr>{% endfor %}</table>
+</div>{% else %}<div class="card muted">{{ _('Nothing missing - or no scan has made the list yet.') }}</div>{% endfor %}
+{% endblock %}

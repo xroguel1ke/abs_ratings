@@ -73,6 +73,8 @@ FIELDS = [
     ('SERIES_MERGE', 'Merge series automatically', 'bool', True, 'Only safe cases; uncertain ones go to the review list', 'Series & authors'),
     ('AUTHOR_NORMALIZE', 'Unify author spellings', 'bool', True, '', 'Series & authors'),
     ('REMOVE_ROLE_CREDITS', 'Keep only real authors', 'bool', True, 'Removes illustrators, translators, editors, forewords … from the author field (only when a real author remains); never taken from Audible', 'Series & authors'),
+    ('MISSING_SERIES', 'List missing volumes of your series', 'bool', True, 'Audible series lists are checked once a week (a few hundred requests)', 'Series & authors'),
+    ('MISSING_NOVELLAS', 'Missing volumes: include novellas (0.5, 2.5 ...)', 'bool', False, '', 'Series & authors'),
     ('GENRE_CLEANUP', 'Clean up genres', 'bool', True, 'One spelling per genre (the most used one); number-only and foreign-script genres are removed from English/German books', 'Series & authors'),
     ('REMOVE_EMPTY_AUTHORS', 'Remove empty authors', 'bool', True, 'Deletes only ABS authors without a single book (left-overs after merges); books are never deleted', 'Series & authors'),
     ('LIBRARY_REPORT', 'Create the library report', 'bool', True, '', 'Series & authors'),
