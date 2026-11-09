@@ -2724,6 +2724,11 @@ def hc_audible_crosscheck(hc, aud):
             m_ = re.search(r'\d+(?:\.\d+)?', str(cs.get('part') or ''))
             if sn and sp is not None and m_ and float(m_.group(0)) == float(sp) and title_similarity(sn, cs.get('name') or '') >= 0.85: same_series = True
     if same_series: why += ', same series and number'
+    # another volume (2026-11-09, library: 'Throne Hunters 4' cached as 'Throne Hunters: Throne Hunters, Book 1'): both titles carry a
+    # volume number and they share none -> not the same book, whatever the title score says (containment counts 'Throne Hunters')
+    va, vh = extract_volume(aud.get('title_raw') or ''), extract_volume(hc.get('title') or '')
+    if va and vh and not (va & vh) and not same_series and not tied and not alt_hit:
+        return False, why + f", other volume ({'/'.join(sorted(vh))} vs {'/'.join(sorted(va))})"
     if tied: why += ', tied by ' + hc['source']
     elif contained and t < 0.7: why += ', title words contained'
     return (a is not False and (t >= 0.7 or contained or tied or same_series or alt_hit)), why
