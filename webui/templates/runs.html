@@ -20,7 +20,7 @@
    <label class="badge"><input type="checkbox" name="rm_goodreads" class="rmr"> Goodreads</label>
    <label class="badge"><input type="checkbox" name="rm_hardcover" class="rmr"> Hardcover</label>
    <button type="button" onclick="document.querySelectorAll('.rmr').forEach(c=>c.checked=true)">{{ _('all') }}</button></div>
-  <p class="muted small">{{ _('Removes the chosen lines from the rating block. Can be undone; the source stays paused for these books until the refresh time.') }}</p>
+  <p class="muted small">{{ _('Removes the chosen lines from the rating block (undoable).') }}</p>
  </details>
  <p class="muted small" id="drynote">{{ _('A test run only plans; you can review and apply the changes afterwards.') }}</p>
  <details class="adv" id="advopts" {{ 'open' if f.adv_open }}><summary><b>{{ _('Options for this scan only') }}</b> <span class="muted small">– {{ _('does not change saved settings') }}</span></summary>

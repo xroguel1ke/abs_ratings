@@ -6,7 +6,7 @@
  <select name="dir" style="flex:1 1 120px" title="{{ _('Direction') }}"><option value="asc" {{ 'selected' if direction=='asc' }}>{{ _('ascending') }}</option><option value="desc" {{ 'selected' if direction=='desc' }}>{{ _('descending') }}</option></select>
  <input name="max" type="number" min="0" max="100" value="{{ mx if mx is not none }}" placeholder="{{ _('Certainty ≤') }}" style="flex:0 1 130px">
  <button class="primary">{{ _('Show') }}</button></form>
-<p class="muted small">{{ _('How sure the script is that the ASIN is exactly this book (0-100), from title, author, runtime, narrator, number, publisher.') }}</p>
+<p class="muted small">{{ _('How sure the ASIN is this exact book (0–100).') }}</p>
 <div class="card tablewrap"><table><tr><th>{{ _('Certainty') }}</th><th>{{ _('Title') }}</th><th>{{ _('Author') }}</th><th>{{ _('Status') }}</th><th>ASIN</th></tr>
 {% for r in rows %}{% set c = r.get('certainty') %}<tr><td style="min-width:130px">{% if c is not none %}<span class="cert {{ 'hi' if c >= 85 else 'mid' if c >= 60 else 'lo' }}">{{ moon(c, 16) }}<span>{{ c }}</span></span>{% else %}<span class="muted">–</span>{% endif %}</td>
 <td><a href="{{ url_for('problem', key=r.key) }}">{{ r.title }}</a></td><td class="small">{{ r.author }}</td>

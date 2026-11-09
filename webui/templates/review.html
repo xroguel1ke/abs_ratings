@@ -4,13 +4,13 @@
  <div class="small">{% if books %}{{ _('Volumes') }} {{ books }}{% endif %}{% if authors %} · {{ authors|join(', ') }}{% endif %}</div>{{ titles(tl) }}</div>{% endmacro %}
 
 <div class="row" style="justify-content:space-between"><h1>{{ _('Review list') }}</h1><button type="button" class="iconbtn snav-toggle" onclick="document.querySelector('.snav').classList.toggle('open')">{{ icon('menu') }} {{ _('Sections') }}</button></div>
-<p class="muted small">{{ _('Only what needs a decision from you. Nothing uncertain is written without you; automatic merges are in the History (with undo).') }}</p>
+<p class="muted small">{{ _('Only what needs your decision. Nothing uncertain is written without you.') }}</p>
 <div class="slayout">
 <nav class="snav" aria-label="{{ _('Sections') }}">{% for k, s in secs.items() %}<a href="#{{ k }}" data-sec="{{ k }}">{{ s.label }} <span class="badge {{ 'warn' if counts[k] else '' }}" style="margin-left:auto">{{ counts[k] }}</span></a>{% endfor %}</nav>
 <div class="spanel">
 
 <div class="sec" data-sec="buecher">
-<div class="card"><h2 style="margin-top:0">{{ _('Books') }}</h2><p class="muted small" style="margin-top:-8px">{{ _('Suggestions without enough evidence for an automatic change. Apply writes it (can be undone), Discard keeps the book as it is.') }}</p>
+<div class="card"><h2 style="margin-top:0">{{ _('Books') }}</h2><p class="muted small" style="margin-top:-8px">{{ _('Not enough evidence for an automatic change: your call.') }}</p>
 {% set kinds = secs.buecher.entries|map(attribute='kind')|list %}{% if kinds %}<div class="row small" style="gap:8px">
 {% for k in ['asin', 'hardcover', 'title', 'isbn', 'series'] %}{% set n = kinds|select('equalto', k)|list|length %}{% if n > 1 %}
  <span class="badge">{{ {'asin': 'ASIN', 'isbn': 'ISBN', 'title': _('Title'), 'hardcover': 'Hardcover', 'series': _('Series')}[k] }} {{ n }}</span>
@@ -50,7 +50,7 @@
 {% for k in ('reihen', 'autoren') %}{% set s = secs[k] %}
 <div class="sec" data-sec="{{ k }}">
 <div class="card"><h2 style="margin-top:0">{{ _('Merge series') if k == 'reihen' else _('Normalize authors') }}</h2>
- <p class="muted small" style="margin-top:-8px">{% if k == 'reihen' %}{{ _('Merged automatically only with equal names (or matching numbers), a shared author, the same edition and no overlapping numbers.') }}{% else %}{{ _('Unified only with evidence for the same person (spelling, Audible author id, identical books).') }}{% endif %}</p></div>
+ <p class="muted small" style="margin-top:-8px">{% if k == 'reihen' %}{{ _('Merged only when clearly the same series.') }}{% else %}{{ _('Unified only with evidence for the same person (spelling, Audible author id, identical books).') }}{% endif %}</p></div>
 <h3>{{ _('Uncertain - your decision') }} ({{ s.review|length }})</h3>
 {% for x in s.review %}<div class="card mcard">
  <div class="mpair">{{ side(x.series, x.series_books if k == 'reihen' else '', x.series_titles, x.series_authors, _('Candidate')) }}<div class="marrow">{{ icon('arrow-right', 14) }}</div>{{ side(x.other, x.other_books if k == 'reihen' else '', x.other_titles, x.other_authors, _('Target')) }}</div>
@@ -65,7 +65,7 @@
 <div class="sec" data-sec="sonstiges">
 <div class="card"><h2 style="margin-top:0">{{ _('Other') }}</h2><p class="muted small" style="margin-top:-8px">{{ _('The same recording twice (author, narrator and runtime equal). Clean up in ABS itself.') }}</p></div>
 <div class="card"><h3 style="margin-top:0">{{ _('Wrong language') }} ({{ secs.sonstiges.languages|length }})</h3>
-<p class="muted small" style="margin-top:-8px">{{ _('The language of these books is unknown or not one of your book languages (Settings → Audible), and the script could not prove the right one. A button sets it right away (can be undone).') }}</p>
+<p class="muted small" style="margin-top:-8px">{{ _('Language unknown or not one of your book languages. A button sets it right away.') }}</p>
 {% for x in secs.sonstiges.languages[:200] %}<div class="small"><a href="{{ url_for('problem', key=x.key) }}"><b>{{ x.title }}</b></a> – {{ x.authors|join(', ') }}{% if x.narrators %} · {{ _('read by') }} {{ x.narrators|join(', ') }}{% endif %} ·
  {{ _('language') }}: <code>{{ x.language or '–' }}</code>{% if x.locked %} <span class="badge">lock_language</span>{% endif %}
  {% if abs_base %}<a href="{{ abs_base }}/item/{{ x.key.split('_', 1)[1] }}" target="_blank">ABS {{ icon('arrow-up-right', 14) }}</a>{% endif %}
@@ -79,7 +79,7 @@
  <form method="post" action="{{ url_for('review_action', mid=x.id, action='keep') }}"><button>{{ _('Keep') }}</button></form></span></div></div>
 {% else %}<div class="card muted">{{ _('None.') }}</div>{% endfor %}
 <div class="card"><h3 style="margin-top:0">{{ _('Same ASIN twice') }} ({{ secs.sonstiges.same_asin|length }})</h3>
-<p class="muted small" style="margin-top:-8px">{{ _('Several books in the library carry the same ASIN. Folder and runtime show what it is. Nothing is changed automatically.') }}</p>
+<p class="muted small" style="margin-top:-8px">{{ _('Books sharing one ASIN. Folder and runtime show why.') }}</p>
 {% for a, books, verdict in secs.sonstiges.same_asin[:200] %}<div class="mcard" style="margin-top:8px"><div class="small"><code>{{ a }}</code> –
  <b>{{ {'same_folder': _('ABS lists the same folder twice (a scan duplicate): remove one entry in ABS, the files are there only once.'),
         'copy': _('The audiobook is stored twice (two folders, same runtime): delete one copy.'),

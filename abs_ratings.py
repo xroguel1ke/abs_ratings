@@ -3250,7 +3250,8 @@ def note_listing_item(lib_id, it):
     for sn_, q_ in split_series_name(md_.get('seriesName'), LIB_SERIES_NAMES.get(lib_id)):
         if sn_:
             SERIES_BOOKS.setdefault((lib_id, sn_.lower()), []).append({'num': q_, 'title': md_.get('title'), 'asin': md_.get('asin'),
-                                                                     'lang': map_language(md_.get('language')), 'author': _first_author(md_.get('authorName')), 'name': sn_})
+                                                                     'lang': map_language(md_.get('language')), 'author': _first_author(md_.get('authorName')), 'name': sn_,
+                                                                     'author_name': str(md_.get('authorName') or '').split(',')[0].strip()})
             f_ = SERIES_FACTS.setdefault((lib_id, sn_.lower()), {'n': 0, 'authors': set(), 'folders': set(), 'name': sn_, 'langs': {}})
             f_['n'] += 1; f_['authors'] |= {_first_author(md_.get('authorName'))}
             if q_: f_['numbered'] = f_.get('numbered', 0) + 1
@@ -3550,7 +3551,7 @@ def missing_in_series_task():
         miss = MS.compare(books, members, _v(name), lang, MISSING_NOVELLAS)
         # a volume the library has OUTSIDE this series (other series name, no series, other ASIN) is no gap: ASIN or title anywhere
         miss = [m for m in miss if not ASIN_OWNERS.get(m.get('asin')) and not TITLE_OWNERS.get((lib, normalize_title_text(m.get('title') or '')))]
-        if miss: out.append({'lib': lib, 'series': name, 'author': books[0].get('author'), 'language': lang, 'have': len(books), 'store': store, 'missing': miss})
+        if miss: out.append({'lib': lib, 'series': name, 'author': books[0].get('author_name') or books[0].get('author'), 'language': lang, 'have': len(books), 'store': store, 'missing': miss})
     rw_json(SERIES_MEMBERS_FILE, cache)
     rw_json(os.path.join(REPORT_DIR, 'missing_in_series.json'), {'generated': datetime.now().strftime('%Y-%m-%d %H:%M'), 'series': out})
     logging.info(f"📚 Missing volumes: {sum(len(x['missing']) for x in out)} in {len(out)} series (series lists checked: {asked})")

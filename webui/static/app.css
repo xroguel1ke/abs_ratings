@@ -246,3 +246,16 @@ table.cmp{margin:8px 0;width:100%}table.cmp td,table.cmp th{padding:4px 8px;vert
 .covers figcaption { font-size: 11px; opacity: .7; margin-top: 2px; }
 @media (max-width: 600px) { .bookcover { width: 120px; height: 120px; } .covers img { width: 104px; height: 104px; } }
 .bookcover:hover, .covers img:hover { opacity: .85; cursor: zoom-in; }
+
+/* one size step larger (user 2026-11-09) */
+body{font:400 15px/22px var(--sans)}
+.small{font-size:14px;line-height:20px}
+.badge{font-size:13px;line-height:18px}
+h2{font-size:17px;line-height:26px}h3{font-size:16px;line-height:22px}
+.tile .l{font-size:14px;line-height:20px}
+.nav .right{font-size:14px}
+/* missing volumes: aligned columns */
+table.mtable{width:100%;table-layout:fixed;border-collapse:collapse}
+table.mtable td{padding:4px 8px;vertical-align:top;border-top:1px solid var(--line)}
+table.mtable td.num{width:56px;white-space:nowrap}
+table.mtable td.rel{width:150px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}

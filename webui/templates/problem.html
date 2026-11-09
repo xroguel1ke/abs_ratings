@@ -36,7 +36,7 @@
 <table><tr><th>{{ _('Field') }}</th><th>ABS</th><th>Audible</th><th></th><th>Hardcover</th></tr>
 {% for f, v in r.compare.items() %}{% if f == 'Laufzeit' and v[0] and v[1] %}{% set same = ((v[0][:-4]|int) - (v[1][:-4]|int))|abs <= 2 %}{% else %}{% set same = (v[0]|lower|replace(' ','')) == (v[1]|lower|replace(' ','')) %}{% endif %}
 <tr><td class="muted">{{ CK.get(f, f) }}</td><td>{{ v[0] or '–' }}</td><td>{{ v[1] or '–' }}</td><td>{% if v[0] and v[1] %}<span class="badge {{ 'ok' if same else 'warn' }}">{{ '=' if same else '≠' }}</span>{% elif v[1] %}<span class="badge">{{ _('Audible only') }}</span>{% endif %}</td><td class="muted">{{ (v[2] if v|length > 2 else '') or '–' }}</td></tr>{% endfor %}
-</table><p class="muted small">{{ _('"≠" does not mean wrong: ABS values are only filled when they are empty (exceptions: broken file-name titles, cover for a verified ASIN).') }}</p></div>{% endif %}
+</table><p class="muted small">{{ _('"≠" is not an error: ABS values are only filled when empty.') }}</p></div>{% endif %}
 
 <div class="card tablewrap"><h2 style="margin-top:0">{{ _('Changes to this book') }}</h2>
 {% if changes %}<table class="diff"><tr><th>{{ _('Time') }}</th><th>{{ _('Field') }}</th><th>{{ _('Old') }}</th><th>{{ _('New') }}</th><th>{{ _('Status') }}</th></tr>
@@ -58,7 +58,7 @@
  <button name="action" value="test">{{ _('Test run first') }}</button>
  <button name="action" value="retry">{{ _('Check again without override') }}</button>
  {% if ov.ignore %}<button name="action" value="unignore">{{ _('Stop ignoring') }}</button>{% else %}<button name="action" value="ignore">{{ _('Ignore') }}</button>{% endif %}</p>
- <p class="muted small">{{ _('A manual ASIN is written to ABS and never replaced automatically afterwards. A Goodreads or Hardcover link is used permanently for this book.') }}</p>
+ <p class="muted small">{{ _('A manual ASIN or link stays for good and is never replaced.') }}</p>
 </form></div>
 <details class="card"><summary><b>{{ _('Remove ratings') }}</b></summary>
 <form method="post" class="row" style="margin-top:12px" data-confirm="{{ _('Remove the chosen ratings from this book? (can be undone in the History)') }}">
