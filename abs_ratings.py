@@ -2746,7 +2746,11 @@ def hc_acceptable(targets, authors, book, min_score, abs_series=(), extra_names=
     if (m := RE_HC_SET_TITLE.search(book.get('title') or '')) and not any(RE_HC_SET_TITLE.search(t) for t in targets):
         return False, score, f"whole series ('{m.group(0)}')"
     found_text = f"{book.get('title') or ''} {book.get('subtitle') or ''}"
-    if (m := RE_HC_SPECIAL.search(found_text)) and not any(RE_HC_SPECIAL.search(t) for t in targets):
+    if (m := RE_HC_SPECIAL.search(found_text)) and not any(RE_HC_SPECIAL.search(t) for t in targets) and not (
+            not RE_HC_SPECIAL.search(book.get('title') or '') and (book.get('ratings_count') or 0) >= 100
+            and any(normalize_title_text(clean_title(t)) == normalize_title_text(book.get('title') or '') for t in targets)):
+        # exception: the label is only in the SUBTITLE of the main book (Hardcover lists 'Harry Potter and the Prisoner of Azkaban'
+        # with the subtitle 'Collector's Edition', 1000s of ratings) and the title is exactly ours -> the work itself, not an edition
         return False, score, f"other format ('{m.group(0)}')"
     if book.get('compilation') and not any(RE_HC_SPECIAL.search(t) for t in targets):
         # 'Midnight Tides' is flagged as compilation because Parts 1+2 exist separately, but it sits as ONE book (single position) in its series
