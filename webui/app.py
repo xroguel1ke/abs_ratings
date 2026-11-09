@@ -351,7 +351,8 @@ def review_page():
         'reihen': {'label': T('Series'), 'review': rv.get('series') or []},
         'autoren': {'label': T('Authors'), 'review': rv.get('authors') or []},
         'sonstiges': {'label': T('Other'), 'dups': rep.get('duplicate_recordings') or [], 'same_asin': core.same_asin_groups(core.load_settings()), 'foreign': rv.get('other') or [],
-                      'languages': rv.get('languages') or []},
+                      'languages': rv.get('languages') or [],
+                      'lang_choices': [x.strip() for x in str(core.load_settings().get('BOOK_LANGUAGES') or 'English, German').split(',') if x.strip()]},
     }
     counts = {'buecher': len(queue), 'reihen': len(secs['reihen']['review']), 'autoren': len(secs['autoren']['review']),
               'sonstiges': len(secs['sonstiges']['foreign']) + len(secs['sonstiges']['dups']) + len(secs['sonstiges']['same_asin']) + len(secs['sonstiges']['languages'])}
@@ -384,8 +385,8 @@ def explain_entry(x, res_all):
         why = reason + ' ' + T('A person is never replaced automatically (pen names, editors, translations).')
     else:
         what, why = T('Suggestion: %(c)s', c=cand), reason
-    does = {'asin': T('Apply: the ASIN is written with the next scan and locked. Discard: the book stays as it is and is not suggested again.'),
-            'hardcover': T('Apply: this Hardcover page is used for the rating. Discard: no Hardcover rating for this book.'),
+    does = {'asin': T('Apply: the ASIN is written right away (one scan of this book, locked). Discard: the book stays as it is and is not suggested again.'),
+            'hardcover': T('Apply: this Hardcover page is used for the rating right away. Discard: no Hardcover rating for this book.'),
             'title': T('Apply: the title is written right away (can be undone). Discard: the title stays.'),
             'isbn': T('Apply: the ISBN is written right away (can be undone). Discard: the ISBN stays.'),
             'authors': T("Apply: Audible's authors are written right away (can be undone). Discard: the authors stay.")}.get(kind, T('Discard: the book stays as it is.'))
@@ -422,6 +423,11 @@ def queue_bulk(kind, action):
     for x in items:
         if action == 'accept' and x.get('candidate'): core.save_override(x['key'], {kind: x['candidate']})
         core.set_queue_decision(x['id'], action)
+    if action == 'accept' and items:  # written right away: one real scan of exactly these books
+        new_id, err = core.RUNNER.start('item', dry_run=False, only_items=[x['key'] for x in items], label=f"{len(items)} × {kind} from the review list",
+                                        run_settings={'ABS_BACKUP': False})
+        if not err: return redirect(url_for('run_view', run_id=new_id))
+        flash(T('Saved. A scan is running right now: it is written for this book with the next scan.'), 'ok'); return redirect(url_for('review_page') + '#buecher')
     flash(T('%(n)s entries done.', n=len(items)), 'ok')
     return redirect(url_for('review_page') + '#buecher')
 
@@ -433,12 +439,15 @@ def queue_action(qid, action):
     if action not in ('accept', 'reject'): abort(400)
     item = next((x for x in core.open_queue() if x['id'] == qid), None)
     if not item: abort(404)
-    if action == 'accept' and item.get('kind') == 'asin' and item.get('candidate'):
-        core.save_override(item['key'], {'asin': item['candidate']})
-        flash(T('ASIN %(a)s saved: it is written for this book with the next scan (and locked). Use "Test run first" on the book page to check it before.', a=item['candidate']), 'ok')
-    elif action == 'accept' and item.get('kind') == 'hardcover' and item.get('candidate'):
-        core.save_override(item['key'], {'hardcover': item['candidate']})
-        flash(T('Hardcover link saved: it is used for this book from the next scan on.'), 'ok')
+    if action == 'accept' and item.get('kind') in ('asin', 'hardcover') and item.get('candidate'):
+        # user 2026-11-09: applied RIGHT AWAY - the override is saved and a real scan of just this book writes it (ASIN, metadata, ratings)
+        core.save_override(item['key'], {item['kind']: item['candidate']})
+        core.set_queue_decision(qid, action)
+        new_id, err = core.RUNNER.start('item', dry_run=False, only_items=[item['key']], label=f"{'ASIN' if item['kind'] == 'asin' else 'Hardcover'} from the review list: {item.get('title')}",
+                                        run_settings={'ABS_BACKUP': False})
+        if err:
+            flash(T('Saved. A scan is running right now: it is written for this book with the next scan.'), 'ok'); return redirect(url_for('review_page') + '#buecher')
+        return redirect(url_for('run_view', run_id=new_id))
     elif action == 'accept' and item.get('kind') in ('title', 'isbn', 'authors') and item.get('candidate'):
         # write through abs_apply.py (value check against ABS, journal, undo) - no new Audible request
         field = item['kind']
@@ -469,6 +478,26 @@ def queue_action(qid, action):
         flash(T('Proposal rejected: the book stays unchanged.'), 'ok')
     core.set_queue_decision(qid, action)
     return redirect(url_for('review_page') + '#buecher')
+
+
+@app.route('/set-language/<path:key>/<lang_name>', methods=['POST'])
+@login_required
+def set_language(key, lang_name):
+    """Review list 'wrong language': write the chosen library language right away (abs_apply: value check, journal, undo)."""
+    s = core.load_settings()
+    allowed = [x.strip() for x in str(s.get('BOOK_LANGUAGES') or 'English, German').split(',') if x.strip()]
+    if lang_name not in allowed: abort(400)
+    iid = key.split('_', 1)[1]
+    try: md = (core.abs_get(s, f'/api/items/{iid}').json().get('media') or {}).get('metadata') or {}
+    except Exception: flash(T('ABS not reachable.'), 'error'); return redirect(url_for('review_page') + '#sonstiges')
+    rid = 'review-' + datetime.now().strftime('%Y%m%d-%H%M%S')
+    os.makedirs(core.REPORT_DIR, exist_ok=True)
+    with open(os.path.join(core.REPORT_DIR, f'planned_changes_{rid}.jsonl'), 'w', encoding='utf-8') as f:
+        f.write(json.dumps({'run': rid, 'ts': datetime.now().isoformat(timespec='seconds'), 'item': iid, 'key': key, 'title': md.get('title'),
+                            'field': 'language', 'old': md.get('language'), 'new': lang_name, 'source': 'review_list', 'dry_run': True}, ensure_ascii=False) + '\n')
+    new_id, err = core.RUNNER.start('apply', undo_args=['--run', rid, '--apply'], label=f"Language from the review list: {md.get('title')}", run_settings={'ABS_BACKUP': False})
+    if err: flash(T(err), 'error'); return redirect(url_for('review_page') + '#sonstiges')
+    return redirect(url_for('run_view', run_id=new_id))
 
 
 @app.route('/review/<path:mid>/<action>', methods=['POST'])

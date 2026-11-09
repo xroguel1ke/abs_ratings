@@ -379,4 +379,10 @@ add({  # page tour 2026-11-08
     'Audible names %(a)s as author(s) of exactly this recording (same runtime and narrator).': 'Audible nennt %(a)s als Autor(en) genau dieser Aufnahme (gleiche Laufzeit und gleicher Sprecher).',
     'A person is never replaced automatically (pen names, editors, translations).': 'Eine Person wird nie automatisch ersetzt (Pseudonyme, Herausgeber, Übersetzungen).',
     "Apply: Audible's authors are written right away (can be undone). Discard: the authors stay.": 'Übernehmen: Die Autoren von Audible werden sofort geschrieben (rückgängig machbar). Verwerfen: Die Autoren bleiben.',
+    'Saved. A scan is running right now: it is written for this book with the next scan.': 'Gespeichert. Gerade läuft ein Scan: es wird für dieses Buch mit dem nächsten Scan geschrieben.',
+    'Apply: the ASIN is written right away (one scan of this book, locked). Discard: the book stays as it is and is not suggested again.': 'Übernehmen: Die ASIN wird sofort geschrieben (ein Scan nur dieses Buchs, gesperrt). Verwerfen: Das Buch bleibt wie es ist, der Vorschlag kommt nicht wieder.',
+    'Apply: this Hardcover page is used for the rating right away. Discard: no Hardcover rating for this book.': 'Übernehmen: Diese Hardcover-Seite wird sofort für die Bewertung genutzt. Verwerfen: keine Hardcover-Bewertung für dieses Buch.',
+    'Set %(l)s': '%(l)s setzen',
+    'The language of these books is unknown or not one of your book languages (Settings → Audible), and the script could not prove the right one. A button sets it right away (can be undone).':
+        'Die Sprache dieser Bücher ist unbekannt oder keine deiner Buchsprachen (Einstellungen → Audible), und das Skript konnte die richtige nicht sicher belegen. Ein Knopf setzt sie sofort (rückgängig machbar).',
 })
