@@ -51,6 +51,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [A] Counting batches after the 2026-11-08/09 rule changes (100 EN + 80 DE synthetic, Hardcover on, new cases year prefix / ISO code / wrong narrator + book folders) | ✅ | 52-64: fixes after 53, 55, 59, 60; 61-64 clean = Audible streak 4, Hardcover streak 4 |
 | [U] Library rounds 6-9 | ✅ | round 9: 0 changes, 0 errors; audit in ABS clean (3 accepted number pairs: split German volumes, two recordings of Mistborn 1) |
 | [A] Night 2026-11-09: genre cleanup (188 books, stable next round), Hardcover edition label in subtitle, library-task writes stamp history, race fix, folder narrator names | ✅ | rounds 10-12 0 errors; batches 65-68 clean (streak 4 again); ASIN audit of all 1907 ASINs: 1900 ok, 7 gone (known) |
+| [U] 2026-11-09 day: source health (canary + breaker), BOOK_LANGUAGES (no foreign editions, language consensus, wrong-language review list), series never mix languages, review list explained in plain words + checked same-ASIN groups, missing volumes page, sibling recordings via catalog search (Discworld #30/32/35) | ✅ | full round 0 errors; missing volumes 290 in 112 series |
 
 ## Goodreads (experimental)
 | Item | State | Note |

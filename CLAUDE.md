@@ -128,6 +128,11 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   2 min) name the same other narrator; a folder narrator contradicting ABS drives the ASIN search with runtime ±2 min (Fool's Errand
   flipped between two ASINs). Folder narrators = person names only ('09 - Volume 09 - The Town of Strife II' is a title). Title
   'YYYY - Title' = file-name title. ISO language codes ('eng') are spelled out for every book, also without Audible data.
+- 2026-11-09 (user): BOOK_LANGUAGES = the library's languages (user: English, German): an Audible product in another language is never
+  taken (neither metadata nor ratings), an ABS language outside it counts as unknown and is never spelled out; a series never mixes
+  languages (non-English book -> Audible's series of its language); library task sets a book to its series' language (90 %, shared
+  narrator); unresolved -> review list 'wrong language'. Source health (source_health.py): canary per source + breaker. Missing volumes
+  (missing_series.py, reports/missing_in_series.json, page /missing). Test containers run with --cpuset-cpus=0-9,12-31 (core 20 defect).
 - **Narrator = author** in ABS is replaced by Audible's narrators of the same recording (runtime 2 min) only.
 
 ## Testing
