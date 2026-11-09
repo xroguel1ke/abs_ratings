@@ -6,14 +6,14 @@
 # Exit code 0 only if nothing deviates. A deviation must be judged BY HAND: wrong -> fix the rule; better -> update golden/baseline with a note.
 DEV=/mnt/user/appdata/abs_ratings_dev; cd $DEV; fail=0
 IMG=ghcr.io/xroguel1ke/abs_ratings:web-ui
-py() { timeout 600 docker run --rm --name "abs_ratings_test_regress_$$_$RANDOM" -e PYTHONDONTWRITEBYTECODE=1 -v $DEV:/src -w /src $IMG python -I "$@"; }
+py() { timeout 600 docker run --rm --cpuset-cpus=${ABS_CPUS:-0-9,12-31} --name "abs_ratings_test_regress_$$_$RANDOM" -e PYTHONDONTWRITEBYTECODE=1 -v $DEV:/src -w /src $IMG python -I "$@"; }
 echo "== 1 syntax";  py -c 'import sys; [compile(open(f).read(), f, "exec") for f in ("abs_ratings.py","abs_series.py","abs_undo.py","recorder.py","source_state.py")]; print("ok")' || fail=1
 echo "== 2 unit tests"; py tests/test_authors.py | tail -1 || fail=1; py tests/test_series.py | tail -1 || fail=1; py tests/test_asin.py | tail -1 || fail=1; py tests/test_webui_queue.py | tail -1 || fail=1; py tests/test_webui_i18n.py | tail -1 || fail=1; py tests/test_source_state.py | tail -1 || fail=1; py tests/test_desc.py | tail -1 || fail=1; py tests/test_rating_block.py | tail -1 || fail=1
 echo "== 2a pytest"; tools/pytest_all.sh > /tmp/claude-0/pytest_all.out 2>&1 || fail=1; tail -1 /tmp/claude-0/pytest_all.out
 echo "== 2b per-source search state (real-run mode vs fake ABS, offline)"; tools/source_state_test.sh tests/private/sst_keys.txt > /tmp/claude-0/sst_it.out 2>&1 || fail=1; tail -1 /tmp/claude-0/sst_it.out
 echo "== 2d change monitoring (real-run mode vs fake ABS)"; tools/watch_test.sh > /tmp/claude-0/watch_it.out 2>&1 || fail=1; tail -1 /tmp/claude-0/watch_it.out
 echo "== 2c Hardcover matches of the hand-checked batches"; tools/hc_golden_check.sh || fail=1
-echo "== 3 library-wide series/author decisions"; py tools/lib_check.py > /tmp/claude-0/lib_check.out 2>&1; rc=$?; [ $rc -eq 139 ] && { echo "lib_check crashed (139, segfault) - one retry"; py tools/lib_check.py > /tmp/claude-0/lib_check.out 2>&1; rc=$?; }; [ $rc -ne 0 ] && { fail=1; echo "lib_check exit code $rc (0-byte output = container did not start; see docker events)"; }; tail -4 /tmp/claude-0/lib_check.out
+echo "== 3 library-wide series/author decisions"; py tools/lib_check.py > /tmp/claude-0/lib_check.out 2>&1; rc=$?; [ $rc -eq 139 -o $rc -eq 135 ] && { echo "lib_check crashed ($rc) - one retry"; py tools/lib_check.py > /tmp/claude-0/lib_check.out 2>&1; rc=$?; }; [ $rc -ne 0 ] && { fail=1; echo "lib_check exit code $rc (0-byte output = container did not start; see docker events)"; }; tail -4 /tmp/claude-0/lib_check.out
 echo "== 3b damage simulation (repairs on damaged copies, undamaged books unchanged)"; tools/damage_test.sh 2 > /tmp/claude-0/damage_reg.out 2>&1 || fail=1; grep "damage repaired" /tmp/claude-0/damage_reg.out; grep -c "  HARM" /tmp/claude-0/damage_reg.out | sed "s/^/harm: /"
 echo "== 4 golden rounds"
 i=0
@@ -37,7 +37,7 @@ for k in tests/private/round*_keys.txt tests/private/wl0*_keys.txt; do
 done
 for sf in tests/synthetic/batch_*.json; do
   n=$(basename $sf .json | sed 's/batch_//'); r=reg_syn_$n; [ -d /mnt/user/appdata/abs_scripts_test/$r ] || continue; echo "-- $r (synthetic books, not in the library)"; grep -cE "Traceback|ERROR" /tmp/claude-0/regress_$r.out | sed 's/^/errors: /'
-  docker run --rm --name abs_ratings_test_evalsyn -e PYTHONDONTWRITEBYTECODE=1 -v $DEV:/src:ro -v /mnt/user/appdata/abs_scripts_test:/t:ro -v /tmp/claude-0:/tmp/claude-0:ro -w /src $IMG python -I tools/evaluate.py $(ls /mnt/user/appdata/abs_scripts_test/$r/reports/planned_changes_*.jsonl | head -1 | sed 's#.*/abs_scripts_test#/t#') /tmp/claude-0/syn_golden_$n.json /tmp/claude-0/syn_keys_$n.txt || fail=1
+  docker run --rm --cpuset-cpus=${ABS_CPUS:-0-9,12-31} --name abs_ratings_test_evalsyn -e PYTHONDONTWRITEBYTECODE=1 -v $DEV:/src:ro -v /mnt/user/appdata/abs_scripts_test:/t:ro -v /tmp/claude-0:/tmp/claude-0:ro -w /src $IMG python -I tools/evaluate.py $(ls /mnt/user/appdata/abs_scripts_test/$r/reports/planned_changes_*.jsonl | head -1 | sed 's#.*/abs_scripts_test#/t#') /tmp/claude-0/syn_golden_$n.json /tmp/claude-0/syn_keys_$n.txt || fail=1
 done
 echo "-- requests that had no recording (blocked, never sent): $(cat tests/private/recordings/_misses.jsonl 2>/dev/null | grep -c blocked)"
 [ $fail = 0 ] && echo "REGRESSION: all green" || echo "REGRESSION: DEVIATIONS - judge by hand"

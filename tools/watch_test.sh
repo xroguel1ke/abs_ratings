@@ -7,7 +7,7 @@ set -e
 DEV=/mnt/user/appdata/abs_ratings_dev; T=/mnt/user/appdata/abs_scripts_test/watch_it
 LIB=114068f9-142d-4524-b0ef-a349354b5f88; ID=8c6e8b09-009d-4b32-a346-6788161e7b2b
 rm -rf "$T"; mkdir -p "$T/logs"
-docker run --rm --name abs_ratings_test_watch_it --network host -e PYTHONDONTWRITEBYTECODE=1 -v "$DEV":/src -v "$T":/data -w /src \
+docker run --rm --cpuset-cpus=${ABS_CPUS:-0-9,12-31} --name abs_ratings_test_watch_it --network host -e PYTHONDONTWRITEBYTECODE=1 -v "$DEV":/src -v "$T":/data -w /src \
   -e DATA_DIR=/data -e LIBRARY_IDS="$LIB" -e RECORD_DIR=/src/tests/private/recordings -e RECORD_REUSE=1 \
   -e RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com,media-amazon -e GOODREADS_ENABLED=false -e HARDCOVER_ENABLED=false \
   -e ABS_BACKUP=false -e REFRESH_DAYS=90 -e BATCH_SIZE=50 -e WORKERS=1 -e SERIES_MERGE=false -e LIBRARY_REPORT=false -e FILL_COVERS=false -e UPDATE_COVERS=false \

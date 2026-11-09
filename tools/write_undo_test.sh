@@ -5,7 +5,7 @@ set -e
 KEYS="$1"; R=wu_$(date +%s); DEV=/mnt/user/appdata/abs_ratings_dev; DATA=/mnt/user/appdata/abs_scripts_test/$R
 mkdir -p "$DATA/logs"
 LIB=$(jq -r '.LIBRARY_IDS' /mnt/user/appdata/audiobookshelf/abs_scripts/settings.json)
-timeout 3600 docker run --rm --name "abs_ratings_test_$R" --network host -e PYTHONDONTWRITEBYTECODE=1 -v "$DEV":/src -v "$DATA":/data \
+timeout 3600 docker run --rm --cpuset-cpus=${ABS_CPUS:-0-9,12-31} --name "abs_ratings_test_$R" --network host -e PYTHONDONTWRITEBYTECODE=1 -v "$DEV":/src -v "$DATA":/data \
   -e DATA_DIR=/data -e ONLY_ITEMS="$(paste -sd, "$KEYS")" -e LIBRARY_IDS="$LIB" -e HARDCOVER_ENABLED=false -e GOODREADS_ENABLED=false \
   -e RECORD_DIR=/src/tests/private/recordings -e RECORD_REUSE=1 -e RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com,media-amazon \
   -e PORT=${FAKE_PORT:-18997} ghcr.io/xroguel1ke/abs_ratings:web-ui sh -c '

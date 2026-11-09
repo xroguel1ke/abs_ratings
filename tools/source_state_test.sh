@@ -8,7 +8,7 @@ set -e
 KEYS="$1"; DEV=/mnt/user/appdata/abs_ratings_dev; T=/mnt/user/appdata/abs_scripts_test/sst_it
 rm -rf "$T"; mkdir -p "$T/logs"; cp "$KEYS" "$T/keys.txt"
 LIB=$(head -1 "$KEYS" | cut -d_ -f1)
-docker run --rm --name abs_ratings_test_sst_it --network host -e PYTHONDONTWRITEBYTECODE=1 -v "$DEV":/src -v "$T":/data -w /src \
+docker run --rm --cpuset-cpus=${ABS_CPUS:-0-9,12-31} --name abs_ratings_test_sst_it --network host -e PYTHONDONTWRITEBYTECODE=1 -v "$DEV":/src -v "$T":/data -w /src \
   -e DATA_DIR=/data -e LIBRARY_IDS="$LIB" -e RECORD_DIR=/src/tests/private/recordings -e RECORD_REUSE=1 \
   -e RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com,media-amazon -e GOODREADS_ENABLED=true -e HARDCOVER_ENABLED=true \
   -e HARDCOVER_TOKEN=offline -e ABS_BACKUP=false -e REFRESH_DAYS=90 -e BATCH_SIZE=500 -e WORKERS=3 -e SERIES_MERGE=false -e LIBRARY_REPORT=false \

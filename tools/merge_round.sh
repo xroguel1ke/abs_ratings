@@ -3,7 +3,7 @@
 set -e
 N="$1"; DEV=/mnt/user/appdata/abs_ratings_dev; D=/mnt/user/appdata/abs_scripts_test/merge_$N; B=tests/synthetic/merge_$N.json
 rm -rf "$D"; mkdir -p "$D"
-docker run --rm --name "abs_ratings_test_merge_$N" --network host -e PYTHONDONTWRITEBYTECODE=1 -v "$DEV":/src -v "$D":/data -w /src \
+docker run --rm --cpuset-cpus=${ABS_CPUS:-0-9,12-31} --name "abs_ratings_test_merge_$N" --network host -e PYTHONDONTWRITEBYTECODE=1 -v "$DEV":/src -v "$D":/data -w /src \
   ghcr.io/xroguel1ke/abs_ratings:web-ui sh -c "
 set -e
 [ -f $B ] || python -I tools/merge_synth.py make $N $B

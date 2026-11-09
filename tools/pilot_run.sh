@@ -11,7 +11,7 @@ REAL=/mnt/user/appdata/audiobookshelf/abs_scripts
 mkdir -p "$P/logs" "$P/backup"; cp -n "$REAL/series_index.json" "$P/" 2>/dev/null || true
 cp "$KEYS" "$P/keys.txt"
 IMG=ghcr.io/xroguel1ke/abs_ratings:web-ui
-run() { docker run --rm --name "abs_ratings_test_pilot_$MODE" --network host -e PYTHONDONTWRITEBYTECODE=1 -e CONFIG_DIR=/config \
+run() { docker run --rm --cpuset-cpus=${ABS_CPUS:-0-9,12-31} --name "abs_ratings_test_pilot_$MODE" --network host -e PYTHONDONTWRITEBYTECODE=1 -e CONFIG_DIR=/config \
   -v "$REAL":/config:ro -v "$DEV":/src:ro -v "$P":/data -w /src $IMG "$@"; }
 case "$MODE" in
   backup)  run python -I tools/item_backup.py backup /data/keys.txt /data/backup ;;
