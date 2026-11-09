@@ -1251,7 +1251,12 @@ def glued_subtitle(title, abs_sub, aud_title, aud_sub, abs_series=None):
     if not (title and aud_title and aud_sub) or n(aud_title) == n(title) or ':' not in title: return None
     if n(title) not in (n(f"{aud_title}: {aud_sub}"), n(f"{aud_title}: {aud_sub}: {aud_sub}")): return None
     if n(abs_sub) == n(aud_sub): return 'title'  # the subtitle is shown twice in ABS (title + subtitle field)
-    if not abs_sub: return 'subtitle' if n(title) == n(f"{aud_title}: {aud_sub}: {aud_sub}") else None  # 'Mistborn: The Final Empire' alone is a normal title
+    if not abs_sub:
+        if n(title) == n(f"{aud_title}: {aud_sub}: {aud_sub}"): return 'subtitle'
+        # Audible's subtitle is only a series label of the book's own series ('Legend of the Arch Magus, Book 1, 2'): never part of the title
+        m0 = re.match(r'^(.+?),?\s+(?:Books?|Volumes?|Vol\.|Band|Teil|Part)\s+[\d,\s&and-]+$', aud_sub.strip(), re.I)
+        if m0 and any(title_similarity(m0.group(1), x) >= 0.85 for x in abs_series or [] if x): return 'subtitle'
+        return None  # 'Mistborn: The Final Empire' alone is a normal title
     m = re.match(r'^(.+?),?\s+(?:Book|Volume|Vol\.|Band|Teil|Part)\s+\d+(?:\.\d+)?$', abs_sub.strip(), re.I)
     if m and not any(title_similarity(m.group(1), x) >= 0.85 for x in abs_series or [] if x) and title_similarity(m.group(1), aud_sub) < 0.85: return 'subtitle'
     return None

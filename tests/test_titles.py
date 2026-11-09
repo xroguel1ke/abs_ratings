@@ -13,6 +13,8 @@ def test_glued_subtitle():
     # the subtitle field names a series the book is not in: replaced too
     assert g('Moreta: Dragonlady of Pern: Dragonriders of Pern, Book 7', 'Victor of Tucson, Book 4', 'Moreta: Dragonlady of Pern', 'Dragonriders of Pern, Book 7', ['Dragonriders of Pern']) == 'subtitle'
     assert g('X: Y: Y', None, 'X', 'Y') == 'subtitle'
+    assert g("Legend of the Arch Magus: Publisher's Pack: Legend of the Arch Magus, Book 1, 2", None, "Legend of the Arch Magus: Publisher's Pack",
+             'Legend of the Arch Magus, Book 1, 2', ['Legend of the Arch Magus']) == 'subtitle'
     # normal titles stay
     assert g('Mistborn: The Final Empire', None, 'Mistborn', 'The Final Empire') is None
     assert g('Mistborn: The Final Empire', 'My own', 'Mistborn', 'The Final Empire') is None
