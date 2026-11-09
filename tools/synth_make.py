@@ -11,9 +11,13 @@ WORDS = ['dragon', 'detective', 'space', 'war', 'magic', 'history', 'spy', 'ghos
          'vampire', 'garden', 'secret', 'island', 'winter', 'doctor', 'soldier', 'legend', 'shadow', 'city', 'forest', 'mountain', 'storm', 'prince', 'thief', 'alien', 'desert',
          'school', 'wizard', 'road', 'night', 'river', 'train', 'castle', 'sword', 'moon', 'fire', 'queen', 'hunter', 'angel', 'heist', 'colony', 'rebel']
 CASES = ['clean_ok', 'no_asin', 'dead_asin', 'messy_number_prefix', 'duplicate_title', 'marketing_suffix', 'initials_author', 'accent_free_author',
-         'runtime_8pct_off', 'series_name_variant', 'messy_series_prefix', 'no_asin']
+         'runtime_8pct_off', 'series_name_variant', 'messy_series_prefix', 'no_asin', 'year_prefix', 'iso_language', 'wrong_narrator']
 WORDS_DE = ['drache', 'mord', 'krieg', 'liebe', 'magie', 'geheimnis', 'königin', 'schatten', 'insel', 'winter', 'nacht', 'wald', 'stadt', 'schwert', 'mond', 'feuer', 'jäger', 'engel', 'reise', 'erbe', 'dunkel', 'welt']
-CASES_DE = ['clean_ok', 'no_asin', 'dead_asin', 'messy_number_prefix', 'duplicate_title', 'accent_free_author', 'no_asin', 'runtime_8pct_off', 'dead_asin', 'no_asin']
+CASES_DE = ['clean_ok', 'no_asin', 'dead_asin', 'messy_number_prefix', 'duplicate_title', 'accent_free_author', 'no_asin', 'runtime_8pct_off', 'dead_asin', 'no_asin',
+            'year_prefix', 'iso_language', 'wrong_narrator']
+# 2026-11-09 cases: 'YYYY - Title' file-name title; ISO language code ('eng'/'deu', correct ASIN: no ASIN change); ABS narrator of
+# another recording (came with a dead ASIN) while the book folder names the real one. Every book gets an 'Author/Series/N - Title - Narrator' folder.
+OTHER_NARR = ['Michael Kramer', 'Kate Reading', 'Simon Vance', 'Ray Porter', 'David Nathan', 'Andreas Fröhlich', 'Julia Nachtmann', 'Steven Pacey']
 GROUPS = 'product_attrs,contributors,series,media'
 UA = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36', 'Accept': 'application/json'}
 
@@ -61,13 +65,20 @@ def main():
         elif case == 'runtime_8pct_off': dur = int(dur * 1.08)  # correct ASIN, other cut -> no ASIN change expected
         elif case == 'series_name_variant' and ser: ser = [{'name': ser[0]['name'] + (' Series' if not ser[0]['name'].lower().endswith('series') else ''), 'sequence': ser[0]['sequence']}]; abs_asin, exp = None, asin
         elif case == 'messy_series_prefix' and ser and ser[0].get('sequence'): title, abs_asin, exp = f"{ser[0]['name']} 0{ser[0]['sequence']} {title}", None, asin
+        elif case == 'year_prefix': title, abs_asin, exp = f"{(p.get('issue_date') or '2020')[:4]} - {title}", None, asin
+        elif case == 'iso_language': pass  # language set below; correct ASIN stays
+        elif case == 'wrong_narrator': abs_asin, exp = 'B0' + ''.join(rng.choice('ABCDEFGHJKLMNPQRSTUVWXYZ0123456789') for _ in range(8)), asin
         elif case in ('series_name_variant', 'messy_series_prefix'): case, abs_asin, exp = 'no_asin', None, asin
+        real_narr = list(narr)
+        if case == 'wrong_narrator': narr = [rng.choice([x for x in OTHER_NARR if x not in narr])]
+        sl = lambda x: str(x).replace('/', '-')
+        folder = f"{sl(authors[0])}/{sl(ser[0]['name'] if ser else p['title'])}/{(ser[0].get('sequence') or '1') if ser else '1'} - {sl(p['title'])} - {' + '.join(real_narr[:2])}"
         iid = f"syn-{a.seed}-{lg}{i:02d}"
         md = {'title': title, 'subtitle': sub, 'authors': [{'id': f'a{j}', 'name': x} for j, x in enumerate(authors)], 'narrators': narr, 'series': [{'id': 's0', 'name': s['name'], 'sequence': s['sequence']} for s in ser],
-              'genres': [], 'publishedYear': (p.get('issue_date') or '')[:4] or None, 'publisher': p.get('publisher_name'), 'description': '', 'asin': abs_asin, 'isbn': None, 'language': 'English' if lg == 'en' else 'German', 'tags': []}
+              'genres': [], 'publishedYear': (p.get('issue_date') or '')[:4] or None, 'publisher': p.get('publisher_name'), 'description': '', 'asin': abs_asin, 'isbn': None, 'language': ('eng' if lg == 'en' else 'deu') if case == 'iso_language' else ('English' if lg == 'en' else 'German'), 'tags': []}
         media = {'metadata': md, 'duration': dur, 'tags': [], 'coverPath': None, 'size': dur * 8000}
-        items[iid] = {'id': iid, 'libraryId': lib, 'mediaType': 'book', 'media': media, 'tags': []}
-        lst.append({'id': iid, 'libraryId': lib, 'mediaType': 'book', 'media': dict(media)})
+        items[iid] = {'id': iid, 'libraryId': lib, 'mediaType': 'book', 'media': media, 'tags': [], 'relPath': folder}
+        lst.append({'id': iid, 'libraryId': lib, 'mediaType': 'book', 'media': dict(media), 'relPath': folder})
         expected[f'{lib}_{iid}'] = {'asin': exp, 'status': 'confirmed', 'title': p['title'], 'note': f'synthetic case {case}; true product {asin}', 'case': case}
     json.dump({'library': lib, 'items': items, 'list': lst, 'expected': expected}, open(a.out, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     print(f'{len(items)} synthetic books -> {a.out} (candidates seen: {len(cands)}); cases: ' + ', '.join(f'{c}={sum(1 for e in expected.values() if e["case"] == c)}' for c in dict.fromkeys(CASES)))
