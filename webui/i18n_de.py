@@ -387,4 +387,5 @@ add({  # page tour 2026-11-08
         'Die Sprache dieser Bücher ist unbekannt oder keine deiner Buchsprachen (Einstellungen → Audible), und das Skript konnte die richtige nicht sicher belegen. Ein Knopf setzt sie sofort (rückgängig machbar).',
     'Scan this book': 'Dieses Buch scannen', 'Test run': 'Testlauf', 'after Apply': 'nach Übernehmen', 'unchanged': 'unverändert', 'now': 'jetzt',
     'Open cover': 'Cover groß öffnen',
+    'ABS backup': 'ABS-Backup', 'Metadata': 'Metadaten', 'Empty authors': 'Leere Autoren', 'Real authors': 'Echte Autoren', 'Authors': 'Autoren', 'Series': 'Reihen',
 })

@@ -3,15 +3,15 @@
 <div class="card">
 {% if running %}<form method="post" class="row" style="margin-bottom:12px"><span class="badge running"><span class="live"></span>{{ _('running') }}</span><button class="danger" name="action" value="stop">{{ icon('square') }} {{ _('Cancel') }}</button></form>{% endif %}
 <form method="post" id="startform"><input type="hidden" name="action" value="start">
- <div class="row" style="gap:12px">
-  <label class="badge"><input type="checkbox" name="task_meta" {{ 'checked' if f.task_meta }}> {{ _('Metadata & ratings') }}</label>
-  <label class="badge"><input type="checkbox" name="task_authors" {{ 'checked' if f.task_authors }}> {{ _('Normalize authors') }}</label>
-  <label class="badge"><input type="checkbox" name="task_series" {{ 'checked' if f.task_series }}> {{ _('Merge series') }}</label>
-  <label class="badge" title="{{ _('Remove illustrators, translators, editors, forewords … from the author field (only when a real author remains)') }}"><input type="checkbox" name="task_roles" {{ 'checked' if f.task_roles }}> {{ _('Only real authors') }}</label>
-  <label class="badge" title="{{ _('Delete ABS authors without a single book') }}"><input type="checkbox" name="task_empty" {{ 'checked' if f.task_empty }}> {{ _('Remove empty authors') }}</label>
-  <span style="flex:1"></span>
-  <label class="badge" id="backupopt" title="{{ _('Ask ABS for a backup before anything is written (takes a few minutes for big libraries)') }}"><input type="checkbox" name="backup" {{ 'checked' if f.backup }}> {{ _('ABS backup before a real scan') }}</label>
-  <label class="badge"><input type="checkbox" name="dry" id="dry" {{ 'checked' if f.dry }} onchange="dryToggle()"> {{ _('Test run (write nothing)') }}</label>
+ <div class="row scanopts">
+  <label class="badge" title="{{ _('Metadata & ratings') }}"><input type="checkbox" name="task_meta" {{ 'checked' if f.task_meta }}> {{ _('Metadata') }}</label>
+  <label class="badge" title="{{ _('Normalize authors') }}"><input type="checkbox" name="task_authors" {{ 'checked' if f.task_authors }}> {{ _('Authors') }}</label>
+  <label class="badge" title="{{ _('Merge series') }}"><input type="checkbox" name="task_series" {{ 'checked' if f.task_series }}> {{ _('Series') }}</label>
+  <label class="badge" title="{{ _('Remove illustrators, translators, editors, forewords … from the author field (only when a real author remains)') }}"><input type="checkbox" name="task_roles" {{ 'checked' if f.task_roles }}> {{ _('Real authors') }}</label>
+  <label class="badge" title="{{ _('Delete ABS authors without a single book') }}"><input type="checkbox" name="task_empty" {{ 'checked' if f.task_empty }}> {{ _('Empty authors') }}</label>
+  <span class="sep"></span>
+  <label class="badge" id="backupopt" title="{{ _('Ask ABS for a backup before anything is written (takes a few minutes for big libraries)') }}"><input type="checkbox" name="backup" {{ 'checked' if f.backup }}> {{ _('ABS backup') }}</label>
+  <label class="badge" title="{{ _('Test run (write nothing)') }}"><input type="checkbox" name="dry" id="dry" {{ 'checked' if f.dry }} onchange="dryToggle()"> {{ _('Test run') }}</label>
   <button class="primary" id="startbtn" {{ 'disabled' if running }}>{{ icon('play') }} {{ _('Start scan') }}</button>
  </div>
  <details class="adv" style="margin-top:8px"><summary><b>{{ _('Remove ratings') }}</b> <span class="muted small">– {{ _('instead of a normal scan') }}</span></summary>

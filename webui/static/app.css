@@ -131,7 +131,23 @@ input[type=text],input[type=password],input[type=number],input[type=time],input[
  transition:border-color .15s var(--ease),background-color .15s var(--ease)}
 textarea{height:auto;padding:8px 12px;line-height:20px}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
-input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;height:16px;vertical-align:-3px;margin:0 4px 0 0}
+input[type=radio]{accent-color:var(--accent);width:16px;height:16px;vertical-align:-3px;margin:0 4px 0 0}
+/* checkboxes: a small rounded box, accent fill + white tick when on (2026-11-09) */
+input[type=checkbox]{appearance:none;-webkit-appearance:none;width:16px;height:16px;margin:0 6px 0 0;vertical-align:-3px;flex:none;cursor:pointer;
+  border-radius:5px;border:1.5px solid var(--fg2);background:var(--bg,transparent);transition:background .12s,border-color .12s}
+input[type=checkbox]:hover{border-color:var(--accent)}
+input[type=checkbox]:checked{background:var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat;border-color:var(--accent)}
+input[type=checkbox]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=checkbox]:disabled{opacity:.45;cursor:not-allowed}
+label.badge:has(input[type=checkbox]){cursor:pointer;padding:4px 10px;transition:background .12s,box-shadow .12s}
+label.badge:has(input[type=checkbox]:checked){background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent);color:var(--fg)}
+label.chk{display:inline-flex;align-items:center;cursor:pointer}
+/* scan options in ONE row (wraps only on narrow screens) */
+.scanopts{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}
+.scanopts .badge{font-size:12px;padding:4px 8px}
+.scanopts .sep{flex:1;min-width:8px}
+.scanopts button{flex:none;white-space:nowrap}
+@media (max-width:900px){.scanopts{flex-wrap:wrap}}
 label.f{display:grid;grid-template-columns:260px 1fr;gap:8px 16px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
 label.f:last-of-type{border-bottom:none}
 label.f .h{grid-column:2;color:var(--muted);font-size:13px;line-height:18px;margin-top:-4px}
