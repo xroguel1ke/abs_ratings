@@ -86,6 +86,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [A] Review list small, only real doubt cases | ✅ | 8 entries for the whole library; wrong ISBNs without a replacement moved to reports/missing_isbn.json (status page), 529 offline - re-measure with Hardcover |
 | [U] Review list: accept for ISBN and title kinds | ✅ | ASIN (override), title + ISBN (abs_apply: value check, journal, undo, checksum), Hardcover link (override) |
 | [A] Counting batches 69-105 (strict expect_* checks since 76) + web UI round 2026-11-09 (series page with inline missing volumes, book page, history search, instant search, notifications per event + ntfy check, rating symbol sets + rewrite) | ✅ | 97-105 clean = 9 in a row (1620 books, 0 deviations); 'new' on the missing list = newly released only |
+| [A] Bug hunt 2026-11-09 evening (live library audit, web UI e2e tests, code review, counter-check batches 106-109, bulk Audible prefetch) | ✅ | 13 clean batches in a row (97-109); full dry run 1919 books in 13.5 min (was 34), 0 errors, 0 doubled blocks; done - further testing = diminishing returns |
 
 ## Web UI (task: 10 points, Playwright vs fake ABS, screenshots in docs/screenshots/)
 | # | Item | State | Note |
