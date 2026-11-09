@@ -12,7 +12,11 @@ WORDS = ['dragon', 'detective', 'space', 'war', 'magic', 'history', 'spy', 'ghos
          'school', 'wizard', 'road', 'night', 'river', 'train', 'castle', 'sword', 'moon', 'fire', 'queen', 'hunter', 'angel', 'heist', 'colony', 'rebel']
 CASES = ['clean_ok', 'no_asin', 'dead_asin', 'messy_number_prefix', 'duplicate_title', 'marketing_suffix', 'initials_author', 'accent_free_author',
          'runtime_8pct_off', 'series_name_variant', 'messy_series_prefix', 'no_asin', 'year_prefix', 'iso_language', 'wrong_narrator']
-WORDS_DE = ['drache', 'mord', 'krieg', 'liebe', 'magie', 'geheimnis', 'königin', 'schatten', 'insel', 'winter', 'nacht', 'wald', 'stadt', 'schwert', 'mond', 'feuer', 'jäger', 'engel', 'reise', 'erbe', 'dunkel', 'welt']
+# 2026-11-09: other categories too (non-fiction, kids, mystery/thriller, romance) - real libraries are not only fantasy
+WORDS += ['biography', 'business', 'psychology', 'science', 'health', 'cooking', 'travel', 'philosophy', 'economics', 'memoir', 'politics',
+          'bear', 'bunny', 'princess', 'dinosaur', 'friends', 'thriller', 'romance', 'wedding', 'cowboy', 'horror', 'zombie', 'poetry']
+WORDS_DE = ['drache', 'mord', 'krieg', 'liebe', 'magie', 'geheimnis', 'königin', 'schatten', 'insel', 'winter', 'nacht', 'wald', 'stadt', 'schwert', 'mond', 'feuer', 'jäger', 'engel', 'reise', 'erbe', 'dunkel', 'welt',
+            'geschichte', 'biografie', 'psychologie', 'kochen', 'kinder', 'pferd', 'hexe', 'krimi', 'kommissar', 'familie', 'gesundheit', 'wirtschaft']
 CASES_DE = ['clean_ok', 'no_asin', 'dead_asin', 'messy_number_prefix', 'duplicate_title', 'accent_free_author', 'no_asin', 'runtime_8pct_off', 'dead_asin', 'no_asin',
             'year_prefix', 'iso_language', 'wrong_narrator']
 # 2026-11-09 cases: 'YYYY - Title' file-name title; ISO language code ('eng'/'deu', correct ASIN: no ASIN change); ABS narrator of
@@ -72,7 +76,9 @@ def main():
         real_narr = list(narr)
         if case == 'wrong_narrator': narr = [rng.choice([x for x in OTHER_NARR if x not in narr])]
         sl = lambda x: str(x).replace('/', '-')
-        folder = f"{sl(authors[0])}/{sl(ser[0]['name'] if ser else p['title'])}/{(ser[0].get('sequence') or '1') if ser else '1'} - {sl(p['title'])} - {' + '.join(real_narr[:2])}"
+        layout = rng.choice(['series', 'series', 'flat', 'title'])  # Author/Series/N - Title - Narrator | Author/Title | Title
+        folder = (f"{sl(authors[0])}/{sl(ser[0]['name'] if ser else p['title'])}/{(ser[0].get('sequence') or '1') if ser else '1'} - {sl(p['title'])} - {' + '.join(real_narr[:2])}"
+                  if layout == 'series' or case == 'wrong_narrator' else f"{sl(authors[0])}/{sl(p['title'])}" if layout == 'flat' else sl(p['title']))
         iid = f"syn-{a.seed}-{lg}{i:02d}"
         md = {'title': title, 'subtitle': sub, 'authors': [{'id': f'a{j}', 'name': x} for j, x in enumerate(authors)], 'narrators': narr, 'series': [{'id': 's0', 'name': s['name'], 'sequence': s['sequence']} for s in ser],
               'genres': [], 'publishedYear': (p.get('issue_date') or '')[:4] or None, 'publisher': p.get('publisher_name'), 'description': '', 'asin': abs_asin, 'isbn': None, 'language': ('eng' if lg == 'en' else 'deu') if case == 'iso_language' else ('English' if lg == 'en' else 'German'), 'tags': []}

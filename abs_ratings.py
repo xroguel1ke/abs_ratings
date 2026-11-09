@@ -2001,6 +2001,11 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             seq_nums = {str(int(float(s.get('sequence')))) for s in (abs_series or []) if re.fullmatch(r'\d+(\.0)?', str(s.get('sequence') or ''))}
             self_inconsistent = bool(seq_nums & f_nums and duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120
                                      and {re.sub(r'[^a-z]', '', fold_accents(n).lower()) for n in (narrators or []) if n} & {re.sub(r'[^a-z]', '', fold_accents(n).lower()) for n in (p.get('narrators_raw') or []) if n})
+            part_ = lambda t: set(re.findall(r'(?i)\b(?:part|pt\.?|teil)\s*(\d+)\b', t or ''))
+            if part_(title) and part_(found_title) and not part_(title) & part_(found_title):
+                # 'The Desert Prince (Part 1 of 3)' vs '(Part 2 of 3)': the title normalisation drops the brackets, the part number decides
+                logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (part {','.join(sorted(part_(found_title)))} vs {','.join(sorted(part_(title)))})")
+                continue
             if f_nums and t_nums and not f_nums & t_nums and not self_inconsistent:  # different volume: never the same book (unless ABS contradicts itself and runtime + narrator agree)
                 logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (volume {','.join(sorted(f_nums))} vs {','.join(sorted(t_nums))})")
                 continue
