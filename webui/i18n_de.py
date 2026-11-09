@@ -407,4 +407,5 @@ add({  # page tour 2026-11-08
     'Keys: J/K next/previous · A apply · D discard · X select': 'Tasten: J/K weiter/zurück · A übernehmen · D verwerfen · X auswählen',
     'Hide hidden': 'Ausgeblendete verbergen', 'Show hidden (%(n)s)': 'Ausgeblendete zeigen (%(n)s)', 'Not interested: hide this series': 'Kein Interesse: Reihe ausblenden',
     'Show again': 'Wieder zeigen', 'Hide series': 'Reihe ausblenden', 'Not interested: hide this volume': 'Kein Interesse: Band ausblenden', 'show': 'zeigen', 'hide': 'ausblenden', 'new': 'neu',
+    'new ASIN': 'neue ASIN', 'series': 'Reihen', 'titles': 'Titel', 'covers': 'Cover', 'review list': 'Prüfliste', 'errors': 'Fehler', 'done around': 'fertig gegen', 'books/min': 'Bücher/min',
 })

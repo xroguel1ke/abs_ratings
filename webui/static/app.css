@@ -275,3 +275,6 @@ table.mtable td.rel{width:150px;text-align:right;white-space:nowrap;font-variant
 
 table.mtable td.hidecol{width:64px;text-align:right}.linkbtn{background:none;border:0;padding:0;color:var(--muted);cursor:pointer;font:inherit;text-decoration:underline dotted}
 .linkbtn:hover{color:var(--accent)}
+
+.livecard{display:block;text-decoration:none;color:inherit;margin-bottom:16px}
+.pbar{height:8px;border-radius:6px;background:var(--chip);overflow:hidden;margin:10px 0 6px}.pbar span{display:block;height:100%;background:var(--accent);transition:width .6s}

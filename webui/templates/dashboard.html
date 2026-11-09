@@ -2,6 +2,22 @@
 <h1>{{ _('Overview') }}</h1>
 {% if not settings.ABS_URL or not settings.API_TOKEN %}<div class="flash error">{{ _('Not set up yet: please enter the ABS URL, token and libraries under') }} <a href="{{ url_for('settings') }}">{{ _('Settings') }}</a>.</div>{% endif %}
 
+{% if running and current_run %}<a class="card livecard" href="{{ url_for('run_view', run_id=current_run.id) }}" id="livecard" data-run="{{ current_run.id }}">
+ <div class="row" style="justify-content:space-between"><span><span class="badge running"><span class="live"></span>{{ _('running') }}</span> <b>{{ current_run.label }}</b></span>
+  <span class="small muted" id="lv-eta"></span></div>
+ <div class="pbar"><span id="lv-bar" style="width:0%"></span></div>
+ <div class="row small" style="justify-content:space-between;gap:12px"><span id="lv-pos" class="muted"></span><span id="lv-title" class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%"></span></div>
+ <div class="row small" id="lv-cnt" style="gap:6px;margin-top:6px"></div></a>
+<script>(function(){ const c=document.getElementById('livecard'); if(!c) return; const L={audible_found:'{{ _('Audible') }}',hardcover:'Hardcover',new_asin:'{{ _('new ASIN') }}',series:'{{ _('series') }}',titles:'{{ _('titles') }}',covers:'{{ _('covers') }}',reviews:'{{ _('review list') }}',errors:'{{ _('errors') }}'};
+ async function tick(){ try{ const j=await (await fetch('/api/run/'+c.dataset.run+'/progress')).json();
+  if(j.status!=='running'){ location.reload(); return; }
+  document.getElementById('lv-bar').style.width=(j.pct||0)+'%';
+  document.getElementById('lv-pos').textContent=j.total? j.n+' / '+j.total+' ('+Math.round(j.pct||0)+' %)' : '';
+  document.getElementById('lv-title').textContent=j.title||'';
+  document.getElementById('lv-eta').textContent=(j.finish? '{{ _('done around') }} '+j.finish : (j.eta||''))+(j.speed? ' · '+j.speed+' {{ _('books/min') }}':'');
+  document.getElementById('lv-cnt').innerHTML=Object.keys(L).filter(k=>j[k]).map(k=>'<span class="badge'+(k==='errors'?' err':'')+'">'+L[k]+' '+j[k]+'</span>').join('');
+ }catch(e){} setTimeout(tick, 4000); } tick(); })();</script>{% endif %}
+
 <div class="hero">
  <a class="card herocard" href="{{ url_for('review_page') }}">
   <div class="muted small">{{ _('To review') }}</div><div class="v">{{ tiles.queue + tiles.review + tiles.merged }}</div>
