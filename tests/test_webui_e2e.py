@@ -143,3 +143,20 @@ def test_5_apply_selected_changes_of_a_test_run():
     wait_run()
     assert item('it2')['metadata']['title'] == 'Second Dawn'
     assert item('it1')['metadata']['title'] == 'First Light'
+
+
+def test_6_same_field_twice_in_one_test_run():
+    from webui import core
+    rid = '20990101-000001'
+    ch = [{'run': rid, 'ts': '2099-01-01T00:00:00', 'item': 'it1', 'key': f'{LIB}_it1', 'title': 'First Light', 'field': 'subtitle', 'old': None,
+           'new': 'Step One', 'source': 'test', 'dry_run': True},
+          {'run': rid, 'ts': '2099-01-01T00:00:01', 'item': 'it1', 'key': f'{LIB}_it1', 'title': 'First Light', 'field': 'subtitle', 'old': 'Step One',
+           'new': 'Step Two', 'source': 'test2', 'dry_run': True}]
+    with open(os.path.join(core.REPORT_DIR, f'planned_changes_{rid}.jsonl'), 'w', encoding='utf-8') as f:
+        for e in ch: f.write(json.dumps(e) + '\n')
+    core.RUNNER._save_run({'id': rid, 'kind': 'full', 'label': 'test run 2', 'dry_run': True, 'status': 'ok', 'start': '2099-01-01T00:00:00', 'end': '2099-01-01T00:00:01'})
+    client().post(f'/run/{rid}/apply', data={'mode': 'apply'})
+    wait_run()
+    assert item('it1')['metadata']['subtitle'] == 'Step Two', item('it1')['metadata']
+    last = [json.loads(l) for l in open(os.path.join(cfg, 'changes.jsonl'), encoding='utf-8')][-1]
+    assert last['field'] == 'subtitle' and last['old'] is None and last['new'] == 'Step Two', last

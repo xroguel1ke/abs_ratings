@@ -1037,7 +1037,8 @@ def abs_update(iid, key, title, updates, old_meta, source, tags=None, old_tags=N
     # User decision 2026-11-08: only lock_<field> tags protect a field. A value changed in ABS (by you or by an ABS rescan -
     # ABS cannot tell them apart) is checked again and corrected like any other value.
     if not updates and tags is None: return True
-    if updates and key:  # a change YOU undid (history / undo) is your decision: the same value is never written again (2026-11-09)
+    if updates and key and not str(source).startswith(('applied:', 'review', 'manual', 'series_page', 'book_page')):
+        # a change YOU undid (history / undo) is your decision: the script never writes the same value again (2026-11-09) - unless you apply it yourself
         journal_last(key, 'asin')
         for f_ in [f_ for f_, v_ in updates.items() if listing_value(f_, v_) in _UNDONE_VAL.get((key, f_), ())]:
             logging.info(f"        ↩️ {f_}: '{listing_value(f_, updates[f_])}' was undone by you before - not written again (lock_{f_} to keep it for good)")

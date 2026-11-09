@@ -84,11 +84,12 @@ def main():
                 continue
             cur = meta.get(f)
             if f == 'tags': cur = (item.get('media') or {}).get('tags')
+            if f in updates: cur = updates[f]  # the same field twice in one run (book scan, then the library task): the 2nd starts from the 1st
             if norm(f, cur) != norm(f, e.get('old')):
                 logging.info(f"  ⏭️ {title}: {f} changed since the dry run ({str(cur)[:60]!r} != {str(e.get('old'))[:60]!r}) - skipped (conflict)"); res['conflict'] += 1; continue
             if f == 'asin' and e.get('new') and (owners.get(e['new'], set()) - {key}):
                 logging.info(f"  ⛔ {title}: ASIN {e['new']} belongs to another book by now - skipped"); res['conflict'] += 1; continue
-            updates[f], old_meta[f] = e['new'], cur
+            updates[f] = e['new']; old_meta.setdefault(f, cur)  # journal 'old' = the value ABS had before this apply
         if updates:
             if a.apply:
                 if A.abs_update(iid, key, title, updates, old_meta, 'applied:' + a.run):
