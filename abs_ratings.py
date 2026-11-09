@@ -201,7 +201,10 @@ RATING_ORDER = RATING_ORDER or list(RATING_SOURCES)  # only the listed sources a
 RATING_ICONS = os.getenv('RATING_ICONS', 'moons').lower()        # moons | stars | circles | squares | diamonds (all with half steps)
 REWRITE_RATING_SYMBOLS = os.getenv('REWRITE_RATING_SYMBOLS', 'false').lower() == 'true'  # task: rewrite the symbols of every rating block
 # (full, half, empty) per symbol set; the order of the keys is the order in the web UI
-RATING_SYMBOL_SETS = {'moons': ('🌕', '🌗', '🌑'), 'stars': ('★', '⯪', '☆'), 'circles': ('●', '◐', '○'), 'squares': ('■', '◧', '□'), 'diamonds': ('◆', '⬖', '◇')}
+RATING_SYMBOL_SETS = {'moons': ('🌕', '🌗', '🌑'), 'stars': ('★', '⯪', '☆'), 'circles': ('●', '◐', '○'), 'squares': ('■', '◧', '□'), 'diamonds': ('◆', '⬖', '◇'),
+                      # colourful emoji (user 2026-11-09): emoji have no half symbol, the middle one stands for the half step
+                      'yellow_stars': ('⭐', '✨', '☆'), 'hearts': ('❤️', '💗', '🤍'), 'traffic': ('🟢', '🟡', '⚪'), 'green_squares': ('🟩', '🟨', '⬜'),
+                      'orange_circles': ('🟠', '🟡', '⚪')}
 RATING_LABELS = os.getenv('RATING_LABELS', 'en').lower()         # en | de
 RATING_POSITION = os.getenv('RATING_POSITION', 'top').lower()    # top | bottom of the description
 RATING_MIN_COUNT = int(os.getenv('RATING_MIN_COUNT', 0) or 0)    # a source with fewer ratings is not shown
@@ -3384,7 +3387,8 @@ def rewrite_symbols_pass():
     new = RATING_SYMBOL_SETS.get(RATING_ICONS, RATING_SYMBOL_SETS['moons'])
     swap = {}
     for st in RATING_SYMBOL_SETS.values():
-        for i, ch in enumerate(st): swap[ch] = new[i]
+        for i, ch in enumerate(st): swap.setdefault(ch, new[i])
+    swap.update({ch: new[i] for st in RATING_SYMBOL_SETS.values() for i, ch in enumerate(st) if st == new})
     keys = []
     for lib in LIBRARY_IDS:
         try: keys += [f"{lib}_{it['id']}" for it in abs_session.get(f"{ABS_URL}/api/libraries/{lib}/items").json().get('results') or []]
@@ -3402,7 +3406,8 @@ def rewrite_symbols_pass():
         if not m: continue
         block = m.group(0)
         # 5 symbols in a row ('🌕🌕🌕🌗🌑'): only those runs are swapped, never a symbol in the user's own text
-        nb = re.sub('[' + re.escape(''.join(swap)) + ']{5}', lambda x: ''.join(swap.get(c, c) for c in x.group(0)), block)
+        tok = '(?:' + '|'.join(re.escape(k) for k in sorted(swap, key=len, reverse=True)) + ')'  # emoji may be 2 code points (❤️)
+        nb = re.sub(f'(?:{tok}){{5}}', lambda x: ''.join(swap[t] for t in re.findall(tok, x.group(0))), block)
         if nb == block: continue
         if 'lock_description' in expand_locks(item_tags(it)): n_locked += 1; continue
         if abs_update(iid, key, meta.get('title'), {'description': cur.replace(block, nb)}, meta, 'rating_symbols'):
