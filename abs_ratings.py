@@ -3534,7 +3534,7 @@ def missing_in_series_task():
     by_key = {}
     for t, asins in list(SERIES_ASINS.items()): by_key.setdefault(_k(t), set()).update(asins)
     hosts = {'German': ['api.audible.de'], 'English': ['api.audible.com', 'api.audible.co.uk']}
-    out, asked = [], 0
+    out, asked, checked = [], 0, []
     for (lib, _), books in sorted(SERIES_BOOKS.items()):
         name = books[0]['name']
         langs = [b['lang'] for b in books if b.get('lang')]
@@ -3548,12 +3548,13 @@ def missing_in_series_task():
                 if m: members, store = m, h.replace('api.', 'www.'); break
             if members: break
         if not members: continue
+        checked.append(name)  # Audible knows this series: the series page can show 'complete'
         miss = MS.compare(books, members, _v(name), lang, MISSING_NOVELLAS)
         # a volume the library has OUTSIDE this series (other series name, no series, other ASIN) is no gap: ASIN or title anywhere
         miss = [m for m in miss if not ASIN_OWNERS.get(m.get('asin')) and not TITLE_OWNERS.get((lib, normalize_title_text(m.get('title') or '')))]
         if miss: out.append({'lib': lib, 'series': name, 'author': books[0].get('author_name') or books[0].get('author'), 'language': lang, 'have': len(books), 'store': store, 'missing': miss})
     rw_json(SERIES_MEMBERS_FILE, cache)
-    rw_json(os.path.join(REPORT_DIR, 'missing_in_series.json'), {'generated': datetime.now().strftime('%Y-%m-%d %H:%M'), 'series': out})
+    rw_json(os.path.join(REPORT_DIR, 'missing_in_series.json'), {'generated': datetime.now().strftime('%Y-%m-%d %H:%M'), 'series': out, 'checked': sorted(set(checked))})
     logging.info(f"📚 Missing volumes: {sum(len(x['missing']) for x in out)} in {len(out)} series (series lists checked: {asked})")
 
 def source_down(source, why):

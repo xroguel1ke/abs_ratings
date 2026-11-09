@@ -398,4 +398,9 @@ add({  # page tour 2026-11-08
     'Not enough evidence for an automatic change: your call.': 'Zu wenig Belege für eine automatische Änderung: deine Entscheidung.',
     'Language unknown or not one of your book languages. A button sets it right away.': 'Sprache unbekannt oder keine deiner Buchsprachen. Ein Knopf setzt sie sofort.',
     'Volumes Audible lists for your series that you do not have yet. Other editions count as present.': 'Bände deiner Reihen, die Audible führt und dir noch fehlen. Andere Ausgaben zählen als vorhanden.',
+    'Every series with its books. Completeness counts released volumes only.': 'Alle Reihen mit ihren Büchern. Vollständigkeit zählt nur erschienene Bände.',
+    'Filter series': 'Reihen filtern', 'All': 'Alle', 'Incomplete': 'Unvollständig', 'Complete': 'Vollständig', 'Problems': 'Auffällig', 'Reload': 'Neu laden',
+    '%(n)s books': '%(n)s Bücher', 'Same number twice': 'Gleiche Nummer doppelt', '%(n)s missing': '%(n)s fehlen',
+    'Audible does not list this series': 'Audible kennt diese Reihe nicht', 'Rename this series on all its books? (can be undone in the History)': 'Diese Reihe bei allen Büchern umbenennen? (im Verlauf rückgängig machbar)',
+    'Rename / merge': 'Umbenennen / zusammenführen', 'An existing name merges the series.': 'Ein bestehender Name führt die Reihen zusammen.', 'No series found.': 'Keine Reihen gefunden.',
 })

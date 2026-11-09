@@ -681,6 +681,42 @@ def logs_zip():
                      mimetype='application/zip')
 
 
+@app.route('/series')
+@login_required
+def series_page():
+    """All series with their books: complete / N missing (released only), duplicate numbers, mixed languages; rename."""
+    return render_template('series.html', series=core.library_series(request.args.get('refresh') == '1'))
+
+
+@app.route('/series/rename', methods=['POST'])
+@login_required
+def series_rename():
+    """Rename a series on all its books (= merge into an existing name). abs_apply: value check, journal, undo, no backup."""
+    lib, old, new = request.form.get('lib', ''), request.form.get('old', ''), (request.form.get('new') or '').strip()
+    if not new or new == old: return redirect(url_for('series_page'))
+    s = core.load_settings()
+    se = next((x for x in core.library_series() if x['lib'] == lib and x['name'] == old), None)
+    if not se: abort(404)
+    rid = 'series-' + datetime.now().strftime('%Y%m%d-%H%M%S')
+    os.makedirs(core.REPORT_DIR, exist_ok=True)
+    with open(os.path.join(core.REPORT_DIR, f'planned_changes_{rid}.jsonl'), 'w', encoding='utf-8') as f:
+        for b in se['books']:
+            try: md = (core.abs_get(s, f"/api/items/{b['id']}").json().get('media') or {}).get('metadata') or {}
+            except Exception: continue
+            cur = [{'name': x.get('name'), 'sequence': x.get('sequence')} for x in md.get('series') or []]
+            newl, seen = [], set()
+            for x in cur:
+                nm = new if x['name'] == old else x['name']
+                if nm.lower() in seen: continue
+                seen.add(nm.lower()); newl.append({'name': nm, 'sequence': x['sequence']})
+            f.write(json.dumps({'run': rid, 'ts': datetime.now().isoformat(timespec='seconds'), 'item': b['id'], 'key': b['key'], 'title': b['title'],
+                                'field': 'series', 'old': cur, 'new': newl, 'source': 'series_page', 'dry_run': True}, ensure_ascii=False) + '\n')
+    core._SERIES_CACHE['data'] = None
+    new_id, err = core.RUNNER.start('apply', undo_args=['--run', rid, '--apply'], label=f"Series renamed: {old} → {new}", run_settings={'ABS_BACKUP': False})
+    if err: flash(T(err), 'error'); return redirect(url_for('series_page'))
+    return redirect(url_for('run_view', run_id=new_id))
+
+
 @app.route('/missing')
 @login_required
 def missing_page():

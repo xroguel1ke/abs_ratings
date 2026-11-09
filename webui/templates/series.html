@@ -1,0 +1,44 @@
+{% extends 'base.html' %}{% block title %}{{ _('Series') }}{% endblock %}{% block body %}
+{% set n_inc = series|selectattr('missing_rel')|list|length %}
+
+<div class="row" style="justify-content:space-between"><h1>{{ _('Series') }}</h1><a class="small" href="{{ url_for('series_page', refresh=1) }}">{{ _('Reload') }}</a></div>
+<p class="muted small">{{ _('Every series with its books. Completeness counts released volumes only.') }}</p>
+<div class="row small serbar">
+ <input type="search" id="sq" placeholder="{{ _('Filter series') }}" oninput="serFilter()">
+ <label class="badge"><input type="radio" name="sf" value="all" checked onchange="serFilter()"> {{ _('All') }} ({{ series|length }})</label>
+ <label class="badge"><input type="radio" name="sf" value="inc" onchange="serFilter()"> {{ _('Incomplete') }} ({{ n_inc }})</label>
+ <label class="badge"><input type="radio" name="sf" value="ok" onchange="serFilter()"> {{ _('Complete') }}</label>
+ <label class="badge"><input type="radio" name="sf" value="prob" onchange="serFilter()"> {{ _('Problems') }}</label>
+</div>
+{% for s in series %}
+<details class="card sercard" data-name="{{ (s.name ~ ' ' ~ s.author)|lower }}" data-state="{{ 'inc' if s.missing_rel else ('ok' if s.known else 'unk') }}" data-prob="{{ 1 if s.dups or s.langs|length > 1 else 0 }}">
+ <summary class="row" style="justify-content:space-between;gap:8px">
+  <span><b>{{ s.name }}</b> <span class="muted small">– {{ s.author }} · {{ _('%(n)s books', n=s.books|length) }}</span></span>
+  <span class="row" style="gap:6px;flex-wrap:nowrap">
+   {% if s.dups %}<span class="badge warn" title="{{ _('Same number twice') }}">#{{ s.dups|join(', #') }} 2×</span>{% endif %}
+   {% if s.langs|length > 1 %}<span class="badge warn">{{ s.langs|join(' + ') }}</span>{% endif %}
+   {% if s.missing_rel %}<a class="badge err" href="{{ url_for('missing_page') }}#s-{{ s.name|urlencode }}">{{ _('%(n)s missing', n=s.missing_rel) }}</a>
+   {% elif s.known %}<span class="badge ok" title="{{ _('Complete') }}">{{ icon('check', 14) }}</span>{% else %}<span class="badge" title="{{ _('Audible does not list this series') }}">–</span>{% endif %}
+   {% if s.missing_up %}<span class="badge" title="{{ _('announced') }}">+{{ s.missing_up }}</span>{% endif %}
+  </span>
+ </summary>
+ <div class="serbooks">{% for b in s.books %}<a class="serbook" href="{{ url_for('problem', key=b.key) }}" title="{{ b.title }}">
+  <img src="{{ url_for('cover', kind='abs', ident=b.id) }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+  <span class="small"><b>{{ ('#' ~ b.num) if b.num else '–' }}</b> {{ b.title }}{% if s.langs|length > 1 %} <span class="muted">({{ b.lang }})</span>{% endif %}</span></a>{% endfor %}</div>
+ <form method="post" action="{{ url_for('series_rename') }}" class="row small" style="margin-top:8px" data-confirm="{{ _('Rename this series on all its books? (can be undone in the History)') }}">
+  <input type="hidden" name="lib" value="{{ s.lib }}"><input type="hidden" name="old" value="{{ s.name }}">
+  <input type="text" name="new" value="{{ s.name }}" style="max-width:360px" list="sernames"><button>{{ _('Rename / merge') }}</button>
+  <span class="muted">{{ _('An existing name merges the series.') }}</span></form>
+</details>
+{% else %}<div class="card muted">{{ _('No series found.') }}</div>{% endfor %}
+<datalist id="sernames">{% for s in series %}<option value="{{ s.name }}">{% endfor %}</datalist>
+<script>
+function serFilter(){
+  const q=(document.getElementById('sq').value||'').toLowerCase(), f=document.querySelector('input[name=sf]:checked').value;
+  document.querySelectorAll('.sercard').forEach(c=>{
+    let ok=!q||c.dataset.name.includes(q);
+    if(f==='inc') ok=ok&&c.dataset.state==='inc'; else if(f==='ok') ok=ok&&c.dataset.state==='ok'; else if(f==='prob') ok=ok&&c.dataset.prob==='1';
+    c.style.display=ok?'':'none';});
+}
+</script>
+{% endblock %}

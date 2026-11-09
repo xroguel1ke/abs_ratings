@@ -259,3 +259,14 @@ table.mtable{width:100%;table-layout:fixed;border-collapse:collapse}
 table.mtable td{padding:4px 8px;vertical-align:top;border-top:1px solid var(--line)}
 table.mtable td.num{width:56px;white-space:nowrap}
 table.mtable td.rel{width:150px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* series page */
+.serbar{gap:8px;margin:8px 0 12px;flex-wrap:wrap}.serbar input[type=search]{min-width:220px;flex:1;max-width:360px}
+.sercard{padding:12px 16px}.sercard summary{cursor:pointer;list-style:none}.sercard summary::-webkit-details-marker{display:none}
+.serbooks{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-top:10px}
+.serbook{display:flex;gap:8px;align-items:center;text-decoration:none;color:inherit;padding:4px;border-radius:8px}
+.serbook:hover{background:var(--chip)}
+.serbook img{width:44px;height:44px;object-fit:cover;border-radius:6px;flex:none}
+.badge.err{background:rgba(200,60,50,.12);color:#c0392b;box-shadow:inset 0 0 0 1px rgba(200,60,50,.45);text-decoration:none}
+.badge.ok .ico{color:#2e8b57}
+.sercard{margin:0 0 8px}.sercard[open]{padding-bottom:14px}

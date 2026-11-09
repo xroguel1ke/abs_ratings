@@ -278,6 +278,48 @@ def abs_get(s, path, timeout=10):
 COVER_DIR = os.path.join(CONFIG_DIR, 'cache', 'covers')
 
 
+_SERIES_CACHE = {'ts': 0, 'data': None}
+
+
+def library_series(force=False):
+    """All series of the configured libraries with their books (ABS series endpoint, cached 5 min) plus the missing-volume state:
+    [{'name', 'lib', 'author', 'books': [{'id','key','title','num','lang'}], 'langs', 'dups', 'missing_rel', 'missing_up', 'known'}]."""
+    import time
+    if not force and _SERIES_CACHE['data'] is not None and time.time() - _SERIES_CACHE['ts'] < 300: return _SERIES_CACHE['data']
+    s = load_settings()
+    rep = _load_json(os.path.join(REPORT_DIR, 'missing_in_series.json'), {})
+    miss = {(m.get('lib'), m.get('series')): m for m in rep.get('series') or []}
+    known = set(rep.get('checked') or [])
+    out = []
+    for lib in [x.strip() for x in str(s.get('LIBRARY_IDS') or '').split(',') if x.strip()]:
+        try: res = abs_get(s, f'/api/libraries/{lib}/series?limit=5000&minified=1', timeout=60).json().get('results') or []
+        except Exception: continue
+        for se in res:
+            name = se.get('name') or ''
+            books = []
+            for b in se.get('books') or []:
+                md = (b.get('media') or {}).get('metadata') or {}
+                m_ = re.search(re.escape(name) + r' #(\S+?)(?:,|$)', md.get('seriesName') or '')
+                books.append({'id': b.get('id'), 'key': f"{lib}_{b.get('id')}", 'title': md.get('title') or '?', 'num': m_.group(1) if m_ else '',
+                              'lang': md.get('language') or '', 'author': (md.get('authorName') or '').split(',')[0].strip()})
+            def sk(b):
+                try: return (0, float(b['num']))
+                except ValueError: return (1, 0)
+            books.sort(key=sk)
+            nums = {}
+            for b in books:
+                if b['num']: nums.setdefault((b['num'], b['lang']), set()).add(b['title'].lower())
+            mm = miss.get((lib, name)) or {}
+            out.append({'name': name, 'lib': lib, 'author': books[0]['author'] if books else '', 'books': books,
+                        'langs': sorted({b['lang'] for b in books if b['lang']}), 'mixed': len({b['lang'] for b in books if b['lang']}) > 1, 'dups': sorted(n for (n, _l), t in nums.items() if len(t) > 1),
+                        'missing_rel': sum(1 for x in mm.get('missing') or [] if not x.get('upcoming')),
+                        'missing_up': sum(1 for x in mm.get('missing') or [] if x.get('upcoming')), 'known': name in known or bool(mm),
+                        'store': mm.get('store') or 'www.audible.com'})
+    out.sort(key=lambda x: x['name'].lower())
+    _SERIES_CACHE.update(ts=time.time(), data=out)
+    return out
+
+
 def cover_file(kind, ident, max_age, full=False):
     """Cover image for the web UI, cached on disk (the ABS token never reaches the browser).
     kind 'abs': the book's current ABS cover (ident = item id, 1 h); 'audible': the cover of an Audible product (ident = ASIN, 7 days).
