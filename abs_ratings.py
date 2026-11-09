@@ -556,7 +556,7 @@ def series_by_membership(lib, asin, host, book_authors, title=None, all_hits=Fal
     hits = []
     for (l_, low), v in list(SERIES_FACTS.items()):
         if l_ != lib or not (v['authors'] & me) or v['n'] < (1 if all_hits else 2) or non_latin_name(v['name']): continue
-        for s_asin in set().union(*[set(a) for t, a in SERIES_ASINS.items() if _k(t) == _k(v['name'])] or [set()]):
+        for s_asin in set().union(*[set(a) for t, a in list(SERIES_ASINS.items()) if _k(t) == _k(v['name'])] or [set()]):
             for a, q, t in (_series_members(host, s_asin) or []):
                 if a == asin or (nt and normalize_title_text(t or '') == nt): hits.append((v['name'], q))
     hits = list(dict.fromkeys(h for h in hits if h[1]))
@@ -1641,7 +1641,7 @@ def note_series(series_list):
 def save_series_asins():
     try:
         os.makedirs(os.path.dirname(SERIES_ASIN_FILE) or '.', exist_ok=True)
-        with open(SERIES_ASIN_FILE, 'w', encoding='utf-8') as f: json.dump({t: sorted(a) for t, a in SERIES_ASINS.items()}, f, ensure_ascii=False)
+        with open(SERIES_ASIN_FILE, 'w', encoding='utf-8') as f: json.dump({t: sorted(a) for t, a in list(SERIES_ASINS.items())}, f, ensure_ascii=False)
     except OSError: pass
 atexit.register(save_series_asins)
 
@@ -1662,7 +1662,7 @@ def note_author_links(abs_authors, aud_data):
 
 def save_author_links():
     try:
-        with open(AUTHOR_LINKS_FILE, 'w', encoding='utf-8') as f: json.dump({n: sorted(a) for n, a in AUTHOR_LINKS.items()}, f, ensure_ascii=False)
+        with open(AUTHOR_LINKS_FILE, 'w', encoding='utf-8') as f: json.dump({n: sorted(a) for n, a in list(AUTHOR_LINKS.items())}, f, ensure_ascii=False)
     except OSError: pass
 atexit.register(save_author_links)
 
