@@ -3582,7 +3582,10 @@ def missing_in_series_task():
     cache = rw_json(SERIES_MEMBERS_FILE) or {}
     prev = rw_json(os.path.join(REPORT_DIR, 'missing_in_series.json')) or {}
     prev_rel = {m.get('asin') for x in prev.get('series') or [] for m in x.get('missing') or [] if not m.get('upcoming')}
+    prev_up = {m.get('asin') for x in prev.get('series') or [] for m in x.get('missing') or [] if m.get('upcoming')}
     first_report = not prev.get('series')
+    try: new_since = (datetime.strptime(prev.get('generated', '')[:10], '%Y-%m-%d') - timedelta(days=14)).strftime('%Y-%m-%d')
+    except ValueError: new_since = None
     if not SERIES_BOOKS:  # series-only scan: the per-book part did not load the listing
         for lib in LIBRARY_IDS:
             try:
@@ -3610,8 +3613,12 @@ def missing_in_series_task():
         miss = MS.compare(books, members, _v(name), lang, MISSING_NOVELLAS)
         # a volume the library has OUTSIDE this series (other series name, no series, other ASIN) is no gap: ASIN or title anywhere
         miss = [m for m in miss if not ASIN_OWNERS.get(m.get('asin')) and not TITLE_OWNERS.get((lib, normalize_title_text(m.get('title') or '')))]
-        for m in miss:  # newly released since the last report (announced before, or a new listing): flagged + counted for the notification
-            if not m['upcoming'] and not first_report and m.get('asin') not in prev_rel: m['new'] = True; NEW_VOLUMES.append(f"{name} #{m['num']}")
+        for m in miss:
+            # 'new' = NEWLY RELEASED since the last report: announced there, or released after it (14 days slack for late listings).
+            # Only on the list for the first time (a series checked for the first time, a better match rule) is no news (user 2026-11-09).
+            if m['upcoming'] or first_report or m.get('asin') in prev_rel: continue
+            if m.get('asin') in prev_up or (new_since and (m.get('release') or '')[:10] >= new_since):
+                m['new'] = True; NEW_VOLUMES.append(f"{name} #{m['num']}")
         if miss: out.append({'lib': lib, 'series': name, 'author': books[0].get('author_name') or books[0].get('author'), 'language': lang, 'have': len(books), 'store': store, 'missing': miss})
     rw_json(SERIES_MEMBERS_FILE, cache)
     rw_json(os.path.join(REPORT_DIR, 'missing_in_series.json'), {'generated': datetime.now().strftime('%Y-%m-%d %H:%M'), 'series': out, 'checked': sorted(set(checked))})
