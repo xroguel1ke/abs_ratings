@@ -859,10 +859,11 @@ def series_seq_conflict(abs_series, cand_series):
             from abs_series import series_key
             rng[series_key(s.get("name") or s.get("title") or "")] = r_
     for ak, an in _series_pairs(abs_series):
-        for ck, cn in _series_pairs(cand_series):
-            if an is not None and cn is not None and (ak == ck or difflib.SequenceMatcher(None, ak, ck).ratio() >= 0.9) and an != cn:
-                if ck in rng and rng[ck][0] <= an <= rng[ck][1]: continue
-                return True
+        if an is None: continue
+        hits = [(ck, cn) for ck, cn in _series_pairs(cand_series) if cn is not None and (ak == ck or difflib.SequenceMatcher(None, ak, ck).ratio() >= 0.9)]
+        # one agreeing entry is enough: Audible lists 'Dune' #1 AND 'The Dune Sequence' #12 (both key 'dune') for the same book
+        if any(cn == an or (ck in rng and rng[ck][0] <= an <= rng[ck][1]) for ck, cn in hits): continue
+        if hits: return True
     return False
 
 _SERIES_SEQ, _ASIN_TITLE = {}, {}  # (host, series asin) -> [(child asin, sequence)]; (host, asin) -> title (cached per run)
@@ -3937,6 +3938,11 @@ def process_queue(work_queue, history, failed, recheck):
                     logging.info(f"      -> ⚠️ ASIN is another recording (narrator {', '.join(aud_data['narrators_raw'][:2])}, runtime {abs(abs_dur - aud_data['runtime_sec']) // 60:.0f} min off): searching this recording...")
                     should_search, strict_search = True, True
                     if fnarr_: narr_override = fnarr_  # the folder names the recording's narrator (ABS narrator may have come with the wrong ASIN)
+                elif int(aud_data.get('count', 0)) == 0 and aud_data.get('page_ok') and str((aud_data.get('meta_raw') or {}).get('releaseDate') or '')[:10] > datetime.now().strftime('%Y-%m-%d'):
+                    # a re-release that is not out yet (Dune B0HQ4V4BGY, 2026-11-24, library 2026-11-09): the released edition has the ratings.
+                    # Strict search: the same recording would replace the ASIN, else the other edition's ratings are used (nothing else changes)
+                    logging.info(f"      -> 🆕 ASIN is not released yet ({aud_data['meta_raw']['releaseDate']}): looking for the released edition...")
+                    should_search, strict_search = True, True
                 elif int(aud_data.get('count', 0)) == 0 and aud_data.get('page_ok'):
                     logging.info(f"      -> 🆕 Product page exists on {aud_data.get('domain')}, but no ratings yet. No replacement search, re-check in {NO_RATINGS_RECHECK_DAYS} days.")
                 elif int(aud_data.get('count', 0)) == 0:
