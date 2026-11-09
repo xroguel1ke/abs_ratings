@@ -3365,6 +3365,9 @@ def build_queue(lib_id, history, recheck):
             except ValueError: recheck_due = True
 
         watch = watch_changes(key, item)
+        if watch != 'reverted' and block_lost(key, item):
+            logging.info(f"  ↩️ '{(item.get('media') or {}).get('metadata', {}).get('title')}': rating block missing in the description (ABS rescan?) - checked again")
+            watch = 'reverted'
         if watch == 'reverted':
             item['_recheck'] = True; item['_reverted'] = True
             work_queue.append(item); count_recheck += 1
@@ -3479,6 +3482,19 @@ def remove_ratings_pass():
 
 REAPPLY_FIELDS = ('title', 'series', 'authors', 'narrators')
 _JOURNAL_LAST = {}
+_BLOCK_KEYS = {}  # key -> our last description write had a rating block (filled with _JOURNAL_LAST)
+
+
+def block_lost(key, item):
+    """Our rating block is gone from the description (an ABS rescan of the book folder reloads the old description - 86 Vol. 6,
+    2026-11-09: block written, files touched, ABS rescanned the item; the description is not in last_written, so nothing noticed it
+    until REFRESH_DAYS). Due again unless lock_description."""
+    journal_last(key, 'asin')  # loads the journal once
+    if not _BLOCK_KEYS.get(key): return False
+    md = (item.get('media') or {}).get('metadata') or {}
+    if 'description' not in md or RE_RATING_BLOCK.search(md.get('description') or ''): return False
+    from abs_series import expand_locks
+    return 'lock_description' not in expand_locks(item_tags(item))
 def journal_last(key, field):
     """Our last real write of this field (changes.jsonl; undone writes don't count). Read once per run."""
     with IO_LOCK:
@@ -3488,7 +3504,10 @@ def journal_last(key, field):
                 for line in open(CHANGES_FILE, encoding='utf-8'):
                     try: e = json.loads(line)
                     except ValueError: continue
-                    if e.get('dry_run') or e.get('field') not in REAPPLY_FIELDS + ('asin',): continue
+                    if e.get('dry_run'): continue
+                    if e.get('field') == 'description':  # did our last description write carry a rating block? (block_lost)
+                        _BLOCK_KEYS[e.get('key')] = 'Infos' in str(e.get('new') or '') and 'undo' not in str(e.get('source') or '')
+                    if e.get('field') not in REAPPLY_FIELDS + ('asin',): continue
                     if 'undo' in str(e.get('source') or ''): _JOURNAL_LAST.pop((e.get('key'), e['field']), None); continue
                     _JOURNAL_LAST[(e.get('key'), e['field'])] = e
             except OSError: pass
