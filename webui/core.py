@@ -327,7 +327,10 @@ def library_series(force=False):
                         'langs': sorted({b['lang'] for b in books if b['lang']}), 'mixed': len({b['lang'] for b in books if b['lang']}) > 1, 'dups': sorted(n for (n, _l), t in nums.items() if len(t) > 1),
                         'missing_rel': sum(1 for x in mm.get('missing') or [] if not x.get('upcoming')),
                         'missing_up': sum(1 for x in mm.get('missing') or [] if x.get('upcoming')), 'known': name in known or bool(mm),
-                        'store': mm.get('store') or 'www.audible.com'})
+                        'store': mm.get('store') or 'www.audible.com',
+                        # books and missing volumes in one list, in number order: the series page shows the gaps where they are
+                        'entries': sorted([dict(b, kind='book') for b in books] + [dict(x, kind='missing') for x in mm.get('missing') or [] if x.get('asin') or x.get('title')],
+                                          key=lambda e: sk({'num': str(e.get('num') or '')}))})
     out.sort(key=lambda x: x['name'].lower())
     _SERIES_CACHE.update(ts=time.time(), data=out)
     return out

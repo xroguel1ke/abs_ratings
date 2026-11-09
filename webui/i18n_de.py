@@ -429,4 +429,5 @@ add({  # page tour 2026-11-08
     'Several targets: separate the Apprise URLs with a space or comma.': 'Mehrere Ziele: Apprise-URLs mit Leerzeichen oder Komma trennen.',
     'ntfy: the server redirects http to https - use ntfys:// (nothing arrived).': 'ntfy: Der Server leitet http auf https um – bitte ntfys:// verwenden (es kam nichts an).',
     'ntfy: the server did not store the message - no permission for this topic? (with a login: user:password@ or tk_token@ before the host)': 'ntfy: Der Server hat die Nachricht nicht gespeichert – keine Berechtigung für dieses Thema? (mit Login: benutzer:passwort@ oder tk_token@ vor den Host)',
+    'open on Audible': 'auf Audible öffnen',
 })

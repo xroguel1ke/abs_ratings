@@ -22,9 +22,13 @@
    {% if s.missing_up %}<span class="badge" title="{{ _('announced') }}">+{{ s.missing_up }}</span>{% endif %}
   </span>
  </summary>
- <div class="serbooks">{% for b in s.books %}<a class="serbook" href="{{ url_for('problem', key=b.key) }}" title="{{ b.title }}">
+ <div class="serbooks">{% for b in s.entries %}{% if b.kind == 'book' %}<a class="serbook" href="{{ url_for('problem', key=b.key) }}" title="{{ b.title }}">
   <img src="{{ url_for('cover', kind='abs', ident=b.id) }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
-  <span class="small"><b>{{ ('#' ~ b.num) if b.num else '–' }}</b> {{ b.title }}{% if s.langs|length > 1 %} <span class="muted">({{ b.lang }})</span>{% endif %}</span></a>{% endfor %}</div>
+  <span class="small"><b>{{ ('#' ~ b.num) if b.num else '–' }}</b> {{ b.title }}{% if s.langs|length > 1 %} <span class="muted">({{ b.lang }})</span>{% endif %}</span></a>
+  {% else %}<a class="serbook sermiss{{ ' up' if b.upcoming }}" href="{% if b.asin %}https://{{ s.store }}/pd/{{ b.asin }}{% else %}https://{{ s.store }}/search?keywords={{ (b.title or s.name)|urlencode }}{% endif %}" target="_blank" rel="noopener" title="{{ _('Missing') }} – {{ _('open on Audible') }}">
+  {% if b.asin %}<img src="{{ url_for('cover', kind='audible', ident=b.asin) }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% else %}<span class="ph"></span>{% endif %}
+  <span class="small"><b>{{ ('#' ~ b.num) if b.num else '–' }}</b> {{ b.title or s.name }} {{ icon('arrow-up-right', 12) }}<br>
+   <span class="{{ 'muted' if b.upcoming else 'misslbl' }}">{% if b.upcoming and b.release %}{{ _('releases %(d)s', d=b.release) }}{% elif b.upcoming %}{{ _('announced') }}{% else %}{{ _('Missing') }}{% if b.release %} · {{ b.release[:4] }}{% endif %}{% endif %}</span></span></a>{% endif %}{% endfor %}</div>
  <form method="post" action="{{ url_for('series_rename') }}" class="row small" style="margin-top:8px" data-confirm="{{ _('Rename this series on all its books? (can be undone in the History)') }}">
   <input type="hidden" name="lib" value="{{ s.lib }}"><input type="hidden" name="old" value="{{ s.name }}">
   <input type="text" name="new" value="{{ s.name }}" style="max-width:360px" list="sernames"><button>{{ _('Rename / merge') }}</button>
