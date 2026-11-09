@@ -33,6 +33,8 @@
 {% else %}<div class="card muted">{{ _('No series found.') }}</div>{% endfor %}
 <datalist id="sernames">{% for s in series %}<option value="{{ s.name }}">{% endfor %}</datalist>
 <script>
+document.addEventListener('DOMContentLoaded',()=>{ let v=null; try{v=sessionStorage.getItem('abs_serq'); sessionStorage.removeItem('abs_serq')}catch(e){}
+  if(v){ const i=document.getElementById('sq'); i.value=v; serFilter(); const c=[...document.querySelectorAll('.sercard')].find(x=>x.style.display!=='none'); if(c) c.open=true; } });
 function serFilter(){
   const q=(document.getElementById('sq').value||'').toLowerCase(), f=document.querySelector('input[name=sf]:checked').value;
   document.querySelectorAll('.sercard').forEach(c=>{

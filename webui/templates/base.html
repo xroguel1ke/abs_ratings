@@ -13,7 +13,20 @@
 <a data-tour="series" href="{{ url_for('series_page') }}" class="{{ 'active' if ep=='series_page' }}">{{ _('Series') }}</a>
 <a data-tour="missing" href="{{ url_for('missing_page') }}" class="{{ 'active' if ep=='missing_page' }}">{{ _('Missing') }}</a>
 <a data-tour="settings" href="{{ url_for('settings') }}" class="{{ 'active' if ep in ('settings','logs','log_view') }}">{{ _('Settings') }}</a>
-<form class="navsearch" action="{{ url_for('books') }}" method="get">{{ icon('search') }}<input type="search" name="q" placeholder="{{ _('Search') }}" aria-label="{{ _('Search') }}"></form>
+<form class="navsearch" action="{{ url_for('books') }}" method="get" autocomplete="off">{{ icon('search') }}<input type="search" name="q" id="navq" placeholder="{{ _('Search') }}" aria-label="{{ _('Search') }}">
+<div class="navresults" id="navres" hidden></div></form>
+<script>(function(){ const q=document.getElementById('navq'), box=document.getElementById('navres'); if(!q) return; let t=null, first=null;
+ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+ q.addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(async()=>{ const v=q.value.trim(); if(v.length<2){box.hidden=true; first=null; return;}
+  try{ const j=await (await fetch('/api/search?q='+encodeURIComponent(v))).json(); let h='';
+   if(j.books.length) h+='<div class="nrh">{{ _('Books') }}</div>'+j.books.map(b=>'<a href="/problem/'+encodeURIComponent(b.key)+'"><img src="/cover/abs/'+encodeURIComponent(b.id)+'" loading="lazy" onerror="this.style.visibility=\'hidden\'"><span><b>'+esc(b.title)+'</b><br><span class="muted">'+esc(b.author)+'</span></span></a>').join('');
+   if(j.series.length) h+='<div class="nrh">{{ _('Series') }}</div>'+j.series.map(s=>'<a href="/series#'+encodeURIComponent(s.name)+'" onclick="sessionStorage.setItem(\'abs_serq\','+JSON.stringify(s.name).replace(/"/g,'&quot;')+')"><span><b>'+esc(s.name)+'</b> <span class="muted">· '+s.n+(s.missing?' · '+s.missing+' {{ _('missing') }}':'')+'</span></span></a>').join('');
+   if(j.authors.length) h+='<div class="nrh">{{ _('Authors') }}</div>'+j.authors.map(a=>'<a href="/books?q='+encodeURIComponent(a.name)+'"><span><b>'+esc(a.name)+'</b> <span class="muted">· '+a.n+'</span></span></a>').join('');
+   box.innerHTML=h||'<div class="muted nrh">{{ _('Nothing found') }}</div>'; box.hidden=false; first=box.querySelector('a'); }catch(e){} },200); });
+ q.form.addEventListener('submit',e=>{ if(first){ e.preventDefault(); location.href=first.href; } });
+ document.addEventListener('click',e=>{ if(!q.form.contains(e.target)) box.hidden=true; });
+ q.addEventListener('keydown',e=>{ if(e.key==='Escape') box.hidden=true; });
+})();</script>
 </div>
 <span class="right">{% if running %}<a class="runpill" href="{{ url_for('run_view', run_id=current_run.id) }}" title="{{ current_run.label }}"><span class="badge running"><span class="live"></span>{{ _('Scan running') }}<span id="runpct"></span></span></a>
 <script>(function(){ const el=document.getElementById('runpct'); async function tick(){ try{ const j=await (await fetch("{{ url_for('api_run_progress', run_id=current_run.id) }}")).json();

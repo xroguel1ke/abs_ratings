@@ -423,4 +423,5 @@ add({  # page tour 2026-11-08
     'Change the rating symbols of ALL books to the saved choice? (values stay, can be undone)': 'Bewertungssymbole ALLER Bücher auf die gespeicherte Auswahl ändern? (Werte bleiben, rückgängig machbar)',
     'Change all rating symbols': 'Alle Bewertungssymbole ändern', 'Save the new choice first.': 'Neue Auswahl vorher speichern.',
     'New and refreshed ratings use these; "Change all rating symbols" rewrites the existing ones': 'Neue und aufgefrischte Bewertungen nutzen diese; „Alle Bewertungssymbole ändern“ schreibt die bestehenden um',
+    'missing': 'fehlen', 'Nothing found': 'Nichts gefunden',
 })

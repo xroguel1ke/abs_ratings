@@ -736,6 +736,25 @@ def rewrite_symbols():
     return redirect(url_for('run_view', run_id=run_id))
 
 
+@app.route('/api/search')
+@login_required
+def api_search():
+    """Instant search (top bar): books (title / author / ASIN), series and authors - from the result list and the series cache."""
+    q = (request.args.get('q') or '').strip().lower()
+    if len(q) < 2: return jsonify(books=[], series=[], authors=[])
+    res = core.results()
+    books, authors = [], {}
+    for k, r in res.items():
+        t, a = r.get('title') or '', r.get('author') or ''
+        if q in t.lower() or q in a.lower() or q == str(r.get('asin') or '').lower():
+            books.append({'key': k, 'title': t, 'author': a, 'id': r.get('id') or k.split('_', 1)[-1], 'exact': t.lower() == q, 'starts': t.lower().startswith(q)})
+        if q in a.lower(): authors[a] = authors.get(a, 0) + 1
+    books.sort(key=lambda b: (not b['exact'], not b['starts'], b['title'].lower()))
+    try: ser = [{'name': s['name'], 'n': len(s['books']), 'missing': s['missing_rel']} for s in core.library_series() if q in s['name'].lower()][:6]
+    except Exception: ser = []
+    return jsonify(books=books[:8], series=ser, authors=[{'name': n, 'n': c} for n, c in sorted(authors.items(), key=lambda x: -x[1])[:5]])
+
+
 @app.route('/sw.js')
 def sw():
     """Service worker at the site root (scope '/') so the web UI can be installed as an app."""

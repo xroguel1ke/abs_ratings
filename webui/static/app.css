@@ -301,3 +301,10 @@ table.detail td{vertical-align:top}table.detail tr.diffrow td:nth-child(3){backg
  button, .btn{min-height:40px}
 }
 @media (max-width:700px){.selbar .muted{display:none}.snav-toggle{flex-direction:row;gap:6px}}
+
+.navresults{position:absolute;top:38px;left:0;width:380px;max-height:70vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;
+ box-shadow:0 8px 28px rgba(0,0,0,.18);z-index:60;padding:6px}
+.navresults a{display:flex;gap:10px;align-items:center;padding:6px 8px;border-radius:8px;text-decoration:none;color:inherit;font-size:14px;line-height:18px}
+.navresults a:hover{background:var(--chip)}.navresults img{width:36px;height:36px;object-fit:cover;border-radius:5px;flex:none}
+.navresults .nrh{font-size:12px;color:var(--muted);padding:6px 8px 2px;text-transform:none}
+@media (max-width:700px){.navresults{width:100%}}
