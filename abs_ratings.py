@@ -1263,6 +1263,18 @@ def format_time(seconds):
         return f"{hours}h {minutes}m"
     return f"{int(seconds // 60)}m {int(seconds % 60)}s"
 
+def narr_keys(names):
+    """Comparable narrator keys; a joint credit counts per person too: 'Bridget & Jake Bordeaux' (Audible) = 'Bridget' + 'Jake Bordeaux'
+    (book folder 'Bridget & Jake Bordeaux' split at '&', batch 93) - the full name AND its parts."""
+    out = set()
+    for n in names or []:
+        if not n: continue
+        k = re.sub(r'[^a-z]', '', fold_accents(n).lower())
+        if k: out.add(k)
+        parts = re.split(r'\s+(?:&|and|und)\s+', n)
+        if len(parts) > 1: out |= {re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in parts if len(x.strip()) >= 3}
+    return out
+
 def fold_accents(s):
     """'Kurmaić' -> 'Kurmaic' so that spelling without diacritics still matches."""
     return "".join(c for c in unicodedata.normalize("NFKD", s or "") if not unicodedata.combining(c))
@@ -2063,7 +2075,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             dur_ok = bool(duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) < 600)
             dur_conflict = bool(duration and p.get('runtime_sec') and not dur_ok)
             norm_n = lambda n: re.sub(r'[^a-z]', '', fold_accents(n).lower())
-            a_narr, c_narr = {norm_n(n) for n in (narrators or []) if n}, {norm_n(n) for n in (p.get('narrators_raw') or []) if n}
+            a_narr, c_narr = narr_keys(narrators), narr_keys(p.get('narrators_raw'))
             # Same book, possibly another recording (runtime/narrator differ): remembered as a ratings-only fallback
             rel_dur_ok = not (duration and p.get('runtime_sec')) or abs(duration - p['runtime_sec']) <= max(2700, 0.25 * duration)
             if t_score >= 0.85 and auth_ok and int(p.get('count') or 0) > 0 and rel_dur_ok and is_boxset_title(found_title) == is_boxset_title(title) \
@@ -2075,7 +2087,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 if rel is None or diff < rel['_diff']:
                     LAST_SEARCH['related'] = dict(p, _diff=diff)
             norm_n = lambda n: re.sub(r'[^a-z]', '', fold_accents(n).lower())
-            a_narr, c_narr = {norm_n(n) for n in (narrators or []) if n}, {norm_n(n) for n in (p.get('narrators_raw') or []) if n}
+            a_narr, c_narr = narr_keys(narrators), narr_keys(p.get('narrators_raw'))
             # Author written in another script (ABS 'Rifujin na Magonote' vs Audible '理不尽な孫の手'): no contradiction if narrator and runtime (+-2 min) agree
             if not auth_ok and a_narr and c_narr and a_narr & c_narr and duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120:
                 cand_auth = ", ".join(p.get('authors_raw') or [])
@@ -2999,7 +3011,7 @@ def hc_audio_asin(hc, abs_dur, authors, targets, narrators, lang):
         t_hc = search_match_score(hc.get('title') or '', p['title_raw'], p.get('subtitle_raw'))
         hc_solid = hc.get('source') in ('ISBN', 'ASIN', 'manual link')
         norm_n = lambda n: re.sub(r'[^a-z]', '', fold_accents(n).lower())
-        a_narr, c_narr = {norm_n(n) for n in (narrators or []) if n}, {norm_n(n) for n in (p.get('narrators_raw') or []) if n}
+        a_narr, c_narr = narr_keys(narrators), narr_keys(p.get('narrators_raw'))
         narr_contra = bool(a_narr and c_narr and not a_narr & c_narr)
         logging.info(f"        🔗 Hardcover edition ASIN {asin} ('{p['title_raw']}'): author {'✓' if auth_ok else '✗'}, runtime {'✓' if dur_ok else '✗'}, "
                      f"title vs ABS {t_abs:.2f}, vs Hardcover {t_hc:.2f}{' (ISBN-confirmed)' if hc_solid else ''}{', narrator differs' if narr_contra else ''}")
@@ -4352,7 +4364,7 @@ def process_queue(work_queue, history, failed, recheck):
                     elif aud_narr and meta.get('narrators') and same_rec_rt and abs_dur and aud_data.get('runtime_sec') \
                             and abs(abs_dur - aud_data['runtime_sec']) <= 120:  # same recording (runtime to 2 min)
                         # hygiene: ABS lists the AUTHOR as narrator (file tags) while the same recording on Audible has other narrators
-                        k_ = lambda xs: {re.sub(r'[^a-z]', '', fold_accents_s(x).lower()) for x in xs if x}
+                        k_ = narr_keys  # joint credits per person too ('Bridget & Jake Bordeaux')
                         fn_ = folder_narrators(item_data) or []
                         ko_ = lambda xs: {''.join(sorted(re.findall(r'[a-z]+', fold_accents_s(x).lower()))) for x in xs if x}  # 'Isshiki Ichika' = 'Ichika Isshiki'
                         def typo_(a_, b_):  # 'Cliff Kurt' (ABS) vs 'Cliff Kirk' (Audible, same recording): same first name, last name one letter off
