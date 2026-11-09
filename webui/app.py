@@ -441,7 +441,11 @@ def queue_action(qid, action):
     if not item: abort(404)
     if action == 'accept' and item.get('kind') in ('asin', 'hardcover') and item.get('candidate'):
         # user 2026-11-09: applied RIGHT AWAY - the override is saved and a real scan of just this book writes it (ASIN, metadata, ratings)
-        core.save_override(item['key'], {item['kind']: item['candidate']})
+        ov_ = {item['kind']: item['candidate']}
+        cand_ = ((item.get('ctx') or {}).get('cand') or {})
+        if item['kind'] == 'asin' and (str(item.get('reason') or '').startswith('runtime (to the minute) and narrator match') or 'author differs' in str(item.get('reason') or '')):
+            ov_['identity'] = True  # the confirmed ASIN is ANOTHER book: title, authors, series, narrators come from Audible
+        core.save_override(item['key'], ov_)
         core.set_queue_decision(qid, action)
         new_id, err = core.RUNNER.start('item', dry_run=False, only_items=[item['key']], label=f"{'ASIN' if item['kind'] == 'asin' else 'Hardcover'} from the review list: {item.get('title')}",
                                         run_settings={'ABS_BACKUP': False})

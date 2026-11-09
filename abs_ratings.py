@@ -394,6 +394,8 @@ RE_RAW_COUNT = re.compile(r'count="(\d+)"')
 
 stats = _Stats({k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred", "cover_added", "desc_filled", "series_merged", "other_edition", "hc_found", "hc_missing", "rating_only"]})
 stats['aborted_ratelimit'] = False
+IDENTITY_DESC_FILE = os.path.join(SCRIPT_DIR, 'identity_desc.json')  # books whose description was replaced after a confirmed other-book ASIN
+IDENTITY_DESC = set()
 SOURCE_DOWN = {}  # source -> reason: failed canary check or tripped breaker (source_health.py); nothing is counted or written from it
 BREAKER = None
 SOURCE_CANARY = os.getenv('SOURCE_CANARY', 'true').lower() == 'true'  # tests replaying recordings switch it off (no live canary request)
@@ -4333,6 +4335,29 @@ def process_queue(work_queue, history, failed, recheck):
                             abs_updates['explicit'] = True
                             log_updates.append("Explicit: False -> True")
 
+                    # The user confirmed (review list) an ASIN of ANOTHER book for this file (The New World -> 'Paladin of the New World 1',
+                    # same runtime + narrator): the ABS metadata belongs to the other book, so the identity comes from Audible - title,
+                    # authors, series (replaced, not added), narrators. Lock tags respected. (2026-11-09: author and old series had stayed)
+                    if ov.get('identity') and ov.get('asin') == asin and aud_data.get('title_raw') and abs_dur and aud_data.get('runtime_sec') \
+                            and abs(abs_dur - aud_data['runtime_sec']) <= 120:
+                        id_aut = [n for n in (aud_data.get('authors_raw') or []) if not is_role_credit(n)]
+                        id_ser = [{'name': canonical_series(lib_id, (x.get('name') or '').strip(), id_aut)[0], 'sequence': aud_part(x.get('part'))}
+                                  for x in (md_raw.get('series') or []) if (x.get('name') or '').strip()]
+                        for fld, val, lk in (('title', aud_data['title_raw'], 'lock_title'), ('subtitle', aud_data.get('subtitle_raw'), 'lock_title'),
+                                             ('authors', [{'name': n} for n in id_aut], 'lock_authors'), ('series', id_ser, 'lock_series'),
+                                             ('narrators', aud_data.get('narrators_raw') or [], 'lock_narrators')):
+                            cur_v = meta.get(fld)
+                            same_v = (sorted(str((x.get('name') if isinstance(x, dict) else x) or '').lower() for x in cur_v or []) ==
+                                      sorted(str((x.get('name') if isinstance(x, dict) else x) or '').lower() for x in val or [])) if isinstance(val, list) else (cur_v or '') == (val or '')
+                            if fld == 'series' and isinstance(val, list):
+                                same_v = sorted((x.get('name'), str(x.get('sequence') or '')) for x in cur_v or []) == sorted((x['name'], str(x['sequence'] or '')) for x in val)
+                            if not val or same_v: continue
+                            if lk in tags: logging.info(f"        🔒 {fld.capitalize()} not replaced (locked)"); continue
+                            abs_updates[fld] = val
+                            log_updates.append(f"{fld.capitalize()}: -> {val if not isinstance(val, list) else ', '.join((x.get('name') + (' #' + str(x['sequence']) if x.get('sequence') else '')) if isinstance(x, dict) else x for x in val)} (ASIN confirmed by you: another book)")
+                        if re.fullmatch(r'B0[A-Z0-9]{8}', str(meta.get('isbn') or '').strip()) and 'lock_isbn' not in tags and 'isbn' not in abs_updates:
+                            abs_updates['isbn'] = ''  # the old book's ASIN in the ISBN field (The New World 'B0C71XXX3Q')
+                            log_updates.append(f"ISBN: '{meta.get('isbn')}' -> '' (an ASIN of the other book)")
                     if abs_updates:
                         logging.info(f"        🛠️ Meta Updates{' (DRY_RUN, not saved)' if DRY_RUN else ''}:")
                         for upd in log_updates: logging.info(f"          -> {upd}")
@@ -4462,7 +4487,14 @@ def process_queue(work_queue, history, failed, recheck):
                     # Empty description (apart from our rating block): use Audible's summary
                     summary = (aud_data or {}).get('summary') if not skip_meta else None
                     base_desc = cur_desc
-                    if summary and not strip_rating_block(cur_desc):
+                    if summary and ov.get('identity') and ov.get('asin') == asin and normalize_desc(strip_rating_block(cur_desc)) != normalize_desc(summary) \
+                            and key not in IDENTITY_DESC:
+                        base_desc = summary  # the old text describes the other book (identity confirmed by the user)
+                        with IO_LOCK:
+                            IDENTITY_DESC.add(key)  # once: a later own text stays
+                            if not DRY_RUN: rw_json(IDENTITY_DESC_FILE, sorted(IDENTITY_DESC))
+                        logging.info("        📝 Description replaced with Audible's summary (ASIN of another book confirmed by you)")
+                    elif summary and not strip_rating_block(cur_desc):
                         base_desc = summary
                         stats['desc_filled'] += 1
                         logging.info("        📝 Empty description filled with Audible summary")
@@ -4767,6 +4799,7 @@ def main():
     SOURCE_STATE.update(rw_json(SOURCE_STATE_FILE) or {})
     LAST_WRITTEN.update(rw_json(LAST_WRITTEN_FILE) or {}); MANUAL_FIELDS.update(rw_json(MANUAL_FIELDS_FILE) or {})
     FILLED_NARR.update(rw_json(FILLED_NARR_FILE) or [])
+    IDENTITY_DESC.update(rw_json(IDENTITY_DESC_FILE) or [])
     try:  # also every narrator fill already in the journal (runs before this file existed)
         with open(CHANGES_FILE, encoding='utf-8') as f_:
             FILLED_NARR.update(json.loads(l)['key'] for l in f_ if '"field": "narrators"' in l and json.loads(l).get('source') == 'audible_meta')
