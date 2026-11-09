@@ -845,6 +845,7 @@ def is_boxset_title(t): return bool(t and BOXSET_RE.search(t))
 ASIN_OWNERS = {}  # asin -> set of item keys (ABS library + ASINs planned in this run); an ASIN is never given to a second book
 ISBN_OWNERS = {}  # isbn -> set of item keys (an ISBN is never given to a second book)
 TITLE_OWNERS = {}  # (lib, normalized title) -> item keys: a title held by several books says nothing about WHICH volume it is
+KEY_LANG = {}  # item key -> book language (who of two books sharing an ISBN holds the one of its own language)
 KEY_ASIN = {}  # item key -> ABS ASIN (an ISBN shared by two books with different ASINs is wrong on at least one)
 KEY_DUR = {}  # item key -> ABS duration (s): tells a duplicate (owner = same recording) from an owner with a wrong ASIN
 
@@ -3430,7 +3431,7 @@ def note_listing_item(lib_id, it):
             from collections import Counter as _C
             NARR_SPELL.setdefault(narr_fold(n_), _C())[n_] += 1
     if a := md_.get('asin'): ASIN_OWNERS.setdefault(a, set()).add(key)
-    KEY_ASIN[key] = md_.get('asin')
+    KEY_ASIN[key] = md_.get('asin'); KEY_LANG[key] = map_language(md_.get('language')) if md_.get('language') else None
     KEY_DUR[key] = (it.get('media') or {}).get('duration')
     if t_ := normalize_title_text(md_.get('title') or ''): TITLE_OWNERS.setdefault((lib_id, t_), set()).add((key, _first_author(md_.get('authorName'))))
     if i_ := normalize_isbn(md_.get('isbn')): ISBN_OWNERS.setdefault(i_, set()).add(key)
@@ -4835,8 +4836,10 @@ def process_queue(work_queue, history, failed, recheck):
                     foreign_ = ('9782', '9783', '9784', '97884', '97888', '97890', '97894')
                     if len(i_c) == 13 and ((l_c == 'English' and i_c.startswith(foreign_)) or (l_c == 'German' and i_c.startswith(tuple(x for x in foreign_ if x != '9783')))):
                         bad_isbn = f"registration group {i_c[:4]} does not fit a {l_c} book"
-                    elif any(KEY_ASIN.get(o) and KEY_ASIN.get(o) != asin for o in ISBN_OWNERS.get(i_c, set()) - {key}):
-                        bad_isbn = 'the same ISBN is on another book of the library'
+                    elif (others_ := [o for o in ISBN_OWNERS.get(i_c, set()) - {key} if KEY_ASIN.get(o) and KEY_ASIN.get(o) != asin]):
+                        own_fits = lambda l: bool(l) and str(i_c).startswith(ISBN_GROUPS.get(str(l).lower(), ('-',)))
+                        if not (own_fits(l_c) and any(not own_fits(KEY_LANG.get(o)) for o in others_)):  # Eragon (English, 978-0) keeps it, the German edition loses it
+                            bad_isbn = 'the same ISBN is on another book of the library'
                 empty_isbn = not str(meta.get('isbn') or '').strip()
                 # ISBN = the PRINT edition (user decision 2026-11-04: the audiobook is identified by the ASIN). Wrong ISBNs are replaced and
                 # empty ones filled, both only with the ISBN-13 of a print edition of the verified book (Hardcover), same language.
