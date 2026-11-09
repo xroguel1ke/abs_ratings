@@ -3482,31 +3482,38 @@ def remove_ratings_pass():
     """Remove the rating lines of REMOVE_RATINGS from the rating block of every book (ONLY_ITEMS or all libraries).
     Journaled like every write (undo restores the old description); lock_description respected. The source is paused for the
     book until REFRESH_DAYS, so the next scan does not add it right back (switch the source off to keep it away for good)."""
-    keys = list(ONLY_ITEMS) if ONLY_ITEMS else []
-    if not keys:
+    # whole library: the listing carries description + tags (one request instead of one per book); single books: the item itself
+    items = []
+    if ONLY_ITEMS:
+        for key in ONLY_ITEMS:
+            try: items.append((key, abs_session.get(f"{ABS_URL}/api/items/{key.partition('_')[2]}", params={'expanded': 1}).json()))
+            except Exception as e: logging.warning(f"  {key}: {e}")
+    else:
         for lib in LIBRARY_IDS:
-            try: keys += [f"{lib}_{it['id']}" for it in abs_session.get(f"{ABS_URL}/api/libraries/{lib}/items").json().get('results') or []]
+            try: items += [(f"{lib}_{it['id']}", it) for it in abs_session.get(f"{ABS_URL}/api/libraries/{lib}/items").json().get('results') or []]
             except Exception as e: logging.error(f"Library {lib}: {e}")
-    logging.info(f"Remove ratings ({', '.join(sorted(REMOVE_RATINGS))}) from {len(keys)} book(s){' - DRY RUN' if DRY_RUN else ''}")
-    n_changed = n_locked = 0
-    for i, key in enumerate(keys):
-        lib, _, iid = key.partition('_')
-        try: it = abs_session.get(f"{ABS_URL}/api/items/{iid}", params={'expanded': 1}).json()
-        except Exception as e: logging.warning(f"  {key}: {e}"); continue
+    logging.info(f"Remove ratings ({', '.join(sorted(REMOVE_RATINGS))}) from {len(items)} book(s){' - DRY RUN' if DRY_RUN else ''}")
+    from abs_series import expand_locks
+    todo, n_locked = [], 0
+    for key, it in items:
         meta = (it.get('media') or {}).get('metadata') or {}
         cur = meta.get('description') or ''
         old = parse_rating_block(cur)
         gone = [src for src in old if src in REMOVE_RATINGS]
         if not gone: continue
-        from abs_series import expand_locks
         if 'lock_description' in expand_locks(item_tags(it)):
             n_locked += 1; logging.info(f"  🔒 {meta.get('title')}: description locked, ratings kept"); continue
-        new = build_description(cur, {}, {k: v for k, v in old.items() if k not in REMOVE_RATINGS})
-        if abs_update(iid, key, meta.get('title'), {'description': new}, meta, 'ratings_removed'):
-            n_changed += 1
-            logging.info(f"  {'WOULD REMOVE' if DRY_RUN else 'removed'}: {meta.get('title')} - {', '.join(gone)}")
-            if not DRY_RUN:
+        todo.append((key, meta, gone, build_description(cur, {}, {k: v for k, v in old.items() if k not in REMOVE_RATINGS})))
+    def write(t):
+        key, meta, gone, new = t
+        if not abs_update(key.partition('_')[2], key, meta.get('title'), {'description': new}, meta, 'ratings_removed'): return False
+        logging.info(f"  {'WOULD REMOVE' if DRY_RUN else 'removed'}: {meta.get('title')} - {', '.join(gone)}")
+        if not DRY_RUN:
+            with IO_LOCK:
                 for src in gone: SST.record(SOURCE_STATE, key, src.lower(), 'absent', why='rating removed by you')
+        return True
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=4) as ex: n_changed = sum(ex.map(write, todo))
     if not DRY_RUN: rw_json(SOURCE_STATE_FILE, SOURCE_STATE)
     logging.info(f"Ratings removed from {n_changed} book(s){' (planned, DRY RUN)' if DRY_RUN else ''}; {n_locked} locked book(s) kept")
 

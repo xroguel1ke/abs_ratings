@@ -106,3 +106,40 @@ def test_3_rewrite_symbols_and_busy_runner():
     assert d3 == 'No ratings here.'
     assert all(p['kind'] != 'backup' for p in patches()), 'no ABS backup without the option'
     assert r2.status_code == 302
+
+
+def test_4_remove_ratings_whole_library():
+    from webui import core
+    rid, err = core.RUNNER.start('full', dry_run=False, label='remove', run_settings={'REMOVE_RATINGS': 'Hardcover', 'ABS_BACKUP': False})
+    assert not err, err
+    wait_run()
+    for i, tail in (('it1', 'Story one.'), ('it2', 'Story two.')):
+        d = item(i)['metadata']['description']
+        assert 'Hardcover' not in d and 'Audible (120)' in d and d.count('Ratings') == 1 and d.endswith(tail), d
+    assert item('it3')['metadata']['description'] == 'No ratings here.'
+
+
+def test_5_apply_selected_changes_of_a_test_run():
+    from webui import core
+    rid = '20990101-000000'
+    os.makedirs(core.REPORT_DIR, exist_ok=True)
+    ch = [{'run': rid, 'ts': '2099-01-01T00:00:00', 'item': 'it1', 'key': f'{LIB}_it1', 'title': 'First Light', 'field': 'title', 'old': 'First Light',
+           'new': 'First Light (new)', 'source': 'test', 'dry_run': True},
+          {'run': rid, 'ts': '2099-01-01T00:00:00', 'item': 'it2', 'key': f'{LIB}_it2', 'title': 'Second Dawn', 'field': 'title', 'old': 'Second Dawn',
+           'new': 'Second Dawn (new)', 'source': 'test', 'dry_run': True}]
+    with open(os.path.join(core.REPORT_DIR, f'planned_changes_{rid}.jsonl'), 'w', encoding='utf-8') as f:
+        for e in ch: f.write(json.dumps(e) + '\n')
+    core.RUNNER._save_run({'id': rid, 'kind': 'full', 'label': 'test run', 'dry_run': True, 'status': 'ok', 'start': '2099-01-01T00:00:00', 'end': '2099-01-01T00:00:01'})
+    c = client()
+    assert c.get(f'/run/{rid}/review').status_code == 200
+    c.post(f'/run/{rid}/apply', data={'mode': 'apply', 'selection': '1', 'sel': ['1']})  # only the second change is ticked
+    wait_run()
+    assert item('it1')['metadata']['title'] == 'First Light'
+    assert item('it2')['metadata']['title'] == 'Second Dawn (new)'
+    # the applied change is in the history search and 'undo all shown' undoes exactly it
+    h = c.get('/history/search', query_string={'q': 'Second Dawn'}).get_data(as_text=True)
+    assert 'Second Dawn' in h and '(new)' in h, h[-2000:]
+    c.post('/history/search', data={'q': 'Second Dawn', 'field': 'title'})
+    wait_run()
+    assert item('it2')['metadata']['title'] == 'Second Dawn'
+    assert item('it1')['metadata']['title'] == 'First Light'
