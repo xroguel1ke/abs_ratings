@@ -35,3 +35,16 @@ def test_unexplained_difference_is_left_alone():
     assert new is None
     new, why = A.match_chapters([], 3500.0, AUD)
     assert new is None
+
+
+def test_anchor_marks_past_the_end():
+    # marks made for the longer Audible file (run 30 s past the end) but sitting exactly at Audible's starts
+    marks = [{'start': 0, 'end': 40, 'title': '1'}, {'start': 40, 'end': 1040, 'title': '2'}, {'start': 1040, 'end': 2240, 'title': '3'}, {'start': 2240, 'end': 3200, 'title': '4'}]
+    new, why = A.match_chapters(marks, 3170.0, AUD)
+    assert new and [round(c['start']) for c in new] == [0, 40, 1040, 2240] and new[-1]['end'] == 3170.0 and new[1]['title'] == 'Chapter 1: Start', why
+
+
+def test_anchor_needs_matching_marks():
+    marks = [{'start': 0, 'end': 500, 'title': '1'}, {'start': 500, 'end': 1500, 'title': '2'}, {'start': 1500, 'end': 3170, 'title': '3'}]
+    new, why = A.match_chapters(marks, 3170.0, AUD)
+    assert new is None, why

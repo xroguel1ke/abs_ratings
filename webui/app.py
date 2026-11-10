@@ -445,6 +445,9 @@ def explain_entry(x, res_all):
                 p=round(float(m_.group(1)) * 100), a={'✓': T('same'), '✗': T('different')}.get(m_.group(2), T('unknown'))) if m_ else reason
     elif kind == 'series':
         what, why = T('Series "%(s)s" looks wrong for this book.', s=cand), reason
+    elif kind == 'incomplete':
+        what = T('The audio file seems to lack about %(m)s minutes.', m=cand)
+        why = T("Its chapters and Audible's runtime of the same book are longer than the file - an incomplete download or another (shorter) edition. Check the end of the book.")
     elif kind == 'authors':
         what = T('Audible names %(a)s as author(s) of exactly this recording (same runtime and narrator).', a=cand)
         why = reason + ' ' + T('A person is never replaced automatically (pen names, editors, translations).')

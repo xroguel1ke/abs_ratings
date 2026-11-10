@@ -1165,6 +1165,12 @@ def match_chapters(abs_chs, dur, aud):
         return mk([0.0] + [c[0] - intro for c in chs[1:]], titles), f"the file lacks Audible's intro ({diff:+.1f} s)"
     if abs(diff) <= 5:
         return mk([c[0] for c in chs], titles), f"length matches Audible ({diff:+.1f} s)"
+    an = anchor_align(abs_chs, chs, dur)
+    if an:  # Audible's starts moved by the measured offset, cut at the end of the file (marks past the end are dropped)
+        off = an[0]
+        starts = [0.0] + [c[0] + off for c in chs[1:]]
+        keep = [i for i, st in enumerate(starts) if st < dur - 1]
+        return mk([starts[i] for i in keep], [titles[i] for i in keep]), f"the file's chapter marks sit at Audible's chapter starts ({an[1]}/{an[2]}, offset {off:+.1f} s)"
     if abs(diff) > 120: return None, f"length differs by {diff:+.0f} s"
     if abs_chs and len(abs_chs) == len(chs) and len(chs) >= 3 and max(float(c.get('end') or 0) for c in abs_chs) <= dur + 2:  # broken marks (past the end) are no anchor
         al = [float(c['end']) - float(c['start']) for c in abs_chs]
@@ -1176,6 +1182,19 @@ def match_chapters(abs_chs, dur, aud):
             off = intro if why != 'outro' else 0.0
             return mk([0.0] + [c[0] - off for c in chs[1:]], titles), f"the file lacks Audible's {why} ({diff:+.1f} s)"
     return None, f"length differs by {diff:+.0f} s and no reliable alignment"
+
+def anchor_align(abs_chs, chs, dur, need=0.9):
+    """The file's own chapter marks sit where Audible's chapters start, up to one constant offset (Audible's intro cut differently):
+    >= need of Audible's chapter starts have a file mark within 2 s after the offset. Returns (offset, matched, total) or None.
+    Proves the chapter structure even when the marks run past the end of the file (marks made for the longer Audible file)."""
+    starts = sorted(float(c.get('start') or 0) for c in abs_chs or [])
+    inner = [c[0] for c in chs[1:]]
+    if len(starts) < 3 or len(inner) < 2: return None
+    near = lambda x: min(starts, key=lambda y: abs(y - x))
+    diffs = sorted(near(x) - x for x in inner)
+    off = diffs[len(diffs) // 2]
+    hit = sum(1 for x in inner if abs(near(x + off) - (x + off)) <= 2)
+    return (off, hit, len(inner)) if hit >= need * len(inner) and abs(off) <= 150 else None
 
 def abs_set_chapters(iid, key, title, new, old, source):
     """Write chapters (own ABS endpoint), journaled like every write; undo writes the old list back."""
@@ -4887,12 +4906,21 @@ def process_queue(work_queue, history, failed, recheck):
                             logging.info(f"        🖼️ Cover {'would be ' if DRY_RUN else ''}{'replaced (verified book)' if has_cover else 'set'} from Audible: {aud_data['cover_url']}")
 
                     # Chapters (user 2026-11-10): Audible's chapters for poorly chaptered files of the SAME recording, only when they fit reliably
-                    if MATCH_CHAPTERS and cover_verified and not lang_conflict and asin:
+                    if MATCH_CHAPTERS and not lang_conflict and asin and not aud_data.get('related_edition') and (cover_verified or len((item_data.get('media') or {}).get('chapters') or []) >= 8):
                         abs_chs = (item_data.get('media') or {}).get('chapters') or []
                         poor = chapters_poor(abs_chs, abs_dur)
                         if poor and 'lock_chapters' in tags: logging.info("        🔒 Chapters not replaced (locked)")
+                        elif poor and abs_dur and abs_chs and max(float(c.get('end') or 0) for c in abs_chs) > abs_dur + 120 \
+                                and aud_data.get('runtime_sec') and aud_data['runtime_sec'] > abs_dur + 120:
+                            # the chapters AND Audible's runtime say the book is longer than the file: the file probably lacks its end
+                            # (incomplete download) - nothing is cut, the user is told (round 'chapters', 2026-11-10: 'The Long Way' -78 min)
+                            miss_ = round((aud_data['runtime_sec'] - abs_dur) / 60)
+                            logging.info(f"        ⚠️ The file seems incomplete: chapters and Audible's runtime are {miss_} min longer than the file - review list")
+                            add_review(key, title, 'incomplete', str(miss_), f"the audio file is {miss_} min shorter than its chapters and Audible's runtime - incomplete download or a shorter edition?")
                         elif poor and abs_dur and (aud_ch := audible_chapters(asin, aud_data.get('domain'))):
                             new_chs, why_c = match_chapters(abs_chs, abs_dur, aud_ch)
+                            if new_chs and not cover_verified and not ((an_ := anchor_align(abs_chs, aud_ch[0], abs_dur, 0.95)) and an_[2] >= 7):
+                                new_chs, why_c = None, 'recording not verified and the chapter marks do not prove it'
                             if new_chs and poor == 'only numbered chapters without names' and all(RE_GENERIC_CH.match(c['title'] or '') for c in new_chs):
                                 new_chs, why_c = None, "Audible's chapters have no names either"  # 'Chapter 1' for 'Chapter 1': nothing gained
                             if new_chs and abs_set_chapters(iid, key, title, new_chs, abs_chs, 'audible_chapters'):
