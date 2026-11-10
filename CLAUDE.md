@@ -151,6 +151,21 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     twice in one test run applies the final value.
   - Web UI e2e tests against the fake ABS: tests/test_webui_e2e.py (rename + undo, lock, symbol rewrite, remove ratings, apply selection,
     undo conflict, no inherited alert).
+- 2026-11-09/10 library audit rounds 1-10 (user: 'the first series I looked at was wrong'):
+  - Packs: Audible's range is the number ('1-2', also replacing a first-volume number); the audio file's own tags naming another volume
+    drive a strict search (Arch Magus 'Pack 1' file = Pack 3); a title that is only '<series> #N' / has the series name appended /
+    '(Unabridged)' / zero-padded numbers / 'Library Edition' -> Audible's title (same recording); subtitle = title -> Audible's or none.
+  - Same-title volumes with different ASINs count as different books for a shared number; '04' -> '4'; a future or non-year publishing
+    year -> the recording's year; Audible's subtitle '<series>, Book N' fixes only an OUTLIER number (#100 next to #1, #2).
+  - Audible series named like the book's folder (same edition) is added; an unnumbered series Audible does not list whose books all sit
+    in that folder goes. Descriptions that are Audible's summary of ANOTHER book are replaced (summary_index.json).
+  - One spelling per narrator (library's most used); swapped author/narrator match crosswise in the search; author-only narrator is no
+    evidence. ISBN of another language group or shared with another book counts as wrong (only a verified one replaces it; the book whose
+    language fits the group keeps it). Genres: glued lists split, 'Audiobook'/'General' removed.
+  - Chapters (MATCH_CHAPTERS, lock_chapters): Audible's chapters (Audnexus) for poor chapters (none, one, only numbers on both sides is
+    skipped, > 30 s past the end) when the file length matches to 5 s, the file's own marks match Audible's lengths, or Audible's intro/outro
+    explain up to 2 min. Journal keeps chapter start/end/title; undo/apply support it.
+  - tools/regress.sh runs at most 10 test containers at a time (REGRESS_JOBS); ~100 parallel containers disturbed the server.
 
 ## Testing
 - **pytest:** `tools/pytest_all.sh` (one process per test file; also step 2a of the gate).
