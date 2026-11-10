@@ -4416,6 +4416,19 @@ def process_queue(work_queue, history, failed, recheck):
                                 abs_updates['subtitle'] = aud_sub
                                 log_updates.append(f"Subtitle: -> '{aud_sub}'")
 
+                    # round 9 (2026-11-10): subtitle = title ('Catching Fire' / 'Catching Fire') or an edition label ('Library Edition'):
+                    # Audible's subtitle of the same recording, else none; ' - Library Edition' at the end of a title goes
+                    if 'lock_title' not in tags and same_recording(abs_dur, meta.get('narrators'), aud_data):
+                        cur_t, cur_s = abs_updates.get('title', title), abs_updates.get('subtitle', meta.get('subtitle')) or ''
+                        new_t = re.sub(r'(?i)\s*[-–:]\s*library edition\s*$', '', cur_t).strip()
+                        new_s = re.sub(r'(?i)\s*[-–:]?\s*library edition\s*$', '', cur_s).strip()
+                        if new_s and normalize_title_text(new_s) == normalize_title_text(new_t): new_s = ''
+                        if not new_s and cur_s and aud_sub and normalize_title_text(aud_sub) != normalize_title_text(new_t): new_s = aud_sub
+                        if new_t != cur_t and new_t:
+                            abs_updates['title'] = new_t; log_updates.append(f"Title: '{cur_t}' -> '{new_t}' (edition label)")
+                        if new_s != cur_s and cur_s:
+                            abs_updates['subtitle'] = new_s; log_updates.append(f"Subtitle: '{cur_s}' -> '{new_s}' (was the title / an edition label)")
+
                     # recording details come only from the SAME recording: runtime within EDITION_FILL_MIN (unknown ABS runtime: as before)
                     same_rec_rt = not (abs_dur and aud_data.get('runtime_sec')) or abs(abs_dur - aud_data['runtime_sec']) <= EDITION_FILL_MIN * 60
                     if not same_rec_rt: logging.info(f"        ⏭️ Narrators/publisher/year/abridged not taken: runtime differs by {abs(abs_dur - aud_data['runtime_sec']) // 60:.0f} min (other recording)")
