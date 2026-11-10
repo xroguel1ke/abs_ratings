@@ -4906,6 +4906,11 @@ def process_queue(work_queue, history, failed, recheck):
                             logging.info(f"        🖼️ Cover {'would be ' if DRY_RUN else ''}{'replaced (verified book)' if has_cover else 'set'} from Audible: {aud_data['cover_url']}")
 
                     # Chapters (user 2026-11-10): Audible's chapters for poorly chaptered files of the SAME recording, only when they fit reliably
+                    chs0_ = (item_data.get('media') or {}).get('chapters') or []
+                    if MATCH_CHAPTERS and len(chs0_) <= 1 and 'lock_chapters' not in tags and not (cover_verified and not lang_conflict and asin and not aud_data.get('related_edition')):
+                        # a book WITHOUT chapters whose recording is not verified: nothing can be matched safely -> review list (user 2026-11-10)
+                        add_review(key, title, 'chapters', 'no chapters' if not chs0_ else 'a single chapter',
+                                   "the book has no chapters and Audible's could not be matched (recording not verified) - add them in ABS (Edit > Chapters)")
                     if MATCH_CHAPTERS and not lang_conflict and asin and not aud_data.get('related_edition') and (cover_verified or len((item_data.get('media') or {}).get('chapters') or []) >= 8):
                         abs_chs = (item_data.get('media') or {}).get('chapters') or []
                         poor = chapters_poor(abs_chs, abs_dur)
@@ -5137,7 +5142,10 @@ def process_queue(work_queue, history, failed, recheck):
                     status, reason = 'other_edition', f"Ratings of another edition ({aud_data.get('asin')}), ASIN not available anymore"
                 elif has_aud: status, reason = 'ok', ''
                 elif no_ratings_yet: status, reason = 'no_ratings_yet', 'On Audible, but no ratings yet'
-                elif not asin: status, reason = 'not_found', 'No ASIN and no match found on Audible'
+                elif not asin:
+                    status, reason = 'not_found', 'No ASIN and no match found on Audible'
+                    if MATCH_CHAPTERS and abs_dur and len((item_data.get('media') or {}).get('chapters') or []) <= 1 and 'lock_chapters' not in tags:
+                        add_review(key, title, 'chapters', 'no chapters', "the book has no chapters and no Audible product to take them from - add them in ABS (Edit > Chapters)")
                 elif aud_data is None: status, reason = 'not_found', 'ASIN not available in any Audible store, no replacement found'
                 else: status, reason = 'not_found', 'No ratings found on Audible'
                 notes = []
