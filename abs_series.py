@@ -726,6 +726,47 @@ def fill_folder_numbers(ctx, records):
     return changed
 
 
+def fill_from_subseries(ctx, records):
+    """Umbrella number from a sub-series (user 2026-11-10, First Law World): a book in umbrella U WITHOUT a number but in sub-series S
+    with number k, while another book of S has U #M at S #m (Last Argument of Kings: First Law World #3 = First Law Trilogy #3) ->
+    U #(M - m + k) (The Blade Itself = First Law Trilogy #1 -> First Law World #1). Only when every book of S that has both numbers
+    gives the same offset, the result is a whole number not held by another book of U, and no lock_series."""
+    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    num = lambda q: float(q) if re.fullmatch(r"\d+(\.\d+)?", str(q or '').strip()) else None
+    held, offs = {}, {}
+    for r in records:
+        sers = [(series_key(x['name']), num(x.get('sequence'))) for x in r['series']]
+        for k_, q in sers:
+            if q is not None: held.setdefault((r['lib'], k_), set()).add(q)
+        for ku, qu in sers:
+            for ks, qs in sers:
+                if ku != ks and qu is not None and qs is not None:
+                    offs.setdefault((r['lib'], ku, ks), set()).add(qu - qs)
+    changed = 0
+    for r in records:
+        if 'lock_series' in r['tags'] or 'lock_all' in r['tags'] or 'lock_metadata' in r['tags']: continue
+        new, did = [dict(x) for x in r['series']], []
+        for x in new:
+            ku = series_key(x['name'])
+            if num(x.get('sequence')) is not None or x.get('sequence'): continue
+            cands = set()
+            for y in new:
+                ks, qs = series_key(y['name']), num(y.get('sequence'))
+                o = offs.get((r['lib'], ku, ks))
+                if qs is None or ks == ku or not o: continue
+                if len(o) != 1: cands = None; break  # the sub-series does not map onto the umbrella with ONE offset
+                cands.add(next(iter(o)) + qs)
+            if not cands or len(cands) != 1: continue
+            q = cands.pop()
+            if q != int(q) or q < 1 or q in held.get((r['lib'], ku), set()): continue
+            x['sequence'] = str(int(q)); did.append(f"{x['name']} #{int(q)}")
+            held.setdefault((r['lib'], ku), set()).add(q)
+        if did and abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'series': new}, {'series': r['series']}, 'subseries_number'):
+            changed += 1; r['series'] = new
+            logging.info(f"   🔢 NUMBER{' (DRY_RUN)' if dry else ''}: '{r['title']}': {', '.join(did)} (from its sub-series)")
+    return changed
+
+
 def wrong_languages(records, allowed):
     """Review list (user 2026-11-09): books whose language is unknown or not one of BOOK_LANGUAGES after every automatic fix."""
     if not allowed: return []
@@ -1014,6 +1055,7 @@ def run(ctx):
         ctx['languages_fixed'] = fix_languages(ctx, records, ctx['book_languages'])
     if ctx.get('merge'):
         ctx['folder_numbers'] = fill_folder_numbers(ctx, records)
+        ctx['subseries_numbers'] = fill_from_subseries(ctx, records)
     if ctx.get('genre_cleanup'):
         ctx['genres_cleaned'] = normalize_genres(ctx, records)
         logging.info(f"   Genre spellings cleaned: {ctx['genres_cleaned']} books")
