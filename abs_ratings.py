@@ -4615,7 +4615,7 @@ def process_queue(work_queue, history, failed, recheck):
                                     # user decision 2026-11-09: a pack / omnibus keeps Audible's own range as its number ('1-2' for Publisher's
                                     # Pack 1, '3-4' for Pack 2) - it says exactly which volumes the book holds
                                     s_seq = f"{rng_.group(1)}-{rng_.group(2)}"
-                                elif s_seq is not None and (is_boxset_title(title) or is_boxset_title(f"{aud_data.get('title_raw') or ''} {aud_data.get('subtitle_raw') or ''}")):  # 'Trilogie 1-3' is not book 5
+                                elif s_seq is not None and (is_boxset_title(title) or is_boxset_title(aud_data.get('title_raw') or '')):  # 'Trilogie 1-3' is not book 5; Audible's TITLE only ('Black Magician Trilogy, Book 3' as subtitle is no box set)
                                     logging.info(f"        ℹ️ Series '{s_name}': no number for a box set / collection ('{title}')")
                                     s_seq = None
                                 elif s_seq is None and not is_boxset_title(title):
