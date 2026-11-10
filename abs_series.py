@@ -102,7 +102,7 @@ def is_latin(name):
     return not any(c.isalpha() and "LATIN" not in unicodedata.name(c, "") for c in (name or ""))  # letters only: "86—EIGHTY-SIX" (em dash) is Latin
 
 FOREIGN_WORDS = {'les', 'le', 'la', 'du', 'aux', 'et', 'une', 'un', 'el', 'los', 'las', 'del', 'y', 'il', 'gli', 'degli', 'della', 'dei', 'delle', 'di', 'os', 'dos', 'het', 'een',
-                 'de', 'chroniques', 'cronache', 'crónicas', 'cronicas', 'ciclo', 'cycle de', 'saga de', 'trilogie', 'trilogia', 'kronikka', 'och', 'av'}
+                 'de', 'des', 'livre', 'tome', 'chroniques', 'cronache', 'crónicas', 'cronicas', 'ciclo', 'cycle de', 'saga de', 'trilogie', 'trilogia', 'kronikka', 'och', 'av'}
 ENDE_WORDS = {'the', 'of', 'and', 'a', 'an', 'der', 'die', 'das', 'und', 'von', 'vom', 'im', 'zum', 'zur', 'ein', 'eine', 'in', 'to', 'for'}
 
 GERMAN_WORDS = {'der', 'die', 'das', 'dem', 'den', 'des', 'und', 'von', 'vom', 'zum', 'zur', 'im', 'unter', 'einer', 'eines', 'zweiten', 'vergessenen', 'chroniken'}

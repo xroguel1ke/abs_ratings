@@ -1337,6 +1337,7 @@ def glued_subtitle(title, abs_sub, aud_title, aud_sub, abs_series=None):
     'Mistborn: The Final Empire' is a normal title) keeps the title as it is."""
     n = lambda x: normalize_title_text(x or '')
     if not (title and aud_title and aud_sub) or n(aud_title) == n(title) or ':' not in title: return None
+    if abs_sub and n(title) == n(f"{aud_title}: {abs_sub}"): return 'title'  # 'Casual Farming: Sowing Season, Book 1' + that subtitle
     if n(title) not in (n(f"{aud_title}: {aud_sub}"), n(f"{aud_title}: {aud_sub}: {aud_sub}")): return None
     if n(abs_sub) == n(aud_sub): return 'title'  # the subtitle is shown twice in ABS (title + subtitle field)
     if not abs_sub:
@@ -4377,6 +4378,8 @@ def process_queue(work_queue, history, failed, recheck):
                             log_updates.append(f"Title: '{title}' -> '{aud_title}' (format label / zero-padded number)")
                     elif aud_title and same_recording(abs_dur, meta.get('narrators'), aud_data) and normalize_title_text(aud_title) != normalize_title_text(title) \
                             and any(re.fullmatch(r'(?i)\s*' + re.escape(str(s_.get('name') or '').strip()) + r'\s*#\s*\d+(?:\.\d+)?\s*', title)  # only the '#N' label: 'Beware of Chicken 2' IS the title (Audible adds marketing)
+                                    or (normalize_title_text(title) == normalize_title_text(s_.get('name') or '') and normalize_title_text(aud_title).startswith(normalize_title_text(title) + ' ')
+                                        and s_.get('sequence') and str(s_.get('sequence')) not in ('1', '1.0'))  # 'A Thousand Li' #12 = 'A Thousand Li: The Fourth Wall'
                                     for s_ in (meta.get('series') or []) if s_.get('name')):
                         # round 3 (2026-11-09): the title is only the series label ('The Dark Tower #1') - Audible's title of the same recording
                         if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{aud_title}'")
@@ -4416,6 +4419,12 @@ def process_queue(work_queue, history, failed, recheck):
                                 abs_updates['subtitle'] = aud_sub
                                 log_updates.append(f"Subtitle: -> '{aud_sub}'")
 
+                    from abs_series import foreign_for_book as _ffs
+                    if meta.get('subtitle') and 'lock_title' not in tags and 'subtitle' not in abs_updates and _ffs(meta['subtitle'], meta.get('language') or lang) \
+                            and not (aud_sub and normalize_title_text(aud_sub) == normalize_title_text(meta['subtitle'])):
+                        # round 10: 'Le Livre des Terres Bannies 1' on the English Malice - a subtitle of a foreign edition
+                        abs_updates['subtitle'] = aud_sub if (aud_sub and same_recording(abs_dur, meta.get('narrators'), aud_data)) else ''
+                        log_updates.append(f"Subtitle: '{meta['subtitle']}' -> '{abs_updates['subtitle']}' (subtitle of a foreign edition)")
                     # round 9 (2026-11-10): subtitle = title ('Catching Fire' / 'Catching Fire') or an edition label ('Library Edition'):
                     # Audible's subtitle of the same recording, else none; ' - Library Edition' at the end of a title goes
                     if 'lock_title' not in tags and same_recording(abs_dur, meta.get('narrators'), aud_data):
