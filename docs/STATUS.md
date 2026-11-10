@@ -53,6 +53,8 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [A] Night 2026-11-09: genre cleanup (188 books, stable next round), Hardcover edition label in subtitle, library-task writes stamp history, race fix, folder narrator names | ✅ | rounds 10-12 0 errors; batches 65-68 clean (streak 4 again); ASIN audit of all 1907 ASINs: 1900 ok, 7 gone (known) |
 | [U] 2026-11-09 day: source health (canary + breaker), BOOK_LANGUAGES (no foreign editions, language consensus, wrong-language review list), series never mix languages, review list explained in plain words + checked same-ASIN groups, missing volumes page, sibling recordings via catalog search (Discworld #30/32/35) | ✅ | full round 0 errors; missing volumes 290 in 112 series |
 
+| [U] 2026-11-10: ABS inode takeover (new folder got another book's entry): moved-item guard + identity switch replaces publisher/year/genres/ISBN/cover; Ambassador's Mission + Orb of Cairado repaired; audit: Audiobooks clean, E-Books ~60 swapped entries (not processed by the script) | ✅ | tests/test_moved_guard.py |
+
 ## Goodreads (experimental)
 | Item | State | Note |
 |---|---|---|

@@ -3536,6 +3536,60 @@ def note_listing_item(lib_id, it):
             SEQ_TITLES.setdefault((lib_id, sn_.lower(), q_.strip()), set()).add(normalize_title_text(md_.get('title') or '') + ('|' + md_['asin'] if md_.get('asin') else ''))
             SEQ_WORKS.setdefault((lib_id, sn_.lower(), q_.strip(), map_language(md_.get('language')) or ''), set()).add(normalize_title_text(md_.get('title') or ''))
 
+ITEM_PATHS_FILE = os.path.join(SCRIPT_DIR, 'item_paths.json')  # key -> [path, title, author] of the last run (moved-item guard)
+_GUARD_STOP = {'the', 'and', 'der', 'die', 'das', 'und', 'von', 'book', 'band', 'teil', 'vol', 'volume', 'part', 'des', 'les'}
+
+def _guard_toks(x):
+    x = unicodedata.normalize('NFKD', str(x or '')).encode('ascii', 'ignore').decode().lower()
+    return {t for t in re.sub(r'[^a-z0-9]+', ' ', re.sub(r"['`\u2019]", '', x)).split() if len(t) > 2 and t not in _GUARD_STOP}
+
+def guard_moved_items(lib_id, items):
+    """ABS took over the entry of ANOTHER book for a newly added folder (2026-11-10: 'The Ambassador's Mission' added -> ABS moved the
+    'The Orb of Cairado' entry, with all its metadata, onto the new folder; the Orb folder had no entry any more). Cause in ABS 2.x: the
+    folder watcher matches a NEW folder to an existing entry by inode only (LibraryScanner findLibraryItemByItemToItemInoMatch) without
+    checking that the entry's own folder is gone, and Unraid's /mnt/user (shfs) inode numbers are not stable, so a stale stored inode
+    can equal the new folder's. Guard: an entry whose path changed since the last run while NEITHER its title NOR its author appears in
+    the new path is no move - it is a takeover. It is not processed (its metadata belongs to the other book), goes on the review list,
+    and a library scan gives the other book's folder its entry back. Real moves (renamed folder, reorganized author folder) keep a word
+    of the title or the author in the path and pass."""
+    old = rw_json(ITEM_PATHS_FILE) or {}
+    if not isinstance(old, dict): old = {}
+    snap, keep, suspects = dict(old), [], []
+    for it in items:
+        key, path = f"{lib_id}_{it.get('id')}", it.get('path') or ''
+        md = ((it.get('media') or {}).get('metadata') or {})
+        title, author = md.get('title') or '', md.get('authorName') or ''
+        prev = old.get(key)
+        if prev and path and prev[0] != path and not prev[3:4] == [True]:
+            ptoks = _guard_toks(path)
+            ttoks, atoks = _guard_toks(prev[1] or title), _guard_toks(prev[2] or author)
+            if (ttoks or atoks) and not (ttoks & ptoks) and not (atoks & ptoks):
+                suspects.append((key, title, prev[0], path))
+                snap[key] = [prev[0], prev[1], prev[2], True]  # stays flagged until the user decides / the entry fits its folder
+                continue
+        if prev and prev[3:4] == [True]:
+            ptoks = _guard_toks(path)
+            if not (_guard_toks(title) & ptoks) and not (_guard_toks(author) & ptoks) and not (OVERRIDES.get(key) or {}).get('identity') and \
+                    not any(x.get('key') == key and x.get('kind') == 'moved' and x.get('status') not in (None, 'open') for x in (rw_json(REVIEW_FILE) or [])):
+                continue  # still the other book's metadata: not processed until fixed
+        snap[key] = [path, title, author]
+        keep.append(it)
+    for key, title, was, now in suspects:
+        logging.warning(f"   ⛔ ABS moved the entry '{title}' from '{was}' to the NEW folder '{now}' (inode takeover): not processed, review list")
+        add_review(key, title, 'moved', now, f"ABS gave the newly added folder '{now}' the entry (and all metadata) of '{title}' from "
+                   f"'{was}'. The metadata belongs to the other book. Set the right ASIN for this folder ('another book') - the other "
+                   f"folder gets a new entry from the library scan.", evidence=[was, now])
+    if suspects and not DRY_RUN:
+        try:
+            abs_session.post(f"{ABS_URL}/api/libraries/{lib_id}/scan", timeout=30)
+            logging.info("   🔄 Library scan started: the other book's folder gets its entry back")
+        except Exception as e: logging.warning(f"   Library scan not started: {e}")
+    if not DRY_RUN:
+        live = {f"{lib_id}_{it.get('id')}" for it in items}
+        snap = {k: v for k, v in snap.items() if not k.startswith(f"{lib_id}_") or k in live}
+        rw_json(ITEM_PATHS_FILE, snap)
+    return keep
+
 def build_queue(lib_id, history, recheck):
     """Due books of one library (new, manually changed, due for refresh, re-checks). Each item gets '_lib'."""
     logging.info(f"--- Library: {lib_id} ---")
@@ -3543,6 +3597,7 @@ def build_queue(lib_id, history, recheck):
         r = abs_session.get(f"{ABS_URL}/api/libraries/{lib_id}/items")
         items = r.json()['results']
     except Exception as e: logging.error(f"Lib Error: {e}"); return []
+    items = guard_moved_items(lib_id, items)
 
     # --- NEW QUEUE LOGIC (UTC ONLY) ---
     work_queue = []
@@ -4866,8 +4921,9 @@ def process_queue(work_queue, history, failed, recheck):
                     # The user confirmed (review list) an ASIN of ANOTHER book for this file (The New World -> 'Paladin of the New World 1',
                     # same runtime + narrator): the ABS metadata belongs to the other book, so the identity comes from Audible - title,
                     # authors, series (replaced, not added), narrators. Lock tags respected. (2026-11-09: author and old series had stayed)
-                    if ov.get('identity') and ov.get('asin') == asin and aud_data.get('title_raw') and abs_dur and aud_data.get('runtime_sec') \
-                            and abs(abs_dur - aud_data['runtime_sec']) <= 120:
+                    id_switch = bool(ov.get('identity') and ov.get('asin') == asin and aud_data.get('title_raw') and abs_dur and aud_data.get('runtime_sec')
+                                     and abs(abs_dur - aud_data['runtime_sec']) <= 120)
+                    if id_switch:
                         id_aut = [n for n in (aud_data.get('authors_raw') or []) if not is_role_credit(n)]
                         id_ser = [{'name': canonical_series(lib_id, (x.get('name') or '').strip(), id_aut)[0], 'sequence': aud_part(x.get('part'))}
                                   for x in (md_raw.get('series') or []) if (x.get('name') or '').strip()]
@@ -4883,9 +4939,22 @@ def process_queue(work_queue, history, failed, recheck):
                             if lk in tags: logging.info(f"        🔒 {fld.capitalize()} not replaced (locked)"); continue
                             abs_updates[fld] = val
                             log_updates.append(f"{fld.capitalize()}: -> {val if not isinstance(val, list) else ', '.join((x.get('name') + (' #' + str(x['sequence']) if x.get('sequence') else '')) if isinstance(x, dict) else x for x in val)} (ASIN confirmed by you: another book)")
-                        if re.fullmatch(r'B0[A-Z0-9]{8}', str(meta.get('isbn') or '').strip()) and 'lock_isbn' not in tags and 'isbn' not in abs_updates:
-                            abs_updates['isbn'] = ''  # the old book's ASIN in the ISBN field (The New World 'B0C71XXX3Q')
-                            log_updates.append(f"ISBN: '{meta.get('isbn')}' -> '' (an ASIN of the other book)")
+                        if str(meta.get('isbn') or '').strip() and 'lock_isbn' not in tags and 'isbn' not in abs_updates:
+                            # the old book's ISBN (Orb of Cairado's 9798331989484 on The Ambassador's Mission, 2026-11-10) or its ASIN in
+                            # the ISBN field (The New World 'B0C71XXX3Q'): it belongs to the other book
+                            abs_updates['isbn'] = ''
+                            log_updates.append(f"ISBN: '{meta.get('isbn')}' -> '' (belongs to the other book)")
+                        # publisher, year and genres of the other book stayed (Ambassador's Mission kept 2026, Tantor Media and the
+                        # Orb's 'Novella', 'Steampunk' genres, 2026-11-10): replaced by the confirmed recording's values
+                        id_pub = ((md_raw.get('publisher') or {}).get('name') or '').strip()
+                        id_year = parse_release_year(md_raw.get('releaseDate'))
+                        id_gen = [g for g in dict.fromkeys(map_genre(c.get('name'), aud_data.get('domain')) for c in (md_raw.get('categories') or []) if c.get('name')) if g]
+                        for fld, val, lk in (('publisher', id_pub, 'lock_publisher'), ('publishedYear', str(id_year) if id_year else None, 'lock_year'),
+                                             ('genres', id_gen, 'lock_genres')):
+                            if not val or val == meta.get(fld): continue
+                            if lk in tags: logging.info(f"        🔒 {fld} not replaced (locked)"); continue
+                            abs_updates[fld] = val
+                            log_updates.append(f"{fld}: {meta.get(fld)!r} -> {val!r} (ASIN confirmed by you: another book)")
                     if abs_updates:
                         logging.info(f"        🛠️ Meta Updates{' (DRY_RUN, not saved)' if DRY_RUN else ''}:")
                         for upd in log_updates: logging.info(f"          -> {upd}")
@@ -4896,9 +4965,10 @@ def process_queue(work_queue, history, failed, recheck):
                     # or an ASIN confirmed by this run's search + runtime ±2 min). cover_state.json avoids re-uploading the same cover every run.
                     has_cover = bool((item_data.get('media') or {}).get('coverPath'))
                     rt_exact = bool(abs_dur and aud_data.get('runtime_sec') and abs(abs_dur - aud_data['runtime_sec']) <= 120)
-                    cover_verified = (same_recording(abs_dur, meta.get('narrators'), aud_data) and key not in FILLED_NARR) or (asin_from_search and rt_exact)
+                    cover_verified = (same_recording(abs_dur, meta.get('narrators'), aud_data) and key not in FILLED_NARR) or (asin_from_search and rt_exact) \
+                        or id_switch  # confirmed other book: the old cover shows the other book (Orb of Cairado's on Ambassador's Mission)
                     if aud_data.get('cover_url') and not lang_conflict and cover_verified and ((FILL_COVERS and not has_cover) or  # user rule: covers only for a VERIFIED ASIN
-                                                                                               (UPDATE_COVERS and has_cover and COVER_STATE.get(iid) != asin)):
+                                                                                               ((UPDATE_COVERS or id_switch) and has_cover and COVER_STATE.get(iid) != asin)):
                         if 'lock_cover' in tags: logging.info("        🔒 Cover Update Skipped (Locked)")
                         elif abs_set_cover(iid, key, title, aud_data['cover_url'], 'audible_cover' if not has_cover else 'audible_cover_verified', replace=has_cover):
                             stats['cover_added'] += 1

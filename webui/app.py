@@ -451,6 +451,10 @@ def explain_entry(x, res_all):
     elif kind == 'incomplete':
         what = T('The audio file seems to lack about %(m)s minutes.', m=cand)
         why = T("Its chapters and Audible's runtime of the same book are longer than the file - an incomplete download or another (shorter) edition. Check the end of the book.")
+    elif kind == 'moved':
+        ev = x.get('evidence') or []
+        what = T('ABS gave the newly added folder "%(n)s" the entry of another book ("%(t)s", folder "%(o)s").', n=cand, t=x.get('title') or '?', o=ev[0] if ev else '?')
+        why = T('Title, author and all other data shown for this folder belong to the other book. The script does not touch it. Look up the right ASIN for this folder and set it as "another book" (book page > ASIN); the other folder gets a new entry from the library scan.')
     elif kind == 'authors':
         what = T('Audible names %(a)s as author(s) of exactly this recording (same runtime and narrator).', a=cand)
         why = reason + ' ' + T('A person is never replaced automatically (pen names, editors, translations).')

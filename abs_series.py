@@ -726,6 +726,34 @@ def fill_folder_numbers(ctx, records):
     return changed
 
 
+def fill_folder_series(ctx, records):
+    """A book in a series folder 'Author/S/Book' without series S while EVERY other book of that folder (at least 2) has S and shares
+    an author with it -> S is added without a number (user 2026-11-10: The Ambassador's Mission sat in 'Kyralia Universe' next to The
+    Rogue and The Traitor Queen but only had Audible's 'Traitor Spy Trilogy'; the sub-series rule then numbers it). lock_series respected."""
+    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    dirs = {}
+    for r in records:
+        parts = [p for p in str(r.get('path') or '').replace('\\', '/').split('/') if p.strip()]
+        if len(parts) >= 3: dirs.setdefault((r['lib'], '/'.join(parts[:-1]).lower()), []).append((r, parts[-2]))
+    changed = 0
+    for (lib, _), group in dirs.items():
+        for r, sfolder in group:
+            if 'lock_series' in r['tags'] or 'lock_all' in r['tags'] or 'lock_metadata' in r['tags']: continue
+            k = series_key(sfolder)
+            if any(series_key(x['name']) == k for x in r['series']): continue
+            others = [o for o, _ in group if o is not r]
+            names = [next((x['name'] for x in o['series'] if series_key(x['name']) == k), None) for o in others]
+            if len(others) < 2 or None in names: continue
+            mine = {author_key(a) for a in r['authors']}
+            if not mine or not all(mine & {author_key(a) for a in o['authors']} for o in others): continue
+            name = max(set(names), key=names.count)
+            new = [dict(x) for x in r['series']] + [{'name': name, 'sequence': None}]
+            if abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'series': new}, {'series': r['series']}, 'folder_series'):
+                changed += 1; r['series'] = new
+                logging.info(f"   📚 SERIES{' (DRY_RUN)' if dry else ''}: '{r['title']}': + '{name}' (every other book of its folder has it)")
+    return changed
+
+
 def fill_from_subseries(ctx, records):
     """Umbrella number from a sub-series (user 2026-11-10, First Law World): a book in umbrella U WITHOUT a number but in sub-series S
     with number k, while another book of S has U #M at S #m (Last Argument of Kings: First Law World #3 = First Law Trilogy #3) ->
@@ -764,6 +792,37 @@ def fill_from_subseries(ctx, records):
         if did and abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'series': new}, {'series': r['series']}, 'subseries_number'):
             changed += 1; r['series'] = new
             logging.info(f"   🔢 NUMBER{' (DRY_RUN)' if dry else ''}: '{r['title']}': {', '.join(did)} (from its sub-series)")
+    # A whole sub-series without umbrella numbers that came out AFTER every numbered book of the umbrella continues it (user 2026-11-10:
+    # Kyralia Universe 1-3 = Black Magician Trilogy, then Traitor Spy 1-3 -> 4-6 even when book 1 is missing): umbrella max + sub number.
+    # Only when the umbrella's whole numbers are gapless 1..N, exactly ONE such sub-series is left and every one of its books is newer.
+    yr = lambda r: int(str(r.get('year'))[:4]) if re.match(r'\d{4}', str(r.get('year') or '')) else None
+    by_u = {}
+    for r in records:
+        for x in r['series']:
+            by_u.setdefault((r['lib'], series_key(x['name'])), []).append(r)
+    for (lib, ku), books in by_u.items():
+        if any('lock_series' in r['tags'] or 'lock_all' in r['tags'] for r in books): continue
+        ints = sorted({int(q) for r in books for x in r['series'] if series_key(x['name']) == ku and (q := num(x.get('sequence'))) is not None and q == int(q) and q >= 1})
+        if not ints or ints != list(range(1, ints[-1] + 1)): continue
+        # whole numbers only: a later prequel (The Magician's Apprentice #0.5, 2013) does not hide that Traitor Spy (2011) followed #1-3
+        years_num = [yr(r) for r in books if any(series_key(x['name']) == ku and (q := num(x.get('sequence'))) and q == int(q) and q >= 1 for x in r['series'])]
+        if not years_num or None in years_num: continue
+        rest = [r for r in books if any(series_key(x['name']) == ku and not x.get('sequence') for x in r['series'])]
+        subs = {}
+        for r in rest:
+            sub = [(series_key(x['name']), x['name'], num(x.get('sequence'))) for x in r['series'] if series_key(x['name']) != ku and num(x.get('sequence'))]
+            if len(sub) != 1: subs = None; break
+            subs.setdefault(sub[0][0], []).append((r, sub[0][2]))
+        if not subs or len(subs) != 1: continue
+        (ks, members), = subs.items()
+        if any(yr(r) is None or yr(r) <= max(years_num) for r, _ in members): continue
+        if any(q != int(q) for _, q in members) or len({q for _, q in members}) != len(members): continue
+        for r, q in members:
+            newq = ints[-1] + int(q)
+            new = [dict(x, sequence=str(newq)) if series_key(x['name']) == ku and not x.get('sequence') else dict(x) for x in r['series']]
+            if abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'series': new}, {'series': r['series']}, 'subseries_number'):
+                changed += 1; r['series'] = new
+                logging.info(f"   🔢 NUMBER{' (DRY_RUN)' if dry else ''}: '{r['title']}': umbrella #{newq} (its sub-series follows #1-{ints[-1]})")
     return changed
 
 
@@ -1054,6 +1113,7 @@ def run(ctx):
     if ctx.get('book_languages'):
         ctx['languages_fixed'] = fix_languages(ctx, records, ctx['book_languages'])
     if ctx.get('merge'):
+        ctx['folder_series'] = fill_folder_series(ctx, records)
         ctx['folder_numbers'] = fill_folder_numbers(ctx, records)
         ctx['subseries_numbers'] = fill_from_subseries(ctx, records)
     if ctx.get('genre_cleanup'):
