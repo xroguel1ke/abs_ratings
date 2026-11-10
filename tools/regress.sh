@@ -16,7 +16,7 @@ echo "== 2c Hardcover matches of the hand-checked batches"; tools/hc_golden_chec
 echo "== 3 library-wide series/author decisions"; py tools/lib_check.py > /tmp/claude-0/lib_check.out 2>&1; rc=$?; [ $rc -eq 139 -o $rc -eq 135 ] && { echo "lib_check crashed ($rc) - one retry"; py tools/lib_check.py > /tmp/claude-0/lib_check.out 2>&1; rc=$?; }; [ $rc -ne 0 ] && { fail=1; echo "lib_check exit code $rc (0-byte output = container did not start; see docker events)"; }; tail -4 /tmp/claude-0/lib_check.out
 echo "== 3b damage simulation (repairs on damaged copies, undamaged books unchanged)"; tools/damage_test.sh 2 > /tmp/claude-0/damage_reg.out 2>&1 || fail=1; grep "damage repaired" /tmp/claude-0/damage_reg.out; grep -c "  HARM" /tmp/claude-0/damage_reg.out | sed "s/^/harm: /"
 # at most MAXJ test containers at a time (user 2026-11-10: ~100 parallel containers showed up in the Unraid web UI)
-MAXJ=${REGRESS_JOBS:-6}
+MAXJ=${REGRESS_JOBS:-10}
 throttle() { while [ "$(jobs -rp | wc -l)" -ge "$MAXJ" ]; do sleep 1; done; }
 echo "== 3c synthetic series/author merge batches (fake ABS, own library)"
 for f in tests/synthetic/merge_*.json; do n=$(basename $f .json | sed 's/merge_//'); [[ $n =~ ^[0-9]+$ ]] || continue

@@ -1036,7 +1036,7 @@ def setup_logging():
 def _plain(v):
     """Make ABS values journal-friendly (series/authors lose their internal ids)."""
     if isinstance(v, list):
-        return [{k: x.get(k) for k in ('name', 'sequence') if k in x} if isinstance(x, dict) else x for x in v]
+        return [({k: x.get(k) for k in ('name', 'sequence') if k in x} if ('name' in x or 'sequence' in x) else dict(x)) if isinstance(x, dict) else x for x in v]  # chapters keep start/end/title
     return v
 
 def journal_change(iid, key, title, field, old, new, source, extra=None):
@@ -1131,7 +1131,7 @@ RE_GENERIC_CH = re.compile(r'(?i)^\s*(?:chapter|kapitel|track|part|teil|ch\.?|cd
 def chapters_poor(chs, dur):
     """ABS chapters worth replacing: none, a single one, only generic names ('Chapter 7', 'Track 03', '12'), or running past the end."""
     if not chs or len(chs) <= 1: return 'no chapters' if not chs else 'a single chapter'
-    if dur and any(float(c.get('end') or 0) > dur + 2 for c in chs): return 'chapters run past the end of the file'
+    if dur and any(float(c.get('end') or 0) > dur + 30 for c in chs): return 'chapters run past the end of the file'  # a few seconds over the end is usual (rounding)
     if all(RE_GENERIC_CH.match(str(c.get('title') or '')) for c in chs): return 'only numbered chapters without names'
     return None
 
@@ -1164,7 +1164,7 @@ def match_chapters(abs_chs, dur, aud):
     if abs(diff) <= 5:
         return mk([c[0] for c in chs], titles), f"length matches Audible ({diff:+.1f} s)"
     if abs(diff) > 120: return None, f"length differs by {diff:+.0f} s"
-    if abs_chs and len(abs_chs) == len(chs) and len(chs) >= 3:
+    if abs_chs and len(abs_chs) == len(chs) and len(chs) >= 3 and max(float(c.get('end') or 0) for c in abs_chs) <= dur + 2:  # broken marks (past the end) are no anchor
         al = [float(c['end']) - float(c['start']) for c in abs_chs]
         if all(abs(a - b[1]) <= 3 for a, b in list(zip(al, chs))[1:-1]) and abs(al[0] - chs[0][1]) <= 125 and abs(al[-1] - chs[-1][1]) <= 125:
             return [{'id': i, 'start': float(c['start']), 'end': float(c['end']), 'title': titles[i] or c.get('title')} for i, c in enumerate(abs_chs)], \
@@ -4868,6 +4868,8 @@ def process_queue(work_queue, history, failed, recheck):
                         if poor and 'lock_chapters' in tags: logging.info("        🔒 Chapters not replaced (locked)")
                         elif poor and abs_dur and (aud_ch := audible_chapters(asin, aud_data.get('domain'))):
                             new_chs, why_c = match_chapters(abs_chs, abs_dur, aud_ch)
+                            if new_chs and poor == 'only numbered chapters without names' and all(RE_GENERIC_CH.match(c['title'] or '') for c in new_chs):
+                                new_chs, why_c = None, "Audible's chapters have no names either"  # 'Chapter 1' for 'Chapter 1': nothing gained
                             if new_chs and abs_set_chapters(iid, key, title, new_chs, abs_chs, 'audible_chapters'):
                                 stats['chapters'] += 1
                                 logging.info(f"        📑 Chapters {'would be ' if DRY_RUN else ''}taken from Audible: {len(new_chs)} ({poor} before; {why_c})")
