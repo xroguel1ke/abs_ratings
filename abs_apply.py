@@ -17,7 +17,7 @@ os.environ.setdefault('DRY_RUN', 'false')
 import abs_ratings as A
 from abs_series import expand_locks
 
-LOCK = {'asin': 'lock_asin', 'title': 'lock_title', 'subtitle': 'lock_title', 'series': 'lock_series', 'language': 'lock_language',
+LOCK = {'chapters': 'lock_chapters', 'asin': 'lock_asin', 'title': 'lock_title', 'subtitle': 'lock_title', 'series': 'lock_series', 'language': 'lock_language',
         'genres': 'lock_genres', 'publisher': 'lock_publisher', 'publishedYear': 'lock_year', 'narrators': 'lock_narrators',
         'authors': 'lock_authors', 'cover': 'lock_cover', 'explicit': 'lock_explicit', 'abridged': 'lock_abridged',
         'isbn': 'lock_isbn', 'description': 'lock_description'}
@@ -28,6 +28,8 @@ def norm(field, v):
     if field == 'description': return A.normalize_desc(v or '')
     if field in ('authors', 'narrators', 'genres'):
         return sorted(str((x.get('name') if isinstance(x, dict) else x) or '').strip().lower() for x in (v or []))
+    if field == 'chapters':
+        return [(round(float(c.get('start') or 0), 1), str(c.get('title') or '')) for c in (v or [])]
     if field == 'series':
         return sorted((str(x.get('name') or '').strip().lower(), str(x.get('sequence') or '')) for x in (v or []))
     if v in (None, '', [], False) and field not in ('explicit', 'abridged'): return None
@@ -80,6 +82,13 @@ def main():
                 if e.get('old') is None and has_cover:
                     logging.info(f"  ⏭️ {title}: cover - ABS has a cover by now - skipped (conflict)"); res['conflict'] += 1; continue
                 if a.apply and A.abs_set_cover(iid, key, title, e['new'], 'applied:' + a.run, replace=has_cover): res['applied'] += 1
+                elif not a.apply: res['would'] += 1
+                continue
+            if f == 'chapters':  # own endpoint (abs_set_chapters): compared and written on their own
+                cur_c = (item.get('media') or {}).get('chapters') or []
+                if norm(f, cur_c) != norm(f, e.get('old')):
+                    logging.info(f"  ⏭️ {title}: chapters changed since the dry run - skipped (conflict)"); res['conflict'] += 1; continue
+                if a.apply and A.abs_set_chapters(iid, key, title, [dict(c, id=i) for i, c in enumerate(e['new'])], cur_c, 'applied:' + a.run): res['applied'] += 1
                 elif not a.apply: res['would'] += 1
                 continue
             cur = meta.get(f)

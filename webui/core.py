@@ -66,6 +66,7 @@ FIELDS = [
     ('RATING_POSITION', 'Rating block position', 'choice:top|bottom', 'top', '', 'Metadata'),
     ('RATING_MIN_COUNT', 'Minimum number of ratings', 'int', 0, 'A source with fewer ratings is not shown (0 = all)', 'Metadata'),
     ('FILL_COVERS', 'Set missing covers', 'bool', True, 'Only for a verified ASIN', 'Metadata'),
+    ('MATCH_CHAPTERS', 'Take Audible chapters', 'bool', True, 'For files without proper chapters (none, one, only numbers) and only when they fit reliably: same length to 5 s, or the file\'s own chapter marks / Audible\'s intro-outro explain a difference up to 2 min. lock_chapters protects a book', 'Metadata'),
     ('UPDATE_COVERS', 'Replace existing covers', 'bool', True, 'Only for a verified ASIN (same recording); the old cover is backed up and can be restored', 'Metadata'),
     ('GENRE_LANGUAGE', 'Genre language', 'choice:en|keep', 'en', 'Audible.de genres are translated to English', 'Metadata'),
     ('GENRE_RULES', 'Genre rules', 'text', '', 'One per line: "Old => New" renames, "Old => -" never adds that genre (only genres coming from Audible)', 'Metadata'),

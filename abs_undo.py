@@ -39,6 +39,8 @@ def norm(field, v):
     if field == 'description': return re.sub(r'\s+', ' ', re.sub(r'<br\s*/?>', '<br>', html.unescape(v or ''))).strip()
     if field in ('authors', 'narrators', 'genres', 'tags'):
         return sorted(str((x.get('name') if isinstance(x, dict) else x) or '').strip().lower() for x in (v or []))
+    if field == 'chapters':
+        return [(round(float(c.get('start') or 0), 1), str(c.get('title') or '')) for c in (v or [])]
     if field == 'series':
         return sorted((str(x.get('name') or '').strip().lower(), str(x.get('sequence') or '')) for x in (v or []))
     if v in (None, '', [], False) and field not in ('explicit', 'abridged'): return None
@@ -99,6 +101,7 @@ def main():
             if media is None: return '__unknown__'
             for f_, v_ in (media.get('metadata') or {}).items(): current.setdefault((iid, f_), v_)
             current.setdefault((iid, 'tags'), media.get('tags') or [])
+            current.setdefault((iid, 'chapters'), media.get('chapters') or [])
             current.setdefault((iid, field), None)
         return current[(iid, field)]
     for e in sorted(sel, key=lambda x: x['ts'], reverse=True):  # newest first
@@ -123,6 +126,9 @@ def main():
                 print("     ❌ backup of the old cover is missing - skipped"); fail += 1; continue
             elif e['field'] == 'cover':
                 r = sess.delete(f"{url}/api/items/{e['item']}/cover", timeout=30)
+            elif e['field'] == 'chapters':
+                old_c = [dict(c, id=i) for i, c in enumerate(e['old'] or [])]
+                r = sess.post(f"{url}/api/items/{e['item']}/chapters", json={'chapters': old_c}, timeout=30)
             elif e['field'] == 'tags':
                 r = sess.patch(f"{url}/api/items/{e['item']}/media", json={"tags": e['old'] or []}, timeout=30)
             else:

@@ -404,7 +404,7 @@ RE_RAW_PERFORMANCE = re.compile(r'performance-value="([0-9.]+)"')
 RE_RAW_OVERALL = re.compile(r'value="([0-9.]+)"') 
 RE_RAW_COUNT = re.compile(r'count="(\d+)"')
 
-stats = _Stats({k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred", "cover_added", "desc_filled", "series_merged", "other_edition", "hc_found", "hc_missing", "rating_only"]})
+stats = _Stats({k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred", "cover_added", "chapters", "desc_filled", "series_merged", "other_edition", "hc_found", "hc_missing", "rating_only"]})
 stats['aborted_ratelimit'] = False
 SUMMARY_INDEX_FILE = os.path.join(SCRIPT_DIR, 'summary_index.json')  # asin -> [title, start of Audible's summary] (description of another book)
 SUMMARY_INDEX = {}
@@ -512,7 +512,7 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
     # series Audible does not list whose books ALL sit in that folder is a stale name for it ('Forgotten Realms: Anthologies') and goes
     f_key = _k(re.sub(r'\s*\((?:the\s+)?(?:complete\s+)?(?:series|saga|collection|reihe)\)\s*$', '', folder or '')) if folder else ''
     for a in aud_series:
-        if f_key and _k(a['name']) == f_key and not any(same(y['name'], a['name']) for y in out):
+        if f_key and _k(a['name']) == f_key and not (_v(a['name']) - book_variant) and not any(same(y['name'], a['name']) for y in out):
             add = {'name': canonical_series(lib, a['name'], book_authors, book_variant)[0], 'sequence': a.get('sequence')}
             out.append(add); notes.append(f"'{add['name']}'{' #' + str(add['sequence']) if add.get('sequence') else ''} added (Audible's series = the book's folder)")
             for y in list(out):
@@ -1121,6 +1121,68 @@ def abs_set_cover(iid, key, title, url, source, replace=False):
             return False
     elif replace: old = '(existing cover, backed up on a real run)'
     journal_change(iid, key, title, 'cover', old, url, source)
+    return True
+
+MATCH_CHAPTERS = os.getenv('MATCH_CHAPTERS', 'true').lower() == 'true'  # take Audible's chapters for poorly chaptered files (user 2026-11-10)
+CHAPTER_REGION = {'www.audible.com': 'us', 'www.audible.de': 'de', 'www.audible.co.uk': 'uk', 'www.audible.ca': 'ca', 'www.audible.com.au': 'au',
+                  'www.audible.fr': 'fr', 'www.audible.it': 'it', 'www.audible.es': 'es', 'www.audible.in': 'in', 'www.audible.co.jp': 'jp'}
+RE_GENERIC_CH = re.compile(r'(?i)^\s*(?:chapter|kapitel|track|part|teil|ch\.?|cd\s*\d+\s*-?\s*track|file|datei|section|\d+\s*[-.]?)?\s*\d{0,4}\s*$')
+
+def chapters_poor(chs, dur):
+    """ABS chapters worth replacing: none, a single one, only generic names ('Chapter 7', 'Track 03', '12'), or running past the end."""
+    if not chs or len(chs) <= 1: return 'no chapters' if not chs else 'a single chapter'
+    if dur and any(float(c.get('end') or 0) > dur + 2 for c in chs): return 'chapters run past the end of the file'
+    if all(RE_GENERIC_CH.match(str(c.get('title') or '')) for c in chs): return 'only numbered chapters without names'
+    return None
+
+def audible_chapters(asin, domain):
+    """Audible's chapter list (Audnexus, the source ABS itself uses for 'Find chapters'): ([(start_s, length_s, title)], intro_s, outro_s)."""
+    reg = CHAPTER_REGION.get(domain or 'www.audible.com', 'us')
+    throttle('audible_api', 'api.audnex.us')
+    try:
+        r = requests.get(f"https://api.audnex.us/books/{asin}/chapters", params={'region': reg}, headers={"User-Agent": FIXED_USER_AGENT}, timeout=20)
+        j = r.json() if r.status_code == 200 else None
+    except (requests.RequestException, ValueError): j = None
+    if not j or not j.get('chapters'): return None
+    chs = [(c['startOffsetMs'] / 1000, c['lengthMs'] / 1000, (c.get('title') or '').strip()) for c in j['chapters'] if c.get('lengthMs') is not None]
+    return chs, (j.get('brandIntroDurationMs') or 0) / 1000, (j.get('brandOutroDurationMs') or 0) / 1000
+
+def match_chapters(abs_chs, dur, aud):
+    """New chapter list or (None, reason). Reliable only:
+    (1) the file length equals Audible's (<= 5 s): Audible's chapters as they are;
+    (2) the file has its own markers and their LENGTHS match Audible's one by one (inner chapters <= 3 s, the whole list shifted by
+        a fixed offset - intro/outro cut differently): Audible's names on the file's own times;
+    (3) no usable markers, the difference (<= 2 min) is exactly Audible's brand intro and/or outro (<= 3 s): shifted by the intro."""
+    chs, intro, outro = aud
+    total = chs[-1][0] + chs[-1][1]
+    diff = dur - total
+    mk = lambda starts, titles: [{'id': i, 'start': round(max(0.0, st), 3), 'end': round(starts[i + 1] if i + 1 < len(starts) else dur, 3), 'title': t or f"Chapter {i + 1}"}
+                                 for i, (st, t) in enumerate(zip(starts, titles))]
+    titles = [c[2] for c in chs]
+    if intro and abs(diff) >= 1.5 and (abs(-diff - intro) <= 1 or abs(-diff - intro - outro) <= 1):  # the file lacks Audible's intro: shift by it
+        return mk([0.0] + [c[0] - intro for c in chs[1:]], titles), f"the file lacks Audible's intro ({diff:+.1f} s)"
+    if abs(diff) <= 5:
+        return mk([c[0] for c in chs], titles), f"length matches Audible ({diff:+.1f} s)"
+    if abs(diff) > 120: return None, f"length differs by {diff:+.0f} s"
+    if abs_chs and len(abs_chs) == len(chs) and len(chs) >= 3:
+        al = [float(c['end']) - float(c['start']) for c in abs_chs]
+        if all(abs(a - b[1]) <= 3 for a, b in list(zip(al, chs))[1:-1]) and abs(al[0] - chs[0][1]) <= 125 and abs(al[-1] - chs[-1][1]) <= 125:
+            return [{'id': i, 'start': float(c['start']), 'end': float(c['end']), 'title': titles[i] or c.get('title')} for i, c in enumerate(abs_chs)], \
+                   "the file's own chapter marks match Audible's chapter lengths"
+    for shift, why in ((intro + outro, 'intro + outro'), (intro, 'intro'), (outro, 'outro')):
+        if shift and abs(-diff - shift) <= 3:
+            off = intro if why != 'outro' else 0.0
+            return mk([0.0] + [c[0] - off for c in chs[1:]], titles), f"the file lacks Audible's {why} ({diff:+.1f} s)"
+    return None, f"length differs by {diff:+.0f} s and no reliable alignment"
+
+def abs_set_chapters(iid, key, title, new, old, source):
+    """Write chapters (own ABS endpoint), journaled like every write; undo writes the old list back."""
+    if not DRY_RUN:
+        r = abs_session.post(f"{ABS_URL}/api/items/{iid}/chapters", json={'chapters': new})
+        if r.status_code != 200:
+            logging.error(f"        ❌ Chapter update failed for '{title}' (HTTP {r.status_code}): {r.text[:150]}"); return False
+    journal_change(iid, key, title, 'chapters', [{k: c.get(k) for k in ('start', 'end', 'title')} for c in old or []],
+                   [{k: c.get(k) for k in ('start', 'end', 'title')} for c in new], source)
     return True
 
 def runtime_mismatch(abs_sec, aud_sec):
@@ -4509,7 +4571,7 @@ def process_queue(work_queue, history, failed, recheck):
                                     # user decision 2026-11-09: a pack / omnibus keeps Audible's own range as its number ('1-2' for Publisher's
                                     # Pack 1, '3-4' for Pack 2) - it says exactly which volumes the book holds
                                     s_seq = f"{rng_.group(1)}-{rng_.group(2)}"
-                                elif s_seq is not None and is_boxset_title(title):  # 'Trilogie 1-3' is not book 5
+                                elif s_seq is not None and (is_boxset_title(title) or is_boxset_title(f"{aud_data.get('title_raw') or ''} {aud_data.get('subtitle_raw') or ''}")):  # 'Trilogie 1-3' is not book 5
                                     logging.info(f"        ℹ️ Series '{s_name}': no number for a box set / collection ('{title}')")
                                     s_seq = None
                                 elif s_seq is None and not is_boxset_title(title):
@@ -4609,6 +4671,18 @@ def process_queue(work_queue, history, failed, recheck):
                                        if (s_.get('name') or '').strip() and not (_svar(s_['name']) - book_variant)]
                             new_list, cl_notes = series_cleanup(lib_id, item_data, new_list, aud_ser, authors, book_variant, same_book, abs_updates.get('language') or lang)
                             for n_ in cl_notes: logging.info(f"        🧹 Series {n_}")
+                            if same_book and aud_data.get('subtitle_raw'):
+                                # round 5 (2026-11-09): Audible's subtitle names the book's series and number ('Legend of Drizzt: Companions Codex,
+                                # Book 3') while ABS has another number nobody else holds there (#100): the subtitle's number
+                                for x_ in new_list:
+                                    m_ = re.search(r'(?i)(?:^|:\s*|\b)' + re.escape(str(x_.get('name') or '')) + r',?\s+(?:Book|Volume|Vol\.)\s+(\d+(?:\.\d+)?)\b', aud_data['subtitle_raw'])
+                                    q_ = str(x_.get('sequence') or '').strip()
+                                    others_q = [_seq_num(k_[2]) for k_ in SEQ_TITLES if k_[0] == lib_id and k_[1] == str(x_.get('name') or '').lower() and k_[2] != q_ and _seq_num(k_[2]) is not None]
+                                    outlier_ = bool(others_q) and _seq_num(q_) is not None and _seq_num(q_) > max(others_q) + 10  # #100 next to #1 and #2 (not a reading-order shift like Ascend Online)
+                                    if m_ and q_ and outlier_ and _seq_num(q_) != float(m_.group(1)) and '-' not in q_ \
+                                            and not ((SEQ_TITLES.get((lib_id, str(x_['name']).lower(), m_.group(1))) or set()) - {normalize_title_text(title) + ('|' + asin if asin else '')}):
+                                        logging.info(f"        🔢 Series '{x_['name']}': ABS #{q_} -> #{m_.group(1)} (Audible's subtitle '{aud_data['subtitle_raw']}')")
+                                        x_['sequence'] = m_.group(1)
                             # a number that three or more DIFFERENT books share is rescan junk ('Mushoku Tensei Web Novel' #3 on 18 books):
                             # when Audible's series of the same recording was added, the junk series goes
                             junk = [x for x in new_list if x in base_list and x.get('sequence')
@@ -4786,6 +4860,18 @@ def process_queue(work_queue, history, failed, recheck):
                             stats['cover_added'] += 1
                             COVER_STATE[iid] = asin
                             logging.info(f"        🖼️ Cover {'would be ' if DRY_RUN else ''}{'replaced (verified book)' if has_cover else 'set'} from Audible: {aud_data['cover_url']}")
+
+                    # Chapters (user 2026-11-10): Audible's chapters for poorly chaptered files of the SAME recording, only when they fit reliably
+                    if MATCH_CHAPTERS and cover_verified and not lang_conflict and asin:
+                        abs_chs = (item_data.get('media') or {}).get('chapters') or []
+                        poor = chapters_poor(abs_chs, abs_dur)
+                        if poor and 'lock_chapters' in tags: logging.info("        🔒 Chapters not replaced (locked)")
+                        elif poor and abs_dur and (aud_ch := audible_chapters(asin, aud_data.get('domain'))):
+                            new_chs, why_c = match_chapters(abs_chs, abs_dur, aud_ch)
+                            if new_chs and abs_set_chapters(iid, key, title, new_chs, abs_chs, 'audible_chapters'):
+                                stats['chapters'] += 1
+                                logging.info(f"        📑 Chapters {'would be ' if DRY_RUN else ''}taken from Audible: {len(new_chs)} ({poor} before; {why_c})")
+                            elif not new_chs: logging.info(f"        ℹ️ Audible's chapters not taken: {why_c}")
 
                 # Hardcover: ratings only. Audible's clean title first, the ABS title as second comparison.
                 hc_targets = hc_target_titles(aud_data if not skip_meta else None, search_title, title, meta.get('subtitle'))
@@ -5098,7 +5184,7 @@ def log_run_summary(start_time, series_result):
     lines = [
         f"Books processed: {s['processed']} (skipped/locked: {s['skipped']}, manual updates: {s['manual_retrigger']}, re-checks: {s['recheck']})",
         f"Ratings {'to write' if DRY_RUN else 'written'}: {s['success']} | Audible without ratings yet: {s['no_ratings_yet']} | Goodreads missing: {s['gr_missing']} (deferred: {s['gr_deferred']})",
-        f"ASINs found: {s['asin_found']} | Ratings from another edition: {s['other_edition']} | Metadata updated: {s['meta_updated']} | Covers added: {s['cover_added']} | Descriptions filled: {s['desc_filled']} | ISBNs added: {s['isbn_added']}",
+        f"ASINs found: {s['asin_found']} | Ratings from another edition: {s['other_edition']} | Metadata updated: {s['meta_updated']} | Covers added: {s['cover_added']} | Chapters: {s.get('chapters', 0)} | Descriptions filled: {s['desc_filled']} | ISBNs added: {s['isbn_added']}",
         f"Series merges: {series_result.get('merges', 0)} ({series_result.get('books_changed', 0)} books {'would change' if DRY_RUN else 'changed'}) | "
         f"Author spellings unified: {series_result.get('author_fixes', 0)} ({series_result.get('authors_changed', 0)} books)",
         hc_line,

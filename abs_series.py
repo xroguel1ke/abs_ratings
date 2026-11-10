@@ -35,7 +35,7 @@ FUZZY_NAME_RATIO = 0.9
 
 
 METADATA_LOCKS = {'lock_title', 'lock_series', 'lock_language', 'lock_genres', 'lock_publisher', 'lock_year', 'lock_narrators',
-                  'lock_authors', 'lock_cover', 'lock_explicit', 'lock_abridged', 'lock_isbn', 'lock_asin'}
+                  'lock_authors', 'lock_cover', 'lock_chapters', 'lock_explicit', 'lock_abridged', 'lock_isbn', 'lock_asin'}
 
 
 def expand_locks(tags):

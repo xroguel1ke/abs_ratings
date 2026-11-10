@@ -15,9 +15,12 @@ echo "== 2d change monitoring (real-run mode vs fake ABS)"; tools/watch_test.sh 
 echo "== 2c Hardcover matches of the hand-checked batches"; tools/hc_golden_check.sh || fail=1
 echo "== 3 library-wide series/author decisions"; py tools/lib_check.py > /tmp/claude-0/lib_check.out 2>&1; rc=$?; [ $rc -eq 139 -o $rc -eq 135 ] && { echo "lib_check crashed ($rc) - one retry"; py tools/lib_check.py > /tmp/claude-0/lib_check.out 2>&1; rc=$?; }; [ $rc -ne 0 ] && { fail=1; echo "lib_check exit code $rc (0-byte output = container did not start; see docker events)"; }; tail -4 /tmp/claude-0/lib_check.out
 echo "== 3b damage simulation (repairs on damaged copies, undamaged books unchanged)"; tools/damage_test.sh 2 > /tmp/claude-0/damage_reg.out 2>&1 || fail=1; grep "damage repaired" /tmp/claude-0/damage_reg.out; grep -c "  HARM" /tmp/claude-0/damage_reg.out | sed "s/^/harm: /"
+# at most MAXJ test containers at a time (user 2026-11-10: ~100 parallel containers showed up in the Unraid web UI)
+MAXJ=${REGRESS_JOBS:-6}
+throttle() { while [ "$(jobs -rp | wc -l)" -ge "$MAXJ" ]; do sleep 1; done; }
 echo "== 3c synthetic series/author merge batches (fake ABS, own library)"
 for f in tests/synthetic/merge_*.json; do n=$(basename $f .json | sed 's/merge_//'); [[ $n =~ ^[0-9]+$ ]] || continue
-  ( out=$(timeout 300 tools/merge_round.sh $n 2>&1 | tail -1); echo "$out" | grep -q "wrong 0 | missed 0" || { echo "merge batch $n: $out"; exit 1; } ) &
+  throttle; ( out=$(timeout 300 tools/merge_round.sh $n 2>&1 | tail -1); echo "$out" | grep -q "wrong 0 | missed 0" || { echo "merge batch $n: $out"; exit 1; } ) &
 done; wait_ok=0; for j in $(jobs -p); do wait $j || wait_ok=1; done; [ $wait_ok = 0 ] && echo "merge batches: all clean" || fail=1
 echo "== 3d missing volumes against real Audible series lists"
 for f in tests/synthetic/missing_*.json; do py tools/missing_test.py eval $f | tail -1 | grep -q "missing volumes: \([0-9]*\)/\1 ok" || { echo "missing-volume test $f deviates"; py tools/missing_test.py eval $f | tail -5; fail=1; }; done; echo "missing volumes: checked $(ls tests/synthetic/missing_*.json | wc -l) files"
@@ -26,7 +29,7 @@ i=0
 for k in tests/private/round*_keys.txt tests/private/wl0*_keys.txt; do
   i=$((i+1)); r=reg_$(basename $k _keys.txt)
   rm -rf /mnt/user/appdata/abs_scripts_test/$r
-  ( RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com REUSE=1 FAKE_PORT=$((19100+i)) tools/run_round.sh $r $k record > /tmp/claude-0/regress_$r.out 2>&1 ) &
+  throttle; ( RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com REUSE=1 FAKE_PORT=$((19100+i)) tools/run_round.sh $r $k record > /tmp/claude-0/regress_$r.out 2>&1 ) &
 done
 # synthetic batches (books NOT in the library, EN + DE): replayed from recordings, expected ASIN known
 for sf in tests/synthetic/batch_*.json; do
@@ -34,7 +37,7 @@ for sf in tests/synthetic/batch_*.json; do
   docker ps --format "{{.Names}}" | grep -qE "^abs_ratings_test_(h|syn_)$n$" && { echo "-- skip batch $n (still being recorded)"; continue; }
   jq '{books: (.expected|map_values(del(.case)))}' $sf > /tmp/claude-0/syn_golden_$n.json; jq -r '.expected|keys[]' $sf > /tmp/claude-0/syn_keys_$n.txt
   rm -rf /mnt/user/appdata/abs_scripts_test/$r
-  ( RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com SYNTH=$n HARDCOVER_OFF=1 REUSE=1 FAKE_PORT=$((19100+i)) tools/run_round.sh $r tests/private/none_keys.txt record > /tmp/claude-0/regress_$r.out 2>&1 ) &
+  throttle; ( RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com SYNTH=$n HARDCOVER_OFF=1 REUSE=1 FAKE_PORT=$((19100+i)) tools/run_round.sh $r tests/private/none_keys.txt record > /tmp/claude-0/regress_$r.out 2>&1 ) &
 done
 wait
 for k in tests/private/round*_keys.txt tests/private/wl0*_keys.txt; do
