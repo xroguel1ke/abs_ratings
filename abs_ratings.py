@@ -141,6 +141,7 @@ RESULTS_FILE = os.path.join(SCRIPT_DIR, "results.json")      # last result per b
 OVERRIDES_FILE = os.path.join(SCRIPT_DIR, "overrides.json")  # manual fixes from the web UI: asin, goodreads, ignore
 ONLY_ITEMS = [x.strip() for x in os.getenv('ONLY_ITEMS', '').split(',') if x.strip()]  # 'libid_itemid' -> single-book mode
 ABS_BACKUP = os.getenv('ABS_BACKUP', 'false').lower() == 'true'  # create an ABS backup before a real run
+ABS_BACKUP_HOURS = float(os.getenv('ABS_BACKUP_HOURS', '24') or 24)  # no new backup when ABS has one younger than this
 BOOK_LANGUAGES = []  # filled after LANGUAGE_MAP (below): languages the library holds; an Audible product in another language is never taken
 MISSING_SERIES = os.getenv('MISSING_SERIES', 'true').lower() == 'true'  # report missing volumes of the library's series (reports/missing_in_series.json)
 MISSING_NOVELLAS = os.getenv('MISSING_NOVELLAS', 'false').lower() == 'true'
@@ -5343,6 +5344,15 @@ def create_abs_backup():
     """Ask ABS to create a backup before a real run (ABS: Settings -> Backups). Returns True on success. A failed backup STOPS the
     real run (it was requested, so nothing is written without it); set ABS_BACKUP=false to run consciously without one."""
     try:
+        # at most one backup per ABS_BACKUP_HOURS (user 2026-11-10: 6 run backups in one day pushed every older backup out of ABS's
+        # keep-limit; the journal undoes single runs, the backup is for disasters - a fresh one per day is enough)
+        try:
+            bl = abs_session.get(f"{ABS_URL}/api/backups", timeout=30).json().get('backups') or []
+            newest = max((float(b_.get('createdAt') or 0) for b_ in bl), default=0) / 1000
+            if newest and time.time() - newest < ABS_BACKUP_HOURS * 3600:
+                logging.info(f"💾 ABS backup skipped: the newest is {(time.time() - newest) / 3600:.1f} h old (one per {ABS_BACKUP_HOURS:g} h).")
+                return True
+        except Exception as e: logging.debug(f"backup list not read ({e}): creating one")
         r = abs_session.post(f"{ABS_URL}/api/backups", timeout=600)
         if r.status_code == 200: logging.info("💾 ABS backup created before this run."); return True
         logging.error(f"💾 ABS backup failed (HTTP {r.status_code}): {r.text[:150]}")

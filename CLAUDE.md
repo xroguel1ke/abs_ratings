@@ -166,6 +166,7 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     skipped, > 30 s past the end) when the file length matches to 5 s, the file's own marks match Audible's lengths, or Audible's intro/outro
     explain up to 2 min. Journal keeps chapter start/end/title; undo/apply support it.
   - tools/regress.sh runs at most 10 test containers at a time (REGRESS_JOBS); ~100 parallel containers disturbed the server.
+  - ABS_BACKUP: at most one ABS backup per ABS_BACKUP_HOURS (24); 6 run backups a day had pushed every older one out of ABS's keep-limit.
   - Moved-item guard (item_paths.json): ABS 2.x's folder watcher gives a NEW folder an existing entry when the inode matches, without
     checking that the entry's own folder is gone; Unraid /mnt/user (shfs) inodes are not stable, so stale stored inodes collide (Ambassador's
     Mission got the 'Orb of Cairado' entry, 2026-11-10). An entry whose path changed while neither title nor author word is in the new path

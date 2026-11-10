@@ -14,7 +14,7 @@ add({
     'Books per scan': 'Bücher pro Scan', 'Picked at random from all due books of all libraries': 'Zufällig aus allen fälligen Büchern aller Bibliotheken',
     'Refresh after (days)': 'Auffrischen nach (Tage)', '0 = every book is due (one complete pass, also in maintenance mode)': '0 = jedes Buch ist fällig (ein kompletter Durchlauf, auch im Wartungsmodus)',
     'ABS backup before real scans': 'ABS-Backup vor echten Scans',
-    'Creates an ABS backup before every scan without DRY_RUN; if it fails nothing is written': 'Legt vor jedem Scan ohne DRY_RUN ein ABS-Backup an; schlägt es fehl, wird nichts geschrieben',
+    'Creates an ABS backup before a scan without DRY_RUN (at most one per 24 h); if it fails nothing is written': 'Legt vor einem Scan ohne DRY_RUN ein ABS-Backup an (höchstens eins pro 24 h); schlägt es fehl, wird nichts geschrieben',
     'Extra pause between books (s)': 'Zusätzliche Pause zwischen Büchern (s)',
     'Every source has its own minimum interval, so 0 is safe and fastest': 'Jede Quelle hat ihren eigenen Mindestabstand, 0 ist daher sicher und am schnellsten',
     'Re-check books without ratings (days)': 'Bücher ohne Bewertungen erneut prüfen (Tage)',
