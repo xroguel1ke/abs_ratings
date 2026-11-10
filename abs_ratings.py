@@ -510,9 +510,11 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
     # round 2 (2026-11-09): the book sits in a folder named like Audible's series of the same recording ("R.A. Salvatore's War Of The
     # Spider Queen (Complete Series)/02 - Insurrection") -> that series is added even when the book has another one; an unnumbered
     # series Audible does not list whose books ALL sit in that folder is a stale name for it ('Forgotten Realms: Anthologies') and goes
-    f_key = _k(re.sub(r'\s*\((?:the\s+)?(?:complete\s+)?(?:series|saga|collection|reihe)\)\s*$', '', folder or '')) if folder else ''
+    plain_ = lambda x: re.sub(r'[\W_]+', ' ', (x or '').lower()).strip()
+    f_key = plain_(re.sub(r'\s*\((?:the\s+)?(?:complete\s+)?(?:series|saga|collection|reihe)\)\s*$', '', folder or '', flags=re.I)) if folder else ''
     for a in aud_series:
-        if f_key and _k(a['name']) == f_key and not (_v(a['name']) - book_variant) and not any(same(y['name'], a['name']) for y in out):
+        # the folder names exactly this series (no normalisation: 'The Witcher' is not 'The Witcher (Full-Cast Editions)')
+        if f_key and plain_(a['name']) == f_key and not (_v(a['name']) - book_variant) and not any(same(y['name'], a['name']) for y in out):
             add = {'name': canonical_series(lib, a['name'], book_authors, book_variant)[0], 'sequence': a.get('sequence')}
             out.append(add); notes.append(f"'{add['name']}'{' #' + str(add['sequence']) if add.get('sequence') else ''} added (Audible's series = the book's folder)")
             for y in list(out):
@@ -4431,8 +4433,9 @@ def process_queue(work_queue, history, failed, recheck):
                         cur_t, cur_s = abs_updates.get('title', title), abs_updates.get('subtitle', meta.get('subtitle')) or ''
                         new_t = re.sub(r'(?i)\s*[-–:]\s*library edition\s*$', '', cur_t).strip()
                         new_s = re.sub(r'(?i)\s*[-–:]?\s*library edition\s*$', '', cur_s).strip()
-                        if new_s and normalize_title_text(new_s) == normalize_title_text(new_t): new_s = ''
-                        if not new_s and cur_s and aud_sub and normalize_title_text(aud_sub) != normalize_title_text(new_t): new_s = aud_sub
+                        plain_ = lambda x: re.sub(r'[\W_]+', '', (x or '').lower())  # strict: 'X, Book 6' is NOT the title 'X 6'
+                        if new_s and plain_(new_s) == plain_(new_t): new_s = ''
+                        if not new_s and cur_s and aud_sub and plain_(aud_sub) != plain_(new_t): new_s = aud_sub
                         if new_t != cur_t and new_t:
                             abs_updates['title'] = new_t; log_updates.append(f"Title: '{cur_t}' -> '{new_t}' (edition label)")
                         if new_s != cur_s and cur_s:
