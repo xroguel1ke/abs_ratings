@@ -434,4 +434,6 @@ add({  # page tour 2026-11-08
     "For files without proper chapters (none, one, only numbers) and only when they fit reliably: same length to 5 s, or the file's own chapter marks / Audible's intro-outro explain a difference up to 2 min. lock_chapters protects a book": 'Nur für Dateien ohne richtige Kapitel (keine, eines, nur Nummern) und nur, wenn sie zuverlässig passen: gleiche Länge auf 5 s, oder die Kapitelmarken der Datei bzw. Audibles Intro/Outro erklären eine Abweichung bis 2 Min. lock_chapters schützt ein Buch',
     'The audio file seems to lack about %(m)s minutes.': 'Der Audiodatei scheinen etwa %(m)s Minuten zu fehlen.',
     "Its chapters and Audible's runtime of the same book are longer than the file - an incomplete download or another (shorter) edition. Check the end of the book.": 'Kapitel und Audibles Laufzeit desselben Buchs sind länger als die Datei – ein unvollständiger Download oder eine andere (kürzere) Ausgabe. Prüfe das Ende des Buchs.',
+    'This book has no chapters.': 'Dieses Buch hat keine Kapitel.',
+    "Audible's chapters could not be matched to the file reliably, so none were set. In ABS: Edit > Chapters > look up chapters, and check them.": 'Audibles Kapitel ließen sich der Datei nicht zuverlässig zuordnen, deshalb wurden keine gesetzt. In ABS: Bearbeiten > Kapitel > Kapitel suchen, und prüfen.',
 })

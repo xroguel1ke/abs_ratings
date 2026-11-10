@@ -4910,14 +4910,17 @@ def process_queue(work_queue, history, failed, recheck):
                         abs_chs = (item_data.get('media') or {}).get('chapters') or []
                         poor = chapters_poor(abs_chs, abs_dur)
                         if poor and 'lock_chapters' in tags: logging.info("        🔒 Chapters not replaced (locked)")
-                        elif poor and abs_dur and abs_chs and max(float(c.get('end') or 0) for c in abs_chs) > abs_dur + 120 \
-                                and aud_data.get('runtime_sec') and aud_data['runtime_sec'] > abs_dur + 120:
+                        elif poor and abs_dur and abs_chs and max(float(c.get('end') or 0) for c in abs_chs) > abs_dur + 300 \
+                                and aud_data.get('runtime_sec') and aud_data['runtime_sec'] > abs_dur + 300:  # user 2026-11-10: only > 5 min on the list
                             # the chapters AND Audible's runtime say the book is longer than the file: the file probably lacks its end
                             # (incomplete download) - nothing is cut, the user is told (round 'chapters', 2026-11-10: 'The Long Way' -78 min)
                             miss_ = round((aud_data['runtime_sec'] - abs_dur) / 60)
                             logging.info(f"        ⚠️ The file seems incomplete: chapters and Audible's runtime are {miss_} min longer than the file - review list")
                             add_review(key, title, 'incomplete', str(miss_), f"the audio file is {miss_} min shorter than its chapters and Audible's runtime - incomplete download or a shorter edition?")
-                        elif poor and abs_dur and (aud_ch := audible_chapters(asin, aud_data.get('domain'))):
+                        elif poor and abs_dur and not (aud_ch := audible_chapters(asin, aud_data.get('domain'))) and poor in ('no chapters', 'a single chapter'):
+                            logging.info("        ⚠️ The book has no chapters and Audible has none for it: review list")
+                            add_review(key, title, 'chapters', poor, "the book has no chapters and Audible lists none for this product - add them in ABS (Edit > Chapters)")
+                        elif poor and abs_dur and aud_ch:
                             new_chs, why_c = match_chapters(abs_chs, abs_dur, aud_ch)
                             if new_chs and not cover_verified and not ((an_ := anchor_align(abs_chs, aud_ch[0], abs_dur, 0.95)) and an_[2] >= 7):
                                 new_chs, why_c = None, 'recording not verified and the chapter marks do not prove it'
@@ -4926,7 +4929,10 @@ def process_queue(work_queue, history, failed, recheck):
                             if new_chs and abs_set_chapters(iid, key, title, new_chs, abs_chs, 'audible_chapters'):
                                 stats['chapters'] += 1
                                 logging.info(f"        📑 Chapters {'would be ' if DRY_RUN else ''}taken from Audible: {len(new_chs)} ({poor} before; {why_c})")
-                            elif not new_chs: logging.info(f"        ℹ️ Audible's chapters not taken: {why_c}")
+                            elif not new_chs:
+                                logging.info(f"        ℹ️ Audible's chapters not taken: {why_c}")
+                                if poor in ('no chapters', 'a single chapter'):  # user 2026-11-10: books WITHOUT chapters that cannot be matched go on the list
+                                    add_review(key, title, 'chapters', poor, f"the book has no chapters and Audible's do not fit reliably ({why_c}) - add them in ABS (Edit > Chapters)")
 
                 # Hardcover: ratings only. Audible's clean title first, the ABS title as second comparison.
                 hc_targets = hc_target_titles(aud_data if not skip_meta else None, search_title, title, meta.get('subtitle'))
