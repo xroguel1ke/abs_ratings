@@ -1,7 +1,7 @@
 # Status (live) – single source for ALL open items
 
 Updated: 2026-11-05 – ALL items done (matching, Hardcover, Goodreads rhythm, web UI, roadmap, docs). Overall 100 % of the list.
-Next: the user's first real full run (test run first), then the merge (docs/CHANGES.md).
+Done: merged into main 2026-11-09, real runs in use.
 Rule: update this file after every batch/chain and whenever an item changes (task requirement). Items come from the task
 (`/mnt/user/appdata/abs_prompt_matching_loop.md`) [A] and from user requests in chat [U].
 
@@ -119,6 +119,6 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | Item | State |
 |---|---|
 | README for the new UI functions | ✅ |
-| Change overview for a later merge (to web-ui/main) | ✅ docs/CHANGES.md |
-| Final report in LOOP_LOG + to the user (numbers, changes, limits, first-run recommendation) | ✅ 2026-11-05 |
-| CLAUDE.md / ROADMAP.md up to date with all learned rules | ✅ |
+| Change overview for the merge into main | ✅ merged 2026-11-09 |
+| Final report to the user (numbers, changes, limits, first-run recommendation) | ✅ 2026-11-05 |
+| CLAUDE.md up to date with all learned rules | ✅ |

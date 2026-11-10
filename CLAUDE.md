@@ -179,7 +179,7 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
 - Full library dry run: `REFRESH_DAYS=0 BATCH_SIZE=2500 GOODREADS_ENABLED=false` (~3 h).
 - Before a real run: ABS backup (`ABS_BACKUP=true`, done automatically by the web UI setting).
 - Local unit-style tests used during development mocked `requests`/ABS; there is no test suite in the repo yet
-  (ROADMAP). Web UI was tested with a fake ABS (Flask) + Playwright.
+ . Web UI was tested with a fake ABS (Flask) + Playwright.
 
 ## Running
 - Container: `docker run -p 47823:47823 -v /mnt/user/appdata/audiobookshelf/abs_scripts:/config ghcr.io/xroguel1ke/abs_ratings:latest`
@@ -187,7 +187,7 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
 - Script without UI: env vars as in `userscript.sh` / README, `DATA_DIR=/path/to/data python abs_ratings.py`.
 
 ## Open work
-All ROADMAP / STATUS items are done (2026-11-05). See docs/STATUS.md and docs/CHANGES.md (merge overview). Next: the user's first real
+All STATUS items are done. See docs/STATUS.md. Next: the user's first real
 full run (test run first, apply selectively), done: merged into main 2026-11-09.
 
 ## Counting batches (user rule – do not weaken, do not change without the user's explicit OK)

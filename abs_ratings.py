@@ -772,7 +772,7 @@ def series_in_library(lib, name, authors=None, exact=False):
     return not authors or bool({author_key(a) for a in authors} & set(ent.get('authors', [])))
 
 def certainty_score(search_title, authors, narrators, abs_dur, publisher, year, abs_series, aud, hc=None, asin_from_search=False, review_open=False):
-    """0-100: how sure are we that the product behind the ASIN is THIS book. Parts are the independent pieces of evidence (weights see ROADMAP.md):
+    """0-100: how sure are we that the product behind the ASIN is THIS book. Parts are the independent pieces of evidence:
     title 25, author 20, runtime 20 (±2 min) / 10 (inside tolerance), narrator 12, series/volume number 10, publisher+year 8, Hardcover ISBN/ASIN confirmation 5.
     Deductions: ASIN found by search -5, ratings of another edition -20, open review entry -15. Returns (score, {part: points})."""
     if not aud or not aud.get('title_raw'): return 0, {'no Audible product': 0}
