@@ -209,6 +209,11 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     a subtitle with no word in common with the book (title, series, authors, Audible, description) = another edition's -> Audible's.
   - Test tools pick a free fake-ABS port (run_round: FAKE_PORT unset = free one, set but busy = abort; watch/source-state tests) and
     refuse RECORD_NO_LIVE=1 (it is a host list).
+  - Check of the first big real run 2026-11-15: Hardcover's release_year can come from ONE wrongly merged edition (HWFWM 7 = 2006,
+    Fellowship = 1937) or from another book found by an alternative title (Dragonsblood -> Dragon's Kin): the year is only taken from
+    an ASIN/ISBN match or a close title AND when hc_year_plausible (an edition within a year, not a lone edition > 5 years before the
+    rest). Case-only author variants ('XKarnation'/'Xkarnation') are merged by renaming the ABS author entry (per-book writes were
+    repeated every run). Role credits with an em dash ('— Translator', '— Other') count as roles.
   - Loop 2026-11-15 part 3: review kinds 'nested' (book folders inside a book folder) and 'too_long' (audio > 1.5x Audible, > 60 min);
     genre synonyms -> one name (_GENRE_SYN, Audible's names; 'adult'/'Amazon' go), also per book (no ping-pong); a series set in the
     same run cleans the subtitle label at once; co-authors without own books -> review list (authors kind, decision remembered);

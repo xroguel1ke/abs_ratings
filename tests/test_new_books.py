@@ -86,3 +86,12 @@ def test_narrator_in_braces():
     assert n("A/S/1 - Fool's Errand - Nick Taylor") == ['Nick Taylor']  # the old form still works
     assert n('A/S/06 - Volume 06 - Darkest Before the Dawn {Suzie Yeung} {Stephen Fu}') == ['Suzie Yeung', 'Stephen Fu']
     assert n('A/Lonely Castle in the Mirror {Sarah Skaer}') == ['Sarah Skaer']
+
+
+def test_hardcover_year_plausible():
+    p = A.hc_year_plausible
+    assert not p(2006, [2006, 2022, 2022, 2022])  # He Who Fights with Monsters 7: one stray edition
+    assert not p(1937, [1954, 1954, 1954])  # The Fellowship of the Ring: no edition in 1937
+    assert p(1937, [1937, 1937, 1954])  # The Hobbit
+    assert p(2017, [2017, 2020, 2020])  # a light novel: Japanese original, English editions later
+    assert p(2023, [2023]) and p(2023, [])

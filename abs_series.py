@@ -87,7 +87,7 @@ def _n(x): return str(int(x)) if float(x).is_integer() else str(x)
 
 
 # Role credits that are not authors ('Kevin Steinbach - translator', 'X - Illustrator', 'Y - Übersetzer'): Audible lists them in the authors list
-ROLE_CREDIT_RE = re.compile(r'\s+[-–]\s+(illustrat\w*|illustrations?|translat\w*|translated by|edited by|editor|editors|introductions?|foreword|afterword|preface|contributor|adapt\w*|cover\s+\w+|'
+ROLE_CREDIT_RE = re.compile(r'\s+[-–—]\s+(?:\S.*?\s+[-–—]\s+)?(other|illustrat\w*|illustrations?|translat\w*|translated by|edited by|editor|editors|introductions?|foreword|afterword|preface|contributor|adapt\w*|cover\s+\w+|'
                             r'übersetz\w*|übertragen\w*|herausgeb\w*|hrsg\.?|zeichn\w*|illustriert\w*|vorwort|nachwort|bearbeit\w*)\s*$', re.I)
 
 
@@ -579,9 +579,34 @@ def find_author_fixes(records, decisions=None, links=None, role_names=()):
     return fixes, count, review
 
 
+def merge_case_variant_authors(ctx, fixes):
+    """Spellings that differ only in case ('XKarnation' / 'Xkarnation') are two ABS author entries, but a book update with the other
+    spelling is matched to the same entry: the per-book fix was written again in every run (check 2026-11-15, 6 runs). The entry is
+    renamed instead - ABS then merges it into the existing one. Returns the variants handled this way."""
+    case_only = {v: c for v, c in fixes.items() if v != c and v.lower() == c.lower()}
+    if not case_only or ctx['dry_run'] or not ctx.get('session'): return set()  # test run: the per-book plan shows it as before
+    done = set()
+    for lib in ctx.get('library_ids') or []:
+        try: lst = ctx['session'].get(f"{ctx['abs_url']}/api/libraries/{lib}/authors", timeout=60).json().get('authors') or []
+        except Exception as e:
+            logging.warning(f"   Author list of {lib} not loaded: {e}"); continue
+        for a in lst:
+            if a.get('name') in case_only:
+                try:
+                    r = ctx['session'].patch(f"{ctx['abs_url']}/api/authors/{a['id']}", json={'name': case_only[a['name']]}, timeout=60)
+                    if r.ok: done.add(a['name']); logging.info(f"   ✍️ AUTHOR entry '{a['name']}' renamed to '{case_only[a['name']]}' (only the case differed: ABS merges both)")
+                    else: logging.warning(f"   Author entry '{a['name']}' not renamed (HTTP {r.status_code})")
+                except Exception as e: logging.warning(f"   Author entry '{a['name']}' not renamed: {e}")
+    return done
+
+
 def apply_author_fixes(ctx, records, fixes, count):
     abs_update, dry = ctx['abs_update'], ctx['dry_run']
     changed = 0
+    merged_ = merge_case_variant_authors(ctx, fixes)
+    if merged_:
+        for r in records: r['authors'] = [fixes[a] if a in merged_ else a for a in r['authors']]
+        fixes = {v: c for v, c in fixes.items() if v not in merged_}
     for variant, canon in sorted(fixes.items()):
         logging.info(f"   ✍️ AUTHOR{' (DRY_RUN)' if dry else ''}: '{variant}' ({count[author_key(variant)][variant]} books) -> '{canon}' ({count[author_key(canon)][canon]} books)")
         titles = lambda n: sorted({r['title'] for r in records if n in r['authors']})[:15]

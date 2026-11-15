@@ -2984,7 +2984,7 @@ HC_DAILY_RESERVE = 25  # stop before the daily limit is used up completely
 HC_BOOK_FIELDS = "id title subtitle slug rating ratings_count compilation cached_featured_series contributions { author { name } } book_mappings(where:{platform_id:{_eq:1}}, limit:8){ external_id }"
 if not (recorder.RECORD_DIR or recorder.REPLAY_DIR):  # live: also the role of every contributor (illustrator, translator, ...); recordings keep the old query
     HC_BOOK_FIELDS = HC_BOOK_FIELDS.replace("contributions { author { name } }", "contributions { contribution author { name } }")
-    HC_BOOK_FIELDS += " release_year"  # user 2026-11-15: the year is the BOOK's release (not the audiobook's)
+    HC_BOOK_FIELDS += " release_year editions(limit:60){ release_date }"  # user 2026-11-15: the BOOK's release (+ editions to check it)
 # Hits that are not the book itself (unless the ABS title says so too)
 RE_HC_SPECIAL = re.compile(r'(?i)\b(graphic novel|comic|manga|coloring|colouring|adventure module|sourcebook|summary of|study guide|'
                            r'sparknotes|cliffsnotes|box(?:ed)? set|boxset|omnibus|collection|collector\W?s edition|books? \d+\s*[-–&]\s*\d+|summary|workbook)\b')
@@ -3099,10 +3099,20 @@ def hc_target_titles(aud, search_title, title, abs_subtitle=None):
             out.append(m.group(2).strip())
     return list(dict.fromkeys(t for t in out if t))
 
+def hc_year_plausible(year, edition_years):
+    """Hardcover's release_year can come from ONE wrongly merged edition (check 2026-11-15: He Who Fights with Monsters 7 = 2006, all
+    other editions 2022; The Fellowship of the Ring = 1937, every edition 1954). Not plausible: no edition within a year of it, or a single
+    edition more than 5 years before every other one. Without edition data the year is taken."""
+    if not edition_years: return True
+    near = sum(1 for y in edition_years if abs(y - int(year)) <= 1)
+    later = [y for y in edition_years if y > int(year) + 1]
+    return near > 0 and not (near == 1 and len(edition_years) >= 2 and later and min(later) - int(year) > 5)
+
 def hc_result(book, source):
     return {'gr_ids': hc_goodreads_ids(book), 'id': book.get('id'), 'slug': book.get('slug'), 'url': f"https://hardcover.app/books/{book.get('slug')}",
             'val': book.get('rating'), 'count': int(book.get('ratings_count') or 0), 'source': source, 'title': book.get('title'),
             'authors': [a for a in hc_authors(book) if a], 'contributions': book.get('contributions') or [], 'year': book.get('release_year'),
+            'edition_years': sorted(int(e['release_date'][:4]) for e in (book.get('editions') or []) if re.match(r'\d{4}', str((e or {}).get('release_date') or ''))),
             'alts': [t for t in (book.get('alternative_titles') or []) if t],
             'series': [(re.sub(r'\s*\([^)]*\)\s*$', '', ((book.get('featured_series') or book.get('cached_featured_series') or {}).get('series') or {}).get('name') or ''),
                         (book.get('featured_series') or book.get('cached_featured_series') or {}).get('position'))]}
@@ -3412,9 +3422,11 @@ def desc_language_wrong(own, audible, book_lang):
     de = lambda xs: sum(x in ('der', 'die', 'und', 'das', 'ist', 'nicht', 'ein', 'eine', 'mit', 'sich', 'auf', 'dem', 'den', 'von') for x in xs)
     en = lambda xs: sum(x in ('the', 'and', 'of', 'is', 'his', 'her', 'with', 'to', 'that', 'he', 'she', 'from') for x in xs)
     a, b = w(own), w(audible); l = str(map_language(book_lang) or '')
-    if len(a) < 30 or len(b) < 30: return False
-    if l == 'German': return en(a) > 3 * max(1, de(a)) and de(b) > 3 * max(1, en(b))
-    if l == 'English': return de(a) > 3 * max(1, en(a)) and en(b) > 3 * max(1, de(b))
+    # check 2026-11-15: short texts too ('Book 1 of [Fellowship of the Ring](openlibrary...)' on Die Gefährten) and Audible's short
+    # merchandising summary (Huckleberry Finn) - the language must still be clear on both sides
+    if len(a) < 5 or len(b) < 12: return False
+    if l == 'German': return en(a) >= max(2, 3 * de(a)) and de(b) >= max(2, 3 * en(b))
+    if l == 'English': return de(a) >= max(2, 3 * en(a)) and en(b) >= max(2, 3 * de(b))
     return False
 
 def description_of_other_book(own, asin, title):
@@ -5463,7 +5475,13 @@ def process_queue(work_queue, history, failed, recheck):
                         # user 2026-11-15: publishedYear = the book's first release (Hardcover, cross-checked against Audible), not the audiobook's;
                         # never later than Audible's release of this recording
                         hy_ = hc_data.get('year'); ay_ = parse_release_year(((aud_data or {}).get('meta_raw') or {}).get('releaseDate'))
-                        if hy_ and str(hy_).isdigit() and 1400 < int(hy_) <= datetime.now().year and (not ay_ or int(hy_) <= int(ay_)) \
+                        # check after the first real run 2026-11-15: a title search can land on another book that lists this title as an
+                        # alternative ('Dragonsblood' -> Dragon's Kin 2003, 'Bog Standard Isekai: Scarred' -> 'Scarred' 2007): the year is only
+                        # taken from an ASIN / ISBN match or a close title (translations keep their year)
+                        hy_ok = hc_data.get('source') in ('ASIN', 'ISBN', 'manual link') or max(title_similarity(title, hc_data.get('title') or ''),
+                                                                                                  title_similarity(aud_data.get('title_raw') or '', hc_data.get('title') or '') if aud_data else 0) >= 0.75
+                        if hy_ and hy_ok and str(hy_).isdigit() and 1400 < int(hy_) <= datetime.now().year and (not ay_ or int(hy_) <= int(ay_)) \
+                                and hc_year_plausible(hy_, hc_data.get('edition_years')) \
                                 and str(hy_) != str(meta.get('publishedYear') or '').strip() and 'lock_year' not in tags and not skip_meta \
                                 and abs_update(iid, key, title, {'publishedYear': str(hy_)}, meta, 'book_year'):
                             logging.info(f"        📅 Year: '{meta.get('publishedYear')}' -> '{hy_}' (first release of the book, Hardcover){' (DRY_RUN, not saved)' if DRY_RUN else ''}")
