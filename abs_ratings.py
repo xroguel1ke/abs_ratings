@@ -4650,7 +4650,14 @@ def process_queue(work_queue, history, failed, recheck):
                         # run 2026-11-15: Audible's own title can carry the subtitle too ('Defiance of the Fall 4: A LitRPG Adventure') - cut it once more
                         sub_ = aud_sub or meta.get('subtitle')
                         new_t = (re.sub(rf'\s*:\s*{re.escape(sub_.strip())}\s*$', '', aud_title, flags=re.I) or aud_title) if sub_ else aud_title
+                        own_q_ = {str(s_.get('sequence')).strip() for s_ in (meta.get('series') or []) if s_.get('sequence')}
+                        # only the series name would be left (no volume): 'Mushoku Tensei' of 'Mushoku Tensei: Jobless Reincarnation' #5;
+                        # 'Dragon's Kin' (a real title) of 'Dragon's Kin: Dragonriders of Pern, Book 16' is fine
+                        keeps_num = not (any(re.search(rf'(?<![\d.]){re.escape(q_)}(?![\d.])', title) and not re.search(rf'(?<![\d.]){re.escape(q_)}(?![\d.])', new_t) for q_ in own_q_)
+                                         and any(normalize_title_text(s_.get('name') or '').startswith(normalize_title_text(new_t)) for s_ in (meta.get('series') or [])))
                         if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{new_t}'")
+                        elif not keeps_num:  # title loop 2026-11-15: 'Mushoku Tensei: Jobless Reincarnation, Vol. 5' -> 'Mushoku Tensei' loses the volume
+                            logging.info(f"        ⏭️ Title kept: '{new_t}' would lose the volume number")
                         elif new_t != title:
                             abs_updates['title'] = new_t
                             log_updates.append(f"Title: '{title}' -> '{new_t}' (subtitle was glued into the title)")
@@ -4726,11 +4733,42 @@ def process_queue(work_queue, history, failed, recheck):
                         # Not a series label ('Volume 3: My Quiet Blacksmith Life in Another World, Book 3') or a tagline ('Book 6: A Deck-Building LitRPG')
                         abs_updates['title'] = m_.group(2).strip(); abs_updates['subtitle'] = ''
                         log_updates.append(f"Title: '{cur_t}' -> '{m_.group(2).strip()}' (the title was the series name, the subtitle the volume's title)")
+                    # title loop 2026-11-15 (last title step, so the new-book / Audible title rules above cannot bring it back):
+                    # a format label anywhere ('Berserk of Gluttony (Light Novel), Vol. 1' - user: '(Light Novel)' goes) and a genre tagline
+                    # after the title ('Melody of Mana 4: A Progression Fantasy', 'System Origin: A LitRPG Adventure (System Universe Book 9)')
+                    # -> the subtitle, like 'Defiance of the Fall 4' (only when the subtitle is empty, a series label or that tagline)
+                    if 'lock_title' not in tags:
+                        cur_t = abs_updates.get('title', title) or ''
+                        new_t = re.sub(r'(?i)\s*\((?:unabridged|ungek(?:ü|ue)rzt|light novel)\)(?=\s*(?:[,:]|$|\s))', '', cur_t)
+                        new_t = re.sub(r'\s+,', ',', re.sub(r'\s{2,}', ' ', new_t)).strip()
+                        tag_s = None
+                        parts_ = [x for x in re.split(r'\s*:\s+', new_t) if x]
+                        for i_ in range(1, len(parts_)):
+                            p_ = re.sub(r'\s*\(([^()]*)\)\s*$', lambda m: '' if _sbl(m.group(1), ser_now) else m.group(0), parts_[i_]).strip()
+                            if re.match(r'(?i)^an?\s', p_) and re.search(r'(?i)\b(?:litrpg|gamelit|progression fantasy|progression epic|cultivation|xianxia|wuxia|isekai|dungeon core)\b', p_) \
+                                    and len(p_) <= 60 and all(_sbl(x, ser_now) for x in parts_[i_ + 1:]):
+                                cur_s_ = abs_updates.get('subtitle', meta.get('subtitle')) or ''
+                                if not cur_s_ or _sbl(cur_s_, ser_now) or normalize_title_text(cur_s_) == normalize_title_text(p_) or 'lock_subtitle' in tags:
+                                    new_t, tag_s = ': '.join(parts_[:i_]), p_
+                                break
+                        if new_t and new_t == title and cur_t != title:  # an earlier rule set Audible's glued title, this step cuts it back: no change
+                            abs_updates.pop('title', None); log_updates[:] = [x for x in log_updates if not x.startswith('Title:')]
+                        elif new_t and new_t != cur_t:
+                            abs_updates['title'] = new_t
+                            log_updates.append(f"Title: '{cur_t}' -> '{new_t}' ({'tagline to the subtitle' if tag_s else 'format label'})")
+                            old_s_ = abs_updates.get('subtitle', meta.get('subtitle')) or ''
+                            if tag_s and 'lock_subtitle' not in tags and old_s_ != tag_s:
+                                abs_updates['subtitle'] = tag_s
+                                log_updates.append(f"Subtitle: '{old_s_}' -> '{tag_s}'")
                     # user 2026-11-15: a subtitle that only names the book's own series and number goes ('Defiance of the Fall, Book 6'), also
                     # in brackets at the end ('A LitRPG Adventure (Defiance of the Fall, Book 5)') - last, so no rule above sets it again
                     from abs_series import clean_series_label_subtitle as _csl
                     cur_s = abs_updates.get('subtitle', meta.get('subtitle')) or ''
-                    new_s = _csl(cur_s, abs_updates.get('series') or meta.get('series') or [])
+                    new_s = _csl(cur_s, abs_updates.get('series') or meta.get('series') or [], meta.get('language') or lang)
+                    t_fin = abs_updates.get('title', title) or ''
+                    if new_s and len(normalize_title_text(new_s).split()) >= 1 and (not aud_title or normalize_title_text(t_fin).startswith(normalize_title_text(aud_title))) \
+                            and (normalize_title_text(new_s) == normalize_title_text(t_fin) or f" {normalize_title_text(new_s)} " in f" {normalize_title_text(t_fin)} "):
+                        new_s = ''  # subtitle loop 2026-11-15: the subtitle repeats the title ('Clariel: The Lost Abhorsen' + 'The Lost Abhorsen')
                     if new_s != cur_s and not ({'lock_subtitle', 'lock_title'} & set(tags)):
                         if meta.get('subtitle') or new_s: abs_updates['subtitle'] = new_s
                         else:

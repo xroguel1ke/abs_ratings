@@ -617,6 +617,25 @@ def genre_key(g):
     return re.sub(r'[^a-z0-9]', '', fold_accents(str(g or '')).lower())
 
 
+def split_joined_narrators(ctx, records):
+    """Narrator loop 2026-11-15: 'Dillon Sickels + Mary Robinette Kowal' as ONE narrator next to both names (9 books, from the folder's
+    'A + B' list) -> the single names, each once, order kept. lock_narrators respected."""
+    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    changed = 0
+    for r in records:
+        if not any(' + ' in (n or '') for n in r['narrators']) or r['tags'] & {'lock_narrators', 'lock_all', 'lock_metadata'}: continue
+        new, seen = [], set()
+        for n in r['narrators']:
+            for x in (p.strip() for p in str(n).split(' + ')):
+                k = re.sub(r'[^a-z]', '', fold_accents(x).lower())
+                if x and k not in seen: seen.add(k); new.append(x)
+        if new != r['narrators'] and abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'narrators': new}, {'narrators': r['narrators']}, 'joined_narrators'):
+            changed += 1
+            logging.info(f"   🎙️ NARRATORS{' (DRY_RUN)' if dry else ''}: '{r['title']}': {r['narrators']} -> {new}")
+            r['narrators'] = new
+    return changed
+
+
 def normalize_genres(ctx, records):
     """Genre hygiene (audit 2026-11-09: 659 genres, 128 books with the same genre twice in another spelling): spellings of one genre
     become the library's most used spelling, a genre listed twice in one book once; number-only genres (timestamps like
@@ -702,17 +721,20 @@ def _lbl_words(n):
 
 
 def _same_series_name(a, b):
-    """'The Murderbot Diaries' = 'Murderbot Diaries', 'Shadows and Crowns Series' = 'Shadows and Crowns', 'Gentleman Bastards' =
+    """a = the name in a label / title, b = the book's series name. 'The Murderbot Diaries' = 'Murderbot Diaries', 'Shadows and Crowns Series' = 'Shadows and Crowns', 'Gentleman Bastards' =
     'Gentleman Bastard' (article, generic word, a plural s). Never a part of a name: 'Legend of Drizzt: Dark Elf Trilogy' != 'Legend of Drizzt'."""
     k = lambda x: re.sub(r's\b', '', series_key(fold_accents(x or '').replace('’', "'").replace("'", '')))
-    return bool(k(a)) and k(a) == k(b)
+    if bool(k(a)) and k(a) == k(b): return True
+    # the part of a two-part series name: 'Jobless Reincarnation' / 'Mushoku Tensei' of 'Mushoku Tensei: Jobless Reincarnation'
+    parts = [x for x in re.split(r'\s*:\s+', b or '') if len(x.split()) >= 2]
+    return len(parts) == 2 and any(k(a) == k(x) for x in parts)
 
 
 def _own_number(n, series, name=None):
     """n is the number of one of the book's series (that series' name ~ name, when a name is given) -> that series, else None."""
     for x in series or []:
         q = str(x.get('sequence') or '').strip()
-        if q and re.fullmatch(r'\d+(?:\.\d+)?', q) and float(q) == float(n) and (name is None or _same_series_name(x.get('name'), name)):
+        if q and re.fullmatch(r'\d+(?:\.\d+)?', q) and float(q) == float(n) and (name is None or _same_series_name(name, x.get('name'))):
             return x
     return None
 
@@ -731,24 +753,65 @@ def series_label(text, series, strict=False):
     return name, n, re.sub(rf'(?i){_LBL_WORD}', lambda w: w.group(0)[0].upper() + w.group(0)[1:].lower(), form)
 
 
+_WORD_NUM = {w: i for i, w in enumerate('one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen '
+                                           'seventeen eighteen nineteen twenty'.split(), 1)}
+
+
+def _roman(t):
+    v = {'i': 1, 'v': 5, 'x': 10, 'l': 50, 'c': 100}; t = t.lower(); n = 0
+    for i, ch in enumerate(t):
+        n += -v[ch] if i + 1 < len(t) and v[ch] < v[t[i + 1]] else v[ch]
+    return n
+
+
+def _label_text(t):
+    """Subtitle label spellings -> the plain form: '(Discworld Novel 7)' -> 'Discworld Book 7', 'Book Nine Of The Spellmonger Series'
+    -> 'Book 9 of The Spellmonger Series', 'The Wheel Of Time, Book II' -> '..., Book 2', "Book Two of 'The Wheel of Time'", 'Expanse Bk 9'."""
+    t = (t or '').strip().strip(',').strip()
+    if re.fullmatch(r'\(([^()]+)\)', t): t = t[1:-1].strip()
+    t = re.sub(r'(?i)\s*\(light novel\)', '', t)  # 'Jobless Reincarnation (Light Novel) Vol. 25'
+    t = re.sub(r"['‘’\"“”]", '', t)
+    t = re.sub(r'(?i)\b(?:novel|bk\.?|number|no\.)(?=\s+\w)', 'Book', t)
+    t = re.sub(rf'(?i)\b({_LBL_WORD}|Book)\s+({"|".join(_WORD_NUM)})\b', lambda m: f"{m.group(1)} {_WORD_NUM[m.group(2).lower()]}", t)
+    t = re.sub(rf'(?i)\b({_LBL_WORD}|Book)\s+([ivxlc]{{1,6}})\b', lambda m: f"{m.group(1)} {_roman(m.group(2))}", t)
+    return t
+
+
 def _subtitle_label(t, series):
     """The whole text only names the book's own series and number: 'Discworld, Book 1', 'Book 18 of the Spellmonger Series',
-    'Book 2' / 'Volume 6' alone, 'Volume 4: My Quiet Blacksmith Life in Another World, Book 4'."""
-    t = (t or '').strip().rstrip(',').strip()
+    'Book 2' / 'Volume 6' alone, 'Volume 4: My Quiet Blacksmith Life in Another World, Book 4', subtitle loop 2026-11-15: word and
+    roman numbers, '(Discworld Novel 7)', 'Book Sixteen in The Wandering Inn Series', 'Number 3 in the Series', 'Expanse Bk 9'."""
+    t = _label_text(t)
     if series_label(t, series, strict=True): return True
-    if (m := re.match(rf'^{_LBL_WORD}\s+(\d+(?:\.\d+)?)\s+of\s+(.+)$', t, re.I)) and _own_number(m.group(1), series, m.group(2)): return True
+    if (m := re.match(rf'^{_LBL_WORD}\s+(\d+(?:\.\d+)?)\s+(?:of|in)\s+(.+)$', t, re.I)) and (
+            _own_number(m.group(1), series, m.group(2)) or (re.fullmatch(r'(?i)the\s+series', m.group(2).strip()) and _own_number(m.group(1), series))): return True
     if (m := re.match(rf'^{_LBL_WORD}\s+(\d+(?:\.\d+)?)$', t, re.I)) and _own_number(m.group(1), series): return True
     if (m := re.match(rf'^({_LBL_WORD}\s+\d+(?:\.\d+)?)\s*:\s*(.+)$', t, re.I)) and _subtitle_label(m.group(1), series) and _subtitle_label(m.group(2), series): return True
     return False
 
 
-def clean_series_label_subtitle(sub, series):
+_MARKETING = re.compile(r"(?i)\b(?:best-?sell\w*|award|winner|audies|netflix|prime original|now a major|sensation|instant (?:sunday|new york)|"
+                        r"sunday times|new york times|meets the|prepare for|gripping|groundbreaking|charming|heart-warming|riotous)\b")
+_EDITION = re.compile(r"(?i)^\W*(?:(?:collector'?s|deluxe|special|anniversary|illustrated|5x8|library|limited|signed|hardcover|paperback)\s*)+"
+                      r"(?:edition)?(?:\s+hardcover)?\W*$|^\W*graphic novel\W*$|\[(?:paperback|hardcover|kindle)[^\]]*\]")
+
+
+def clean_series_label_subtitle(sub, series, lang=None):
     """A subtitle that only names the book's own series and number goes ('Defiance of the Fall, Book 6' -> ''), a trailing one in
     brackets too ('A LitRPG Adventure (Defiance of the Fall, Book 5)' -> 'A LitRPG Adventure'). user 2026-11-15: the series field holds
     it already. Kept: another number ('The Murderbot Diaries, Book 8' on #7), a sub-series the book's series do not name ('Legend of
-    Drizzt: Dark Elf Trilogy, Book 3' on 'Legend of Drizzt' #3), ranges ('Book 3, 4')."""
+    Drizzt: Dark Elf Trilogy, Book 3' on 'Legend of Drizzt' #3), ranges ('Book 3, 4').
+    Subtitle loop 2026-11-15, also gone: marketing lines ('An instant Sunday Times bestseller ...', 'WINNER OF THE AUDIES ...'),
+    edition labels ("Collector's Edition", '5x8 Edition', 'Graphic Novel', '[Paperback]'), a format label alone ('Light Novel'), and on
+    an English book a subtitle in another language ('La révolte' on Mockingjay)."""
     if not sub: return sub
     if _subtitle_label(sub, series): return ''
+    if _MARKETING.search(sub) or _EDITION.search(sub): return ''
+    if re.fullmatch(r'(?i)\W*(?:light novel|novel|unabridged|ungek(?:ü|ue)rzt|audiobook|hörbuch)\W*', sub): return ''
+    if str(lang or '').lower() in ('english', 'eng', 'en'):
+        w = re.findall(r"[a-zà-ÿ]+", sub.lower())
+        f, e = sum(x in FOREIGN_WORDS for x in w), sum(x in ENDE_WORDS for x in w)
+        if e == 0 and (f >= 2 or (f >= 1 and re.search(r'[à-ÿ]', sub.lower()))) or foreign_series_name(sub): return ''
     m = re.match(r'^(.*\S)\s*\(([^()]+)\)\s*$', sub)
     if m and _subtitle_label(m.group(2), series):
         rest = m.group(1).strip(' ,:-')
@@ -1301,6 +1364,7 @@ def run(ctx):
         ctx['folder_numbers'] = fill_folder_numbers(ctx, records)
         ctx['subseries_numbers'] = fill_from_subseries(ctx, records)
         ctx['series_titles'] = harmonize_series_titles(ctx, records)
+    ctx['narrators_split'] = split_joined_narrators(ctx, records)
     if ctx.get('genre_cleanup'):
         ctx['genres_cleaned'] = normalize_genres(ctx, records)
         logging.info(f"   Genre spellings cleaned: {ctx['genres_cleaned']} books")

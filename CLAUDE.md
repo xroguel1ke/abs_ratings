@@ -189,6 +189,10 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     Also per book (verified recording): a subtitle with the number of ANOTHER volume (Mushoku 5 with 'Vol. 20', System Collapse #7 with
     'Book 8') -> Audible's subtitle (blurbs, 'Light Novel' -> none); kept when ABS = Audible (sub-series numbers: Legend of Drizzt).
     Title = series name + subtitle 'Book N: X' (Dragon Heart, also 'Dragon Heart: Book 14') -> title X; not for taglines/labels.
+  - Field loop 2026-11-15 (title/subtitle/narrators): last title step strips '(Light Novel)' anywhere and moves a genre tagline
+    (': A LitRPG Adventure') to the subtitle; glued-subtitle cut never leaves only the series name ('Mushoku Tensei'). Subtitles:
+    word/roman numbers and '(Discworld Novel 7)' count as own-series labels, marketing lines / edition labels / foreign text on an
+    English book / a subtitle repeating the title go. Series task split_joined_narrators: 'A + B' narrator entry -> A, B.
   - tools/run_round.sh RECORD_NO_LIVE is a HOST LIST, not a flag ('1' matched every URL with a 1, web pages went live and were
     recorded -> golden deviations). For library-wide comparisons use mode 'replay' (nothing recorded).
   - Book folders: new ones are named 'N - Title {Narrator}' (user 2026-11-15; several: '{A} {B}' or '{A, B}'); the old

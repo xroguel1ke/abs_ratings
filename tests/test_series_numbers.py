@@ -177,3 +177,38 @@ def test_title_form_keeps_separator():
     recs.append(rec(3, 'Cinnamon Bun 3', '2022', [('Cinnamon Bun', '3')], 'A/C', author='A'))
     c, _ = ctx()
     assert S.harmonize_series_titles(c, recs) == 1 and recs[-1]['title'] == 'Cinnamon Bun: Volume 3'
+
+
+def test_subtitle_loop_cleanups():
+    c = S.clean_series_label_subtitle
+    one = lambda n, q: [{'name': n, 'sequence': q}]
+    assert c('(Discworld Novel 7)', one('Discworld', '7')) == ''
+    assert c('Book Nine Of The Spellmonger Series', one('The Spellmonger', '9')) == ''
+    assert c('Book Sixteen in The Wandering Inn Series', one('The Wandering Inn', '16')) == ''
+    assert c('The Wheel Of Time, Book II', one('The Wheel of Time', '2')) == ''
+    assert c("Book Two of 'The Wheel of Time'", one('The Wheel of Time', '2')) == ''
+    assert c('Number 3 in the Series', one('The Original Shannara Trilogy', '3')) == ''
+    assert c('Expanse Bk 9', one('The Expanse', '9')) == ''
+    assert c('The First Law: Book One', one('The First Law Trilogy', '1')) == ''
+    assert c('Jobless Reincarnation (Light Novel) Vol. 25', one('Mushoku Tensei: Jobless Reincarnation', '25')) == ''
+    assert c('Light Novel', one('X', '1')) == ''
+    assert c('An instant Sunday Times bestseller and a twisting tale of love', []) == ''
+    assert c('WINNER OF THE AUDIES AUDIOBOOK OF THE YEAR', []) == ''
+    assert c("Collector's Edition", []) == '' and c('5x8 Edition', []) == '' and c('Graphic Novel', []) == ''
+    assert c('Book 2 (Six of Crows) [Paperback] [May 04, 2017] Leigh Bardugo', one('Six of Crows', '2')) == ''
+    assert c('La révolte', [], 'English') == ''
+    # kept
+    assert c('A Cozy Guide to Annoying the Cults, Outsmarting the Fish, and Alienating Oneself', []) != ''
+    assert c('In the Service of the King', one('Temeraire', '1'), 'English') != ''
+    assert c('Sons of Ares #1', one('Red Rising Saga', '1')) != ''
+    assert c('The Old Kingdom 2', one('Abhorsen/The Old Kingdom', '1')) != ''  # another number: not a label of this book
+    assert c('Book Two of The Last King of Osten Ard', one('The Last King of Osten Ard', '2')) == ''
+
+
+def test_joined_narrators_split():
+    r = rec(1, 'The Last Contract of Isako', '2024', [], 'A/x', author='A')
+    r['narrators'] = ['Dillon Sickels + Mary Robinette Kowal', 'Dillon Sickels', 'Mary Robinette Kowal']
+    c, calls = ctx()
+    assert S.split_joined_narrators(c, [r]) == 1 and r['narrators'] == ['Dillon Sickels', 'Mary Robinette Kowal']
+    r2 = rec(2, 'x', '2024', [], 'A/x', author='A', tags=('lock_narrators',)); r2['narrators'] = ['A + B']
+    assert S.split_joined_narrators(c, [r2]) == 0

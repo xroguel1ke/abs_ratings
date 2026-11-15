@@ -63,6 +63,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [U] 2026-11-15 check of the first full real run after the loops (2046 books, 1 error): cover upload timeout 120 s and no crash on a timeout, failed original-size cover only an info line when the smaller one follows (it was logged as an error), Audible title with the subtitle glued in cut once more (Defiance of the Fall 4) | ✅ | tests/test_cover_upload.py, test_new_books.py; regress green |
 | [U] 2026-11-15 series titles alike: subtitles that only name the own series + number removed (806 in the library), 'series + number' titles in the form of their series (9), narrators from '{Narrator}' folders | ✅ | library check, fake-write full run vs. old code (only these fields differ), second run idempotent, regress green |
 | [U] 2026-11-15 wrong-volume subtitles -> Audible's (12 books), Dragon Heart titles from the subtitle (14) | ✅ | fake-write full run diff: only these 31 fields; regress green |
+| [U] 2026-11-15 locks: 50 of 70 removed (no change or only fixes without them, backup tests/private/lock_backup_20261115.json); field loop: title (46), subtitle (171), narrators (8) | ✅ | replay full runs vs previous code, second run stable, regress green |
 
 ## Goodreads (experimental)
 | Item | State | Note |

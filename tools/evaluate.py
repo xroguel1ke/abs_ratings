@@ -25,7 +25,9 @@ for key, g in golden.items():
     last = lambda f: (fl[f][-1]['new'] if fl.get(f) else None)
     nt = lambda t: ''.join(ch for ch in __import__('re').sub(r'\([^)]*\)', '', str(t or '')).lower() if ch.isalnum())  # '(Tokyo Empire)' = series, moved to the series field
     nn = lambda xs: sorted(nt(x.get('name') if isinstance(x, dict) else x) for x in (xs or []))
-    if g.get('expect_title') and nt(last('title')) != nt(g['expect_title']):
+    # title loop 2026-11-15: a genre tagline after the title goes to the subtitle ('Falling with Folded Wings: A LitRPG Progression Fantasy')
+    cut = lambda t: __import__('re').sub(r'(?i):\s+an?\s[^:]*\b(?:litrpg|gamelit|progression fantasy|progression epic|cultivation|xianxia|wuxia|isekai|dungeon core)\b[^:]*$', '', str(t or ''))
+    if g.get('expect_title') and nt(last('title')) != nt(g['expect_title']) and nt(last('title')) != nt(cut(g['expect_title'])):
         bad.append((g.get('title') or key, f"title {g['expect_title']!r}", last('title'), g.get('note'))); continue
     if g.get('expect_lang') and last('language') != g['expect_lang']:
         bad.append((g.get('title') or key, f"language {g['expect_lang']}", last('language'), g.get('note'))); continue
