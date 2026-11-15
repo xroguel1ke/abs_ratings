@@ -727,6 +727,14 @@ def _sibling_series(asin, domain, series_list, title, authors=None):
     return extra
 
 def canonical_series(lib, name, book_authors, book_variant=None):
+    """canonical_series_raw without a format label in the result: an old series index / alias may still hold Audible's
+    'The Sword of Shannara (Unabridged)' (lock check 2026-11-15)."""
+    out = _canonical_series_raw(lib, name, book_authors, book_variant)
+    if out and isinstance(out, tuple) and isinstance(out[0], str):
+        return (re.sub(r'(?i)\s*\((?:unabridged|ungek(?:ü|ue)rzt|abridged)\)\s*$', '', out[0]).strip(),) + tuple(out[1:])
+    return out
+
+def _canonical_series_raw(lib, name, book_authors, book_variant=None):
     """Map a series name delivered by Audible to the name used in ABS:
     1. series_aliases.json (merges done earlier), 2. an existing ABS series with the same normalized
     name, same edition and a shared author. Prevents Audible from splitting series again."""
