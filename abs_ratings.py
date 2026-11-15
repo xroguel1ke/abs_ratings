@@ -4695,6 +4695,37 @@ def process_queue(work_queue, history, failed, recheck):
                             abs_updates['title'] = new_t; log_updates.append(f"Title: '{cur_t}' -> '{new_t}' (edition label)")
                         if new_s != cur_s and cur_s:
                             abs_updates['subtitle'] = new_s; log_updates.append(f"Subtitle: '{cur_s}' -> '{new_s}' (was the title / an edition label)")
+                    from abs_series import _same_series_name as _ssn
+                    ser_now = abs_updates.get('series') or meta.get('series') or []
+                    own_nums = set()
+                    for x_ in ser_now:
+                        try: own_nums.add(float(str(x_.get('sequence')).strip()))
+                        except (TypeError, ValueError): pass
+                    vol_nums = lambda t: [float(n) for n in re.findall(r'(?i)(?:\b(?:book|vol\.?|volume|band|teil|part)|#)\s*(\d+(?:\.\d+)?)\b', t or '')]
+                    cur_s = abs_updates.get('subtitle', meta.get('subtitle')) or ''
+                    if cur_s and own_nums and (bad_n := vol_nums(cur_s)) and not (set(bad_n) & own_nums) and not ({'lock_subtitle', 'lock_title'} & set(tags)) \
+                            and normalize_title_text(cur_s) != normalize_title_text(aud_sub or '') and same_recording(abs_dur, meta.get('narrators'), aud_data):
+                        # check 2026-11-15: the subtitle of ANOTHER volume ('Mushoku Tensei' 5 with 'Vol. 20', 'System Collapse' #7 with 'Book 8',
+                        # 'The Thrice-Bound Fool' with 'Riyria Revelations, Volume 3') - Audible's subtitle of this recording, else none.
+                        # Kept when ABS = Audible (a sub-series number: 'Legend of Drizzt: Neverwinter Saga, Book 3' on #25)
+                        new_s = aud_sub or ''
+                        if len(new_s) > 70 or re.search(r'(?i)\b(?:sequel|bestsell|author of)\b', new_s) or re.fullmatch(r'(?i)\s*(?:light novel|novel|unabridged)\s*', new_s): new_s = ''
+                        if not vol_nums(new_s) or set(vol_nums(new_s)) & own_nums:  # never one wrong number for another
+                            abs_updates['subtitle'] = new_s
+                            log_updates.append(f"Subtitle: '{cur_s}' -> '{new_s}' (number of another volume)")
+                    cur_t, cur_s = abs_updates.get('title', title), abs_updates.get('subtitle', meta.get('subtitle')) or ''
+                    from abs_series import _subtitle_label as _sbl
+                    if (m_ := re.match(r'(?i)^(?:book|volume|vol\.|part|band|teil)\s*(\d+(?:\.\d+)?)\s*[:\-–]\s*(.+)$', cur_s)) and 'lock_title' not in tags \
+                            and not _sbl(m_.group(2), ser_now) \
+                            and not re.search(r'(?i)\b(?:litrpg|gamelit|adventure|fantasy|novel|series|saga|epic|progression|cultivation|isekai|xianxia|wuxia|romance|thriller|sci-?fi)\b', m_.group(2)) \
+                            and any((_ssn(cur_t, x_.get('name')) or _ssn(re.sub(r'(?i)[,:]?\s*(?:book|volume|vol\.|part)?\s*#?\s*\d+(?:\.\d+)?\s*$', '', cur_t), x_.get('name'))
+                                     and float(re.findall(r'\d+(?:\.\d+)?', cur_t)[-1]) == float(m_.group(1)))  # 'Dragon Heart: Book 14'
+                                    and str(x_.get('sequence') or '').strip() and float(x_['sequence']) == float(m_.group(1))
+                                    for x_ in ser_now if re.fullmatch(r'\d+(?:\.\d+)?', str(x_.get('sequence') or '').strip())):
+                        # user 2026-11-15: 'Dragon Heart' + 'Book 9: Land of Pain' (every volume titled like the series) -> 'Land of Pain'.
+                        # Not a series label ('Volume 3: My Quiet Blacksmith Life in Another World, Book 3') or a tagline ('Book 6: A Deck-Building LitRPG')
+                        abs_updates['title'] = m_.group(2).strip(); abs_updates['subtitle'] = ''
+                        log_updates.append(f"Title: '{cur_t}' -> '{m_.group(2).strip()}' (the title was the series name, the subtitle the volume's title)")
                     # user 2026-11-15: a subtitle that only names the book's own series and number goes ('Defiance of the Fall, Book 6'), also
                     # in brackets at the end ('A LitRPG Adventure (Defiance of the Fall, Book 5)') - last, so no rule above sets it again
                     from abs_series import clean_series_label_subtitle as _csl

@@ -186,6 +186,11 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     Kept: other number, a sub-series the book does not hold ('Legend of Drizzt: Dark Elf Trilogy'), ranges. Series task
     harmonize_series_titles: 'series + number' titles take the form 3 of 4 (min. 4) of their series use. Library check 2026-11-15:
     806 subtitles + 9 titles, a fake-write full run vs. the old code differed ONLY there; a second run changed nothing back.
+    Also per book (verified recording): a subtitle with the number of ANOTHER volume (Mushoku 5 with 'Vol. 20', System Collapse #7 with
+    'Book 8') -> Audible's subtitle (blurbs, 'Light Novel' -> none); kept when ABS = Audible (sub-series numbers: Legend of Drizzt).
+    Title = series name + subtitle 'Book N: X' (Dragon Heart, also 'Dragon Heart: Book 14') -> title X; not for taglines/labels.
+  - tools/run_round.sh RECORD_NO_LIVE is a HOST LIST, not a flag ('1' matched every URL with a 1, web pages went live and were
+    recorded -> golden deviations). For library-wide comparisons use mode 'replay' (nothing recorded).
   - Book folders: new ones are named 'N - Title {Narrator}' (user 2026-11-15; several: '{A} {B}' or '{A, B}'); the old
     'N - Title - Narrator' is still read. folder_narrators reads braces without a folder number too.
   - Loop 2026-11-15: 'new book' = not in history AND ABS addedAt within NEW_BOOK_DAYS (30) - never a whole first run. Manual update =

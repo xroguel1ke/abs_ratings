@@ -62,6 +62,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [U] 2026-11-15 web UI slimmed: series + missing volumes on one page (tiles / list, filters all / incomplete / new / complete / problems, hide, released only; /missing redirects), overview: 100 % coverage fields and library checks without findings in one line, books without ratings folded, 21 long help texts shortened; tools/ui_shots.sh (screenshots from a config copy + fake ABS) | ✅ | web UI tests + regress |
 | [U] 2026-11-15 check of the first full real run after the loops (2046 books, 1 error): cover upload timeout 120 s and no crash on a timeout, failed original-size cover only an info line when the smaller one follows (it was logged as an error), Audible title with the subtitle glued in cut once more (Defiance of the Fall 4) | ✅ | tests/test_cover_upload.py, test_new_books.py; regress green |
 | [U] 2026-11-15 series titles alike: subtitles that only name the own series + number removed (806 in the library), 'series + number' titles in the form of their series (9), narrators from '{Narrator}' folders | ✅ | library check, fake-write full run vs. old code (only these fields differ), second run idempotent, regress green |
+| [U] 2026-11-15 wrong-volume subtitles -> Audible's (12 books), Dragon Heart titles from the subtitle (14) | ✅ | fake-write full run diff: only these 31 fields; regress green |
 
 ## Goodreads (experimental)
 | Item | State | Note |
