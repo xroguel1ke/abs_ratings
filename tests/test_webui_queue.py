@@ -57,7 +57,7 @@ def test_status_page_coverage_and_api():
     json.dump({'books': 10, 'generated': 'now', 'missing': {'asin': ['A', 'B'], 'cover': []}}, open(os.path.join(cfg, 'reports', 'library_report.json'), 'w'))
     open(os.path.join(cfg, 'logs', 'run_2026-01-01_00-00-00.log'), 'w').write('Hardcover: found 5 (daily limit left: 4321)\nGoodreads blocks requests: Bot challenge')
     html = client().get('/').get_data(as_text=True)
-    assert '80.0' in html and '100.0' in html and '4321' in html and 'blocked' in html, html[-900:]
+    assert '80.0' in html and 'Complete: Cover' in html and '4321' in html and 'blocked' in html, html[-900:]  # 100 % fields share one line (2026-11-15)
 
 
 def test_csv_export():

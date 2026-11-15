@@ -47,7 +47,7 @@
 <form method="post" class="sec" data-sec="{{ slug(sec) }}">{% for g in grps %}{{ group_card(g) }}{% endfor %}{% if sec == 'Interface' %}<div class="card"><h2 style="margin-top:0">{{ _('Onboarding') }}</h2>
  <p class="small">{{ _('The tour explains the pages of the app in a few steps. It starts automatically on the first visit.') }}</p>
  <div class="row"><button type="button" class="primary" onclick="window.ABSTour && ABSTour.start()">{{ _('Start the tour') }}</button>
- <span class="muted small">{{ _('Switch between light and dark with the moon button at the top right (on the first visit the system setting applies, afterwards your choice in this browser).') }}</span></div></div>
+ <span class="muted small">{{ _('Light or dark: moon button at the top right. The first visit follows your system.') }}</span></div></div>
 <div class="card"><h2 style="margin-top:0">{{ _('Export / import') }}</h2>
  <p class="small">{{ _('All settings as a file - without tokens, password and notification URL.') }}</p>
  <div class="row"><a class="btn" href="{{ url_for('settings_export') }}">{{ icon('download') }} {{ _('Export') }}</a>

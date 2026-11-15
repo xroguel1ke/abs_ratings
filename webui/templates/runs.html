@@ -7,7 +7,7 @@
   <label class="badge" title="{{ _('Metadata & ratings') }}"><input type="checkbox" name="task_meta" {{ 'checked' if f.task_meta }}> {{ _('Metadata') }}</label>
   <label class="badge" title="{{ _('Normalize authors') }}"><input type="checkbox" name="task_authors" {{ 'checked' if f.task_authors }}> {{ _('Authors') }}</label>
   <label class="badge" title="{{ _('Merge series') }}"><input type="checkbox" name="task_series" {{ 'checked' if f.task_series }}> {{ _('Series') }}</label>
-  <label class="badge" title="{{ _('Remove illustrators, translators, editors, forewords … from the author field (only when a real author remains)') }}"><input type="checkbox" name="task_roles" {{ 'checked' if f.task_roles }}> {{ _('Real authors') }}</label>
+  <label class="badge" title="{{ _('Remove illustrators, translators etc. from the author field (if a real author remains)') }}"><input type="checkbox" name="task_roles" {{ 'checked' if f.task_roles }}> {{ _('Real authors') }}</label>
   <label class="badge" title="{{ _('Delete ABS authors without a single book') }}"><input type="checkbox" name="task_empty" {{ 'checked' if f.task_empty }}> {{ _('Empty authors') }}</label>
   <span class="sep"></span>
   <label class="badge" id="backupopt" title="{{ _('Ask ABS for a backup before anything is written (takes a few minutes for big libraries)') }}"><input type="checkbox" name="backup" {{ 'checked' if f.backup }}> {{ _('ABS backup') }}</label>

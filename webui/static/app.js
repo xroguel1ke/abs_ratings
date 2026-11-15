@@ -40,6 +40,7 @@ function T(s) { return (window.I18N && window.I18N[s]) || s; }
     { page: 'runs', sel: '#startform', t: T('Start a scan'), p: T('Choose the tasks (metadata & ratings, authors, series …) and start. Keep "test run" ticked at first: nothing is written, you see every planned change and apply only what you want.') },
     { page: 'runs', sel: '.tabs', t: T('Scans and changes written'), p: T('The list of all scans with live progress (time left, expected end, changes so far). The second tab shows what was really written to ABS.') },
     { page: 'history', sel: '.card.tablewrap', t: T('Undo'), p: T('Every written change, per scan. Open a scan to undo one field, one book or the whole scan; replaced covers come back from the backup.') },
+    { page: 'series', sel: '.serbar', t: T('Series'), p: T('Every series with its books and the volumes you are missing. Tiles show covers, List only the gaps. Hide what does not interest you.') },
     { page: 'books', sel: 'form.card', t: T('Books'), p: T('Every checked book. Search, filter by status and sort by certainty - how sure the script is that the ASIN is exactly this book.') },
     { page: 'books', sel: '.card.tablewrap', t: T('Book page'), p: T('A click on a title shows ABS next to Audible and Hardcover, the reasoning of every decision, and lets you set an ASIN by hand or test this one book.') },
     { page: 'review', sel: '.snav', t: T('Review list'), p: T('Only what the script could not verify on its own, in sections: books, series, authors. Done entries disappear by themselves after the next scan.') },

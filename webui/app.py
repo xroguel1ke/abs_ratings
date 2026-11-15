@@ -453,11 +453,11 @@ def explain_entry(x, res_all):
         why = T("Its chapters and Audible's runtime of the same book are longer than the file - an incomplete download or another (shorter) edition. Check the end of the book.")
     elif kind == 'tmpfile':
         what = T('A temporary file lies next to the real audio file: %(f)s', f=cand)
-        why = T('It is a half-written copy of an aborted conversion or download. It was excluded from playback (the duration is correct again), but the file is still in the book folder: delete it there.')
+        why = T('A half-written copy of an aborted conversion. It is excluded from playback; delete it in the book folder.')
     elif kind == 'moved':
         ev = x.get('evidence') or []
         what = T('ABS gave the newly added folder "%(n)s" the entry of another book ("%(t)s", folder "%(o)s").', n=cand, t=x.get('title') or '?', o=ev[0] if ev else '?')
-        why = T('Title, author and all other data shown for this folder belong to the other book. The script does not touch it. Look up the right ASIN for this folder and set it as "another book" (book page > ASIN); the other folder gets a new entry from the library scan.')
+        why = T('All data shown belongs to the other book; the script leaves it alone. Set the right ASIN as "another book" on the book page.')
     elif kind == 'authors':
         what = T('Audible names %(a)s as author(s) of exactly this recording (same runtime and narrator).', a=cand)
         why = reason + ' ' + T('A person is never replaced automatically (pen names, editors, translations).')
@@ -845,8 +845,11 @@ def logs_zip():
 @app.route('/series')
 @login_required
 def series_page():
-    """All series with their books: complete / N missing (released only), duplicate numbers, mixed languages; rename."""
-    return render_template('series.html', series=core.library_series(request.args.get('refresh') == '1'))
+    """Series and missing volumes on one page (user 2026-11-15): tiles (books with covers, gaps in place) or a compact list of the
+    missing volumes; filters all / incomplete / new / complete / problems; hide a series or volume."""
+    data = core.library_series(request.args.get('refresh') == '1')
+    return render_template('series.html', series=data, generated=core._SERIES_CACHE.get('generated'),
+                           view=request.args.get('view') or '', f=request.args.get('f') or '')
 
 
 @app.route('/series/rename', methods=['POST'])
@@ -881,20 +884,8 @@ def series_rename():
 @app.route('/missing')
 @login_required
 def missing_page():
-    """Missing volumes of the library's series (reports/missing_in_series.json, written by every full / library scan)."""
-    d = core._load_json(os.path.join(core.REPORT_DIR, 'missing_in_series.json'), {})
-    hid = core.missing_hidden(); hid_s, hid_v = set(hid.get('series') or []), set(hid.get('volumes') or [])
-    show_hidden = request.args.get('hidden') == '1'
-    series = []
-    for s in d.get('series') or []:
-        sid = f"{s.get('lib')}|{s.get('series')}"
-        ms = [dict(m, hidden=m.get('asin') in hid_v) for m in s.get('missing') or []]
-        if not show_hidden: ms = [m for m in ms if not m['hidden']]
-        if (sid in hid_s and not show_hidden) or not ms: continue
-        series.append(dict(s, sid=sid, hidden=sid in hid_s, missing=ms, n=len(ms), n_rel=sum(1 for m in ms if not m.get('upcoming'))))
-    n_hidden = len(hid_s) + len(hid_v)
-    return render_template('missing.html', series=sorted(series, key=lambda s: (s.get('series') or '').lower()), generated=d.get('generated'),
-                           show_hidden=show_hidden, n_hidden=n_hidden)
+    """Old address of the missing-volumes page: now the series page (list view, incomplete series)."""
+    return redirect(url_for('series_page', view='list', f='inc'))
 
 
 @app.route('/missing/hide', methods=['POST'])
@@ -903,7 +894,9 @@ def missing_hide():
     kind, ident, hide = request.form.get('kind'), request.form.get('id') or '', request.form.get('hide') != '0'
     if kind not in ('series', 'volumes') or not ident: abort(400)
     core.set_missing_hidden(kind, ident, hide)
-    return redirect(url_for('missing_page', hidden=request.form.get('back_hidden') or None) + (f"#s-{request.form.get('anchor')}" if request.form.get('anchor') else ''))
+    core._SERIES_CACHE['data'] = None  # counts change
+    return redirect(url_for('series_page', view=request.form.get('view') or None, f=request.form.get('f') or None)
+                    + (f"#s-{request.form.get('anchor')}" if request.form.get('anchor') else ''))
 
 
 @app.route('/books')

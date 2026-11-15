@@ -28,10 +28,10 @@ FIELDS = [
     ('DRY_RUN', 'Test run (DRY_RUN) for scheduled scans', 'bool', True, 'On = nothing is written to ABS, changes are only planned and logged', 'Run'),
     ('BATCH_SIZE', 'Books per scan', 'int', 300, 'Picked at random from all due books of all libraries', 'Run'),
     ('REFRESH_DAYS', 'Refresh after (days)', 'int', 90, '0 = every book is due (one complete pass, also in maintenance mode)', 'Run'),
-    ('RUN_MODE', 'Run mode', 'choice:auto|buildup|maintain', 'auto', 'auto = build-up until every book was checked once, then maintenance. Maintenance: new and changed books always, plus a few random due books', 'Run'),
+    ('RUN_MODE', 'Run mode', 'choice:auto|buildup|maintain', 'auto', 'auto: every book once, then only new and changed books plus a few random ones', 'Run'),
     ('MAINTAIN_SAMPLE', 'Random books per maintenance scan', 'int', 30, 'Besides new and changed books', 'Run'),
-    ('QUICK_MODE_MINUTES', 'Quick mode: look for new books every (minutes)', 'int', 0, '0 = off. New books in ABS are checked right away instead of waiting for the next scheduled scan', 'Run'),
-    ('ABS_BACKUP', 'ABS backup before real scans', 'bool', True, 'Creates an ABS backup before a scan without DRY_RUN (at most one per 24 h); if it fails nothing is written', 'Run'),
+    ('QUICK_MODE_MINUTES', 'Quick mode: look for new books every (minutes)', 'int', 0, 'Looks for new books every N minutes and processes them at once. 0 = off', 'Run'),
+    ('ABS_BACKUP', 'ABS backup before real scans', 'bool', True, 'ABS backup before writing (at most once a day). If it fails, nothing is written', 'Run'),
     ('SLEEP_TIMER', 'Extra pause between books (s)', 'float', 0, 'Every source has its own minimum interval, so 0 is safe and fastest', 'Run'),
     ('NO_RATINGS_RECHECK_DAYS', 'Re-check books without ratings (days)', 'int', 7, '', 'Run'),
     ('LOG_LEVEL', 'Log level', 'choice:INFO|DEBUG', 'INFO', 'DEBUG only for troubleshooting (much bigger logs)', 'Logs'),
@@ -41,19 +41,19 @@ FIELDS = [
     ('USE_AUDIBLE_API', 'Use the Audible API', 'bool', True, 'Off = read web pages only (not recommended)', 'Audible'),
     ('AUDIBLE_API_INTERVAL', 'Interval Audible API (s)', 'float', 0.5, '', 'Audible'),
     ('AUDIBLE_WEB_INTERVAL', 'Interval Audible web page (s)', 'float', 3, '', 'Audible'),
-    ('BOOK_LANGUAGES', 'Languages of your books', 'str', '', 'Comma list, e.g. English, German. Audible editions in other languages are never taken; empty = any language', 'Audible'),
-    ('RUNTIME_TOLERANCE_PCT', 'Same-book runtime tolerance (%)', 'float', 15, 'Only decides whether the ASIN still names the same BOOK (another recording can be 12-16 % longer). Lower values lose correct matches. Narrator, publisher, year and cover need the runtime within 10 min anyway', 'Audible'),
+    ('BOOK_LANGUAGES', 'Languages of your books', 'str', '', 'e.g. English, German. Editions in other languages are never used. Empty = all', 'Audible'),
+    ('RUNTIME_TOLERANCE_PCT', 'Same-book runtime tolerance (%)', 'float', 15, 'Max. runtime difference for the ASIN to still count as this book. Lower = fewer matches', 'Audible'),
     ('RUNTIME_TOLERANCE_MIN', 'Same-book runtime tolerance (min)', 'float', 20, 'Both limits must be exceeded', 'Audible'),
 
     ('HARDCOVER_ENABLED', 'Use Hardcover', 'bool', True, 'Ratings and the print ISBN. The scan stops shortly before the daily limit', 'Hardcover'),
     ('HARDCOVER_TOKEN', 'Hardcover API token', 'secret', '', 'hardcover.app → Settings → API', 'Hardcover'),
-    ('HARDCOVER_PAID', 'Paid Hardcover plan', 'bool', False, 'Off = free plan: at most 5000 requests per day. On = 50000 per day. Both 60 per minute', 'Hardcover'),
+    ('HARDCOVER_PAID', 'Paid Hardcover plan', 'bool', False, 'Free plan: 5,000 requests a day, paid: 50,000. Both 60 per minute', 'Hardcover'),
     ('HARDCOVER_INTERVAL', 'Interval Hardcover (s)', 'float', 1.1, 'Hardcover allows 60 requests per minute', 'Hardcover'),
 
-    ('GOODREADS_ENABLED', 'Use Goodreads', 'bool', False, 'Experimental: Goodreads blocks bots quickly. At the first block Goodreads is stopped for the scan', 'Goodreads'),
-    ('GOODREADS_MAX_PER_RUN', 'Goodreads searches per scan', 'int', 25, 'Fallback when no book page helps. Remembered books do not count. Safe so far: about 25 per night', 'Goodreads'),
-    ('GOODREADS_PAGES_PER_RUN', 'Goodreads book pages per scan', 'int', 3, 'Book page first (allowed by Goodreads robots.txt), but a bot check comes after 3-7 pages; then only the search is used for the rest of the scan', 'Goodreads'),
-    ('GR_IMPERSONATE', 'Goodreads: imitate a browser signature', 'bool', False, 'Sends the network signature of Chrome (curl_cffi, no browser). Your choice and risk: Goodreads does not want bots. Budgets and the stop at a block stay', 'Goodreads'),
+    ('GOODREADS_ENABLED', 'Use Goodreads', 'bool', False, 'Experimental: Goodreads blocks bots quickly; then it is skipped for the rest of the scan', 'Goodreads'),
+    ('GOODREADS_MAX_PER_RUN', 'Goodreads searches per scan', 'int', 25, 'Searches per scan when no book page helps (about 25 a night are safe)', 'Goodreads'),
+    ('GOODREADS_PAGES_PER_RUN', 'Goodreads book pages per scan', 'int', 3, 'Book pages per scan; then only the search is used (bot check after 3-7 pages)', 'Goodreads'),
+    ('GR_IMPERSONATE', 'Goodreads: imitate a browser signature', 'bool', False, 'Looks like Chrome to Goodreads (no real browser). At your own risk', 'Goodreads'),
     ('GOODREADS_INTERVAL', 'Interval Goodreads (s)', 'float', 10, '', 'Goodreads'),
     ('GR_BLOCK_COOLDOWN', 'Pause after a Goodreads block (s)', 'int', 900, '', 'Goodreads'),
     ('GR_MAX_COOLDOWNS', 'Pauses before Goodreads is skipped', 'int', 0, '0 = stop at the first block (recommended)', 'Goodreads'),
@@ -61,24 +61,24 @@ FIELDS = [
     ('GR_MISSING_RECHECK_DAYS', 'Re-check books without Goodreads (days)', 'int', 30, '', 'Goodreads'),
 
     ('RATING_ORDER', 'Sources in the rating block', 'order:audible|goodreads|hardcover', 'audible,goodreads,hardcover', 'Ticked sources are shown, top to bottom (all enabled sources are still asked)', 'Metadata'),
-    ('RATING_ICONS', 'Rating symbols', 'choice:moons|stars|circles|squares|diamonds|yellow_stars|hearts|traffic|green_squares|orange_circles', 'moons', 'New and refreshed ratings use these; "Change all rating symbols" rewrites the existing ones', 'Metadata'),
+    ('RATING_ICONS', 'Rating symbols', 'choice:moons|stars|circles|squares|diamonds|yellow_stars|hearts|traffic|green_squares|orange_circles', 'moons', 'For new ratings; "Change all rating symbols" updates existing ones', 'Metadata'),
     ('RATING_LABELS', 'Rating block language', 'choice:en|de', 'en', '', 'Metadata'),
     ('RATING_POSITION', 'Rating block position', 'choice:top|bottom', 'top', '', 'Metadata'),
     ('RATING_MIN_COUNT', 'Minimum number of ratings', 'int', 0, 'A source with fewer ratings is not shown (0 = all)', 'Metadata'),
     ('FILL_COVERS', 'Set missing covers', 'bool', True, 'Only for a verified ASIN', 'Metadata'),
-    ('MATCH_CHAPTERS', 'Take Audible chapters', 'bool', True, 'For files without proper chapters (none, one, only numbers) and only when they fit reliably: same length to 5 s, or the file\'s own chapter marks / Audible\'s intro-outro explain a difference up to 2 min. lock_chapters protects a book', 'Metadata'),
-    ('UPDATE_COVERS', 'Replace existing covers', 'bool', True, 'Only for a verified ASIN (same recording); the old cover is backed up and can be restored', 'Metadata'),
+    ('MATCH_CHAPTERS', 'Take Audible chapters', 'bool', True, "Audible's chapters for files without real chapters - only when they fit exactly. lock_chapters protects a book", 'Metadata'),
+    ('UPDATE_COVERS', 'Replace existing covers', 'bool', True, 'Only for a verified ASIN; the old cover is backed up', 'Metadata'),
     ('GENRE_LANGUAGE', 'Genre language', 'choice:en|keep', 'en', 'Audible.de genres are translated to English', 'Metadata'),
-    ('GENRE_RULES', 'Genre rules', 'text', '', 'One per line: "Old => New" renames, "Old => -" never adds that genre (only genres coming from Audible)', 'Metadata'),
+    ('GENRE_RULES', 'Genre rules', 'text', '', 'One per line: "Old => New" renames, "Old => -" blocks a genre', 'Metadata'),
 
     ('SERIES_MERGE', 'Merge series automatically', 'bool', True, 'Only safe cases; uncertain ones go to the review list', 'Series & authors'),
     ('AUTHOR_NORMALIZE', 'Unify author spellings', 'bool', True, '', 'Series & authors'),
-    ('REMOVE_ROLE_CREDITS', 'Keep only real authors', 'bool', True, 'Removes illustrators, translators, editors, forewords … from the author field (only when a real author remains); never taken from Audible', 'Series & authors'),
-    ('MISSING_SERIES', 'List missing volumes of your series', 'bool', True, 'Checked at the end of every scan against Audible series lists (a few hundred requests per refresh)', 'Series & authors'),
+    ('REMOVE_ROLE_CREDITS', 'Keep only real authors', 'bool', True, 'Removes illustrators, translators etc. from the author field if a real author remains', 'Series & authors'),
+    ('MISSING_SERIES', 'List missing volumes of your series', 'bool', True, 'Compares your series with Audible after every scan', 'Series & authors'),
     ('SERIES_LIST_DAYS', 'Missing volumes: refresh Audible series lists after (days)', 'int', 1, 'New volumes on Audible show up at the latest after this time (1 = daily)', 'Series & authors'),
     ('MISSING_NOVELLAS', 'Missing volumes: include novellas (0.5, 2.5 ...)', 'bool', False, '', 'Series & authors'),
-    ('GENRE_CLEANUP', 'Clean up genres', 'bool', True, 'One spelling per genre (the most used one); number-only and foreign-script genres are removed from English/German books', 'Series & authors'),
-    ('REMOVE_EMPTY_AUTHORS', 'Remove empty authors', 'bool', True, 'Deletes only ABS authors without a single book (left-overs after merges); books are never deleted', 'Series & authors'),
+    ('GENRE_CLEANUP', 'Clean up genres', 'bool', True, 'One spelling per genre; drops number-only and foreign-script genres', 'Series & authors'),
+    ('REMOVE_EMPTY_AUTHORS', 'Remove empty authors', 'bool', True, 'Deletes ABS authors without books (left over after merges)', 'Series & authors'),
     ('LIBRARY_REPORT', 'Create the library report', 'bool', True, '', 'Series & authors'),
     ('SERIES_LOCK_AFTER_MERGE', 'Set lock_series after a merge', 'bool', False, 'Old variant, not recommended', 'Series & authors'),
 
@@ -302,8 +302,9 @@ def library_series(force=False):
     s = load_settings()
     rep = _load_json(os.path.join(REPORT_DIR, 'missing_in_series.json'), {})
     hid = missing_hidden(); hid_s, hid_v = set(hid.get('series') or []), set(hid.get('volumes') or [])
-    miss = {(m.get('lib'), m.get('series')): dict(m, missing=[x for x in m.get('missing') or [] if x.get('asin') not in hid_v])
-            for m in rep.get('series') or [] if f"{m.get('lib')}|{m.get('series')}" not in hid_s}
+    # hidden volumes / series stay in the data (flag 'hidden'): the series page can show them again; counts leave them out
+    miss = {(m.get('lib'), m.get('series')): dict(m, missing=[dict(x, hidden=x.get('asin') in hid_v) for x in m.get('missing') or []])
+            for m in rep.get('series') or []}
     known = set(rep.get('checked') or [])
     out = []
     for lib in [x.strip() for x in str(s.get('LIBRARY_IDS') or '').split(',') if x.strip()]:
@@ -325,16 +326,20 @@ def library_series(force=False):
             for b in books:
                 if b['num']: nums.setdefault((b['num'], b['lang']), set()).add(b['title'].lower())
             mm = miss.get((lib, name)) or {}
-            out.append({'name': name, 'lib': lib, 'author': books[0]['author'] if books else '', 'books': books,
+            sid = f"{lib}|{name}"
+            s_hidden = sid in hid_s
+            vis = [x for x in mm.get('missing') or [] if not x['hidden'] and not s_hidden]
+            out.append({'sid': sid, 'hidden': s_hidden, 'missing_new': sum(1 for x in vis if x.get('new')),
+                        'missing_hidden': sum(1 for x in mm.get('missing') or [] if x['hidden']) + (len(mm.get('missing') or []) if s_hidden else 0),'name': name, 'lib': lib, 'author': books[0]['author'] if books else '', 'books': books,
                         'langs': sorted({b['lang'] for b in books if b['lang']}), 'mixed': len({b['lang'] for b in books if b['lang']}) > 1, 'dups': sorted(n for (n, _l), t in nums.items() if len(t) > 1),
-                        'missing_rel': sum(1 for x in mm.get('missing') or [] if not x.get('upcoming')),
-                        'missing_up': sum(1 for x in mm.get('missing') or [] if x.get('upcoming')), 'known': name in known or bool(mm),
+                        'missing_rel': sum(1 for x in vis if not x.get('upcoming')),
+                        'missing_up': sum(1 for x in vis if x.get('upcoming')), 'known': name in known or bool(mm),
                         'store': mm.get('store') or 'www.audible.com',
                         # books and missing volumes in one list, in number order: the series page shows the gaps where they are
                         'entries': sorted([dict(b, kind='book') for b in books] + [dict(x, kind='missing') for x in mm.get('missing') or [] if x.get('asin') or x.get('title')],
                                           key=lambda e: sk({'num': str(e.get('num') or '')}))})
     out.sort(key=lambda x: x['name'].lower())
-    _SERIES_CACHE.update(ts=time.time(), data=out)
+    _SERIES_CACHE.update(ts=time.time(), data=out, generated=rep.get('generated'))
     return out
 
 

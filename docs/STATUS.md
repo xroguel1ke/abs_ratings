@@ -59,6 +59,8 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 
 | [U] 2026-11-15 loops: new-book window, manual-update fingerprints, original-size covers, identity once, box-set slash titles, quick runs without Goodreads waits, pause log lines, daily series lists | ✅ | full-library dry run 2027 books 0 errors; regress green; 81 + 14 book fake-write checks |
 
+| [U] 2026-11-15 web UI slimmed: series + missing volumes on one page (tiles / list, filters all / incomplete / new / complete / problems, hide, released only; /missing redirects), overview: 100 % coverage fields and library checks without findings in one line, books without ratings folded, 21 long help texts shortened; tools/ui_shots.sh (screenshots from a config copy + fake ABS) | ✅ | web UI tests + regress |
+
 ## Goodreads (experimental)
 | Item | State | Note |
 |---|---|---|

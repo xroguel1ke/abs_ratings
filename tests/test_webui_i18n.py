@@ -10,7 +10,7 @@ json.dump({'lib_1': {'title': 'Test Book One', 'status': 'not_found', 'author': 
 json.dump({'must_change_password': False}, open(os.path.join(cfg, 'settings.json'), 'w'))
 from webui import app as W, core, i18n
 
-PAGES = ['/', '/books', '/review', '/runs', '/history', '/settings', '/logs', '/problem/lib_1', '/password']
+PAGES = ['/', '/books', '/review', '/runs', '/history', '/settings', '/logs', '/problem/lib_1', '/password', '/series']
 # words that must never show up on an English page (book data in the fixtures is English)
 GERMAN = re.compile(r'Bücher|Einstellungen|Prüfliste|Übernehmen|rückgängig|Testlauf|Übersicht|Verlauf|speichern|Zeitplan|Sicherheit|Begründung|Abbrechen|nicht gefunden')
 
@@ -134,3 +134,8 @@ if __name__ == '__main__':
     for n, f in sorted(globals().items()):
         if n.startswith('test_'): f(); print('ok', n)
     print('webui i18n tests passed')
+
+
+def test_missing_redirects_to_series_list():
+    r = client().get('/missing')
+    assert r.status_code == 302 and '/series' in r.headers['Location'] and 'view=list' in r.headers['Location']

@@ -193,6 +193,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     fits its folder, the review is decided, or an 'identity' override exists. A confirmed other-book ASIN (identity) now also replaces
     publisher, year, genres, ISBN and the cover.
 
+- Web UI: keep texts short (help texts <= ~100 chars, user 2026-11-15: human readability first). Series and missing volumes are ONE page (series.html, two views). Screenshots: tools/ui_shots.sh <snapshot> <port> name=/path ... (FULL=0 = viewport only); never commit them (private data).
+
 ## Testing
 - **pytest:** `tools/pytest_all.sh` (one process per test file; also step 2a of the gate).
 - **Regression gate (mandatory):** every change to matching, series or author logic runs `tools/regress.sh` before it is kept (12 s: syntax, synthetic unit tests `tests/test_authors.py`/`tests/test_series.py`,

@@ -11,7 +11,6 @@
 <a data-tour="books" href="{{ url_for('books') }}" class="{{ 'active' if ep in ('books','problem') }}">{{ _('Books') }}</a>
 <a data-tour="review" href="{{ url_for('review_page') }}" class="{{ 'active' if ep=='review_page' }}">{{ _('Review list') }}</a>
 <a data-tour="series" href="{{ url_for('series_page') }}" class="{{ 'active' if ep=='series_page' }}">{{ _('Series') }}</a>
-<a data-tour="missing" href="{{ url_for('missing_page') }}" class="{{ 'active' if ep=='missing_page' }}">{{ _('Missing') }}</a>
 <a data-tour="settings" href="{{ url_for('settings') }}" class="{{ 'active' if ep in ('settings','logs','log_view') }}">{{ _('Settings') }}</a>
 <form class="navsearch" action="{{ url_for('books') }}" method="get" autocomplete="off">{{ icon('search') }}<input type="search" name="q" id="navq" placeholder="{{ _('Search') }}" aria-label="{{ _('Search') }}">
 <div class="navresults" id="navres" hidden></div></form>
@@ -39,7 +38,6 @@
  <a href="{{ url_for('dashboard') }}" class="{{ 'active' if ep in ('dashboard','status') }}">{{ icon('headphones', 18) }}<span>{{ _('Overview') }}</span></a>
  <a href="{{ url_for('review_page') }}" class="{{ 'active' if ep=='review_page' }}">{{ icon('circle-check', 18) }}<span>{{ _('Review list') }}</span></a>
  <a href="{{ url_for('series_page') }}" class="{{ 'active' if ep=='series_page' }}">{{ icon('book-open', 18) }}<span>{{ _('Series') }}</span></a>
- <a href="{{ url_for('missing_page') }}" class="{{ 'active' if ep=='missing_page' }}">{{ icon('search', 18) }}<span>{{ _('Missing') }}</span></a>
  <a href="{{ url_for('runs') }}" class="{{ 'active' if ep in ('runs','run_view','history','history_run','history_search') }}">{{ icon('play', 18) }}<span>{{ _('Scans') }}</span></a></nav>
 <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('{{ url_for('sw') }}').catch(()=>{})}</script>{% endif %}
 {% if session.auth %}<footer class="muted small">ABS Ratings {{ app_version }}{% if update_available %} · <span class="badge warn">{{ _('Update available') }}</span>{% endif %}</footer>{% endif %}</body></html>

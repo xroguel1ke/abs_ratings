@@ -1,23 +1,43 @@
 {% extends 'base.html' %}{% block title %}{{ _('Series') }}{% endblock %}{% block body %}
-{% set n_inc = series|selectattr('missing_rel')|list|length %}
-
-<div class="row" style="justify-content:space-between"><h1>{{ _('Series') }}</h1><a class="small" href="{{ url_for('series_page', refresh=1) }}">{{ _('Reload') }}</a></div>
-<p class="muted small">{{ _('Every series with its books. Completeness counts released volumes only.') }}</p>
+{# Series and missing volumes on one page (2026-11-15): two views (tiles / list) with the same filters #}
+{% set n_inc = series|rejectattr('hidden')|selectattr('missing_rel')|list|length + series|rejectattr('hidden')|rejectattr('missing_rel')|selectattr('missing_up')|list|length %}
+{% set n_new = series|selectattr('missing_new')|list|length %}
+{% set n_hidden = series|sum(attribute='missing_hidden') %}
+<div class="row" style="justify-content:space-between"><h1>{{ _('Series') }}</h1>
+ <span class="small muted">{% if generated %}{{ _('Missing volumes as of %(d)s', d=generated) }} · {% endif %}<a href="{{ url_for('series_page', refresh=1) }}">{{ _('Reload') }}</a></span></div>
 <div class="row small serbar">
  <input type="search" id="sq" placeholder="{{ _('Filter series') }}" oninput="serFilter()">
  <label class="badge"><input type="radio" name="sf" value="all" checked onchange="serFilter()"> {{ _('All') }} ({{ series|length }})</label>
  <label class="badge"><input type="radio" name="sf" value="inc" onchange="serFilter()"> {{ _('Incomplete') }} ({{ n_inc }})</label>
+ {% if n_new %}<label class="badge ok"><input type="radio" name="sf" value="new" onchange="serFilter()"> {{ _('New') }} ({{ n_new }})</label>{% endif %}
  <label class="badge"><input type="radio" name="sf" value="ok" onchange="serFilter()"> {{ _('Complete') }}</label>
  <label class="badge"><input type="radio" name="sf" value="prob" onchange="serFilter()"> {{ _('Problems') }}</label>
+ <span class="seg" id="view"><button type="button" data-v="tiles" onclick="setView('tiles')">{{ _('Tiles') }}</button><button type="button" data-v="list" onclick="setView('list')">{{ _('List') }}</button></span>
+ <label class="chk"><input type="checkbox" id="relOnly" onchange="serFilter()"> {{ _('Released only') }}</label>
+ {% if n_hidden %}<label class="chk"><input type="checkbox" id="showHid" onchange="serFilter()"> {{ _('Show hidden (%(n)s)', n=n_hidden) }}</label>{% endif %}
 </div>
+
+{% macro hideform(kind, ident, hidden, anchor) %}<form method="post" action="{{ url_for('missing_hide') }}" class="inl">
+ <input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="id" value="{{ ident }}"><input type="hidden" name="hide" value="{{ 0 if hidden else 1 }}">
+ <input type="hidden" name="anchor" value="{{ anchor|urlencode }}"><input type="hidden" name="view" value=""><input type="hidden" name="f" value="">
+ {% if kind == 'series' %}<button class="small" title="{{ _('Not interested: hide this series') }}">{{ _('Show again') if hidden else _('Hide series') }}</button>
+ {% else %}<button class="linkbtn" title="{{ _('Not interested: hide this volume') }}">{{ _('show') if hidden else _('hide') }}</button>{% endif %}</form>{% endmacro %}
+
+{% macro rel(m) %}{% if m.upcoming and m.release %}{{ _('releases %(d)s', d=m.release) }}{% elif m.upcoming %}{{ _('announced') }}{% elif m.release %}{{ m.release[:4] }}{% endif %}{% endmacro %}
+
+{% macro attrs(s) %}data-name="{{ (s.name ~ ' ' ~ s.author)|lower }}" data-rel="{{ s.missing_rel }}" data-up="{{ s.missing_up }}" data-new="{{ s.missing_new }}"
+ data-known="{{ 1 if s.known else 0 }}" data-hid="{{ 1 if s.hidden else 0 }}" data-prob="{{ 1 if s.dups or s.langs|length > 1 else 0 }}"{% endmacro %}
+
+<div id="tiles">
 {% for s in series %}
-<details class="card sercard" data-name="{{ (s.name ~ ' ' ~ s.author)|lower }}" data-state="{{ 'inc' if s.missing_rel else ('ok' if s.known else 'unk') }}" data-prob="{{ 1 if s.dups or s.langs|length > 1 else 0 }}">
+<details class="card sercard" id="t-{{ s.name|urlencode }}" {{ attrs(s) }}>
  <summary class="row" style="justify-content:space-between;gap:8px">
-  <span><b>{{ s.name }}</b> <span class="muted small">– {{ s.author }} · {{ _('%(n)s books', n=s.books|length) }}</span></span>
+  <span><b>{{ s.name }}</b> <span class="muted small">– {{ s.author }} · {{ _('1 book') if s.books|length == 1 else _('%(n)s books', n=s.books|length) }}</span></span>
   <span class="row" style="gap:6px;flex-wrap:nowrap">
    {% if s.dups %}<span class="badge warn" title="{{ _('Same number twice') }}">#{{ s.dups|join(', #') }} 2×</span>{% endif %}
    {% if s.langs|length > 1 %}<span class="badge warn">{{ s.langs|join(' + ') }}</span>{% endif %}
-   {% if s.missing_rel %}<a class="badge err" href="{{ url_for('missing_page') }}#s-{{ s.name|urlencode }}">{{ _('%(n)s missing', n=s.missing_rel) }}</a>
+   {% if s.missing_new %}<span class="badge ok">{{ _('new') }}</span>{% endif %}
+   {% if s.missing_rel %}<a class="badge err" href="{{ url_for('series_page', view='list', f='inc') }}#s-{{ s.name|urlencode }}">{{ _('%(n)s missing', n=s.missing_rel) }}</a>
    {% elif s.known %}<span class="badge ok" title="{{ _('Complete') }}">{{ icon('check', 14) }}</span>{% else %}<span class="badge" title="{{ _('Audible does not list this series') }}">–</span>{% endif %}
    {% if s.missing_up %}<span class="badge" title="{{ _('announced') }}">+{{ s.missing_up }}</span>{% endif %}
   </span>
@@ -25,26 +45,71 @@
  <div class="serbooks">{% for b in s.entries %}{% if b.kind == 'book' %}<a class="serbook" href="{{ url_for('problem', key=b.key) }}" title="{{ b.title }}">
   <img src="{{ url_for('cover', kind='abs', ident=b.id) }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
   <span class="small"><b>{{ ('#' ~ b.num) if b.num else '–' }}</b> {{ b.title }}{% if s.langs|length > 1 %} <span class="muted">({{ b.lang }})</span>{% endif %}</span></a>
-  {% else %}<a class="serbook sermiss{{ ' up' if b.upcoming }}" href="{% if b.asin %}https://{{ s.store }}/pd/{{ b.asin }}{% else %}https://{{ s.store }}/search?keywords={{ (b.title or s.name)|urlencode }}{% endif %}" target="_blank" rel="noopener" title="{{ _('Missing') }} – {{ _('open on Audible') }}">
+  {% else %}<a class="serbook sermiss{{ ' up' if b.upcoming }}{{ ' hid' if b.hidden or s.hidden }}" data-up="{{ 1 if b.upcoming else 0 }}" href="{% if b.asin %}https://{{ s.store }}/pd/{{ b.asin }}{% else %}https://{{ s.store }}/search?keywords={{ (b.title or s.name)|urlencode }}{% endif %}" target="_blank" rel="noopener" title="{{ _('Missing') }} – {{ _('open on Audible') }}">
   {% if b.asin %}<img src="{{ url_for('cover', kind='audible', ident=b.asin) }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">{% else %}<span class="ph"></span>{% endif %}
   <span class="small"><b>{{ ('#' ~ b.num) if b.num else '–' }}</b> {{ b.title or s.name }} {{ icon('arrow-up-right', 12) }}<br>
-   <span class="{{ 'muted' if b.upcoming else 'misslbl' }}">{% if b.upcoming and b.release %}{{ _('releases %(d)s', d=b.release) }}{% elif b.upcoming %}{{ _('announced') }}{% else %}{{ _('Missing') }}{% if b.release %} · {{ b.release[:4] }}{% endif %}{% endif %}</span></span></a>{% endif %}{% endfor %}</div>
+   <span class="{{ 'muted' if b.upcoming else 'misslbl' }}">{% if b.upcoming %}{{ rel(b) }}{% else %}{{ _('Missing') }}{% if b.release %} · {{ b.release[:4] }}{% endif %}{% endif %}</span>{% if b.new %} <span class="badge ok">{{ _('new') }}</span>{% endif %}</span></a>{% endif %}{% endfor %}</div>
  <form method="post" action="{{ url_for('series_rename') }}" class="row small" style="margin-top:8px" data-confirm="{{ _('Rename this series on all its books? (can be undone in the History)') }}">
   <input type="hidden" name="lib" value="{{ s.lib }}"><input type="hidden" name="old" value="{{ s.name }}">
   <input type="text" name="new" value="{{ s.name }}" style="max-width:360px" list="sernames"><button>{{ _('Rename / merge') }}</button>
   <span class="muted">{{ _('An existing name merges the series.') }}</span></form>
 </details>
 {% else %}<div class="card muted">{{ _('No series found.') }}</div>{% endfor %}
+</div>
+
+<div id="list" hidden>
+{% for s in series if s.entries|selectattr('kind', 'equalto', 'missing')|list %}
+<div class="card mcard" id="s-{{ s.name|urlencode }}" {{ attrs(s) }}>
+ <div class="row" style="justify-content:space-between"><div><b>{{ s.name }}</b> <span class="muted small">– {{ s.author }} · {{ _('%(n)s in your library', n=s.books|length) }}</span></div>
+  {{ hideform('series', s.sid, s.hidden, s.name) }}</div>
+ <table class="mtable small" style="margin-top:6px">{% for m in s.entries if m.kind == 'missing' %}<tr class="{{ 'upcoming' if m.upcoming }}{{ ' hid' if m.hidden }}" data-up="{{ 1 if m.upcoming else 0 }}"><td class="num">#{{ m.num }}</td>
+  {# an announced volume without a date has no product page yet (Audible placeholder): the search finds it once it is listed #}
+  <td>{% if m.upcoming and not m.release %}<a href="https://{{ s.store }}/search?keywords={{ (m.title or s.name)|urlencode }}" target="_blank">{{ m.title or s.name }} {{ icon('search', 14) }}</a>
+   {% else %}<a href="https://{{ s.store }}/pd/{{ m.asin }}" target="_blank">{{ m.title }} {{ icon('arrow-up-right', 14) }}</a>{% endif %}{% if m.new %} <span class="badge ok">{{ _('new') }}</span>{% endif %}</td>
+  <td class="hidecol">{{ hideform('volumes', m.asin, m.hidden, s.name) }}</td>
+  <td class="muted rel">{{ rel(m) }}</td></tr>{% endfor %}</table>
+</div>{% endfor %}
+<div class="card muted" id="nomiss" hidden>{{ _('Nothing missing.') }}</div>
+</div>
+
 <datalist id="sernames">{% for s in series %}<option value="{{ s.name }}">{% endfor %}</datalist>
 <script>
-document.addEventListener('DOMContentLoaded',()=>{ let v=null; try{v=sessionStorage.getItem('abs_serq'); sessionStorage.removeItem('abs_serq')}catch(e){}
-  if(v){ const i=document.getElementById('sq'); i.value=v; serFilter(); const c=[...document.querySelectorAll('.sercard')].find(x=>x.style.display!=='none'); if(c) c.open=true; } });
-function serFilter(){
-  const q=(document.getElementById('sq').value||'').toLowerCase(), f=document.querySelector('input[name=sf]:checked').value;
-  document.querySelectorAll('.sercard').forEach(c=>{
-    let ok=!q||c.dataset.name.includes(q);
-    if(f==='inc') ok=ok&&c.dataset.state==='inc'; else if(f==='ok') ok=ok&&c.dataset.state==='ok'; else if(f==='prob') ok=ok&&c.dataset.prob==='1';
-    c.style.display=ok?'':'none';});
+const SER_INIT = {view: {{ (view or '')|tojson }}, f: {{ (f or '')|tojson }}};
+function store(k, v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k, v) }catch(e){ return null } }
+function setView(v){
+  document.getElementById('tiles').hidden = v !== 'tiles'; document.getElementById('list').hidden = v !== 'list';
+  document.querySelectorAll('#view button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  store('abs_ser_view', v); serFilter();
 }
+function serFilter(){
+  const q = (document.getElementById('sq').value || '').toLowerCase(), f = document.querySelector('input[name=sf]:checked').value;
+  const relOnly = document.getElementById('relOnly').checked, hb = document.getElementById('showHid'), showHid = hb && hb.checked;
+  const list = !document.getElementById('list').hidden; let shown = 0;
+  document.querySelectorAll('.hid').forEach(e => e.style.display = showHid ? '' : 'none');
+  document.querySelectorAll('[data-up="1"]:not(.sercard):not(.mcard)').forEach(e => { if (!e.classList.contains('hid') || showHid) e.style.display = relOnly ? 'none' : ''; });
+  document.querySelectorAll(list ? '.mcard' : '.sercard').forEach(c => {
+    const d = c.dataset, hid = d.hid === '1' && !showHid, open = (+d.rel) + (relOnly ? 0 : +d.up);
+    let ok = !q || d.name.includes(q);
+    if (f === 'inc' || list) ok = ok && open > 0 && !hid;
+    if (f === 'new') ok = ok && +d.new > 0 && !hid;
+    else if (f === 'ok') ok = ok && open === 0 && d.known === '1';
+    else if (f === 'prob') ok = ok && d.prob === '1';
+    if (d.hid === '1' && showHid) ok = !q || d.name.includes(q);
+    c.style.display = ok ? '' : 'none'; if (ok) shown++;
+  });
+  const nm = document.getElementById('nomiss'); if (nm) nm.hidden = !list || shown > 0;
+  document.querySelectorAll('form.inl input[name=view]').forEach(i => i.value = list ? 'list' : '');
+  document.querySelectorAll('form.inl input[name=f]').forEach(i => i.value = f === 'all' ? '' : f);
+}
+document.addEventListener('DOMContentLoaded', () => {
+  if (SER_INIT.f) { const r = document.querySelector('input[name=sf][value="' + SER_INIT.f + '"]'); if (r) r.checked = true; }
+  if (store('abs_ser_relonly') === '1') document.getElementById('relOnly').checked = true;
+  document.getElementById('relOnly').addEventListener('change', e => store('abs_ser_relonly', e.target.checked ? '1' : '0'));
+  let v = null; try { v = sessionStorage.getItem('abs_serq'); sessionStorage.removeItem('abs_serq') } catch (e) {}
+  if (v) document.getElementById('sq').value = v;
+  setView(SER_INIT.view || store('abs_ser_view') || 'tiles');
+  if (v) { const c = [...document.querySelectorAll('.sercard')].find(x => x.style.display !== 'none'); if (c) c.open = true; }
+  if (location.hash) { const t = document.getElementById(location.hash.slice(1)); if (t) t.scrollIntoView(); }
+});
 </script>
 {% endblock %}
