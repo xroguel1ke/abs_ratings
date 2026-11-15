@@ -129,3 +129,51 @@ def test_sub_series_inside_umbrella_name_stays():
           rec(2, 'The Witchwood Crown', '2017', [('Osten Ard', '5'), ('The Last King of Osten Ard', '5')], 'T/Osten Ard/5 - b', author='T')]
     c, _ = ctx()
     assert S.drop_duplicate_series(c, oa) == 0  # fake-write check 2026-11-15: the sub-series must stay
+
+
+def test_series_label_subtitles():
+    dof = lambda n: [{'name': 'Defiance of the Fall', 'sequence': str(n)}]
+    c = S.clean_series_label_subtitle
+    assert c('Defiance of the Fall, Book 6', dof(6)) == ''
+    assert c('A LitRPG Adventure (Defiance of the Fall, Book 5)', dof(5)) == 'A LitRPG Adventure'
+    assert c('A LitRPG Adventure', dof(5)) == 'A LitRPG Adventure'
+    assert c('Defiance of the Fall, Book 6', dof(7)) == 'Defiance of the Fall, Book 6'  # another number: not this book's label
+    assert c('Dark Elf Trilogy, Book 3', dof(3)) == 'Dark Elf Trilogy, Book 3'  # another series
+    assert c('Apollo 13', [{'name': 'Apollo', 'sequence': '13'}]) == 'Apollo 13'  # no word before the number
+
+
+def test_series_title_form():
+    names = ['Defiance of the Fall 8', 'Defiance of the Fall 9', 'Defiance of the Fall, Book 10', 'Defiance of the Fall 11', 'Defiance of the Fall']
+    seqs = ['8', '9', '10', '11', '1']
+    recs = [rec(i, t, '2023', [('Defiance of the Fall', q)], f'J/D/{q} - x', author='J') for i, (t, q) in enumerate(zip(names, seqs))]
+    c, calls = ctx()
+    assert S.harmonize_series_titles(c, recs) == 1 and recs[2]['title'] == 'Defiance of the Fall 10' and recs[4]['title'] == 'Defiance of the Fall'
+    mixed = [rec(i, t, '2020', [('X', str(i))], 'A/X', author='A') for i, t in enumerate(['X 1', 'X 2', 'X, Book 3', 'X, Book 4'], 1)]
+    assert S.harmonize_series_titles(c, mixed) == 0  # no clear form
+    locked = [rec(i, f'Y {i}', '2020', [('Y', str(i))], 'A/Y', author='A') for i in (1, 2, 3)] + [rec(4, 'Y, Book 4', '2020', [('Y', '4')], 'A/Y', author='A', tags=('lock_title',))]
+    assert S.harmonize_series_titles(c, locked) == 0
+
+
+def test_series_label_subtitle_variants():
+    c = S.clean_series_label_subtitle
+    one = lambda n, q: [{'name': n, 'sequence': q}]
+    assert c('Book 18 of the Spellmonger Series', one('The Spellmonger', '18')) == ''
+    assert c('Volume 6', one('My Quiet Blacksmith Life in Another World', '6')) == ''
+    assert c('Volume 4: My Quiet Blacksmith Life in Another World, Book 4', one('My Quiet Blacksmith Life in Another World', '4')) == ''
+    assert c('Gentleman Bastards, Book 2', one('Gentleman Bastard', '2')) == ''
+    assert c('Shadows and Crowns Series, Book 3', one('Shadows and Crowns', '3')) == ''
+    assert c('Light Novel (Mushoku Tensei: Jobless Reincarnation, Book 28)', one('Mushoku Tensei: Jobless Reincarnation', '28')) == ''
+    assert c('The Red Maidens (Black Summoner, Book 6)', one('Black Summoner', '6')) == 'The Red Maidens'
+    # kept (checked against the whole library 2026-11-15)
+    assert c('Legend of Drizzt: Dark Elf Trilogy, Book 3', one('Legend of Drizzt', '3')) != ''  # names a sub-series
+    assert c('The Murderbot Diaries, Book 8', one('Murderbot Diaries', '7')) != ''  # another number
+    assert c('The Beginning After the End, Book 3, 4', one('The Beginning After the End', '3-4')) != ''  # a range
+    assert c('Book 9: Land of Pain', one('Dragon Heart', '9')) != ''  # the volume's own title
+    assert c('Sons of Ares #1', one('Red Rising Saga', '1')) != ''
+
+
+def test_title_form_keeps_separator():
+    recs = [rec(i, f'Cinnamon Bun: Volume {i}', '2022', [('Cinnamon Bun', str(i))], 'A/C', author='A') for i in (1, 2, 4, 5)]
+    recs.append(rec(3, 'Cinnamon Bun 3', '2022', [('Cinnamon Bun', '3')], 'A/C', author='A'))
+    c, _ = ctx()
+    assert S.harmonize_series_titles(c, recs) == 1 and recs[-1]['title'] == 'Cinnamon Bun: Volume 3'

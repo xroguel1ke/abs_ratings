@@ -72,3 +72,17 @@ def test_temp_track_excluded(monkeypatch, tmp_path):
     assert A.rw_json(A.REVIEW_FILE)[0]['kind'] == 'tmpfile'
     only_tmp = {'media': {'audioFiles': [{'ino': '2', 'index': 1, 'duration': 5, 'metadata': {'filename': 'x.tmp.mp4'}}]}}
     assert A.exclude_temp_tracks('i', 'l_i', 'T', only_tmp) is None  # never the only file
+
+
+def test_narrator_in_braces():
+    n = lambda p: A.folder_narrators({'relPath': p})
+    t = lambda p: A.folder_book_title({'relPath': p})
+    assert n('Adrian Tchaikovsky/Echoes of the Fall/3 - The Hyena and the Hawk {Nicholas Guy Smith}') == ['Nicholas Guy Smith']
+    assert n('A/S/2 - Title {Kate Reading, Michael Kramer}') == ['Kate Reading', 'Michael Kramer']
+    assert n('A/S/2 - Title {Full Cast}') == []
+    assert n('A/S/2 - Title {Book 2}') == []  # no person
+    assert t('A/S/3 - The Hyena and the Hawk {Nicholas Guy Smith}') == 'The Hyena and the Hawk'
+    assert t('A/S/3 - Title - Subtitle {Nick Taylor}') == 'Title - Subtitle'  # the braces name the narrator, ' - ' stays in the title
+    assert n("A/S/1 - Fool's Errand - Nick Taylor") == ['Nick Taylor']  # the old form still works
+    assert n('A/S/06 - Volume 06 - Darkest Before the Dawn {Suzie Yeung} {Stephen Fu}') == ['Suzie Yeung', 'Stephen Fu']
+    assert n('A/Lonely Castle in the Mirror {Sarah Skaer}') == ['Sarah Skaer']

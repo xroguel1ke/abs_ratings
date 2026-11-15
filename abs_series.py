@@ -691,6 +691,98 @@ def fix_languages(ctx, records, allowed):
 FOLDER_NUM_RE = re.compile(r"^(?:book\s*)?0*(\d+(?:\.\d+)?)\s+-\s+")
 
 
+_LBL_WORD = r'(?:Books?|Volume|Vol\.|Band|Teil|Part)'
+_LBL_SEP = rf'([,:]?\s+{_LBL_WORD}\s+|\s*#\s*|\s+)'
+
+
+def _lbl_words(n):
+    w = re.sub(r"[^a-z0-9\s]", ' ', fold_accents((n or '').lower()).replace("'", '')).split()
+    while w and w[0] in LEADING_ARTICLES: w = w[1:]
+    return ' '.join(w)
+
+
+def _same_series_name(a, b):
+    """'The Murderbot Diaries' = 'Murderbot Diaries', 'Shadows and Crowns Series' = 'Shadows and Crowns', 'Gentleman Bastards' =
+    'Gentleman Bastard' (article, generic word, a plural s). Never a part of a name: 'Legend of Drizzt: Dark Elf Trilogy' != 'Legend of Drizzt'."""
+    k = lambda x: re.sub(r's\b', '', series_key(fold_accents(x or '').replace('’', "'").replace("'", '')))
+    return bool(k(a)) and k(a) == k(b)
+
+
+def _own_number(n, series, name=None):
+    """n is the number of one of the book's series (that series' name ~ name, when a name is given) -> that series, else None."""
+    for x in series or []:
+        q = str(x.get('sequence') or '').strip()
+        if q and re.fullmatch(r'\d+(?:\.\d+)?', q) and float(q) == float(n) and (name is None or _same_series_name(x.get('name'), name)):
+            return x
+    return None
+
+
+def series_label(text, series, strict=False):
+    """'Defiance of the Fall, Book 10' / 'Defiance of the Fall 10' / 'X #3' / 'Cinnamon Bun: Volume 3': the text is only one of the book's
+    OWN series names + its own number -> (series name as written in the text, number, form). form = the separator as written
+    (' ', ', Book ', ': Volume ', ' #'). strict: a word or '#' must stand before the number (a subtitle 'Apollo 13' is no label)."""
+    m = re.match(rf'^\s*(.+?){_LBL_SEP}(\d+(?:\.\d+)?)\s*$', text or '', re.I)
+    if not m: return None
+    name, sep, n = m.group(1).strip(), m.group(2), m.group(3)
+    if strict and not sep.strip(' ,:'): return None
+    if not _own_number(n, series, name): return None
+    form = re.sub(r'\s+', ' ', sep)
+    form = form if form.strip() else ' '
+    return name, n, re.sub(rf'(?i){_LBL_WORD}', lambda w: w.group(0)[0].upper() + w.group(0)[1:].lower(), form)
+
+
+def _subtitle_label(t, series):
+    """The whole text only names the book's own series and number: 'Discworld, Book 1', 'Book 18 of the Spellmonger Series',
+    'Book 2' / 'Volume 6' alone, 'Volume 4: My Quiet Blacksmith Life in Another World, Book 4'."""
+    t = (t or '').strip().rstrip(',').strip()
+    if series_label(t, series, strict=True): return True
+    if (m := re.match(rf'^{_LBL_WORD}\s+(\d+(?:\.\d+)?)\s+of\s+(.+)$', t, re.I)) and _own_number(m.group(1), series, m.group(2)): return True
+    if (m := re.match(rf'^{_LBL_WORD}\s+(\d+(?:\.\d+)?)$', t, re.I)) and _own_number(m.group(1), series): return True
+    if (m := re.match(rf'^({_LBL_WORD}\s+\d+(?:\.\d+)?)\s*:\s*(.+)$', t, re.I)) and _subtitle_label(m.group(1), series) and _subtitle_label(m.group(2), series): return True
+    return False
+
+
+def clean_series_label_subtitle(sub, series):
+    """A subtitle that only names the book's own series and number goes ('Defiance of the Fall, Book 6' -> ''), a trailing one in
+    brackets too ('A LitRPG Adventure (Defiance of the Fall, Book 5)' -> 'A LitRPG Adventure'). user 2026-11-15: the series field holds
+    it already. Kept: another number ('The Murderbot Diaries, Book 8' on #7), a sub-series the book's series do not name ('Legend of
+    Drizzt: Dark Elf Trilogy, Book 3' on 'Legend of Drizzt' #3), ranges ('Book 3, 4')."""
+    if not sub: return sub
+    if _subtitle_label(sub, series): return ''
+    m = re.match(r'^(.*\S)\s*\(([^()]+)\)\s*$', sub)
+    if m and _subtitle_label(m.group(2), series):
+        rest = m.group(1).strip(' ,:-')
+        return '' if re.fullmatch(r'(?i)light novel|novel|unabridged|ungek(?:ü|ue)rzt', rest) else rest  # 'Light Novel (Mushoku Tensei, Book 28)'
+    return sub
+
+
+def harmonize_series_titles(ctx, records):
+    """Volumes titled only 'series name + number' get the form most of their series uses (user 2026-11-15: 'Defiance of the Fall, Book 10'
+    among 'Defiance of the Fall 9', '... 11' -> 'Defiance of the Fall 10'). Needs at least 4 such titles in the series and 3 of 4 in one
+    form. lock_title respected."""
+    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    groups = defaultdict(list)
+    for r in records:
+        for x in r['series']:
+            lb = series_label(r['title'], [x])
+            if lb: groups[(r['lib'], _lbl_words(x['name']))].append((r, lb))
+    changed = 0
+    for lst in groups.values():
+        forms = defaultdict(list)
+        for r, lb in lst: forms[lb[2]].append(lb[0])
+        top = max(forms, key=lambda f: len(forms[f]))
+        if len(lst) < 4 or len(forms[top]) < 3 or len(forms[top]) * 4 < len(lst) * 3: continue
+        name = max(set(forms[top]), key=forms[top].count)  # the spelling the series uses
+        for r, lb in lst:
+            if lb[2] == top or r['tags'] & {'lock_title', 'lock_all', 'lock_metadata'}: continue
+            new = f"{name}{top}{lb[1]}"
+            if new != r['title'] and abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'title': new}, {'title': r['title']}, 'series_title_form'):
+                changed += 1
+                logging.info(f"   📚 TITLE{' (DRY_RUN)' if dry else ''}: '{r['title']}' -> '{new}' (form of the other volumes)")
+                r['title'] = new
+    return changed
+
+
 def fill_folder_numbers(ctx, records):
     """A book sits in series S without a number, and its folder is 'Author/S/N - Title' (the series folder IS the series): the folder
     number N becomes the series number - only in a series that is otherwise numbered (>= 75 %), only when N is unique in that folder (Elfhame/1 holds The Cruel Prince AND The Stolen Heir:
@@ -1208,6 +1300,7 @@ def run(ctx):
         ctx['folder_series'] = fill_folder_series(ctx, records)
         ctx['folder_numbers'] = fill_folder_numbers(ctx, records)
         ctx['subseries_numbers'] = fill_from_subseries(ctx, records)
+        ctx['series_titles'] = harmonize_series_titles(ctx, records)
     if ctx.get('genre_cleanup'):
         ctx['genres_cleaned'] = normalize_genres(ctx, records)
         logging.info(f"   Genre spellings cleaned: {ctx['genres_cleaned']} books")

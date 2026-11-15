@@ -632,17 +632,23 @@ def folder_narrators(item_data):
     cannot be overwritten by an ABS match, so it is evidence when ABS narrator and ASIN were replaced together."""
     base = str((item_data or {}).get('relPath') or '').replace('\\', '/').split('/')[-1]
     parts = [p.strip() for p in base.split(' - ')]
+    from abs_series import is_role_credit as _irc, role_base as _rbase
+    person = lambda n: 1 <= len(n.split()) <= 4 and not re.search(r'\d', n) and not re.search(
+        r"\b(?:the|of|and|a|an|in|to|on|for|der|die|das|und|des)\b|^(?:The|Der|Die|Das|A|An)\s|(?i:\b(?:vol|volume|book|part|teil|band)\b)|\b[IVX]{2,}\b", n)
+    if br := re.search(r'(?:\{[^{}]+\}\s*)+$', base):
+        # user 2026-11-15: new folders '3 - The Hyena and the Hawk {Nicholas Guy Smith}' - the narrators in braces at the end
+        # (one or several: '{Suzie Yeung} {Stephen Fu}', '{A, B}'); braces are the narrator syntax, a folder number is not needed
+        raw = [x.strip() for g in re.findall(r'\{([^{}]+)\}', br.group(0)) for x in re.split(r'\s*\+\s*|\s*,\s*|\s+&\s+', g)]
+        names = [_rbase(n) if _irc(n) else n for n in raw if n and not re.search(r'(?i)full cast', n)]
+        return names if names and all(person(n) for n in names) else []
     if len(parts) < 3 or not re.match(r'^(?:book\s*)?\d', parts[0], re.I): return []
     # everything after the title: '... - Brian Sutherland + Donald Katz - introduction' (a role suffix splits at ' - ' too, batch 84)
-    from abs_series import is_role_credit as _irc, role_base as _rbase
     tail = parts[-1]
     if len(parts) >= 4 and _irc(f"X - {parts[-1]}"): tail = ' - '.join(parts[-2:])  # the last part is only a role ('introduction')
     names = [n.strip() for n in re.split(r'\s*\+\s*|\s*,\s*|\s+&\s+', re.sub(r'\{[^}]*\}', '', tail)) if n.strip() and not re.search(r'(?i)full cast', n)]
     names = [_rbase(n) if _irc(n) else n for n in names]
     # '09 - Volume 09 - The Town of Strife II': the last part is a TITLE, not a narrator (regress wl01 2026-11-09) -> person names only
-    # function words only in lower case ('Eric A. Shelman' is a name: an initial 'A.' is no article - batch 60), an article only first
-    person = lambda n: 1 <= len(n.split()) <= 4 and not re.search(r'\d', n) and not re.search(
-        r"\b(?:the|of|and|a|an|in|to|on|for|der|die|das|und|des)\b|^(?:The|Der|Die|Das|A|An)\s|(?i:\b(?:vol|volume|book|part|teil|band)\b)|\b[IVX]{2,}\b", n)
+    # (person: function words only in lower case - 'Eric A. Shelman' is a name: an initial 'A.' is no article, batch 60; an article only first)
     if len(names) > 1 and '+' in tail:  # an explicit 'A + B' list is the downloader's narrator list: keep the person names in it
         return [n for n in names if person(n)]  # ('Casey Wayman + Mind Control and Manipulation Studio' -> Casey Wayman, batch 86)
     return names if names and all(person(n) for n in names) else []
@@ -902,7 +908,7 @@ def folder_book_title(item_data):
     t = re.sub(r'\{[^}]*\}', '', base)
     t = re.sub(r'(?i)^\s*(?:book\s*)?\d+(?:\.\d+)?\s*-\s*', '', t).strip()
     parts = [x.strip() for x in t.split(' - ') if x.strip()]
-    if len(parts) >= 2 and folder_narrators(item_data): parts = parts[:-1]
+    if len(parts) >= 2 and folder_narrators(item_data) and not re.search(r'\{[^}]*\}\s*$', base): parts = parts[:-1]  # '{Narrator}' is gone already
     t = ' - '.join(parts).strip()
     if not t or re.fullmatch(r'(?i)(?:vol(?:ume)?\.?|book|part|teil|band)\s*\d+', t): return None
     return t
@@ -4595,7 +4601,11 @@ def process_queue(work_queue, history, failed, recheck):
                         # (user 2026-11-15: title + subtitle glued came from ABS's own match, not wanted - Audible's split like the glued_subtitle rule)
                         fmt_ = lambda x: re.sub(r'(?i)\s*\((?:unabridged|ungek(?:ü|ue)rzt|light novel|novel)\)\s*$', '', x or '').strip()
                         cur_ = fmt_(title)
-                        new_t = cur_ if normalize_title_text(aud_title) == normalize_title_text(cur_) or not new_book_title_ok(cur_, aud_title) else fmt_(aud_title)
+                        from abs_series import series_label as _sl
+                        ser_ = meta.get('series') or []
+                        same_lbl = _sl(cur_, ser_) and _sl(fmt_(aud_title), ser_) and _sl(cur_, ser_)[1] == _sl(fmt_(aud_title), ser_)[1]
+                        # 'Defiance of the Fall 10' vs Audible 'Defiance of the Fall, Book 10': the series task chose the form, keep it
+                        new_t = cur_ if same_lbl or normalize_title_text(aud_title) == normalize_title_text(cur_) or not new_book_title_ok(cur_, aud_title) else fmt_(aud_title)
                         if new_t and new_t != title:
                             if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{new_t}'")
                             else:
@@ -4685,6 +4695,16 @@ def process_queue(work_queue, history, failed, recheck):
                             abs_updates['title'] = new_t; log_updates.append(f"Title: '{cur_t}' -> '{new_t}' (edition label)")
                         if new_s != cur_s and cur_s:
                             abs_updates['subtitle'] = new_s; log_updates.append(f"Subtitle: '{cur_s}' -> '{new_s}' (was the title / an edition label)")
+                    # user 2026-11-15: a subtitle that only names the book's own series and number goes ('Defiance of the Fall, Book 6'), also
+                    # in brackets at the end ('A LitRPG Adventure (Defiance of the Fall, Book 5)') - last, so no rule above sets it again
+                    from abs_series import clean_series_label_subtitle as _csl
+                    cur_s = abs_updates.get('subtitle', meta.get('subtitle')) or ''
+                    new_s = _csl(cur_s, abs_updates.get('series') or meta.get('series') or [])
+                    if new_s != cur_s and not ({'lock_subtitle', 'lock_title'} & set(tags)):
+                        if meta.get('subtitle') or new_s: abs_updates['subtitle'] = new_s
+                        else:
+                            abs_updates.pop('subtitle', None); log_updates[:] = [x for x in log_updates if not x.startswith('Subtitle:')]
+                        if (meta.get('subtitle') or '') != new_s: log_updates.append(f"Subtitle: '{cur_s}' -> '{new_s}' (only the series name and number)")
 
                     # recording details come only from the SAME recording: runtime within EDITION_FILL_MIN (unknown ABS runtime: as before)
                     same_rec_rt = not (abs_dur and aud_data.get('runtime_sec')) or abs(abs_dur - aud_data['runtime_sec']) <= EDITION_FILL_MIN * 60

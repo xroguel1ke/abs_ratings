@@ -181,6 +181,13 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     (First Law Trilogy / Mistborn Era 1 / Irwin's Journey stay - a fake-write test caught the first, looser version.)
   - Dashboard selection runs ('only new') set FOLLOW_UP_TASKS: series task + missing volumes run afterwards (they were skipped).
   - tools/run_round.sh: FOLLOW_UP_TASKS, FAKE_WRITE=1 (writes ONLY into the fake ABS: tests the library task after per-book changes).
+  - Series labels (user 2026-11-15): a subtitle that only names the book's OWN series + its own number goes ('Discworld, Book 1',
+    'Book 18 of the Spellmonger Series', '... (Defiance of the Fall, Book 5)' -> the rest) - last step per book, so no rule sets it again.
+    Kept: other number, a sub-series the book does not hold ('Legend of Drizzt: Dark Elf Trilogy'), ranges. Series task
+    harmonize_series_titles: 'series + number' titles take the form 3 of 4 (min. 4) of their series use. Library check 2026-11-15:
+    806 subtitles + 9 titles, a fake-write full run vs. the old code differed ONLY there; a second run changed nothing back.
+  - Book folders: new ones are named 'N - Title {Narrator}' (user 2026-11-15; several: '{A} {B}' or '{A, B}'); the old
+    'N - Title - Narrator' is still read. folder_narrators reads braces without a folder number too.
   - Loop 2026-11-15: 'new book' = not in history AND ABS addedAt within NEW_BOOK_DAYS (30) - never a whole first run. Manual update =
     newer ABS time stamp AND changed metadata fingerprint (meta_fingerprints.json; inode/path rescans stamp items too). Covers in original
     size (no '._SL1215_'; cover_state token 'ASIN@orig' upgrades old ones once). Identity switch applies once (identity_meta.json).
