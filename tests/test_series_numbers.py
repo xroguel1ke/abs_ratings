@@ -299,7 +299,11 @@ def test_manage_tags():
     got = {}
     ctx_ = {'dry_run': True, 'abs_update': lambda iid, key, title, upd, old, src, tags=None, old_tags=None, **kw: got.__setitem__(iid, tags) or True}
     S.manage_tags(ctx_, [r, fc, duo])
-    assert got[1] == ['lock_series', 'Favorite', 'Dragons', 'Audible 4.5+'], got[1]
+    assert got[1] == ['lock_series', 'Favorite', 'Dragons', 'Audible 4.5+'], got[1]  # 4.6: only the 4.5 tag
+    r2 = dict(r, id=9, media_tags=['Audible 4.9+'], description='Audible (900):<br />🏆 x 4.9 / 5 - Overall', _themes=set())
+    r3 = dict(r, id=8, media_tags=['Audible 4.5+', 'Audible 4.7+', 'Audible 4.9+'], description='Audible (900):<br />🏆 x 4.8 / 5 - Overall', _themes=set())
+    S.manage_tags(ctx_, [r2, r3])
+    assert got[9] == ['Audible 4.9+', 'Audible 4.5+', 'Audible 4.7+'] and got[8] == ['Audible 4.5+', 'Audible 4.7+'], (got[9], got[8])
     assert got[2] == ['Full Cast'], got[2]  # 5 narrators; only 12 Audible ratings: no 'Audible 4.5+'
     assert got[3] == [], got[3]  # two narrators are no full cast
 

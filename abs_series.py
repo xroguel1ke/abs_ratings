@@ -880,6 +880,7 @@ def normalize_genres(ctx, records):
     return changed
 
 
+RATING_TAGS = (4.5, 4.7, 4.9)  # Audible overall rating tags (at least 50 ratings; user 2026-11-15: 4.9 instead of 4.8)
 FULL_CAST_RE = re.compile(r'(?i)full[\s-]*cast|dramati[sz](?:ed|ation)|audio\s*drama|radio\s*drama|h(?:ö|oe)rspiel|graphic\s*audio')
 
 
@@ -890,7 +891,7 @@ def manage_tags(ctx, records):
     is set per book (ratings)."""
     from collections import Counter
     abs_update, dry = ctx['abs_update'], ctx['dry_run']
-    managed = set(_THEME_TAG.values()) | {'Full Cast', 'Audible 4.5+'}
+    managed = set(_THEME_TAG.values()) | {'Full Cast'} | {f'Audible {lim}+' for lim in RATING_TAGS}
     known = {genre_key(g) for r in records for g in r['genres'] if isinstance(g, str)} | set(_GENRE_CANON) | set(_GENRE_SYN_KEYS) | set(_THEME_KEYS) \
             | {genre_key(g) for g in ctx.get('audible_genres') or ()} | {genre_key(x) for x in (
                 'Genre Fiction', 'Literatur & Belletristik', 'Klassiker', 'Action & Abenteuer', 'Abenteuer', 'Dystopien', 'Family & Relationships',
@@ -911,9 +912,12 @@ def manage_tags(ctx, records):
             if tt not in new: new.append(tt)
         # 'Audible 4.5+' (user 2026-11-15): Audible's overall rating of the rating block >= 4.5 with at least 50 ratings; gone when it drops
         m_ = re.search(r'Audible \((\d+)\):(?:<br\s*/?>|\s)*\S*\s*\S*\s*([\d.]+) / 5 - (?:Overall|Gesamt)', r.get('description') or '')
-        top = bool(m_ and int(m_.group(1)) >= 50 and float(m_.group(2)) >= 4.5)
-        if top and 'Audible 4.5+' not in new: new.append('Audible 4.5+')
-        elif not top and 'Audible 4.5+' in new: new.remove('Audible 4.5+')
+        # user 2026-11-15: cumulative - a 4.8 book has 'Audible 4.5+', 'Audible 4.7+' and 'Audible 4.8+' (filter 4.7+ = everything >= 4.7)
+        for lim in RATING_TAGS:
+            tag_ = f'Audible {lim}+'
+            top = bool(m_ and int(m_.group(1)) >= 50 and float(m_.group(2)) >= lim)
+            if top and tag_ not in new: new.append(tag_)
+            elif not top and tag_ in new: new.remove(tag_)
         marker = ' '.join([r['title'] or '', r.get('subtitle') or '', r.get('path') or ''] + [x['name'] or '' for x in r['series']] + [str(g) for g in r['genres']] + list(r['narrators']))
         fc = bool(FULL_CAST_RE.search(marker)) or len({n.strip().lower() for n in r['narrators'] if n and n.strip()}) >= 5
         if fc and 'Full Cast' not in new: new.append('Full Cast')
