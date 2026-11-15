@@ -207,7 +207,12 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     one run; full books get no Audible genre re-added); number_shared_titles: 2+ volumes titled like (part of) the series name ->
     'Title, Vol. N'; shared descriptions (series task -> shared_descriptions.json) and wrong-language texts take Audible's summary;
     a subtitle with no word in common with the book (title, series, authors, Audible, description) = another edition's -> Audible's.
-  - Regress and run_round on the same FAKE_PORT collide (watch_test failed once): use another port for parallel replay runs.
+  - Test tools pick a free fake-ABS port (run_round: FAKE_PORT unset = free one, set but busy = abort; watch/source-state tests) and
+    refuse RECORD_NO_LIVE=1 (it is a host list).
+  - Loop 2026-11-15 part 3: review kinds 'nested' (book folders inside a book folder) and 'too_long' (audio > 1.5x Audible, > 60 min);
+    genre synonyms -> one name (_GENRE_SYN, Audible's names; 'adult'/'Amazon' go), also per book (no ping-pong); a series set in the
+    same run cleans the subtitle label at once; co-authors without own books -> review list (authors kind, decision remembered);
+    run status 'warning' when every failed book was a network error (web UI badge + reason).
   - tools/run_round.sh RECORD_NO_LIVE is a HOST LIST, not a flag ('1' matched every URL with a 1, web pages went live and were
     recorded -> golden deviations). For library-wide comparisons use mode 'replay' (nothing recorded).
   - Book folders: new ones are named 'N - Title {Narrator}' (user 2026-11-15; several: '{A} {B}' or '{A, B}'); the old

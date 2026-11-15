@@ -470,4 +470,9 @@ add({  # page tour 2026-11-08
     'This book has no chapters.': 'Dieses Buch hat keine Kapitel.',
     "Audible's chapters could not be matched to the file reliably, so none were set. In ABS: Edit > Chapters > look up chapters, and check them.": 'Audibles Kapitel ließen sich der Datei nicht zuverlässig zuordnen, deshalb wurden keine gesetzt. In ABS: Bearbeiten > Kapitel > Kapitel suchen, und prüfen.',
     'Genres per book (max.)': 'Genres pro Buch (max.)', "Audible's genres stay first; genres only one book has go. 0 = no limit": 'Audibles Genres bleiben vorne; Genres, die nur ein Buch hat, fallen weg. 0 = ohne Grenze',
+    "Other book folders lie inside this book's folder: %(f)s": 'Im Ordner dieses Buchs liegen weitere Buchordner: %(f)s',
+    'ABS counts their audio as part of this book (wrong length). Move them next to this folder, or delete them if they are copies.': 'ABS zählt deren Audio zu diesem Buch (falsche Länge). Verschiebe sie neben diesen Ordner oder lösche sie, wenn es Kopien sind.',
+    "The audio is %(m)s minutes longer than Audible's edition.": 'Das Audio ist %(m)s Minuten länger als Audibles Ausgabe.',
+    'The content may be in the file twice, or it is a collection or another edition. Listen to the middle and the end of the file.': 'Vielleicht ist der Inhalt doppelt in der Datei, oder es ist eine Sammlung bzw. andere Ausgabe. Hör in die Mitte und das Ende der Datei.',
+    'warning': 'Warnung', 'error': 'Fehler', 'stopped': 'abgebrochen', 'running': 'läuft', 'ok': 'ok',
 })

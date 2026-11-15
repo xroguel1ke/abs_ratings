@@ -4,6 +4,12 @@
 # Data goes to /mnt/user/appdata/abs_scripts_test/<round>; recordings to tests/private/recordings (git-ignored).
 set -e
 R="$1"; KEYS="$2"; MODE="${3:-record}"
+# loop 2026-11-15: two test runs on one fake-ABS port talk to each other's fake ABS (a regress check failed); RECORD_NO_LIVE=1 matched every
+# URL containing a '1' (web pages went live and were recorded). Both are refused now.
+port_used() { (echo > /dev/tcp/127.0.0.1/$1) >/dev/null 2>&1; }
+if [ -z "$FAKE_PORT" ]; then FAKE_PORT=18999; while port_used $FAKE_PORT; do FAKE_PORT=$((FAKE_PORT - 1)); done
+elif port_used "$FAKE_PORT"; then echo "run_round: port $FAKE_PORT is in use (another test run?) - choose another FAKE_PORT" >&2; exit 2; fi
+case "${RECORD_NO_LIVE:-}" in 1|true|yes|TRUE|True) echo "run_round: RECORD_NO_LIVE is a host list (e.g. audible,api.hardcover.app,www.goodreads.com), not a flag" >&2; exit 2;; esac
 DEV=/mnt/user/appdata/abs_ratings_dev
 DATA=/mnt/user/appdata/abs_scripts_test/$R
 SET=/mnt/user/appdata/audiobookshelf/abs_scripts/settings.json     # read only

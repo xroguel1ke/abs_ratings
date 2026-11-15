@@ -657,7 +657,9 @@ class RunManager:
         summary = parse_env_summary() if run['kind'] in ('full', 'series', 'item') and fresh else {}
         if not os.path.exists(os.path.join(LOG_DIR, run['log'])): run['log'] = run['console']
         run.update(end=datetime.now().isoformat(timespec='seconds'), returncode=rc,
-                   status='stopped' if rc in (-15, -9) else ('ok' if rc == 0 and summary.get('ABS_ICON') != 'alert' else 'error'),
+                   status='stopped' if rc in (-15, -9) else ('warning' if rc == 0 and summary.get('ABS_ICON') == 'warning'
+                                                             else ('ok' if rc == 0 and summary.get('ABS_ICON') != 'alert' else 'error')),
+                   status_reason=summary.get('ABS_HEADER', '') if summary.get('ABS_ICON') in ('warning', 'alert') else '',
                    summary=summary.get('ABS_REPORT_BODY', ''), subject=summary.get('ABS_SUBJECT', ''))
         if run['kind'] == 'undo' and rc == 0: run['status'] = 'ok'
         self._save_run(run)

@@ -127,8 +127,9 @@ def test_genre_cleanup():  # audit 2026-11-09: spelling variants, duplicates in 
             g(4, ['アクション・冒険'], lang='Japanese'), g(5, ['Science Fiction'], tags={'lock_genres'})]
     writes = {}
     ctx = {'dry_run': True, 'abs_update': lambda iid, key, title, upd, old, src: writes.__setitem__(iid, upd['genres']) or True}
-    assert S.normalize_genres(ctx, recs) == 1, writes
-    assert writes == {3: ['Science fiction', 'Post Apocalyptic']}, writes
+    # loop 2026-11-15: one fixed name per genre ('Science Fiction', not the library's most used 'Science fiction')
+    assert S.normalize_genres(ctx, recs) == 3, writes
+    assert writes == {1: ['Science Fiction', 'Post Apocalyptic'], 2: ['Science Fiction', 'Post Apocalyptic'], 3: ['Science Fiction', 'Post Apocalyptic']}, writes
     assert S.genre_key('Post-Apocalyptic') == S.genre_key('PostApocalyptic')
 
 

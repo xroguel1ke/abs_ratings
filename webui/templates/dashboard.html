@@ -39,7 +39,7 @@
  <div class="card herocard">
   <div class="muted small">{{ _('Last scan') }}</div>
   {% if last %}<div class="v" style="font-size:1.2em"><a href="{{ url_for('run_view', run_id=last.id) }}">{{ last.start|dt }}</a></div>
-  <div class="small"><span class="badge {{ 'ok' if last.status=='ok' else 'err' }}">{{ last.status }}</span>{% if last.dry_run %} <span class="badge">{{ _('Test run') }}</span>{% endif %}</div>
+  <div class="small"><span class="badge {{ {'ok': 'ok', 'running': 'running', 'warning': 'warn'}.get(last.status, 'err') }}"{% if last.status_reason %} title="{{ last.status_reason }}"{% endif %}>{{ {'ok': _('ok'), 'warning': _('warning'), 'error': _('error'), 'stopped': _('stopped'), 'running': _('running')}.get(last.status, last.status) }}</span>{% if last.dry_run %} <span class="badge">{{ _('Test run') }}</span>{% endif %}</div>
   {% else %}<div class="v" style="font-size:1.2em">–</div><div class="muted small">{{ _('no scan yet') }}</div>{% endif %}</div>
  <a class="card herocard" href="{{ url_for('runs') }}">
   <div class="muted small">{{ _('Next scan') }}</div><div class="v" style="font-size:1.2em">{{ next_run|dt if next_run else _('no schedule') }}</div>

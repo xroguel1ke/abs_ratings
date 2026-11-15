@@ -617,6 +617,42 @@ def genre_key(g):
     return re.sub(r'[^a-z0-9]', '', fold_accents(str(g or '')).lower())
 
 
+# genre loop 2026-11-15 (user: one name per genre): synonyms -> one name (Audible's where it has one). '-' = no genre at all.
+_GENRE_SYN = {
+    'Humorous': ['Humor', 'Humour', 'comedy', 'Comedy & Humor', 'Humorous Fiction', 'Humour fiction'],
+    'Science Fiction': ['Science fiction', 'Sci-fi', 'Sci-Fi', 'SciFi', 'Science-Fiction'],
+    'LitRPG': ['litrpg', 'LitRpg', 'Lit RPG', 'GameLit', 'gamelit'],
+    'Young Adult': ['Young Adult Fiction', 'Teen & Young Adult', 'Young adult fantasy', 'teen', 'YA'],
+    'Dystopian': ['Dystopia', 'Dystopias'],
+    'Post Apocalyptic': ['Apocalyptic & Post-Apocalyptic', 'Post-apocalyptic fiction', 'Apocalyptic'],
+    'Dragons & Mythical Creatures': ['dragons', 'Dragons'],
+    'LGBTQ': ['Lgbt', 'LGBTQ+', 'Queer', 'Gay', 'Lesbian', 'LGBT'],
+    'Comics & Graphic Novels': ['Comics', 'Graphic novels', 'Comix'],
+    'Light Novel': ['light-novels', 'Light Novels'],
+    'Urban Fantasy': ['Urban'],
+    'Anthologies & Short Stories': ['Short stories', 'Anthologies', 'Collections', 'Anthology', 'Short Stories'],
+    'Thriller & Suspense': ['Thrillers & Suspense', 'Suspense', 'Thriller', 'Thrillers'],
+    'Cozy': ['cozy fantasy', 'Cozy Fantasy', 'Cosy'],
+    'Military': ['Military Fiction', 'War & Military'],
+    'Fantasy Romance': ['Fantasy romance', 'Romantasy'],
+    'Fantasy': ['Fantasy fiction', 'Fantasy Fiction'],
+    'Fiction': ['Novels', 'Literature', 'Fiction & Literature'],
+    'Mystery': ['Mysteries', 'Detective and mystery stories'],
+    "Children's Audiobooks": ['childrens', "Children's", 'Juvenile Fiction', 'Middle Grade', 'Juvenile Literature'],
+    'Anime & Manga': ['anime'],
+    '-': ['adult', 'Amazon', 'Book Club', 'smut', 'Large type books', 'Unfinished'],
+}
+_GENRE_CANON = {genre_key(v): k for k, vs in _GENRE_SYN.items() for v in vs}
+_GENRE_SYN_KEYS = {genre_key(k): k for k in _GENRE_SYN}  # canonical key -> its spelling
+
+
+def canonical_genre(g):
+    """One name for a genre ('Humor' / 'comedy' -> 'Humorous', 'litrpg' -> 'LitRPG'); None = no genre ('adult', 'Amazon')."""
+    c = _GENRE_CANON.get(genre_key(g))
+    if c == '-': return None
+    return c or g
+
+
 _CB_STOP = {'the', 'a', 'an', 'of', 'and', 'series', 'saga', 'trilogy', 'cycle', 'novels', 'novel', 'books', 'book', 'chronicles', 'pre', 'era',
             'order', 'publication', 'chronological', 'light'}
 
@@ -702,7 +738,7 @@ def split_joined_narrators(ctx, records):
 
 
 _FOREIGN_GENRE = re.compile(r"(?i)(?:acci[oó]n|aventuras?\b|fantas[ií]a\b|ficci[oó]n|literatura\b|azione|avventura|\bepica\b|fantascienza|créatures|"
-                            r"mythiques|\bet\b|science-fiction et|abenteuer|belletristik|\bliteratur\b|jugendliche|heranwachsende|kinderb|krimi|"
+                            r"mythiques|[ée]pique|epopeyas|\bet\b|science-fiction et|abenteuer|belletristik|\bliteratur\b|jugendliche|heranwachsende|kinderb|krimi|"
                             r"sachbuch|geschichte|fantastique|policier|paranormal y|y urbana|ciencia)")
 
 
@@ -742,9 +778,12 @@ def normalize_genres(ctx, records):
                                                             'ebooks', 'ebook', 'e-books', 'kindle', 'audible'): continue
             if isinstance(g, str) and re.search(r'\S\s+:\s+\S', g): continue  # 'Boston : Allen & Unwin' (place : publisher of a catalogue record)
             if isinstance(g, str) and en_ and _FOREIGN_GENRE.search(g): continue  # 'Acción y aventura', 'Literatur & Belletristik' on an English book
+            if isinstance(g, str):
+                g = canonical_genre(g)
+                if g is None: continue
             k = genre_key(g) if isinstance(g, str) else ''
             if not k or k.isdigit() or k in seen or (en_de and not is_latin(g)): continue
-            seen.add(k); out.append(best.get(k, g.strip()))
+            seen.add(k); out.append(_GENRE_SYN_KEYS.get(k) or best.get(k, g.strip()))
         if gmax and out:
             # user 2026-11-15: at most GENRE_MAX genres (Audible's first, then the others in their order) and no genre that only this
             # book has (unless it came from Audible) - at least 3 genres stay

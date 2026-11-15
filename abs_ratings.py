@@ -414,7 +414,7 @@ RE_RAW_PERFORMANCE = re.compile(r'performance-value="([0-9.]+)"')
 RE_RAW_OVERALL = re.compile(r'value="([0-9.]+)"') 
 RE_RAW_COUNT = re.compile(r'count="(\d+)"')
 
-stats = _Stats({k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred", "cover_added", "chapters", "desc_filled", "series_merged", "other_edition", "hc_found", "hc_missing", "rating_only"]})
+stats = _Stats({k: 0 for k in ["processed", "success", "failed", "no_data", "skipped", "partial", "cooldown", "recycled", "asin_found", "isbn_added", "isbn_repaired", "asin_migrated", "meta_updated", "manual_retrigger", "no_ratings_yet", "gr_missing", "recheck", "gr_deferred", "cover_added", "chapters", "desc_filled", "series_merged", "other_edition", "hc_found", "hc_missing", "rating_only", "failed_transient"]})
 stats['aborted_ratelimit'] = False
 SUMMARY_INDEX_FILE = os.path.join(SCRIPT_DIR, 'summary_index.json')  # asin -> [title, start of Audible's summary] (description of another book)
 SUMMARY_INDEX = {}
@@ -875,6 +875,19 @@ def same_recording(abs_dur, abs_narrators, aud):
     return bool(n(abs_narrators) & n(aud.get('narrators_raw')))
 
 TMP_AUDIO_RE = re.compile(r'(?i)\.(?:tmp|temp|part|partial|crdownload)(?:\.[a-z0-9]{2,4})?$|\.tmp\.')
+
+def nested_book_folders(key, title, item_data):
+    """Book folders INSIDE this book's folder (user 2026-11-15: Slimes Vol. 7 held copies of Vol. 9-12 - ABS added them to Vol. 7,
+    2038 instead of 396 min): review list, nothing is moved by the script. Returns the subfolder names."""
+    afs = (item_data.get('media') or {}).get('audioFiles') or []
+    subs = sorted({str((a.get('metadata') or {}).get('relPath') or '').replace('\\', '/').rsplit('/', 1)[0] for a in afs
+                   if '/' in str((a.get('metadata') or {}).get('relPath') or '').replace('\\', '/')})
+    books = [x for x in subs if re.search(r'(?i)^(?:.*/)?(?:\d+(?:\.\d+)?\s*-\s|.*\b(?:vol(?:ume)?|book|band|teil)\s*\d)', x)]
+    if books:
+        logging.info(f"      -> ⚠️ Other book folders inside this book's folder: {', '.join(books)} - review list")
+        add_review(key, title, 'nested', ', '.join(books), "other book folders lie inside this book's folder; ABS counts their audio as part of this book - "
+                   "move them out (next to this folder) or delete copies")
+    return books
 
 def exclude_temp_tracks(iid, key, title, item_data):
     """A half-written copy next to the real audio file ('... Book 3.tmp.mp4' of an aborted conversion, 2026-11-15: The Hyena and the
@@ -1340,6 +1353,9 @@ def write_env_file(log_file, start_time, error=None):
     if error: sub, icon, head = "ABS Ratings: Start failed ❌", "alert", "Error"
     elif stats['aborted_ratelimit']: sub, icon, head = "ABS Ratings: Aborted 🛑", "alert", "Rate Limit detected!"
     elif SOURCE_DOWN: sub, icon, head = "ABS Ratings: Source problem ⚠️", "alert", f"{', '.join(s.capitalize() for s in SOURCE_DOWN)} switched off"
+    elif stats['failed'] > 0 and stats['failed'] == stats['failed_transient']:
+        # loop 2026-11-15: a timeout of ABS / a source on single books is no error of the run - those books are retried in the next run
+        sub, icon, head = "ABS Ratings: Warning ⚠️", "warning", f"{stats['failed']} book(s) hit a network timeout - retried in the next run"
     elif stats['failed'] > 0: sub, icon, head = "ABS Ratings: Error ❌", "alert", "Error occurred!"
     elif any(stats[k] > 0 for k in ['success', 'recycled', 'asin_found', 'asin_migrated', 'isbn_added', 'meta_updated', 'series_merged']): sub, icon, head = "ABS Ratings: Success ✅", "normal", "Update complete"
     else: sub, icon, head = "ABS Ratings: Info ℹ️", "normal", "No changes"
@@ -4318,6 +4334,7 @@ def process_queue(work_queue, history, failed, recheck):
                 skip_meta = False
                 abs_dur = (item_data.get('media') or {}).get('duration') or (item.get('media') or {}).get('duration')
                 if (tmp_dur := exclude_temp_tracks(iid, key, title, item_data)): abs_dur = tmp_dur
+                nested_book_folders(key, title, item_data)
                 src_due = set((SST.SOURCES if (item.get('_manual_trigger') or ONLY_ITEMS) else SST.due_sources(SOURCE_STATE, key, list(SST.SOURCES), REFRESH_DAYS)))
 
                 asin_hint_note = None
@@ -4882,7 +4899,9 @@ def process_queue(work_queue, history, failed, recheck):
 
                     if 'lock_genres' not in tags:
                         current_genres = meta.get('genres') or []
-                        new_genres_list = [g for g in dict.fromkeys(map_genre(c.get('name'), aud_data.get('domain')) for c in (md_raw.get('categories') or []) if c.get('name')) if g]
+                        from abs_series import canonical_genre as _cg  # genre loop 2026-11-15: the series task's names (no ping-pong)
+                        new_genres_list = [g for g in dict.fromkeys(_cg(x) if x else None for x in (map_genre(c.get('name'), aud_data.get('domain'))
+                                                                                                    for c in (md_raw.get('categories') or []) if c.get('name'))) if g]
                         from abs_series import genre_key as _gk
                         have_g = {_gk(c) for c in current_genres}  # 'Science fiction' already there = 'Science Fiction' (no re-add after the genre cleanup)
                         added_genres = [g for g in new_genres_list if _gk(g) not in have_g and not have_g.add(_gk(g))]
@@ -4894,7 +4913,9 @@ def process_queue(work_queue, history, failed, recheck):
                             log_updates.append(f"Genres: +{added_genres}")
                     else:
                         current_genres = meta.get('genres') or []
-                        new_genres_list = [g for g in dict.fromkeys(map_genre(c.get('name'), aud_data.get('domain')) for c in (md_raw.get('categories') or []) if c.get('name')) if g]
+                        from abs_series import canonical_genre as _cg  # genre loop 2026-11-15: the series task's names (no ping-pong)
+                        new_genres_list = [g for g in dict.fromkeys(_cg(x) if x else None for x in (map_genre(c.get('name'), aud_data.get('domain'))
+                                                                                                    for c in (md_raw.get('categories') or []) if c.get('name'))) if g]
                         from abs_series import genre_key as _gk
                         have_g = {_gk(c) for c in current_genres}  # 'Science fiction' already there = 'Science Fiction' (no re-add after the genre cleanup)
                         added_genres = [g for g in new_genres_list if _gk(g) not in have_g and not have_g.add(_gk(g))]
@@ -5244,6 +5265,15 @@ def process_queue(work_queue, history, failed, recheck):
                         co_ = [an for an in aud_auth if re.sub(r'[^a-z]', '', fold_accents(an).lower()) not in abs_norm and not match_author(authors, an)
                                and SOLO_AUTHORS.get(re.sub(r'[^a-z]', '', fold_accents(an).lower()), 0) >= 1 and 2 <= len(an.split()) <= 4
                                and not re.search(r'(?i)\d|\b(?:books|publishing|press|studios?|media|audio|entertainment|llc|inc)\b', an)]
+                        co_maybe = [an for an in aud_auth if re.sub(r'[^a-z]', '', fold_accents(an).lower()) not in abs_norm and not match_author(authors, an)
+                                    and an not in co_ and 2 <= len(an.split()) <= 4
+                                    and not re.search(r'(?i)\d|\b(?:books|publishing|press|studios?|media|audio|entertainment|llc|inc)\b', an)]
+                        if co_maybe and not co_ and 'lock_authors' not in tags and same_recording(abs_dur, meta.get('narrators'), aud_data):
+                            # loop 2026-11-15 (web UI decision): a co-author WITHOUT own books here may be a real co-author (Janci Patterson) or a
+                            # pen name of the same writer (Travis Deverell = Shirtaloon) - the review list asks once and remembers the answer
+                            sug_ = [a_ for a_ in aud_auth if a_ in co_maybe or match_author(authors, a_)]
+                            sug_ = [next((a_ for a_ in authors if match_author([a_], b_)), b_) for b_ in sug_] + [a_ for a_ in authors if not any(match_author([a_], b_) for b_ in sug_)]
+                            add_review(key, title, 'authors', ', '.join(dict.fromkeys(sug_)), f"Audible lists {', '.join(co_maybe)} as co-author of this recording (a real co-author, or a pen name of the same writer?)")
                         if co_ and 'lock_authors' not in tags and not abs_updates.get('authors') and same_recording(abs_dur, meta.get('narrators'), aud_data) \
                                 and all(len(a_.split()) >= 2 for a_ in authors):
                             order_ = [a_ for a_ in aud_auth if a_ in co_ or match_author(authors, a_)]
@@ -5320,6 +5350,15 @@ def process_queue(work_queue, history, failed, recheck):
                             if lk in tags: logging.info(f"        🔒 {fld} not replaced (locked)"); continue
                             abs_updates[fld] = val
                             log_updates.append(f"{fld}: {meta.get(fld)!r} -> {val!r} (ASIN confirmed by you: another book)")
+                    if 'series' in abs_updates and not ({'lock_subtitle', 'lock_title'} & set(tags)):
+                        # loop 2026-11-15: a series added in THIS run makes the subtitle a label of the book's own series ('Forgotten Realms:
+                        # Transitions, Book 3' once 'Forgotten Realms: Transitions' #3 is set) - cleaned now, not one run later
+                        from abs_series import clean_series_label_subtitle as _csl2
+                        s_cur = abs_updates.get('subtitle', meta.get('subtitle')) or ''
+                        s_new = _csl2(s_cur, abs_updates['series'], meta.get('language') or lang) if s_cur else s_cur
+                        if s_new != s_cur:
+                            abs_updates['subtitle'] = s_new
+                            log_updates.append(f"Subtitle: '{s_cur}' -> '{s_new}' (only the series name and number)")
                     if abs_updates:
                         logging.info(f"        🛠️ Meta Updates{' (DRY_RUN, not saved)' if DRY_RUN else ''}:")
                         for upd in log_updates: logging.info(f"          -> {upd}")
@@ -5355,6 +5394,13 @@ def process_queue(work_queue, history, failed, recheck):
                                    "the book has no chapters and Audible's could not be matched (recording not verified) - add them in ABS (Edit > Chapters)")
                     if MATCH_CHAPTERS and not lang_conflict and asin and not aud_data.get('related_edition') and (cover_verified or len((item_data.get('media') or {}).get('chapters') or []) >= 8):
                         abs_chs = (item_data.get('media') or {}).get('chapters') or []
+                        rt_ = (aud_data or {}).get('runtime_sec')
+                        if rt_ and abs_dur and abs_dur > 1.5 * rt_ and abs_dur - rt_ > 3600 and title_similarity(title, aud_data.get('title_raw') or '') >= 0.85:
+                            # user 2026-11-15: Sherlock Holmes 9233 of Audible's 4317 min, '20.000 Meilen' 1908 of 1022 - a file that holds more than
+                            # the product (content twice, a collection, another edition): review list
+                            more_ = round((abs_dur - rt_) / 60)
+                            logging.info(f"        ⚠️ The audio is {more_} min longer than Audible's edition ({round(rt_ / 60)} min): review list")
+                            add_review(key, title, 'too_long', str(more_), f"the audio is {more_} min longer than Audible's edition of {round(rt_ / 60)} min - content twice, a collection or another edition?")
                         poor = chapters_poor(abs_chs, abs_dur)
                         if poor and 'lock_chapters' in tags: logging.info("        🔒 Chapters not replaced (locked)")
                         elif poor and abs_dur and abs_chs and max(float(c.get('end') or 0) for c in abs_chs) > abs_dur + 300 \
@@ -5643,6 +5689,7 @@ def process_queue(work_queue, history, failed, recheck):
                 time.sleep(RECOVERY_PAUSE * consecutive_rl)
             except Exception as e:
                 logging.exception(f"Item Error: {e}"); stats['failed'] += 1
+                if isinstance(e, requests.exceptions.RequestException): stats['failed_transient'] += 1  # network: retried next run (warning, not error)
                 # Count the crash as a strike so broken items don't block the batch forever
                 record_attempt(f"{lib_id}_{item['id']}", history, failed, recheck)
                 set_result(f"{lib_id}_{item['id']}", lib_id, item['id'], (item.get('media') or {}).get('metadata', {}).get('title') or item['id'],

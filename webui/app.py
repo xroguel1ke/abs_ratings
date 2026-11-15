@@ -454,6 +454,12 @@ def explain_entry(x, res_all):
     elif kind == 'tmpfile':
         what = T('A temporary file lies next to the real audio file: %(f)s', f=cand)
         why = T('A half-written copy of an aborted conversion. It is excluded from playback; delete it in the book folder.')
+    elif kind == 'nested':
+        what = T("Other book folders lie inside this book's folder: %(f)s", f=cand)
+        why = T('ABS counts their audio as part of this book (wrong length). Move them next to this folder, or delete them if they are copies.')
+    elif kind == 'too_long':
+        what = T("The audio is %(m)s minutes longer than Audible's edition.", m=cand)
+        why = T('The content may be in the file twice, or it is a collection or another edition. Listen to the middle and the end of the file.')
     elif kind == 'moved':
         ev = x.get('evidence') or []
         what = T('ABS gave the newly added folder "%(n)s" the entry of another book ("%(t)s", folder "%(o)s").', n=cand, t=x.get('title') or '?', o=ev[0] if ev else '?')

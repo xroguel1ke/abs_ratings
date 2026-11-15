@@ -7,12 +7,13 @@
 set -e
 KEYS="$1"; DEV=/mnt/user/appdata/abs_ratings_dev; T=/mnt/user/appdata/abs_scripts_test/sst_it
 rm -rf "$T"; mkdir -p "$T/logs"; cp "$KEYS" "$T/keys.txt"
+SP=18991; while (echo > /dev/tcp/127.0.0.1/$SP) >/dev/null 2>&1; do SP=$((SP - 11)); done  # a free fake-ABS port (parallel test runs)
 LIB=$(head -1 "$KEYS" | cut -d_ -f1)
 docker run --rm --cpuset-cpus=${ABS_CPUS:-0-9,12-31} --name abs_ratings_test_sst_it --network host -e PYTHONDONTWRITEBYTECODE=1 -v "$DEV":/src -v "$T":/data -w /src \
   -e DATA_DIR=/data -e LIBRARY_IDS="$LIB" -e RECORD_DIR=/src/tests/private/recordings -e RECORD_REUSE=1 \
   -e RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com,media-amazon -e GOODREADS_ENABLED=true -e HARDCOVER_ENABLED=true \
   -e HARDCOVER_TOKEN=offline -e ABS_BACKUP=false -e REFRESH_DAYS=90 -e BATCH_SIZE=500 -e WORKERS=3 -e SERIES_MERGE=false -e LIBRARY_REPORT=false \
-  -e AUTHOR_NORMALIZE=false -e REMOVE_EMPTY_AUTHORS=false -e REMOVE_ROLE_CREDITS=false ghcr.io/xroguel1ke/abs_ratings:web-ui sh -c '
+  -e AUTHOR_NORMALIZE=false -e REMOVE_EMPTY_AUTHORS=false -e REMOVE_ROLE_CREDITS=false -e SP=$SP ghcr.io/xroguel1ke/abs_ratings:web-ui sh -c '
 set -e
 python -I - <<PY
 import json
@@ -23,8 +24,8 @@ for lib in s["lists"].values(): lib["results"] = [x for x in lib["results"] if x
 json.dump(s, open("/data/mini_snapshot.json", "w"))
 print("mini library:", len(s["items"]), "books")
 PY
-python -I tools/fake_abs.py --snapshot /data/mini_snapshot.json --port 18991 --patch-log /data/patches.jsonl >/data/fake.log 2>&1 & sleep 3
-export ABS_URL=http://127.0.0.1:18991 API_TOKEN=fake DRY_RUN=false
+python -I tools/fake_abs.py --snapshot /data/mini_snapshot.json --port $SP --patch-log /data/patches.jsonl >/data/fake.log 2>&1 & sleep 3
+export ABS_URL=http://127.0.0.1:$SP API_TOKEN=fake DRY_RUN=false
 run() { RUN_ID=$1 python -u abs_ratings.py > /data/run_$1.out 2>&1; }
 run r1; run r2
 python -I - <<PY
