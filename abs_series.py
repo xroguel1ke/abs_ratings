@@ -644,38 +644,71 @@ def genre_key(g):
 
 # genre loop 2026-11-15 (user: one name per genre): synonyms -> one name (Audible's where it has one). '-' = no genre at all.
 _GENRE_SYN = {
+    # user 2026-11-15: one name per genre, no '&' names (except the established 'Sword & Sorcery'), no umbrella categories
     'Humorous': ['Humor', 'Humour', 'comedy', 'Comedy & Humor', 'Humorous Fiction', 'Humour fiction'],
     'Science Fiction': ['Science fiction', 'Sci-fi', 'Sci-Fi', 'SciFi', 'Science-Fiction'],
-    'LitRPG': ['litrpg', 'LitRpg', 'Lit RPG', 'GameLit', 'gamelit'],
-    'Young Adult': ['Young Adult Fiction', 'Teen & Young Adult', 'Young adult fantasy', 'teen', 'YA'],
+    'LitRPG': ['litrpg', 'LitRpg', 'Lit RPG', 'GameLit', 'gamelit', 'Fantasy LitRPG'],
+    'Young Adult': ['Young Adult Fiction', 'Teen & Young Adult', 'Young adult fantasy', 'teen', 'YA', 'Jugendliche & Heranwachsende'],
     'Dystopian': ['Dystopia', 'Dystopias'],
     'Post Apocalyptic': ['Apocalyptic & Post-Apocalyptic', 'Post-apocalyptic fiction', 'Apocalyptic'],
-    'Dragons & Mythical Creatures': ['dragons', 'Dragons'],
-    'LGBTQ': ['Lgbt', 'LGBTQ+', 'Queer', 'Gay', 'Lesbian', 'LGBT'],
-    'Comics & Graphic Novels': ['Comics', 'Graphic novels', 'Comix'],
     'Light Novel': ['light-novels', 'Light Novels'],
-    'Urban Fantasy': ['Urban'],
-    'Anthologies & Short Stories': ['Short stories', 'Anthologies', 'Collections', 'Anthology', 'Short Stories'],
-    'Thriller & Suspense': ['Thrillers & Suspense', 'Suspense', 'Thriller', 'Thrillers'],
-    'Cozy': ['cozy fantasy', 'Cozy Fantasy', 'Cosy'],
+    'Short Stories': ['Short stories', 'Anthologies', 'Collections', 'Anthology', 'Anthologies & Short Stories'],
+    'Thriller': ['Thrillers & Suspense', 'Thriller & Suspense', 'Suspense', 'Thrillers', 'Crime Thrillers'],
+    'Graphic Novel': ['Comics', 'Graphic novels', 'Comix', 'Comics & Graphic Novels'],
     'Military': ['Military Fiction', 'War & Military'],
     'Fantasy Romance': ['Fantasy romance', 'Romantasy'],
-    'Fantasy': ['Fantasy fiction', 'Fantasy Fiction'],
-    'Fiction': ['Novels', 'Literature', 'Fiction & Literature'],
+    'Fantasy': ['Fantasy fiction', 'Fantasy Fiction', 'Fantasy & Magic', 'Fantasy & Magie'],
+    'Epic Fantasy': ['Fantasy - Epic', 'Epische Fantasy'],
+    'Urban Fantasy': ['Urban', 'Paranormal & Urban', 'Zeitgenössische Fantasy'],
+    'Romance': ['Liebesromane'],
+    'Sword & Sorcery': ['Schwerter & Magie'],
+    'Adventure': ['Action & Adventure', 'Action', 'Action and Adventure', 'Sea Adventures'],
     'Mystery': ['Mysteries', 'Detective and mystery stories'],
-    "Children's Audiobooks": ['childrens', "Children's", 'Juvenile Fiction', 'Middle Grade', 'Juvenile Literature'],
+    "Children's Audiobooks": ['childrens', "Children's", 'Juvenile Fiction', 'Middle Grade', 'Juvenile Literature', 'Kinder-Hörbücher'],
     'Anime & Manga': ['anime'],
-    '-': ['adult', 'Amazon', 'Book Club', 'smut', 'Large type books', 'Unfinished'],
+    'Mythology': ['Greek & Roman', 'Norse'],
+    'Dramatized': ['Dramatizations', 'Audio Performances & Dramatizations'],
+    '-': ['adult', 'Amazon', 'Book Club', 'smut', 'Large type books', 'Unfinished', 'Science Fiction & Fantasy', 'Sci-Fi & Fantasy', 'Literature & Fiction',
+          'Fiction', 'Novels', 'Literature', 'Fiction & Literature', 'Genre Fiction', 'Social & Life Skills', 'Growing Up & Facts of Life', 'Death & Dying',
+          'Physical & Emotional Abuse', 'Difficult Situations', 'Family Life', 'Emotions & Feelings', 'Explore the World', 'Self Esteem & Self Image',
+          'Clean & Wholesome', 'Small Town & Rural', 'Asian American & Pacific Islander', 'Words, Language & Grammar', 'Arts & Entertainment',
+          'Metaphysical & Visionary', 'Family', 'Bullying', 'Belletristik', 'Literatur & Belletristik', 'Mystery, Thriller & Suspense', 'Holidays', 'Modern', 'Dark', 'second chance', 'Multicultural', 'European', 'Southern'],
+}
+# themes are no genres (user 2026-11-15: 'Dragons & Mythical Creatures' is a tag) -> an English tag
+_THEME_TAG = {
+    'Dragons & Mythical Creatures': 'Dragons', 'Drachen & Fabelwesen': 'Dragons', 'Zeitreisen': 'Time Travel', 'Mit Videospiel-, Film- & Fernsehbezug': 'Tie-In', 'Mit Videospiel-': 'Tie-In',
+    'Film- & Fernsehbezug': 'Tie-In',
+    'dragons': 'Dragons', 'Dragons': 'Dragons', 'Magic': 'Magic', 'Time Travel': 'Time Travel',
+    'First Contact': 'First Contact', 'Aliens': 'Aliens', 'Movie, TV & Video Game Tie-Ins': 'Tie-In', 'Movie, TV & Video Game Tie-ins': 'Tie-In',
+    'Vampires': 'Vampires', 'Elves': 'Elves', 'Monsters': 'Monsters', 'demons': 'Demons', 'Shapeshifters': 'Shapeshifters', 'Cats': 'Cats',
+    'Animals': 'Animals', 'Superhero': 'Superheroes', 'Superheroes': 'Superheroes', 'Martial arts': 'Martial Arts', 'Genetic Engineering': 'Genetic Engineering',
+    'Artificial Intelligence': 'Artificial Intelligence', 'Space Exploration': 'Space Exploration', 'Coming of Age': 'Coming of Age', 'LGBTQ': 'LGBTQ',
+    'Lgbt': 'LGBTQ', 'LGBTQ+': 'LGBTQ', 'Queer': 'LGBTQ', 'Gay': 'LGBTQ', 'Lesbian': 'LGBTQ', 'Cozy': 'Cozy', 'cozy fantasy': 'Cozy', 'Cozy Fantasy': 'Cozy',
+    'Cosy': 'Cozy', 'Harem': 'Harem', 'Friendship': 'Friendship', 'Medieval': 'Medieval', 'Forgotten Realms': 'Forgotten Realms',
+    'Dungeons and dragons': 'Dungeons & Dragons', 'Star wars': 'Star Wars', 'gods': 'Gods', 'fae': 'Fae', 'Pirates': 'Pirates', 'Spicy': 'Spicy', 'Space': 'Space',
 }
 _GENRE_CANON = {genre_key(v): k for k, vs in _GENRE_SYN.items() for v in vs}
-_GENRE_SYN_KEYS = {genre_key(k): k for k in _GENRE_SYN}  # canonical key -> its spelling
+_GENRE_SYN_KEYS = {genre_key(k): k for k in _GENRE_SYN if k != '-'}  # canonical key -> its spelling
+_THEME_KEYS = {genre_key(k): v for k, v in _THEME_TAG.items()}
+MAIN_GENRES = {genre_key(x) for x in ('Fantasy', 'Science Fiction', 'Horror', 'Mystery', 'Thriller', 'Romance', 'Historical Fiction', 'Literary Fiction',
+                                       'Classics', 'Humorous', 'Crime', 'Westerns', 'Poetry')}
+AUDIENCE_GENRES = {genre_key(x) for x in ('Young Adult', "Children's Audiobooks", 'New adult')}
+BROAD_GENRES = {genre_key(x) for x in ('Adventure', 'Contemporary', 'Historical')}  # on most books: only for places left over
 
 
 def canonical_genre(g):
-    """One name for a genre ('Humor' / 'comedy' -> 'Humorous', 'litrpg' -> 'LitRPG'); None = no genre ('adult', 'Amazon')."""
-    c = _GENRE_CANON.get(genre_key(g))
+    """One name for a genre ('Humor' / 'comedy' -> 'Humorous', 'Action & Adventure' -> 'Adventure'); None = no genre ('adult', umbrella
+    categories like 'Science Fiction & Fantasy', themes - see theme_tag)."""
+    k = genre_key(g)
+    if k in _THEME_KEYS: return None
+    c = _GENRE_CANON.get(k)
     if c == '-': return None
-    return c or g
+    return c or _GENRE_SYN_KEYS.get(k) or g
+
+
+def theme_tag(g):
+    """'Dragons & Mythical Creatures' -> 'Dragons', 'Magic' -> 'Magic' (a theme, kept as a tag), else None."""
+    return _THEME_KEYS.get(genre_key(g))
 
 
 _CB_STOP = {'the', 'a', 'an', 'of', 'and', 'series', 'saga', 'trilogy', 'cycle', 'novels', 'novel', 'books', 'book', 'chronicles', 'pre', 'era',
@@ -798,6 +831,7 @@ def normalize_genres(ctx, records):
                 # only when every part is a genre of its own in the library ('Movie, TV & Video Game Tie-Ins' is ONE genre)
                 parts_ += cs_ if len(cs_) > 1 and all(y and cnt.get(y, 0) >= 1 for y in cs_) else [x]
         en_ = str(r.get('language') or '').strip().lower() in ('english', 'eng', 'en')
+        r['_themes'] = {t for t in (theme_tag(g) for g in parts_ if isinstance(g, str)) if t}  # -> tags (manage_tags)
         for g in parts_:
             if isinstance(g, str) and g.strip().lower() in ('audiobook', 'audiobooks', 'hörbuch', 'hörbücher', 'general', 'unknown', 'books', 'genre',
                                                             'ebooks', 'ebook', 'e-books', 'kindle', 'audible'): continue
@@ -809,6 +843,9 @@ def normalize_genres(ctx, records):
             k = genre_key(g) if isinstance(g, str) else ''
             if not k or k.isdigit() or k in seen or (en_de and not is_latin(g)): continue
             seen.add(k); out.append(_GENRE_SYN_KEYS.get(k) or best.get(k, g.strip()))
+        if {'epic', 'epicfantasy'} <= {genre_key(g) for g in out if isinstance(g, str)}:
+            # user 2026-11-15: 'Epic' next to 'Epic Fantasy' is a duplicate -> Epic Fantasy stays; 'Epic' alone stays 'Epic'
+            out = [g for g in out if not (isinstance(g, str) and genre_key(g) == 'epic')]
         if gmax and out:
             # user 2026-11-15: at most GENRE_MAX genres (Audible's first, then the others in their order) and no genre that only this
             # book has (unless it came from Audible) - at least 3 genres stay
@@ -817,7 +854,11 @@ def normalize_genres(ctx, records):
             if rare and len(out) - len(rare) >= 3: out = [g for g in out if g not in rare]
             if len(out) > gmax:
                 # Audible's first, then the genres the library uses most ('LitRPG' on 610 books stays before a one-off tag)
-                keep_ = set(sorted(out, key=lambda g: (0 if isinstance(g, str) and genre_key(g) in aud_g else 1, -cnt_all.get(genre_key(g) if isinstance(g, str) else '', 0)))[:gmax])
+                # user 2026-11-15: the main genre first (Fantasy, Science Fiction, Horror ...), then the specific ones (LitRPG, Epic
+                # Fantasy, Cyberpunk ...), then the audience (Young Adult); inside each: Audible's, then the library's most used
+                cls_ = lambda g: 0 if genre_key(g) in MAIN_GENRES else (2 if genre_key(g) in AUDIENCE_GENRES else (3 if genre_key(g) in BROAD_GENRES else 1))
+                keep_ = set(sorted(out, key=lambda g: (cls_(g) if isinstance(g, str) else 1, 0 if isinstance(g, str) and genre_key(g) in aud_g else 1,
+                                                       -cnt_all.get(genre_key(g) if isinstance(g, str) else '', 0)))[:gmax])
                 out = [g for g in out if g in keep_]  # the book's own order
         props.append((r, out))
     if gmax:
@@ -836,6 +877,52 @@ def normalize_genres(ctx, records):
                 changed += 1
                 gone = [g for g in r['genres'] if g not in out]
                 logging.info(f"   🏷️ GENRES{' (DRY_RUN)' if dry else ''}: '{r['title']}': {', '.join(map(str, gone))} -> {len(out)} genres")
+    return changed
+
+
+FULL_CAST_RE = re.compile(r'(?i)full[\s-]*cast|dramati[sz](?:ed|ation)|audio\s*drama|radio\s*drama|h(?:ö|oe)rspiel|graphic\s*audio')
+
+
+def manage_tags(ctx, records):
+    """Tags (user 2026-11-15): genre copies go (ABS put Audible's categories into the tags - filter by genre instead), themes that are
+    no genres come in as English tags ('Dragons', 'Magic'), 'Full Cast' only for a real full cast (marked as full cast / dramatized /
+    Hörspiel / GraphicAudio, or 5+ narrators - two narrators are no full cast). lock_* tags and the user's own tags stay; 'Audible 4.5+'
+    is set per book (ratings)."""
+    from collections import Counter
+    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    managed = set(_THEME_TAG.values()) | {'Full Cast', 'Audible 4.5+'}
+    known = {genre_key(g) for r in records for g in r['genres'] if isinstance(g, str)} | set(_GENRE_CANON) | set(_GENRE_SYN_KEYS) | set(_THEME_KEYS) \
+            | {genre_key(g) for g in ctx.get('audible_genres') or ()} | {genre_key(x) for x in (
+                'Genre Fiction', 'Literatur & Belletristik', 'Klassiker', 'Action & Abenteuer', 'Abenteuer', 'Dystopien', 'Family & Relationships',
+                'Animals & Nature', 'Christian Fiction', 'Collections & Anthologies', 'Anthologien & Kurzgeschichten', 'Kulturen & Geografie',
+                'Mit Videospiel-', 'Film- & Fernsehbezug', 'Belletristik', 'Mystery, Thriller & Suspense', 'Kinder-Hörbücher', 'Jugendliche & Heranwachsende')}
+    changed = 0
+    for r in records:
+        if r['tags'] & {'lock_all', 'lock_metadata', 'lock_tags'}: continue
+        cur = [t for t in (r.get('media_tags') or []) if isinstance(t, str)]
+        new = []
+        for t in cur:
+            if t.startswith('lock_') or t in managed: new.append(t)
+            elif genre_key(t) in known:
+                if (tt := theme_tag(t)) and tt not in new: new.append(tt)  # a theme copied into the tags stays as a theme tag
+            else: new.append(t)  # the user's own tag
+        new = list(dict.fromkeys(new))  # once each ('Dragons' from the book step and from a theme genre)
+        for tt in sorted(r.get('_themes') or ()):
+            if tt not in new: new.append(tt)
+        # 'Audible 4.5+' (user 2026-11-15): Audible's overall rating of the rating block >= 4.5 with at least 50 ratings; gone when it drops
+        m_ = re.search(r'Audible \((\d+)\):(?:<br\s*/?>|\s)*\S*\s*\S*\s*([\d.]+) / 5 - (?:Overall|Gesamt)', r.get('description') or '')
+        top = bool(m_ and int(m_.group(1)) >= 50 and float(m_.group(2)) >= 4.5)
+        if top and 'Audible 4.5+' not in new: new.append('Audible 4.5+')
+        elif not top and 'Audible 4.5+' in new: new.remove('Audible 4.5+')
+        marker = ' '.join([r['title'] or '', r.get('subtitle') or '', r.get('path') or ''] + [x['name'] or '' for x in r['series']] + [str(g) for g in r['genres']] + list(r['narrators']))
+        fc = bool(FULL_CAST_RE.search(marker)) or len({n.strip().lower() for n in r['narrators'] if n and n.strip()}) >= 5
+        if fc and 'Full Cast' not in new: new.append('Full Cast')
+        elif not fc and 'Full Cast' in new: new.remove('Full Cast')
+        if new != cur and abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {}, {}, 'tag_cleanup', tags=new, old_tags=cur):
+            changed += 1
+            gone, added = [t for t in cur if t not in new], [t for t in new if t not in cur]
+            logging.info(f"   🔖 TAGS{' (DRY_RUN)' if dry else ''}: '{r['title']}': {('-' + ', -'.join(gone)) if gone else ''}{' ' if gone and added else ''}{('+' + ', +'.join(added)) if added else ''}")
+            r['media_tags'] = new
     return changed
 
 
@@ -1566,6 +1653,7 @@ def run(ctx):
     ctx['shared_desc'] = len(shared_descriptions(ctx, records))
     if ctx.get('genre_cleanup'):
         ctx['genres_cleaned'] = normalize_genres(ctx, records)
+        ctx['tags_changed'] = manage_tags(ctx, records)
         logging.info(f"   Genre spellings cleaned: {ctx['genres_cleaned']} books")
     # Web UI files: merge history, uncertain cases, decisions (a confirmed merge may have been reopened)
     series_review = []

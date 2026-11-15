@@ -152,7 +152,7 @@ BOOK_LANGUAGES = []  # filled after LANGUAGE_MAP (below): languages the library 
 MISSING_SERIES = os.getenv('MISSING_SERIES', 'true').lower() == 'true'  # report missing volumes of the library's series (reports/missing_in_series.json)
 MISSING_NOVELLAS = os.getenv('MISSING_NOVELLAS', 'false').lower() == 'true'
 SERIES_BOOKS = {}  # (lib, series name lower) -> [{'num', 'title', 'asin', 'lang', 'author'}] from the listing
-GENRE_MAX = int(os.getenv('GENRE_MAX', '10') or 0)  # user 2026-11-15: at most 10 genres per book, rare single-book genres go (0 = off)
+GENRE_MAX = int(os.getenv('GENRE_MAX', '6') or 0)  # user 2026-11-15: at most 10 genres per book, rare single-book genres go (0 = off)
 GENRE_CLEANUP = os.getenv('GENRE_CLEANUP', 'true').lower() == 'true'  # one spelling per genre, no number-only / foreign-script genres (abs_series.normalize_genres)
 REMOVE_ROLE_CREDITS = os.getenv('REMOVE_ROLE_CREDITS', 'true').lower() == 'true'  # only real authors: remove 'X - illustrator', 'Y - translator', ...
 REMOVE_EMPTY_AUTHORS = os.getenv('REMOVE_EMPTY_AUTHORS', 'true').lower() == 'true'  # delete ABS author objects with 0 books
@@ -4916,8 +4916,16 @@ def process_queue(work_queue, history, failed, recheck):
                                                                                                     for c in (md_raw.get('categories') or []) if c.get('name'))) if g]
                         from abs_series import genre_key as _gk
                         have_g = {_gk(c) for c in current_genres}  # 'Science fiction' already there = 'Science Fiction' (no re-add after the genre cleanup)
-                        added_genres = [g for g in new_genres_list if _gk(g) not in have_g and not have_g.add(_gk(g))]
+                        added_genres = [g for g in new_genres_list if _gk(g) not in have_g and not have_g.add(_gk(g))
+                                        and not (_gk(g) == 'epic' and 'epicfantasy' in have_g)]  # the series task drops 'Epic' next to Epic Fantasy
                         with IO_LOCK: AUD_GENRES.update(new_genres_list)
+                        from abs_series import theme_tag as _tt
+                        cur_tags_ = [t_ for t_ in ((item_data.get('media') or {}).get('tags') or []) if isinstance(t_, str)]
+                        th_ = [t_ for t_ in dict.fromkeys(_tt(map_genre(c.get('name'), aud_data.get('domain')) or '') for c in (md_raw.get('categories') or []) if c.get('name'))
+                               if t_ and t_ not in cur_tags_]
+                        if th_ and abs_update(iid, key, title, {}, meta, 'theme_tags', tags=cur_tags_ + th_, old_tags=cur_tags_):
+                            # user 2026-11-15: Audible's theme categories ('Dragons & Mythical Creatures') are tags, not genres
+                            logging.info(f"        🔖 Tags: +{th_} (themes from Audible's categories)")
                         if GENRE_MAX and len(current_genres) >= GENRE_MAX: added_genres = []  # full: the series task chose these (no ping-pong)
                         if added_genres:
                             # genre loop 2026-11-15: Audible's genres first - the series task keeps at most GENRE_MAX, Audible's before the rest
@@ -4930,7 +4938,8 @@ def process_queue(work_queue, history, failed, recheck):
                                                                                                     for c in (md_raw.get('categories') or []) if c.get('name'))) if g]
                         from abs_series import genre_key as _gk
                         have_g = {_gk(c) for c in current_genres}  # 'Science fiction' already there = 'Science Fiction' (no re-add after the genre cleanup)
-                        added_genres = [g for g in new_genres_list if _gk(g) not in have_g and not have_g.add(_gk(g))]
+                        added_genres = [g for g in new_genres_list if _gk(g) not in have_g and not have_g.add(_gk(g))
+                                        and not (_gk(g) == 'epic' and 'epicfantasy' in have_g)]  # the series task drops 'Epic' next to Epic Fantasy
                         if added_genres: logging.info(f"        🔒 Genre Update Skipped (Locked): +{added_genres}")
 
                     if 'lock_series' not in tags:

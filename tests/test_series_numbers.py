@@ -245,7 +245,7 @@ def test_genre_loop_cleanup():
     c, calls = ctx()
     S.normalize_genres(c, [r, g, o])
     new = [x for x in calls if x[0] == 1][0][3]['genres']
-    assert new == ['Action & Adventure', 'Dark Fantasy', 'Fantasy']  # 'Acción y aventura, Cyberpunk' goes as a whole (foreign part)
+    assert new == ['Adventure', 'Dark Fantasy', 'Fantasy']  # 'Acción y aventura, Cyberpunk' goes as a whole (foreign part); 'Action & Adventure' = 'Adventure'
     assert not [x for x in calls if x[0] == 2]  # a German book keeps German genres
 
 
@@ -254,7 +254,8 @@ def test_genre_loop_keeps_real_genres():
     r['genres'] = ['Dragons & Mythical Creatures', 'Movie, TV & Video Game Tie-Ins', 'Fairy Tales, Folk Tales & Myths', 'Fantasy']
     c, calls = ctx()
     S.normalize_genres(c, [r])
-    assert not calls  # nothing to change
+    # 2026-11-15: 'Dragons & Mythical Creatures' / tie-ins are themes (tags), the comma genre stays one genre
+    assert calls[0][3]['genres'] == ['Fairy Tales, Folk Tales & Myths', 'Fantasy'] and r['_themes'] == {'Dragons', 'Tie-In'}
 
 
 def test_number_shared_titles():
@@ -266,3 +267,48 @@ def test_number_shared_titles():
     assert S.number_shared_titles(c, recs) == 4 and [r['title'] for r in recs] == [f'Reborn to Master the Blade, Vol. {i}' for i in (1, 2, 3, 4)]
     one = [rec(7, 'The Dark Tower', '2004', [('The Dark Tower', '7')], 'K/D', author='K'), rec(1, 'The Gunslinger', '1982', [('The Dark Tower', '1')], 'K/D', author='K')]
     assert S.number_shared_titles(c, one) == 0
+
+
+def test_genre_taxonomy_2026_11_15():
+    c = S.canonical_genre
+    assert c('Action & Adventure') == 'Adventure' and c('Science Fiction & Fantasy') is None and c('Fiction') is None
+    assert c('Dragons & Mythical Creatures') is None and S.theme_tag('Dragons & Mythical Creatures') == 'Dragons'
+    assert c('Anthologies & Short Stories') == 'Short Stories' and c('Sword & Sorcery') == 'Sword & Sorcery' and c('Light Novel') == 'Light Novel'
+    mk = lambda i, g: dict(rec(i, f't{i}', '2020', [], 'A/x', author='A'), genres=g, language='English')
+    a = mk(1, ['Science Fiction & Fantasy', 'Fantasy', 'Epic', 'Epic Fantasy', 'Action & Adventure', 'Adventure', 'Fiction', 'Dragons & Mythical Creatures',
+               'Magic', 'LitRPG', 'Young Adult', 'High Fantasy', 'Dark Fantasy', 'Humorous'])
+    b = mk(2, ['Science Fiction & Fantasy', 'Science Fiction', 'Epic', 'Space Opera'])
+    fill = [mk(10 + i, ['Fantasy', 'Epic Fantasy', 'Adventure', 'LitRPG', 'Young Adult', 'High Fantasy', 'Dark Fantasy', 'Humorous', 'Space Opera', 'Science Fiction']) for i in range(3)]
+    ctx_ = {'dry_run': True, 'abs_update': lambda iid, key, title, upd, old, src, **kw: True, 'genre_max': 6}
+    S.normalize_genres(ctx_, [a, b] + fill)
+    # read back via a recording ctx
+    got = {}
+    ctx2 = {'dry_run': True, 'abs_update': lambda iid, key, title, upd, old, src, **kw: got.__setitem__(iid, upd.get('genres')) or True, 'genre_max': 6}
+    S.normalize_genres(ctx2, [mk(1, a['genres']), mk(2, b['genres'])] + fill)
+    assert len(got[1]) <= 6 and got[1][0] == 'Fantasy' and 'Epic' not in got[1] and 'Science Fiction & Fantasy' not in got[1] and 'Young Adult' not in got[1], got[1]
+    assert got[2] == ['Science Fiction', 'Epic', 'Space Opera'], got[2]  # 'Epic' alone stays 'Epic'
+
+
+def test_manage_tags():
+    r = rec(1, 'The Way of Kings', '2010', [('Stormlight', '1')], 'B/x', author='B')
+    r.update(genres=['Fantasy'], narrators=['Kate Reading', 'Michael Kramer'], subtitle='', media_tags=['Fantasy', 'Action & Adventure', 'lock_series', 'Favorite'],
+             description='─── Ratings &amp; Infos ───<br />Audible (42647):<br />🏆 ⭐⭐⭐⭐✨ 4.6 / 5 - Overall<br />', _themes={'Dragons'})
+    fc = rec(2, 'Dune', '2020', [], 'H/x', author='H')
+    fc.update(genres=['Science Fiction'], narrators=['A B', 'C D', 'E F', 'G H', 'I J'], subtitle='', media_tags=[], description='Audible (12):<br />🏆 x 4.9 / 5 - Overall')
+    duo = rec(3, 'Two', '2020', [], 'H/x', author='H'); duo.update(genres=['Fantasy'], narrators=['A B', 'C D'], subtitle='', media_tags=['Full Cast'], description='')
+    got = {}
+    ctx_ = {'dry_run': True, 'abs_update': lambda iid, key, title, upd, old, src, tags=None, old_tags=None, **kw: got.__setitem__(iid, tags) or True}
+    S.manage_tags(ctx_, [r, fc, duo])
+    assert got[1] == ['lock_series', 'Favorite', 'Dragons', 'Audible 4.5+'], got[1]
+    assert got[2] == ['Full Cast'], got[2]  # 5 narrators; only 12 Audible ratings: no 'Audible 4.5+'
+    assert got[3] == [], got[3]  # two narrators are no full cast
+
+
+def test_epic_on_fantasy_and_science_fiction():
+    mk = lambda i, g: dict(rec(i, f't{i}', '2020', [], 'A/x', author='A'), genres=g, language='English')
+    got = {}
+    c_ = {'dry_run': True, 'abs_update': lambda iid, key, title, upd, old, src, **kw: got.__setitem__(iid, upd.get('genres')) or True, 'genre_max': 6}
+    S.normalize_genres(c_, [mk(1, ['Science Fiction & Fantasy', 'Epic']), mk(2, ['Epic', 'Adventure', 'Space Opera']), mk(3, ['Fantasy', 'Epic', 'Epic Fantasy'])])
+    assert got[1] == ['Epic'], got[1]  # 'Epic' alone stays (user 2026-11-15), the umbrella goes
+    assert 2 not in got  # nothing to change
+    assert got[3] == ['Fantasy', 'Epic Fantasy'], got[3]  # both: Epic Fantasy

@@ -68,6 +68,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [U] 2026-11-15 user decisions: co-authors, '(Light Novel)' out of series names, ASIN out of ISBN field, book year from Hardcover, max. 10 genres, shared titles numbered, shared/wrong-language descriptions, other-edition subtitles; manual: 15 more locks removed, Word & Void renamed, Ascend Online renumbered, Slimes 7 nested copies moved out, Mushoku ISBN, 3 subtitles | ✅ | replay runs 1+2 (second run stable), live checks (Hardcover years, chapters), regress green |
 | [U] 2026-11-15 improvements: file problems on the review list (nested folders, too long), genre synonyms (593 -> ~180 genres), same-run subtitle clean-up, co-author suggestions, warning status, safe test tools; German books: all 55 already have German ASINs, English texts on them are replaced by the German Audible summary | ✅ | replay runs, regress green |
 | [U] 2026-11-15 check of the big real run (1015 books): Hardcover year plausibility + manual fix of 25 implausible years (backup year_fix_backup_20261115.json), author case merge, em-dash role credits, short wrong-language descriptions; manual: Malice / Divine Witness subtitles, 5 wrong review suggestions removed | ✅ | journal analysis, library-wide checks, regress green |
+| [U] 2026-11-15 genres: max 6, no umbrella / '&' names, themes as tags, Epic rule; tags: genre copies out, Audible 4.5+, Full Cast (marked or 5+ narrators) | ✅ | replay runs 1+2 (stable), regress green |
 
 ## Goodreads (experimental)
 | Item | State | Note |

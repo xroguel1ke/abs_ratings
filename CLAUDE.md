@@ -209,6 +209,12 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     a subtitle with no word in common with the book (title, series, authors, Audible, description) = another edition's -> Audible's.
   - Test tools pick a free fake-ABS port (run_round: FAKE_PORT unset = free one, set but busy = abort; watch/source-state tests) and
     refuse RECORD_NO_LIVE=1 (it is a host list).
+  - Genres and tags (user 2026-11-15): GENRE_MAX 6; one name per genre without '&' (Action & Adventure -> Adventure, Thriller,
+    Short Stories, Graphic Novel; Sword & Sorcery stays); umbrellas go (Science Fiction & Fantasy, Literature & Fiction, Fiction);
+    'Epic' next to 'Epic Fantasy' goes, 'Epic' alone stays (per book: not re-added next to Epic Fantasy); themes are English TAGS
+    (_THEME_TAG: Dragons, Magic, Time Travel, Tie-In ...); order: main genre, specific ones, audience, broad (Adventure) last.
+    manage_tags: genre copies leave the tags, lock_* and own tags stay, 'Full Cast' only when marked (full cast / dramatized /
+    Hörspiel / GraphicAudio) or 5+ narrators, 'Audible 4.5+' from the rating block (>= 4.5 with >= 50 ratings, removed when lower).
   - Check of the first big real run 2026-11-15: Hardcover's release_year can come from ONE wrongly merged edition (HWFWM 7 = 2006,
     Fellowship = 1937) or from another book found by an alternative title (Dragonsblood -> Dragon's Kin): the year is only taken from
     an ASIN/ISBN match or a close title AND when hc_year_plausible (an edition within a year, not a lone edition > 5 years before the
