@@ -48,3 +48,9 @@ def test_anchor_needs_matching_marks():
     marks = [{'start': 0, 'end': 500, 'title': '1'}, {'start': 500, 'end': 1500, 'title': '2'}, {'start': 1500, 'end': 3170, 'title': '3'}]
     new, why = A.match_chapters(marks, 3170.0, AUD)
     assert new is None, why
+
+
+def test_chapters_ending_early_are_poor():
+    named = lambda end: [{'start': 0, 'end': 600, 'title': 'Prologue'}, {'start': 600, 'end': end, 'title': 'Chapter 1'}]
+    assert A.chapters_poor(named(59820), 72300) == 'chapters end long before the file does'  # 997 of 1205 min
+    assert A.chapters_poor(named(72000), 72300) is None  # 5 min short: rounding / credits

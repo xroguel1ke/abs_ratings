@@ -1214,6 +1214,8 @@ def chapters_poor(chs, dur):
     """ABS chapters worth replacing: none, a single one, only generic names ('Chapter 7', 'Track 03', '12'), or running past the end."""
     if not chs or len(chs) <= 1: return 'no chapters' if not chs else 'a single chapter'
     if dur and any(float(c.get('end') or 0) > dur + 30 for c in chs): return 'chapters run past the end of the file'  # a few seconds over the end is usual (rounding)
+    if dur and max(float(c.get('end') or 0) for c in chs) < dur - max(300, 0.03 * dur):
+        return 'chapters end long before the file does'  # chapter loop 2026-11-15: '1% Lifesteal 2' 997 of 1205 min (marks of another volume)
     if all(RE_GENERIC_CH.match(str(c.get('title') or '')) for c in chs): return 'only numbered chapters without names'
     return None
 
@@ -1793,7 +1795,9 @@ def audible_result(p, asin, domain):
         'releaseDate': p.get('release_date') or p.get('issue_date'),
         'format': p.get('format_type'),
         'categories': [{'name': c} for c in categories],
-        'series': [{'name': s.get('title'), 'part': aud_part(s.get('sequence')), 'asin': s.get('asin')} for s in (p.get('series') or []) if s.get('title')],
+        # series loop 2026-11-15: Audible's 'The Sword of Shannara (Unabridged)' series - the format label is no part of a series name
+        'series': [{'name': re.sub(r'(?i)\s*\((?:unabridged|ungek(?:ü|ue)rzt|abridged)\)\s*$', '', s.get('title')).strip(), 'part': aud_part(s.get('sequence')), 'asin': s.get('asin')}
+                   for s in (p.get('series') or []) if s.get('title')],
     }
     note_series(p.get('series'))
     return res
@@ -3451,6 +3455,7 @@ def build_description(current_desc, fresh, old):
     clean_d = RE_RATING_BLOCK.sub('', current_desc)
     clean_d = re.sub(r'(?s)\*\*Audible\*\*.*?---\s*\n*', '', clean_d)
     clean_d = re.sub(r'^(?:\s|<br\s*/?>)+', '', clean_d, flags=re.I).strip()
+    clean_d = clean_d.replace('\\r\\n', '<br>').replace('\\n', '<br>')  # description loop 2026-11-15: a literal '\n' from a source text
     if len(lines) == 1: return clean_d  # No ratings at all: don't write an empty rating block
     lines.append(BLOCK_END)
     if RATING_POSITION == 'bottom':
@@ -4784,6 +4789,14 @@ def process_queue(work_queue, history, failed, recheck):
                         if new_pub and not meta.get('publisher'):
                             abs_updates['publisher'] = new_pub
                             log_updates.append(f"Publisher: '{meta.get('publisher')}' -> '{new_pub}'")
+                        elif new_pub and same_recording(abs_dur, meta.get('narrators'), aud_data) and new_pub != meta.get('publisher') \
+                                and (map_language(meta.get('language') or lang) or '').lower() in ('english', '') \
+                                and re.search(r"(?i)\b(?:verlag|editorial|[ée]ditions?|edizioni|j'ai lu|bastei|l[üu]bbe|heyne|goldmann|piper|carlsen|argon|comics?)\b", meta['publisher']) \
+                                and not re.search(r"(?i)\b(?:verlag|editorial|[ée]ditions?|edizioni|comics?)\b", new_pub):
+                            # publisher loop 2026-11-15: an English recording with the publisher of a foreign or comic edition ("J'ai Lu" on
+                            # The Sword of Shannara, 'S. Fischer Verlag', 'NORMA EDITORIAL', 'Marvel Comics Group') - the recording's publisher
+                            abs_updates['publisher'] = new_pub
+                            log_updates.append(f"Publisher: '{meta.get('publisher')}' -> '{new_pub}' (publisher of another edition)")
                     elif new_pub and not meta.get('publisher'): logging.info(f"        🔒 Publisher Update Skipped (Locked): '{new_pub}'")
 
                     if 'lock_year' not in tags:
@@ -4995,8 +5008,15 @@ def process_queue(work_queue, history, failed, recheck):
                                     # ('The Cosmere' on The Final Empire); never into a numbered series (Witchwood Crown is no 'Memory, Sorrow & Thorn' #1)
                                     # user rule 2026-11-08: a series of THIS recording that already exists in the library for this author
                                     # is added although the book has other series (Way of Kings back into 'The Stormlight Archive')
-                                    logging.info(f"        ➕ Series '{canon}' #{s_seq}: Audible lists it and it exists in the library for this author")
-                                    new_list.append({"name": canon, "sequence": s_seq})
+                                    from abs_series import covered_by_series as _cbs
+                                    if _cbs(canon, s_seq, new_list):
+                                        # series loop 2026-11-15: 'Apocalypse Bringer Mynoghra' #4 next to 'Apocalypse Bringer Mynoghra: World
+                                        # Conquest ...' #4 (the series task removed it again every run), 'Wax and Wayne' next to 'Mistborn, Era 2:
+                                        # Wax & Wayne', 'Pre-Shannara: Word and Void' next to 'Shannara (...)' + 'The Word & The Void'
+                                        logging.info(f"        ⏭️ Series '{canon}' #{s_seq} not added: the book's series already name it")
+                                    else:
+                                        logging.info(f"        ➕ Series '{canon}' #{s_seq}: Audible lists it and it exists in the library for this author")
+                                        new_list.append({"name": canon, "sequence": s_seq})
                                 else:
                                     ignored.append(f"{canon}" + (f" #{s_seq}" if s_seq else ""))
                             added = [x for x in new_list if not any(same(x['name'], b['name']) for b in base_list)]
@@ -5290,6 +5310,11 @@ def process_queue(work_queue, history, failed, recheck):
                             add_review(key, title, 'chapters', poor, "the book has no chapters and Audible lists none for this product - add them in ABS (Edit > Chapters)")
                         elif poor and abs_dur and aud_ch:
                             new_chs, why_c = match_chapters(abs_chs, abs_dur, aud_ch)
+                            aud_len_ = sum(x[1] for x in (aud_ch[0] or []))
+                            if new_chs and poor == 'chapters end long before the file does' and aud_len_ and abs(aud_len_ - abs_dur) > max(300, 0.05 * abs_dur):
+                                # chapter loop 2026-11-15: 'Sherlock Holmes: The Definitive Collection' 9233 min, Audible's chapters 4318 min -
+                                # the file holds more than this product: its chapters would not cover it either
+                                new_chs, why_c = None, f"Audible's chapters cover {aud_len_ / 60:.0f} of {abs_dur / 60:.0f} min"
                             if new_chs and not cover_verified and not ((an_ := anchor_align(abs_chs, aud_ch[0], abs_dur, 0.95)) and an_[2] >= 7):
                                 new_chs, why_c = None, 'recording not verified and the chapter marks do not prove it'
                             if new_chs and poor == 'only numbered chapters without names' and all(RE_GENERIC_CH.match(c['title'] or '') for c in new_chs):

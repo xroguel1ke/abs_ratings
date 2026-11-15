@@ -212,3 +212,46 @@ def test_joined_narrators_split():
     assert S.split_joined_narrators(c, [r]) == 1 and r['narrators'] == ['Dillon Sickels', 'Mary Robinette Kowal']
     r2 = rec(2, 'x', '2024', [], 'A/x', author='A', tags=('lock_narrators',)); r2['narrators'] = ['A + B']
     assert S.split_joined_narrators(c, [r2]) == 0
+
+
+def test_covered_by_series():
+    cb = S.covered_by_series
+    sr = lambda *xs: [{'name': n, 'sequence': q} for n, q in xs]
+    assert cb('Apocalypse Bringer Mynoghra', '4', sr(('Apocalypse Bringer Mynoghra: World Conquest Starts with the Civilization of Ruin', '4')))
+    assert cb('Wax and Wayne', '1', sr(('Mistborn, Era 2: Wax & Wayne', '1')))
+    assert cb('Pern Novels [publication order]', '5', sr(('Pern', '5')))
+    assert not cb('Discworld: Tiffany Aching', '1', sr(('Discworld', '30'), ('Tiffany Aching', '1')))  # longer name: added, the task keeps it
+    assert not cb('The Mistborn Saga', '4', sr(('Mistborn, Era 2: Wax & Wayne', '1')))  # another number: a real umbrella
+    assert not cb('The Stormlight Archive', '1', sr(('The Cosmere', None)))
+    assert not cb('Discworld: Tiffany Aching', '5', sr(('Discworld', '41')))  # 'tiffany aching' is new
+
+
+def test_tidy_series_entries():
+    recs = [rec(1, 'a', '2020', [('The Devils ', '1')], 'A/x', author='A'), rec(2, 'b', '2020', [('Qi=MC^2)', '1')], 'A/x', author='A'),
+            rec(3, 'c', '2020', [('Musashi', '01–07')], 'A/x', author='A'), rec(4, 'd', '2020', [('X', '10.5')], 'A/x', author='A'),
+            rec(5, 'e', '2020', [('Y (Z)', '01')], 'A/x', author='A', tags=('lock_series',))]
+    c, _ = ctx()
+    assert S.tidy_series_entries(c, recs) == 3
+    assert [r['series'][0]['name'] for r in recs[:2]] == ['The Devils', 'Qi=MC^2'] and recs[2]['series'][0]['sequence'] == '1-7'
+    assert recs[3]['series'][0]['sequence'] == '10.5' and recs[4]['series'][0]['sequence'] == '01'
+    assert S.covered_by_series('The Witcher (Full-Cast Editions)', '7', [{'name': 'The Witcher', 'sequence': '7'}])
+
+
+def test_genre_loop_cleanup():
+    r = rec(1, 'a', '2020', [], 'A/x', author='A'); r['genres'] = ['Action & Adventure, Dark Fantasy, Fantasy', 'Ebooks', 'Boston : Allen & Unwin', 'Acción y aventura, Cyberpunk', 'Fantasy']
+    r['language'] = 'English'
+    g = rec(2, 'b', '2020', [], 'A/x', author='A'); g['genres'] = ['Abenteuer', 'Fantasy']; g['language'] = 'German'
+    o = rec(3, 'c', '2020', [], 'A/x', author='A'); o['genres'] = ['Action & Adventure', 'Dark Fantasy', 'Cyberpunk']; o['language'] = 'English'
+    c, calls = ctx()
+    S.normalize_genres(c, [r, g, o])
+    new = [x for x in calls if x[0] == 1][0][3]['genres']
+    assert new == ['Action & Adventure', 'Dark Fantasy', 'Fantasy']  # 'Acción y aventura, Cyberpunk' goes as a whole (foreign part)
+    assert not [x for x in calls if x[0] == 2]  # a German book keeps German genres
+
+
+def test_genre_loop_keeps_real_genres():
+    r = rec(1, 'a', '2020', [], 'A/x', author='A'); r['language'] = 'English'
+    r['genres'] = ['Dragons & Mythical Creatures', 'Movie, TV & Video Game Tie-Ins', 'Fairy Tales, Folk Tales & Myths', 'Fantasy']
+    c, calls = ctx()
+    S.normalize_genres(c, [r])
+    assert not calls  # nothing to change

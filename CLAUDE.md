@@ -193,6 +193,13 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     (': A LitRPG Adventure') to the subtitle; glued-subtitle cut never leaves only the series name ('Mushoku Tensei'). Subtitles:
     word/roman numbers and '(Discworld Novel 7)' count as own-series labels, marketing lines / edition labels / foreign text on an
     English book / a subtitle repeating the title go. Series task split_joined_narrators: 'A + B' narrator entry -> A, B.
+  - Field loop 2026-11-15 (series/publisher/genres/description/chapters): a per-book Audible series that is only a SHORTER name
+    (or an edition-marker variant) of a same-numbered series of the book is not added (covered_by_series; Mynoghra / Wax and Wayne /
+    Pern publication order / Witcher Full-Cast were added and removed every run); '(Unabridged)' cut from Audible series names;
+    series task tidy_series_entries (trailing spaces, lone ')', '01' -> '1'). English recording with a foreign/comic edition's
+    publisher -> Audible's. Genres: comma lists split only when every part is a library genre, 'Ebooks', 'place : publisher' and
+    foreign genres on English books go. Literal '\\n' in descriptions -> line break. Chapters ending > max(5 min, 3%) before the file
+    are poor; Audible's are taken only when they cover the file (+-5%).
   - tools/run_round.sh RECORD_NO_LIVE is a HOST LIST, not a flag ('1' matched every URL with a 1, web pages went live and were
     recorded -> golden deviations). For library-wide comparisons use mode 'replay' (nothing recorded).
   - Book folders: new ones are named 'N - Title {Narrator}' (user 2026-11-15; several: '{A} {B}' or '{A, B}'); the old

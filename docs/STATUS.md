@@ -64,6 +64,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [U] 2026-11-15 series titles alike: subtitles that only name the own series + number removed (806 in the library), 'series + number' titles in the form of their series (9), narrators from '{Narrator}' folders | ✅ | library check, fake-write full run vs. old code (only these fields differ), second run idempotent, regress green |
 | [U] 2026-11-15 wrong-volume subtitles -> Audible's (12 books), Dragon Heart titles from the subtitle (14) | ✅ | fake-write full run diff: only these 31 fields; regress green |
 | [U] 2026-11-15 locks: 50 of 70 removed (no change or only fixes without them, backup tests/private/lock_backup_20261115.json); field loop: title (46), subtitle (171), narrators (8) | ✅ | replay full runs vs previous code, second run stable, regress green |
+| [U] 2026-11-15 field loop part 2: series (ping-pong of covered names, tidy names/numbers), publisher (5), genres (197), descriptions (literal \\n), chapters (8 live-checked), authors/ASIN/ISBN/year/cover: no clear errors | ✅ | replay full runs vs previous code, live chapter check, regress green |
 
 ## Goodreads (experimental)
 | Item | State | Note |

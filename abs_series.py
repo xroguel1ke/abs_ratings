@@ -617,6 +617,47 @@ def genre_key(g):
     return re.sub(r'[^a-z0-9]', '', fold_accents(str(g or '')).lower())
 
 
+_CB_STOP = {'the', 'a', 'an', 'of', 'and', 'series', 'saga', 'trilogy', 'cycle', 'novels', 'novel', 'books', 'book', 'chronicles', 'pre', 'era',
+            'order', 'publication', 'chronological', 'light'}
+
+
+def covered_by_series(name, seq, series):
+    """The name is a SHORTER name of a series the book already has with the same number: all its words are in that one name
+    ('Apocalypse Bringer Mynoghra' #4 / 'Apocalypse Bringer Mynoghra: World Conquest ...' #4, 'Wax and Wayne' #1 / 'Mistborn, Era 2:
+    Wax & Wayne' #1, 'Pern Novels [publication order]' #5 / 'Pern' #5). Series loop 2026-11-15: added per book, removed again by the
+    series task every run. A LONGER name ('Discworld: Tiffany Aching' next to 'Tiffany Aching') is still added: drop_duplicate_series
+    then keeps the longer one for the whole series."""
+    w = lambda n: {x for x in re.sub(r"[^a-z0-9\s]", ' ', fold_accents((n or '').lower()).replace("'", '').replace('&', ' and ')).split() if x not in _CB_STOP}
+    num = lambda q: float(q) if re.fullmatch(r'\d+(?:\.\d+)?', str(q or '').strip()) else None
+    mine = w(name)
+    # also the same name with an edition marker ('The Witcher (Full-Cast Editions)' #7 next to 'The Witcher' #7: the task drops it)
+    return bool(mine) and num(seq) is not None and any((mine <= w(x.get('name')) or series_key(name) == series_key(x.get('name') or ''))
+                                                       and num(x.get('sequence')) == num(seq) for x in series or [])
+
+
+def tidy_series_entries(ctx, records):
+    """Series loop 2026-11-15: 'The Devils ' / 'Battle Mage Farmer ' (a trailing space makes a second series in ABS), 'Qi=MC^2)' (a
+    lone closing bracket), numbers '01' -> '1', '01–07' -> '1-7'. lock_series respected."""
+    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    def nm(n):
+        n = re.sub(r'\s{2,}', ' ', (n or '').strip())
+        if n.endswith(')') and '(' not in n: n = n[:-1].rstrip()
+        return n
+    def sq(q):
+        if q is None: return q
+        q = str(q).strip().replace('–', '-').replace('—', '-')
+        return re.sub(r'(?<![\d.])0+(\d)', r'\1', q)
+    changed = 0
+    for r in records:
+        if r['tags'] & {'lock_series', 'lock_all', 'lock_metadata'}: continue
+        new = [dict(x, name=nm(x['name']), sequence=sq(x.get('sequence'))) for x in r['series']]
+        if new != r['series'] and abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'series': new}, {'series': r['series']}, 'series_spelling'):
+            changed += 1
+            logging.info(f"   📚 SERIES{' (DRY_RUN)' if dry else ''}: '{r['title']}': spelling {[(x['name'], x.get('sequence')) for x in r['series']]} -> {[(x['name'], x.get('sequence')) for x in new]}")
+            r['series'] = new
+    return changed
+
+
 def split_joined_narrators(ctx, records):
     """Narrator loop 2026-11-15: 'Dillon Sickels + Mary Robinette Kowal' as ONE narrator next to both names (9 books, from the folder's
     'A + B' list) -> the single names, each once, order kept. lock_narrators respected."""
@@ -634,6 +675,11 @@ def split_joined_narrators(ctx, records):
             logging.info(f"   🎙️ NARRATORS{' (DRY_RUN)' if dry else ''}: '{r['title']}': {r['narrators']} -> {new}")
             r['narrators'] = new
     return changed
+
+
+_FOREIGN_GENRE = re.compile(r"(?i)(?:acci[oó]n|aventuras?\b|fantas[ií]a\b|ficci[oó]n|literatura\b|azione|avventura|\bepica\b|fantascienza|créatures|"
+                            r"mythiques|\bet\b|science-fiction et|abenteuer|belletristik|\bliteratur\b|jugendliche|heranwachsende|kinderb|krimi|"
+                            r"sachbuch|geschichte|fantastique|policier|paranormal y|y urbana|ciencia)")
 
 
 def normalize_genres(ctx, records):
@@ -657,9 +703,18 @@ def normalize_genres(ctx, records):
         for g in r['genres']:
             # round 5 (2026-11-09): several genres glued into one ('Epic; Action & Adventure', 'A|B', 'Science Fiction & Fantasy / Science
             # Fiction / Military', 'X:Y:Z') are split; 'Audiobook' (1341 books), 'General', 'Unknown' are no genres
-            parts_ += [x.strip() for x in re.split(r'\s*;\s*|\s*\|\s*|\s+/\s+|(?<=\S):(?=\S)', g) if x.strip()] if isinstance(g, str) else [g]
+            ps_ = [x.strip() for x in re.split(r'\s*;\s*|\s*\|\s*|\s+/\s+|(?<=\S):(?=\S)', g) if x.strip()] if isinstance(g, str) else [g]
+            # genre loop 2026-11-15: 'Action & Adventure, Dark Fantasy, Fantasy' (one entry) - comma lists of capitalized genres split too
+            for x in ps_:
+                cs_ = [y.strip() for y in x.split(', ')] if isinstance(x, str) else [x]
+                # only when every part is a genre of its own in the library ('Movie, TV & Video Game Tie-Ins' is ONE genre)
+                parts_ += cs_ if len(cs_) > 1 and all(y and cnt.get(y, 0) >= 1 for y in cs_) else [x]
+        en_ = str(r.get('language') or '').strip().lower() in ('english', 'eng', 'en')
         for g in parts_:
-            if isinstance(g, str) and g.strip().lower() in ('audiobook', 'audiobooks', 'hörbuch', 'hörbücher', 'general', 'unknown', 'books', 'genre'): continue
+            if isinstance(g, str) and g.strip().lower() in ('audiobook', 'audiobooks', 'hörbuch', 'hörbücher', 'general', 'unknown', 'books', 'genre',
+                                                            'ebooks', 'ebook', 'e-books', 'kindle', 'audible'): continue
+            if isinstance(g, str) and re.search(r'\S\s+:\s+\S', g): continue  # 'Boston : Allen & Unwin' (place : publisher of a catalogue record)
+            if isinstance(g, str) and en_ and _FOREIGN_GENRE.search(g): continue  # 'Acción y aventura', 'Literatur & Belletristik' on an English book
             k = genre_key(g) if isinstance(g, str) else ''
             if not k or k.isdigit() or k in seen or (en_de and not is_latin(g)): continue
             seen.add(k); out.append(best.get(k, g.strip()))
@@ -1358,6 +1413,7 @@ def run(ctx):
     if ctx.get('book_languages'):
         ctx['languages_fixed'] = fix_languages(ctx, records, ctx['book_languages'])
     if ctx.get('merge'):
+        ctx['series_tidied'] = tidy_series_entries(ctx, records)
         ctx['duplicate_series'] = drop_duplicate_series(ctx, records)
         ctx['folder_only_series'] = drop_folder_only_series(ctx, records)
         ctx['folder_series'] = fill_folder_series(ctx, records)
