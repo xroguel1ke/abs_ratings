@@ -40,3 +40,16 @@ def test_fallback_failure_is_info(monkeypatch, caplog):
 def test_success_journals(monkeypatch):
     seen = setup(monkeypatch, lambda url, **k: R(200))
     assert A.abs_set_cover('i1', 'k', 'T', 'http://x/a.jpg', 'audible_cover') is True and len(seen) == 1
+
+
+def test_wait_for_abs_scan(monkeypatch):
+    seq = [{'tasks': [{'action': 'library-scan', 'isFinished': False}]}, {'tasks': [{'action': 'library-scan', 'isFinished': True}]}]
+    class J:
+        def __init__(self, d): self.d = d
+        def json(self): return self.d
+    calls = []
+    monkeypatch.setattr(A, 'DRY_RUN', False)
+    monkeypatch.setattr(A.abs_session, 'get', lambda url, **k: calls.append(url) or J(seq[min(len(calls) - 1, 1)]))
+    monkeypatch.setattr(A.time, 'sleep', lambda s: None)
+    A.wait_for_abs_scan('test')
+    assert len(calls) == 2 and calls[0].endswith('/api/tasks')  # waited once, then the scan was finished

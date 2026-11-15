@@ -130,6 +130,10 @@ def clean_env(value, allowed):
 
 ABS_URL, _URL_REMOVED = clean_env('ABS_URL', r'A-Za-z0-9:/._\-\[\]%')
 ABS_URL = ABS_URL.rstrip('/')
+# speed 2026-11-15: the per-host lock is for the rate-limited sources; the user's own ABS server takes the workers' requests in parallel
+# (the book step spent most of its 12 min waiting for this lock: ~3 ABS requests per book, one at a time)
+if (_abs_host := urllib.parse.urlsplit(ABS_URL).hostname):
+    _HOST_LOCKS[_abs_host] = threading.BoundedSemaphore(int(os.getenv('ABS_PARALLEL', '3') or 1))
 API_TOKEN, _TOKEN_REMOVED = clean_env('API_TOKEN', r'A-Za-z0-9._\-')  # JWT: only these characters
 LIBRARY_IDS = [l.strip() for l in os.getenv('LIBRARY_IDS', '').split(',') if l.strip()]
 
@@ -1199,6 +1203,33 @@ def abs_update(iid, key, title, updates, old_meta, source, tags=None, old_tags=N
     if not DRY_RUN and key:
         with IO_LOCK: OUR_WRITTEN.add(key)
     return True
+
+def wait_for_abs_scan(where, max_wait=900):
+    """Check of the run 2026-11-15: the ABS library scan (cron every 30 min) ran WHILE the script wrote - it had read a book's files
+    before our write and saved its own result after it, so cleared subtitles came back from the audio tags (41 books, every run).
+    Before writing, the script waits until no ABS scan task is running (at most max_wait seconds)."""
+    if DRY_RUN: return
+    t0 = time.monotonic(); said = False
+    while time.monotonic() - t0 < max_wait:
+        try: tasks = (abs_session.get(f"{ABS_URL}/api/tasks", timeout=15).json() or {}).get('tasks') or []
+        except Exception: return
+        busy = [t for t in tasks if 'scan' in str(t.get('action') or '').lower() and not t.get('isFinished')]
+        if not busy: break
+        if not said: logging.info(f"   ⏳ ABS is scanning a library - waiting before {where} (writes during a scan can be overwritten)"); said = True
+        time.sleep(10)
+    if said: logging.info(f"   ABS scan finished after {time.monotonic() - t0:.0f}s")
+
+_SCAN_GATE = {'t': 0.0}
+_SCAN_GATE_LOCK = threading.Lock()
+
+def scan_gate():
+    """At most every 30 s: is an ABS scan running? Then wait for it - the other workers wait at the lock meanwhile, so no book is
+    written during the scan."""
+    if DRY_RUN: return
+    with _SCAN_GATE_LOCK:
+        if time.monotonic() - _SCAN_GATE['t'] < 30: return
+        wait_for_abs_scan('the next books')
+        _SCAN_GATE['t'] = time.monotonic()
 
 OUR_WRITTEN = set()  # keys this run wrote to
 
@@ -5780,6 +5811,7 @@ def run_books(work_queue, one):
                 try: g = jobs.get_nowait()
                 except _queue_mod.Empty: break
                 for idx, item in g:
+                    scan_gate()  # an ABS library scan started meanwhile (cron every 30 min): pause the writes until it is done
                     _TL.logbuf = []
                     try: one(idx, item)
                     finally:
@@ -5789,6 +5821,7 @@ def run_books(work_queue, one):
         finally:
             stats.merge(_TL.stats); _TL.stats = None
     threads = [threading.Thread(target=worker, name=f"book-worker-{i+1}", daemon=True) for i in range(min(WORKERS, len(groups)))]
+    wait_for_abs_scan('the book step')
     logging.info(f"Parallel: {len(threads)} workers for {len(work_queue)} books ({len(groups)} author groups); max. 1 request at a time per host")
     for t in threads: t.start()
     for t in threads: t.join()
@@ -5997,11 +6030,13 @@ def main():
     if (SERIES_MERGE or LIBRARY_REPORT) and (not ONLY_ITEMS or FOLLOW_UP_TASKS):  # user 2026-11-15: 'only new' left merges + missing list undone
         lib_written = set()
         def lib_update(iid, key, *a, **kw):  # library-task writes are OUR writes: not a 'manual update' in the next run
+            scan_gate()  # no write while an ABS scan runs (it would overwrite it)
             ok = abs_update(iid, key, *a, **kw)
             if ok and not DRY_RUN: lib_written.add(key)
             return ok
         try:
             import abs_series
+            wait_for_abs_scan('the series & library task')
             series_result = abs_series.run({
                 'session': abs_session, 'abs_url': ABS_URL, 'library_ids': LIBRARY_IDS, 'dry_run': DRY_RUN,
                 'abs_update': lib_update, 'report_dir': REPORT_DIR, 'merge': SERIES_MERGE, 'report': LIBRARY_REPORT,
