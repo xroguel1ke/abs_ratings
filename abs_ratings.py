@@ -152,12 +152,14 @@ BOOK_LANGUAGES = []  # filled after LANGUAGE_MAP (below): languages the library 
 MISSING_SERIES = os.getenv('MISSING_SERIES', 'true').lower() == 'true'  # report missing volumes of the library's series (reports/missing_in_series.json)
 MISSING_NOVELLAS = os.getenv('MISSING_NOVELLAS', 'false').lower() == 'true'
 SERIES_BOOKS = {}  # (lib, series name lower) -> [{'num', 'title', 'asin', 'lang', 'author'}] from the listing
+GENRE_MAX = int(os.getenv('GENRE_MAX', '10') or 0)  # user 2026-11-15: at most 10 genres per book, rare single-book genres go (0 = off)
 GENRE_CLEANUP = os.getenv('GENRE_CLEANUP', 'true').lower() == 'true'  # one spelling per genre, no number-only / foreign-script genres (abs_series.normalize_genres)
 REMOVE_ROLE_CREDITS = os.getenv('REMOVE_ROLE_CREDITS', 'true').lower() == 'true'  # only real authors: remove 'X - illustrator', 'Y - translator', ...
 REMOVE_EMPTY_AUTHORS = os.getenv('REMOVE_EMPTY_AUTHORS', 'true').lower() == 'true'  # delete ABS author objects with 0 books
 ROLE_NAMES_FILE = os.path.join(SCRIPT_DIR, 'role_credits.json')  # names seen with a role suffix on Audible ('Kurone Mishima - illustrator')
 ROLE_NAMES = set()
 SERIES_ALIASES_FILE = os.path.join(SCRIPT_DIR, "series_aliases.json")  # {library: {"alias name": "series name"}} (editable)
+AUD_GENRES_FILE = os.path.join(SCRIPT_DIR, "audible_genres.json")       # genres that came from Audible categories (never 'rare', genre loop 2026-11-15)
 SERIES_INDEX_FILE = os.path.join(SCRIPT_DIR, "series_index.json")      # Series that exist in ABS (written by the series task)
 CHANGES_FILE = os.path.join(SCRIPT_DIR, "changes.jsonl")  # Every applied change (old -> new), used by abs_undo.py
 PLANNED_FILE = os.path.join(REPORT_DIR, f"planned_changes_{RUN_ID}.jsonl")  # DRY_RUN: what would have been changed
@@ -418,6 +420,8 @@ SUMMARY_INDEX_FILE = os.path.join(SCRIPT_DIR, 'summary_index.json')  # asin -> [
 SUMMARY_INDEX = {}
 IDENTITY_DESC_FILE = os.path.join(SCRIPT_DIR, 'identity_desc.json')  # books whose description was replaced after a confirmed other-book ASIN
 IDENTITY_DESC = set()
+SHARED_DESC_FILE = os.path.join(SCRIPT_DIR, 'shared_descriptions.json')  # keys whose text another library book has too (series task)
+SHARED_DESC = set()
 IDENTITY_META_FILE = os.path.join(SCRIPT_DIR, 'identity_meta.json')  # books whose title/authors/series came once from a confirmed other-book ASIN
 IDENTITY_META = set()
 SERIES_LIST_DAYS = float(os.getenv('SERIES_LIST_DAYS', 1))  # missing volumes: Audible series lists cached this long (user 2026-11-15: was 7 days, new volumes came a week late)
@@ -431,6 +435,7 @@ GR_CACHE = {}  # Filled in main()  # Set once Goodreads blocks us; GR is then sk
 reports = {"audible": {}, "goodreads": {}, "isbn": {}}
 AUTHOR_NOTES = []  # Author spelling differences between ABS and Audible (report only)
 SERIES_ALIASES, SERIES_INDEX = {}, {}  # Loaded in main()
+AUD_GENRES = set()  # genres mapped from Audible categories (all runs, AUD_GENRES_FILE)
 SEQ_TITLES = {}  # (lib, series name lower, number) -> normalized titles holding it (filled by build_queue)
 
 def _first_author(names):
@@ -502,6 +507,7 @@ def search_series(lib, series):
         out.append(x)
     return out
 
+SOLO_AUTHORS = {}  # author_key -> number of library books that list ONLY this author (co-author evidence, author loop 2026-11-15)
 SERIES_FACTS = {}  # (lib, series name lower) -> {'n': books, 'authors': first authors, 'folders': series folders, 'name'} (from the listing)
 
 def series_cleanup(lib, item_data, series, aud_series, book_authors, book_variant, verified, book_lang=None):
@@ -731,7 +737,8 @@ def canonical_series(lib, name, book_authors, book_variant=None):
     'The Sword of Shannara (Unabridged)' (lock check 2026-11-15)."""
     out = _canonical_series_raw(lib, name, book_authors, book_variant)
     if out and isinstance(out, tuple) and isinstance(out[0], str):
-        return (re.sub(r'(?i)\s*\((?:unabridged|ungek(?:ü|ue)rzt|abridged)\)\s*$', '', out[0]).strip(),) + tuple(out[1:])
+        from abs_series import strip_series_format as _ssf
+        return (_ssf(out[0]),) + tuple(out[1:])
     return out
 
 def _canonical_series_raw(lib, name, book_authors, book_variant=None):
@@ -1804,7 +1811,7 @@ def audible_result(p, asin, domain):
         'format': p.get('format_type'),
         'categories': [{'name': c} for c in categories],
         # series loop 2026-11-15: Audible's 'The Sword of Shannara (Unabridged)' series - the format label is no part of a series name
-        'series': [{'name': re.sub(r'(?i)\s*\((?:unabridged|ungek(?:ü|ue)rzt|abridged)\)\s*$', '', s.get('title')).strip(), 'part': aud_part(s.get('sequence')), 'asin': s.get('asin')}
+        'series': [{'name': __import__('abs_series').strip_series_format(s.get('title')), 'part': aud_part(s.get('sequence')), 'asin': s.get('asin')}
                    for s in (p.get('series') or []) if s.get('title')],
     }
     note_series(p.get('series'))
@@ -2961,6 +2968,7 @@ HC_DAILY_RESERVE = 25  # stop before the daily limit is used up completely
 HC_BOOK_FIELDS = "id title subtitle slug rating ratings_count compilation cached_featured_series contributions { author { name } } book_mappings(where:{platform_id:{_eq:1}}, limit:8){ external_id }"
 if not (recorder.RECORD_DIR or recorder.REPLAY_DIR):  # live: also the role of every contributor (illustrator, translator, ...); recordings keep the old query
     HC_BOOK_FIELDS = HC_BOOK_FIELDS.replace("contributions { author { name } }", "contributions { contribution author { name } }")
+    HC_BOOK_FIELDS += " release_year"  # user 2026-11-15: the year is the BOOK's release (not the audiobook's)
 # Hits that are not the book itself (unless the ABS title says so too)
 RE_HC_SPECIAL = re.compile(r'(?i)\b(graphic novel|comic|manga|coloring|colouring|adventure module|sourcebook|summary of|study guide|'
                            r'sparknotes|cliffsnotes|box(?:ed)? set|boxset|omnibus|collection|collector\W?s edition|books? \d+\s*[-–&]\s*\d+|summary|workbook)\b')
@@ -3078,7 +3086,7 @@ def hc_target_titles(aud, search_title, title, abs_subtitle=None):
 def hc_result(book, source):
     return {'gr_ids': hc_goodreads_ids(book), 'id': book.get('id'), 'slug': book.get('slug'), 'url': f"https://hardcover.app/books/{book.get('slug')}",
             'val': book.get('rating'), 'count': int(book.get('ratings_count') or 0), 'source': source, 'title': book.get('title'),
-            'authors': [a for a in hc_authors(book) if a], 'contributions': book.get('contributions') or [],
+            'authors': [a for a in hc_authors(book) if a], 'contributions': book.get('contributions') or [], 'year': book.get('release_year'),
             'alts': [t for t in (book.get('alternative_titles') or []) if t],
             'series': [(re.sub(r'\s*\([^)]*\)\s*$', '', ((book.get('featured_series') or book.get('cached_featured_series') or {}).get('series') or {}).get('name') or ''),
                         (book.get('featured_series') or book.get('cached_featured_series') or {}).get('position'))]}
@@ -3382,6 +3390,17 @@ def _plain_text(html_text):
 def _sum_norm(t):
     return re.sub(r'[^a-z0-9]+', ' ', re.sub(r'<[^>]+>', ' ', html_lib.unescape(t or '')).lower()).strip()
 
+def desc_language_wrong(own, audible, book_lang):
+    """An English text on a German book or a German one on an English book, while Audible's summary is in the book's language."""
+    w = lambda t: re.findall(r"[a-zäöüß]+", _plain_text(t).lower())
+    de = lambda xs: sum(x in ('der', 'die', 'und', 'das', 'ist', 'nicht', 'ein', 'eine', 'mit', 'sich', 'auf', 'dem', 'den', 'von') for x in xs)
+    en = lambda xs: sum(x in ('the', 'and', 'of', 'is', 'his', 'her', 'with', 'to', 'that', 'he', 'she', 'from') for x in xs)
+    a, b = w(own), w(audible); l = str(map_language(book_lang) or '')
+    if len(a) < 30 or len(b) < 30: return False
+    if l == 'German': return en(a) > 3 * max(1, de(a)) and de(b) > 3 * max(1, en(b))
+    if l == 'English': return de(a) > 3 * max(1, en(a)) and en(b) > 3 * max(1, de(b))
+    return False
+
 def description_of_other_book(own, asin, title):
     """The ABS description (without our block) is Audible's summary of ANOTHER book (round 3, 2026-11-09: 86 Vol. 4 had Vol. 5's text,
     Tom Sawyer had Iron Gold's): it differs from this book's own summary, matches another product's (>= 0.75, 6-word phrases shared)
@@ -3643,6 +3662,8 @@ def note_listing_item(lib_id, it):
     KEY_DUR[key] = (it.get('media') or {}).get('duration')
     if t_ := normalize_title_text(md_.get('title') or ''): TITLE_OWNERS.setdefault((lib_id, t_), set()).add((key, _first_author(md_.get('authorName'))))
     if i_ := normalize_isbn(md_.get('isbn')): ISBN_OWNERS.setdefault(i_, set()).add(key)
+    if (an_ := [a.strip() for a in str(md_.get('authorName') or '').split(',') if a.strip()]) and len(an_) == 1:
+        with IO_LOCK: SOLO_AUTHORS[re.sub(r'[^a-z]', '', fold_accents(an_[0]).lower())] = SOLO_AUTHORS.get(re.sub(r'[^a-z]', '', fold_accents(an_[0]).lower()), 0) + 1
     for sn_, q_ in split_series_name(md_.get('seriesName'), LIB_SERIES_NAMES.get(lib_id)):
         if sn_:
             SERIES_BOOKS.setdefault((lib_id, sn_.lower()), []).append({'num': q_, 'title': md_.get('title'), 'asin': md_.get('asin'),
@@ -4777,6 +4798,21 @@ def process_queue(work_queue, history, failed, recheck):
                     # in brackets at the end ('A LitRPG Adventure (Defiance of the Fall, Book 5)') - last, so no rule above sets it again
                     from abs_series import clean_series_label_subtitle as _csl
                     cur_s = abs_updates.get('subtitle', meta.get('subtitle')) or ''
+                    # subtitle loop 2026-11-15: a subtitle of ANOTHER edition / book ('Testimonios sobre ...' on Grave Peril, 'An Evans Pack
+                    # Story' on Storm Glass, 'Sons of Ares #1' on Red Rising): same recording, not Audible's, no word in common with the
+                    # title, series, authors, Audible's title / subtitle or the description - Audible's subtitle (or none). Taglines stay.
+                    st_ = {'the', 'and', 'of', 'a', 'an', 'in', 'to', 'for', 'book', 'books', 'series', 'novel', 'volume', 'vol', 'part', 'story',
+                           'tale', 'tales', 'from', 'with', 'edition', 'saga', 'trilogy'}
+                    ws_ = lambda t: {x for x in re.findall(r"[a-z]{4,}", fold_accents(re.sub(r'<[^>]+>', ' ', str(t or ''))).lower()) if x not in st_}
+                    if cur_s and not ({'lock_subtitle', 'lock_title'} & set(tags)) and normalize_title_text(cur_s) != normalize_title_text(aud_sub or '') \
+                            and _csl(cur_s, ser_now, meta.get('language') or lang) == cur_s \
+                            and not re.match(r'(?i)^an?\s.*\b(?:litrpg|gamelit|fantasy|sci-?fi|epic|adventure|isekai|cultivation|novel|saga)\b', cur_s) \
+                            and same_recording(abs_dur, meta.get('narrators'), aud_data) and ws_(cur_s) \
+                            and not (ws_(cur_s) & (ws_(abs_updates.get('title', title)) | ws_(' '.join(x_.get('name') or '' for x_ in ser_now)) | ws_(' '.join(authors or []))
+                                                   | ws_(aud_data.get('title_raw')) | ws_(aud_sub) | ws_(meta.get('description')) | ws_(aud_data.get('summary')))):
+                        abs_updates['subtitle'] = aud_sub or ''
+                        log_updates.append(f"Subtitle: '{cur_s}' -> '{aud_sub or ''}' (subtitle of another edition)")
+                        cur_s = aud_sub or ''
                     new_s = _csl(cur_s, abs_updates.get('series') or meta.get('series') or [], meta.get('language') or lang)
                     t_fin = abs_updates.get('title', title) or ''
                     if new_s and len(normalize_title_text(new_s).split()) >= 1 and (not aud_title or normalize_title_text(t_fin).startswith(normalize_title_text(aud_title))) \
@@ -4850,8 +4886,11 @@ def process_queue(work_queue, history, failed, recheck):
                         from abs_series import genre_key as _gk
                         have_g = {_gk(c) for c in current_genres}  # 'Science fiction' already there = 'Science Fiction' (no re-add after the genre cleanup)
                         added_genres = [g for g in new_genres_list if _gk(g) not in have_g and not have_g.add(_gk(g))]
+                        with IO_LOCK: AUD_GENRES.update(new_genres_list)
+                        if GENRE_MAX and len(current_genres) >= GENRE_MAX: added_genres = []  # full: the series task chose these (no ping-pong)
                         if added_genres:
-                            abs_updates['genres'] = current_genres + added_genres
+                            # genre loop 2026-11-15: Audible's genres first - the series task keeps at most GENRE_MAX, Audible's before the rest
+                            abs_updates['genres'] = added_genres + current_genres
                             log_updates.append(f"Genres: +{added_genres}")
                     else:
                         current_genres = meta.get('genres') or []
@@ -5199,6 +5238,18 @@ def process_queue(work_queue, history, failed, recheck):
                             if re.sub(r'[^a-z]', '', fold_accents(an).lower()) not in abs_norm and match_author(authors, an):
                                 AUTHOR_NOTES.append({'title': title, 'abs': authors, 'audible': an})
                                 logging.info(f"        ℹ️ Author spelling differs: ABS {authors} vs Audible '{an}' (not changed, listed in report)")
+                        # user 2026-11-15: a real CO-AUTHOR Audible lists for the same recording is added (Dakota Krout on Artorian's Archives,
+                        # Brandon Sanderson on A Memory of Light). Only a person who writes books of their own in this library (no pen name
+                        # of the same writer: 'Travis Deverell' = Shirtaloon, 'puddles4263' = Noret Flood), no role, no publisher
+                        co_ = [an for an in aud_auth if re.sub(r'[^a-z]', '', fold_accents(an).lower()) not in abs_norm and not match_author(authors, an)
+                               and SOLO_AUTHORS.get(re.sub(r'[^a-z]', '', fold_accents(an).lower()), 0) >= 1 and 2 <= len(an.split()) <= 4
+                               and not re.search(r'(?i)\d|\b(?:books|publishing|press|studios?|media|audio|entertainment|llc|inc)\b', an)]
+                        if co_ and 'lock_authors' not in tags and not abs_updates.get('authors') and same_recording(abs_dur, meta.get('narrators'), aud_data) \
+                                and all(len(a_.split()) >= 2 for a_ in authors):
+                            order_ = [a_ for a_ in aud_auth if a_ in co_ or match_author(authors, a_)]
+                            new_a = [next((a_ for a_ in authors if match_author([a_], b_)), b_) for b_ in order_] + [a_ for a_ in authors if not any(match_author([a_], b_) for b_ in order_)]
+                            abs_updates['authors'] = [{'name': n_} for n_ in dict.fromkeys(new_a)]
+                            log_updates.append(f"Authors: {authors} -> {list(dict.fromkeys(new_a))} (co-author on Audible, writes own books in the library)")
                         ko2_ = lambda n_: ''.join(sorted(re.findall(r'[a-z]+', fold_accents_s(n_).lower())))
                         if new_book and 'lock_authors' not in tags and not abs_updates.get('authors') and len(authors) == len(aud_auth) \
                                 and verified_recording(abs_dur, meta.get('narrators'), authors, aud_data) and (
@@ -5363,6 +5414,13 @@ def process_queue(work_queue, history, failed, recheck):
                     elif hc_data:
                         logging.info(f"        ✓ Hardcover cross-check against Audible: {cc_why}")
                         hc_learn_roles(hc_data)
+                        # user 2026-11-15: publishedYear = the book's first release (Hardcover, cross-checked against Audible), not the audiobook's;
+                        # never later than Audible's release of this recording
+                        hy_ = hc_data.get('year'); ay_ = parse_release_year(((aud_data or {}).get('meta_raw') or {}).get('releaseDate'))
+                        if hy_ and str(hy_).isdigit() and 1400 < int(hy_) <= datetime.now().year and (not ay_ or int(hy_) <= int(ay_)) \
+                                and str(hy_) != str(meta.get('publishedYear') or '').strip() and 'lock_year' not in tags and not skip_meta \
+                                and abs_update(iid, key, title, {'publishedYear': str(hy_)}, meta, 'book_year'):
+                            logging.info(f"        📅 Year: '{meta.get('publishedYear')}' -> '{hy_}' (first release of the book, Hardcover){' (DRY_RUN, not saved)' if DRY_RUN else ''}")
                 if HARDCOVER_ENABLED and hc_status != 'fresh': stats['hc_found' if hc_data else 'hc_missing'] += 1
                 sst_record(key, 'hardcover', 'found' if hc_data else hc_status, LOOKUP_HITS['hardcover'])
                 if hc_data and (not aud_data or aud_data.get('related_edition')) and 'lock_asin' not in tags:
@@ -5416,6 +5474,11 @@ def process_queue(work_queue, history, failed, recheck):
                             fix = (a_i, 'audio edition ISBN, Audible'); ISBN_OWNERS.setdefault(a_i, set()).add(key); stats['isbn_repaired'] += 1
                             logging.info(f"        🔧 ISBN '{meta.get('isbn')}' is wrong ({bad_isbn}): replaced by {a_i} (no print ISBN found; audio edition, Audible){' (DRY_RUN, not saved)' if DRY_RUN else ''}")
                     isbn_written = bool(fix)
+                    if not fix and bad_isbn == 'value is an ASIN, not an ISBN' and asin and 'lock_isbn' not in tags and not skip_meta \
+                            and abs_update(iid, key, title, {'isbn': ''}, meta, 'isbn_was_asin'):
+                        # user 2026-11-15: an ASIN in the ISBN field goes (the book has its own ASIN; 135 books, mostly Kindle ASINs)
+                        logging.info(f"        🧹 ISBN '{meta.get('isbn')}' is an ASIN, not an ISBN: removed{' (DRY_RUN, not saved)' if DRY_RUN else ''}")
+                        fix = ('', 'removed'); isbn_written = True
                     if not fix and bad_isbn and 'lock_isbn' not in tags:
                         # nothing to decide (no candidate): not on the review list but in the report missing_isbn.json (status page)
                         logging.info(f"        ℹ️ ISBN '{meta.get('isbn')}' looks wrong ({bad_isbn}); no verified replacement, left unchanged (ISBN report)")
@@ -5473,6 +5536,14 @@ def process_queue(work_queue, history, failed, recheck):
                         base_desc = summary  # provably not the user's own text: another book's summary
                         stats['desc_filled'] += 1
                         logging.info(f"        📝 Description replaced by Audible's summary (it was the description of '{other_d}')")
+                    elif summary and aud_data and not aud_data.get('related_edition') and (key in SHARED_DESC or desc_language_wrong(strip_rating_block(cur_desc), summary, meta.get('language') or lang)) \
+                            and (same_recording(abs_dur, meta.get('narrators'), aud_data) or title_similarity(title, aud_data.get('title_raw') or '') >= 0.7) \
+                            and normalize_desc(strip_rating_block(cur_desc)) != normalize_desc(summary):
+                        # description loop 2026-11-15: the same text as ANOTHER library book (Dragon Heart 1 = 4, Shield Hero 1 = 3 = 4: series task
+                        # list) or a text in another language than the book (English text on 'Der Hobbit') -> this recording's Audible summary
+                        base_desc = summary
+                        stats['desc_filled'] += 1
+                        logging.info(f"        📝 Description replaced by Audible's summary ({'another book of the library has the same text' if key in SHARED_DESC else 'the text was in another language'})")
                     elif summary and (why_d := description_replaceable(strip_rating_block(cur_desc), summary)):
                         base_desc = summary  # user rule 2026-11-03: only a provably truncated / very short text, never an own long one
                         stats['desc_filled'] += 1
@@ -5781,6 +5852,7 @@ def main():
     HC_CACHE.update(rw_json(HC_CACHE_FILE))
     SERIES_ALIASES.update(rw_json(SERIES_ALIASES_FILE))
     SERIES_INDEX.update(rw_json(SERIES_INDEX_FILE))
+    AUD_GENRES.update((rw_json(AUD_GENRES_FILE) or {}).get('genres') or [])
     if SERIES_ALIASES or SERIES_INDEX:
         logging.info(f"Series aliases: {sum(len(v) for v in SERIES_ALIASES.values())} | Known series: {sum(len(v) for v in SERIES_INDEX.values())}")
     RESULTS.update(rw_json(RESULTS_FILE)); OVERRIDES.update(rw_json(OVERRIDES_FILE))
@@ -5791,6 +5863,7 @@ def main():
     LAST_WRITTEN.update(rw_json(LAST_WRITTEN_FILE) or {}); MANUAL_FIELDS.update(rw_json(MANUAL_FIELDS_FILE) or {})
     FILLED_NARR.update(rw_json(FILLED_NARR_FILE) or [])
     IDENTITY_DESC.update(rw_json(IDENTITY_DESC_FILE) or [])
+    SHARED_DESC.update(rw_json(SHARED_DESC_FILE) or [])
     IDENTITY_META.update(rw_json(IDENTITY_META_FILE) or [])
     SUMMARY_INDEX.update(rw_json(SUMMARY_INDEX_FILE) or {})
     try:  # also every narrator fill already in the journal (runs before this file existed)
@@ -5841,14 +5914,15 @@ def main():
                 'lock_after_merge': SERIES_LOCK_AFTER_MERGE, 'author_normalize': AUTHOR_NORMALIZE,
                 'aliases': SERIES_ALIASES, 'aliases_file': SERIES_ALIASES_FILE, 'index_file': SERIES_INDEX_FILE,
                 'decisions_file': os.path.join(SCRIPT_DIR, 'merge_decisions.json'), 'merges_file': os.path.join(SCRIPT_DIR, 'merges.json'),
-                'review_file': os.path.join(SCRIPT_DIR, 'merge_review.json'),
+                'review_file': os.path.join(SCRIPT_DIR, 'merge_review.json'), 'shared_desc_file': SHARED_DESC_FILE,
                 'author_links': {n: sorted(a) for n, a in AUTHOR_LINKS.items()},
-                'remove_role_credits': REMOVE_ROLE_CREDITS, 'genre_cleanup': GENRE_CLEANUP, 'book_languages': list(BOOK_LANGUAGES), 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
+                'remove_role_credits': REMOVE_ROLE_CREDITS, 'genre_cleanup': GENRE_CLEANUP, 'audible_genres': AUD_GENRES, 'genre_max': GENRE_MAX, 'book_languages': list(BOOK_LANGUAGES), 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
                 'audible_series_names': set(SERIES_ASINS),
                 'new_book_days': NEW_BOOK_DAYS,
                 'extra': {'author_notes': AUTHOR_NOTES, 'unmapped_genres': UNMAPPED_GENRES},
             })
             stats['series_merged'] = series_result.get('merges', 0)
+            if not DRY_RUN and AUD_GENRES: rw_json(AUD_GENRES_FILE, {'genres': sorted(AUD_GENRES)})
             if lib_written:  # 2026-11-09: 188 genre writes made 193 'manual updates' (full lookups, 1800 Hardcover requests) next run
                 stamp = datetime.now(timezone.utc).isoformat(timespec='seconds')
                 for k_ in lib_written:

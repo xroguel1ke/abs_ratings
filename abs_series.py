@@ -635,12 +635,20 @@ def covered_by_series(name, seq, series):
                                                        and num(x.get('sequence')) == num(seq) for x in series or [])
 
 
+def strip_series_format(name):
+    """'Spice and Wolf (Light Novel)' / 'How a Realist Hero Rebuilt the Kingdom Light Novel' / 'The Sword of Shannara (Unabridged)' ->
+    the name without the format label (user 2026-11-15: '(Light Novel)' out of series names too)."""
+    n = re.sub(r'(?i)\s*\((?:light\s*novels?|unabridged|ungek(?:ü|ue)rzt|abridged)\)', '', name or '')
+    n = re.sub(r'(?i)\s+light\s*novels?\s*$', '', n)
+    return re.sub(r'\s{2,}', ' ', n).strip() or (name or '')
+
+
 def tidy_series_entries(ctx, records):
     """Series loop 2026-11-15: 'The Devils ' / 'Battle Mage Farmer ' (a trailing space makes a second series in ABS), 'Qi=MC^2)' (a
     lone closing bracket), numbers '01' -> '1', '01–07' -> '1-7'. lock_series respected."""
     abs_update, dry = ctx['abs_update'], ctx['dry_run']
     def nm(n):
-        n = re.sub(r'\s{2,}', ' ', (n or '').strip())
+        n = strip_series_format(re.sub(r'\s{2,}', ' ', (n or '').strip()))
         if n.endswith(')') and '(' not in n: n = n[:-1].rstrip()
         return n
     def sq(q):
@@ -656,6 +664,22 @@ def tidy_series_entries(ctx, records):
             logging.info(f"   📚 SERIES{' (DRY_RUN)' if dry else ''}: '{r['title']}': spelling {[(x['name'], x.get('sequence')) for x in r['series']]} -> {[(x['name'], x.get('sequence')) for x in new]}")
             r['series'] = new
     return changed
+
+
+def shared_descriptions(ctx, records):
+    """Keys whose description text (without the rating block) another library book of another ASIN has too - the per-book step then
+    takes this recording's Audible summary (description loop 2026-11-15: Dragon Heart 1 = 4, Pendulum of Fate 1 = 2)."""
+    def body(d):
+        d = re.sub(r'(?s)─── .*? ───.*?─{6,}(?:<br\s*/?>)?', '', d or '')
+        return re.sub(r'\W+', '', re.sub(r'<[^>]+>', ' ', d).lower())[:400]
+    groups = defaultdict(list)
+    for r in records:
+        b = body(r.get('description'))
+        if len(b) >= 120: groups[(r['lib'], b)].append(r)
+    keys = sorted(f"{r['lib']}_{r['id']}" for lst in groups.values() if len({r.get('asin') for r in lst}) > 1 for r in lst)
+    if ctx.get('shared_desc_file') and not ctx['dry_run']: _save(ctx['shared_desc_file'], keys)
+    if keys: logging.info(f"   📝 Descriptions shared by several books: {len(keys)} (each takes its own Audible summary in the next run)")
+    return keys
 
 
 def split_joined_narrators(ctx, records):
@@ -695,6 +719,9 @@ def normalize_genres(ctx, records):
         k, cur = genre_key(g), best.get(genre_key(g))
         if k and (cur is None or (n, g[:1].isupper(), g.count(' '), g) > (cnt[cur], cur[:1].isupper(), cur.count(' '), cur)): best[k] = g
     changed = 0
+    gmax = int(ctx.get('genre_max') or 0)
+    cnt_all = Counter(genre_key(x) for r in records for g in r['genres'] if isinstance(g, str) for x in split_(g))  # books per genre
+    props = []
     for r in records:
         if not r['genres'] or 'lock_genres' in r['tags'] or 'lock_all' in r['tags']: continue
         en_de = str(r.get('language') or '').strip().lower() in ('english', 'german', 'eng', 'deu', 'ger', 'en', 'de')
@@ -718,6 +745,28 @@ def normalize_genres(ctx, records):
             k = genre_key(g) if isinstance(g, str) else ''
             if not k or k.isdigit() or k in seen or (en_de and not is_latin(g)): continue
             seen.add(k); out.append(best.get(k, g.strip()))
+        if gmax and out:
+            # user 2026-11-15: at most GENRE_MAX genres (Audible's first, then the others in their order) and no genre that only this
+            # book has (unless it came from Audible) - at least 3 genres stay
+            aud_g = {genre_key(x) for x in ctx.get('audible_genres') or ()}
+            rare = [g for g in out if isinstance(g, str) and cnt_all.get(genre_key(g), 0) <= 1 and genre_key(g) not in aud_g]
+            if rare and len(out) - len(rare) >= 3: out = [g for g in out if g not in rare]
+            if len(out) > gmax:
+                # Audible's first, then the genres the library uses most ('LitRPG' on 610 books stays before a one-off tag)
+                keep_ = set(sorted(out, key=lambda g: (0 if isinstance(g, str) and genre_key(g) in aud_g else 1, -cnt_all.get(genre_key(g) if isinstance(g, str) else '', 0)))[:gmax])
+                out = [g for g in out if g in keep_]  # the book's own order
+        props.append((r, out))
+    if gmax:
+        # rarity on the RESULT (a genre left on one book after the cap goes now, not one run later - stable in one run)
+        aud_g = {genre_key(x) for x in ctx.get('audible_genres') or ()}
+        for _ in range(5):
+            cnt_new = Counter(genre_key(g) for r, out in props for g in out if isinstance(g, str))
+            moved = False
+            for i, (r, out) in enumerate(props):
+                rare = [g for g in out if isinstance(g, str) and cnt_new.get(genre_key(g), 0) <= 1 and genre_key(g) not in aud_g]
+                if rare and len(out) - len(rare) >= 3: props[i] = (r, [g for g in out if g not in rare]); moved = True
+            if not moved: break
+    for r, out in props:
         if out and out != r['genres']:
             if abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'genres': out}, {'genres': r['genres']}, 'genre_cleanup'):
                 changed += 1
@@ -872,6 +921,34 @@ def clean_series_label_subtitle(sub, series, lang=None):
         rest = m.group(1).strip(' ,:-')
         return '' if re.fullmatch(r'(?i)light novel|novel|unabridged|ungek(?:ü|ue)rzt', rest) else rest  # 'Light Novel (Mushoku Tensei, Book 28)'
     return sub
+
+
+def number_shared_titles(ctx, records):
+    """Volumes of one series that are only titled with (a part of) the series name get their number (user 2026-11-15: 'Reborn to
+    Master the Blade' 1 + 2 and 'Reborn to Master the Blade: From Hero-king ...' 3 + 4 -> 'Reborn to Master the Blade, Vol. 1' ...).
+    Needs 2+ such volumes with different numbers; the shortest of their titles is used for all. A single volume titled like its series
+    stays ('The Dark Tower' #7, 'Mistborn' #1). lock_title respected."""
+    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    num = lambda q: float(q) if re.fullmatch(r'\d+(?:\.\d+)?', str(q or '').strip()) else None
+    groups = defaultdict(list)
+    for r in records:
+        for x in r['series']:
+            sn, t = _lbl_words(x['name']), _lbl_words(r['title'])
+            if t and num(x.get('sequence')) is not None and (t == sn or sn.startswith(t + ' ')) and not re.search(r'\d', r['title']):
+                groups[(r['lib'], sn)].append((r, x))
+    changed = 0
+    for lst in groups.values():
+        if len(lst) < 2 or len({num(x.get('sequence')) for _, x in lst}) < len(lst): continue
+        base = min((r['title'] for r, _ in lst), key=len).strip().rstrip(':,')
+        for r, x in lst:
+            if r['tags'] & {'lock_title', 'lock_all', 'lock_metadata'}: continue
+            q = str(x['sequence']).strip()
+            new = f"{base}, Vol. {q}"
+            if new != r['title'] and abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'title': new}, {'title': r['title']}, 'shared_title_number'):
+                changed += 1
+                logging.info(f"   📚 TITLE{' (DRY_RUN)' if dry else ''}: '{r['title']}' -> '{new}' (several volumes had this title)")
+                r['title'] = new
+    return changed
 
 
 def harmonize_series_titles(ctx, records):
@@ -1419,8 +1496,10 @@ def run(ctx):
         ctx['folder_series'] = fill_folder_series(ctx, records)
         ctx['folder_numbers'] = fill_folder_numbers(ctx, records)
         ctx['subseries_numbers'] = fill_from_subseries(ctx, records)
+        ctx['shared_titles'] = number_shared_titles(ctx, records)
         ctx['series_titles'] = harmonize_series_titles(ctx, records)
     ctx['narrators_split'] = split_joined_narrators(ctx, records)
+    ctx['shared_desc'] = len(shared_descriptions(ctx, records))
     if ctx.get('genre_cleanup'):
         ctx['genres_cleaned'] = normalize_genres(ctx, records)
         logging.info(f"   Genre spellings cleaned: {ctx['genres_cleaned']} books")

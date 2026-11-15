@@ -469,4 +469,5 @@ add({  # page tour 2026-11-08
     'No findings': 'Ohne Befund',
     'This book has no chapters.': 'Dieses Buch hat keine Kapitel.',
     "Audible's chapters could not be matched to the file reliably, so none were set. In ABS: Edit > Chapters > look up chapters, and check them.": 'Audibles Kapitel ließen sich der Datei nicht zuverlässig zuordnen, deshalb wurden keine gesetzt. In ABS: Bearbeiten > Kapitel > Kapitel suchen, und prüfen.',
+    'Genres per book (max.)': 'Genres pro Buch (max.)', "Audible's genres stay first; genres only one book has go. 0 = no limit": 'Audibles Genres bleiben vorne; Genres, die nur ein Buch hat, fallen weg. 0 = ohne Grenze',
 })

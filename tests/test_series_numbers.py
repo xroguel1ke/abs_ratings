@@ -255,3 +255,14 @@ def test_genre_loop_keeps_real_genres():
     c, calls = ctx()
     S.normalize_genres(c, [r])
     assert not calls  # nothing to change
+
+
+def test_number_shared_titles():
+    n = 'Reborn to Master the Blade: From Hero-King to Extraordinary Squire'
+    recs = [rec(i, t, '2023', [(n, str(i))], 'H/R', author='H') for i, t in
+            [(1, 'Reborn to Master the Blade'), (2, 'Reborn to Master the Blade'), (3, 'Reborn to Master the Blade: From Hero-king to Extraordinary Squire'),
+             (4, 'Reborn to Master the Blade: From Hero-king to Extraordinary Squire')]]
+    c, _ = ctx()
+    assert S.number_shared_titles(c, recs) == 4 and [r['title'] for r in recs] == [f'Reborn to Master the Blade, Vol. {i}' for i in (1, 2, 3, 4)]
+    one = [rec(7, 'The Dark Tower', '2004', [('The Dark Tower', '7')], 'K/D', author='K'), rec(1, 'The Gunslinger', '1982', [('The Dark Tower', '1')], 'K/D', author='K')]
+    assert S.number_shared_titles(c, one) == 0

@@ -70,6 +70,7 @@ FIELDS = [
     ('UPDATE_COVERS', 'Replace existing covers', 'bool', True, 'Only for a verified ASIN; the old cover is backed up', 'Metadata'),
     ('GENRE_LANGUAGE', 'Genre language', 'choice:en|keep', 'en', 'Audible.de genres are translated to English', 'Metadata'),
     ('GENRE_RULES', 'Genre rules', 'text', '', 'One per line: "Old => New" renames, "Old => -" blocks a genre', 'Metadata'),
+    ('GENRE_MAX', 'Genres per book (max.)', 'int', 10, "Audible's genres stay first; genres only one book has go. 0 = no limit", 'Metadata'),
 
     ('SERIES_MERGE', 'Merge series automatically', 'bool', True, 'Only safe cases; uncertain ones go to the review list', 'Series & authors'),
     ('AUTHOR_NORMALIZE', 'Unify author spellings', 'bool', True, '', 'Series & authors'),

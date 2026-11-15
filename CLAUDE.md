@@ -200,6 +200,14 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     publisher -> Audible's. Genres: comma lists split only when every part is a library genre, 'Ebooks', 'place : publisher' and
     foreign genres on English books go. Literal '\\n' in descriptions -> line break. Chapters ending > max(5 min, 3%) before the file
     are poor; Audible's are taken only when they cover the file (+-5%).
+  - User decisions 2026-11-15: co-authors from Audible are added (same recording, the person has own books in the library: no pen
+    names); '(Light Novel)' / ' Light Novel' leave series names (strip_series_format: Audible parse, canonical_series, series task);
+    an ASIN in the ISBN field is removed; publishedYear = the BOOK's first release (Hardcover release_year, cross-checked, never after
+    Audible's release); GENRE_MAX (web UI, 10): Audible's genres first, then the library's most used, single-book genres go (stable in
+    one run; full books get no Audible genre re-added); number_shared_titles: 2+ volumes titled like (part of) the series name ->
+    'Title, Vol. N'; shared descriptions (series task -> shared_descriptions.json) and wrong-language texts take Audible's summary;
+    a subtitle with no word in common with the book (title, series, authors, Audible, description) = another edition's -> Audible's.
+  - Regress and run_round on the same FAKE_PORT collide (watch_test failed once): use another port for parallel replay runs.
   - tools/run_round.sh RECORD_NO_LIVE is a HOST LIST, not a flag ('1' matched every URL with a 1, web pages went live and were
     recorded -> golden deviations). For library-wide comparisons use mode 'replay' (nothing recorded).
   - Book folders: new ones are named 'N - Title {Narrator}' (user 2026-11-15; several: '{A} {B}' or '{A, B}'); the old
