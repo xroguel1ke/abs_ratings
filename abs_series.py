@@ -881,7 +881,7 @@ def normalize_genres(ctx, records):
 
 
 RATING_TAGS = (4.5, 4.7, 4.9)  # Audible overall rating tags (at least 50 ratings; user 2026-11-15: 4.9 instead of 4.8)
-HC_RATING_TAGS = (4.0, 4.2, 4.4)  # Hardcover rating tags (user 2026-11-15; at least 10 ratings - Hardcover has far fewer)
+HC_RATING_TAGS = (4.0, 4.2, 4.4)  # Hardcover rating tags (user 2026-11-15; at least 50 ratings like Audible)
 FULL_CAST_RE = re.compile(r'(?i)full[\s-]*cast|dramati[sz](?:ed|ation)|audio\s*drama|radio\s*drama|h(?:ö|oe)rspiel|graphic\s*audio')
 
 
@@ -897,7 +897,8 @@ def manage_tags(ctx, records):
             | {genre_key(g) for g in ctx.get('audible_genres') or ()} | {genre_key(x) for x in (
                 'Genre Fiction', 'Literatur & Belletristik', 'Klassiker', 'Action & Abenteuer', 'Abenteuer', 'Dystopien', 'Family & Relationships',
                 'Animals & Nature', 'Christian Fiction', 'Collections & Anthologies', 'Anthologien & Kurzgeschichten', 'Kulturen & Geografie',
-                'Mit Videospiel-', 'Film- & Fernsehbezug', 'Belletristik', 'Mystery, Thriller & Suspense', 'Kinder-Hörbücher', 'Jugendliche & Heranwachsende')}
+                'Mit Videospiel-', 'Film- & Fernsehbezug', 'Belletristik', 'Mystery, Thriller & Suspense', 'Kinder-Hörbücher', 'Jugendliche & Heranwachsende',
+                'Science-Fiction et fantasy', 'Épique', 'Urbain et paranormal', 'Contemporain', "Women's Adventure", 'Historisch')}
     changed = 0
     for r in records:
         if r['tags'] & {'lock_all', 'lock_metadata', 'lock_tags'}: continue
@@ -914,17 +915,14 @@ def manage_tags(ctx, records):
         # 'Audible 4.5+' (user 2026-11-15): Audible's overall rating of the rating block >= 4.5 with at least 50 ratings; gone when it drops
         m_ = re.search(r'Audible \((\d+)\):(?:<br\s*/?>|\s)*\S*\s*\S*\s*([\d.]+) / 5 - (?:Overall|Gesamt)', r.get('description') or '')
         # user 2026-11-15: cumulative - a 4.8 book has 'Audible 4.5+', 'Audible 4.7+' and 'Audible 4.8+' (filter 4.7+ = everything >= 4.7)
-        for lim in RATING_TAGS:
-            tag_ = f'Audible {lim}+'
-            top = bool(m_ and int(m_.group(1)) >= 50 and float(m_.group(2)) >= lim)
-            if top and tag_ not in new: new.append(tag_)
-            elif not top and tag_ in new: new.remove(tag_)
+        # user 2026-11-15: only the HIGHEST level per source (a 4.9 book has 'Audible 4.9+' only), at least 50 ratings for both sources
         h_ = re.search(r'Hardcover \((\d+)\):(?:<br\s*/?>|\s)*\S*\s*\S*\s*([\d.]+) / 5 - (?:Rating|Bewertung)', r.get('description') or '')
-        for lim in HC_RATING_TAGS:
-            tag_ = f'Hardcover {lim}+'
-            top = bool(h_ and int(h_.group(1)) >= 10 and float(h_.group(2)) >= lim)
-            if top and tag_ not in new: new.append(tag_)
-            elif not top and tag_ in new: new.remove(tag_)
+        for src_, mm_, levels in (('Audible', m_, RATING_TAGS), ('Hardcover', h_, HC_RATING_TAGS)):
+            best = max((l for l in levels if mm_ and int(mm_.group(1)) >= 50 and float(mm_.group(2)) >= l), default=None)
+            for l in levels:
+                tag_ = f'{src_} {l}+'
+                if l == best and tag_ not in new: new.append(tag_)
+                elif l != best and tag_ in new: new.remove(tag_)
         marker = ' '.join([r['title'] or '', r.get('subtitle') or '', r.get('path') or ''] + [x['name'] or '' for x in r['series']] + [str(g) for g in r['genres']] + list(r['narrators']))
         fc = bool(FULL_CAST_RE.search(marker)) or len({n.strip().lower() for n in r['narrators'] if n and n.strip()}) >= 5
         if fc and 'Full Cast' not in new: new.append('Full Cast')

@@ -1196,7 +1196,27 @@ def abs_update(iid, key, title, updates, old_meta, source, tags=None, old_tags=N
         if field in WATCH_FIELDS and not DRY_RUN:
             with IO_LOCK: LAST_WRITTEN.setdefault(key, {})[field] = {'ours': listing_value(field, new), 'old': listing_value(field, (old_meta or {}).get(field))}
     if tags is not None: journal_change(iid, key, title, 'tags', old_tags, tags, source, extra)
+    if not DRY_RUN and key:
+        with IO_LOCK: OUR_WRITTEN.add(key)
     return True
+
+OUR_WRITTEN = set()  # keys this run wrote to
+
+def refresh_own_fingerprints():
+    """Check of the run 2026-11-15: 1884 'manual updates' after a run that changed genres / tags of most books - the fingerprints were
+    those seen at the START of that run, before our own writes. After the run, the books we wrote get the fingerprint of their new
+    state (one listing per library), so only YOUR later changes count as manual updates."""
+    if DRY_RUN or not OUR_WRITTEN: return
+    fp = rw_json(META_FP_FILE) or {}; n = 0
+    for lib in LIBRARY_IDS:
+        try: items = abs_session.get(f"{ABS_URL}/api/libraries/{lib}/items", timeout=120).json().get('results') or []
+        except Exception as e:
+            logging.warning(f"   Fingerprints of {lib} not refreshed: {e}"); continue
+        for it in items:
+            k = f"{lib}_{it['id']}"
+            if k in OUR_WRITTEN: fp[k] = meta_fingerprint(it); n += 1
+    rw_json(META_FP_FILE, fp)
+    logging.info(f"   Fingerprints refreshed for {n} book(s) written in this run (no 'manual update' next run)")
 
 def image_ext(data):
     """File extension from the image bytes (magic numbers)."""
@@ -6006,6 +6026,8 @@ def main():
             logging.error("abs_series.py not found next to abs_ratings.py - series task skipped.")
         except Exception as e:
             logging.exception(f"Series task failed: {e}")
+    try: refresh_own_fingerprints()
+    except Exception as e: logging.warning(f"Fingerprint refresh failed: {e}")
     if MISSING_SERIES and (not ONLY_ITEMS or FOLLOW_UP_TASKS) and USE_AUDIBLE_API and 'audible' not in SOURCE_DOWN:
         # the library task may have merged / renamed series in THIS run: the series of the listing loaded at the start are stale
         # (2026-11-15: 'Spice and Wolf' and 'Spice and Wolf (Light Novel)' both on the list right after their merge) -> reload

@@ -303,7 +303,7 @@ def test_manage_tags():
     r2 = dict(r, id=9, media_tags=['Audible 4.9+'], description='Audible (900):<br />🏆 x 4.9 / 5 - Overall', _themes=set())
     r3 = dict(r, id=8, media_tags=['Audible 4.5+', 'Audible 4.7+', 'Audible 4.9+'], description='Audible (900):<br />🏆 x 4.8 / 5 - Overall', _themes=set())
     S.manage_tags(ctx_, [r2, r3])
-    assert got[9] == ['Audible 4.9+', 'Audible 4.5+', 'Audible 4.7+'] and got[8] == ['Audible 4.5+', 'Audible 4.7+'], (got[9], got[8])
+    assert 9 not in got and got[8] == ['Audible 4.7+'], (got.get(9), got[8])  # only the highest level
     assert got[2] == ['Full Cast'], got[2]  # 5 narrators; only 12 Audible ratings: no 'Audible 4.5+'
     assert got[3] == [], got[3]  # two narrators are no full cast
 
@@ -326,5 +326,8 @@ def test_hardcover_rating_tags():
     got = {}
     ctx_ = {'dry_run': True, 'abs_update': lambda iid, key, title, upd, old, src, tags=None, old_tags=None, **kw: got.__setitem__(iid, tags) or True}
     S.manage_tags(ctx_, [r, few])
-    assert got[1] == ['Hardcover 4.0+', 'Hardcover 4.2+'], got[1]  # 4.3 with 25 ratings; 4.4+ removed; Audible: only 12 ratings
+    assert got[1] == [], got[1]  # 25 Hardcover ratings: under 50 -> no tag, 4.4+ removed
+    big = dict(r, id=3, media_tags=['Hardcover 4.0+'], description='Hardcover (120):<br />🏆 x 4.3 / 5 - Rating<br />')
+    S.manage_tags(ctx_, [big])
+    assert got[3] == ['Hardcover 4.2+'], got[3]  # highest level only
     assert 2 not in got  # 6 Hardcover ratings: no tag
