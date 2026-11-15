@@ -181,6 +181,11 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     (First Law Trilogy / Mistborn Era 1 / Irwin's Journey stay - a fake-write test caught the first, looser version.)
   - Dashboard selection runs ('only new') set FOLLOW_UP_TASKS: series task + missing volumes run afterwards (they were skipped).
   - tools/run_round.sh: FOLLOW_UP_TASKS, FAKE_WRITE=1 (writes ONLY into the fake ABS: tests the library task after per-book changes).
+  - Loop 2026-11-15: 'new book' = not in history AND ABS addedAt within NEW_BOOK_DAYS (30) - never a whole first run. Manual update =
+    newer ABS time stamp AND changed metadata fingerprint (meta_fingerprints.json; inode/path rescans stamp items too). Covers in original
+    size (no '._SL1215_'; cover_state token 'ASIN@orig' upgrades old ones once). Identity switch applies once (identity_meta.json).
+    Box sets also 'A / B / C' and 'Trilogie 1-3' subtitles. Selection runs (ONLY_ITEMS) never wait for Goodreads; long pauses are logged
+    at once (log_pause, extra={'now': True} bypasses the per-book log buffer). SERIES_LIST_DAYS (1) web UI setting.
   - Moved-item guard (item_paths.json): ABS 2.x's folder watcher gives a NEW folder an existing entry when the inode matches, without
     checking that the entry's own folder is gone; Unraid /mnt/user (shfs) inodes are not stable, so stale stored inodes collide (Ambassador's
     Mission got the 'Orb of Cairado' entry, 2026-11-10). An entry whose path changed while neither title nor author word is in the new path

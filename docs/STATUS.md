@@ -57,6 +57,8 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 
 | [U] 2026-11-15: new books with messy file tags (82 moved books, runs of 2026-11-10): Audible title/subtitle for new verified books, search fallbacks (subtitle = title, folder title, narrator in author field), cover without narrator tag, duplicate series names, follow-up tasks after 'only new' | ✅ | fake-write replay of the 81 books vs the user's own fixes: ASIN 81/81, narrators 81/81, title 80/81, series 80/81, authors 80/81 (old runs: 21-65/81); 0 writes to other books |
 
+| [U] 2026-11-15 loops: new-book window, manual-update fingerprints, original-size covers, identity once, box-set slash titles, quick runs without Goodreads waits, pause log lines, daily series lists | ✅ | full-library dry run 2027 books 0 errors; regress green; 81 + 14 book fake-write checks |
+
 ## Goodreads (experimental)
 | Item | State | Note |
 |---|---|---|
