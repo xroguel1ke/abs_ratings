@@ -36,6 +36,10 @@ def test_same_tail_twice():
     assert A.glued_subtitle(t, 'A LitRPG Adventure', 'Defiance of the Fall 4: A LitRPG Adventure', None) == 'title'
     assert A.glued_subtitle('Mistborn: The Final Empire', None, 'Mistborn', None) is None  # a normal title stays
     assert A.glued_subtitle('Dune: Dune', None, 'Dune', None) is None  # needs three parts
+    # run 2026-11-15: after the first cut the title is still Audible's glued one - the volume number before the colon cuts it once more
+    assert A.glued_subtitle('Defiance of the Fall 4: A LitRPG Adventure', 'A LitRPG Adventure', 'Defiance of the Fall 4: A LitRPG Adventure', None) == 'title'
+    assert A.glued_subtitle('Mistborn: The Final Empire', 'The Final Empire', 'Mistborn: The Final Empire', None) is None  # no volume number
+    assert A.glued_subtitle('Dune 2: Messiah', 'Other', 'Dune 2: Messiah', None) is None  # the ABS subtitle is another one
 
 
 def test_box_set_detection():

@@ -1171,7 +1171,7 @@ def image_ext(data):
     if data[:4] == b'RIFF' and data[8:12] == b'WEBP': return 'webp'
     return 'jpg'
 
-def abs_set_cover(iid, key, title, url, source, replace=False):
+def abs_set_cover(iid, key, title, url, source, replace=False, fallback=False):
     """Set a cover from URL. replace=True: ABS already has a cover -> it is backed up first (cover_backup/<item>_<run>.img) and the
     journal's 'old' holds the backup path, so undo uploads it again. Without a backup nothing is replaced. Undo of a new cover removes it."""
     old = None
@@ -1187,9 +1187,13 @@ def abs_set_cover(iid, key, title, url, source, replace=False):
             except Exception as e:
                 logging.warning(f"        ⚠️ Old cover of '{title}' could not be backed up ({e}): cover NOT replaced")
                 return False
-        r = abs_session.post(f"{ABS_URL}/api/items/{iid}/cover", json={"url": url})
-        if r.status_code != 200:
-            logging.error(f"        ❌ Cover upload failed for '{title}' (HTTP {r.status_code}): {r.text[:200]}")
+        try:  # ABS downloads the image itself; a 2400px original can take longer than the usual 30 s (timeout 2026-11-15)
+            r = abs_session.post(f"{ABS_URL}/api/items/{iid}/cover", json={"url": url}, timeout=120)
+            err = None if r.status_code == 200 else f"HTTP {r.status_code}: {r.text[:200]}"
+        except requests.exceptions.RequestException as e: err = str(e)[:200]
+        if err:
+            if fallback: logging.info(f"        ℹ️ ABS could not load the original-size cover ({err}): trying the smaller one")
+            else: logging.error(f"        ❌ Cover upload failed for '{title}' ({err})")
             return False
     elif replace: old = '(existing cover, backed up on a real run)'
     journal_change(iid, key, title, 'cover', old, url, source)
@@ -1430,6 +1434,8 @@ def glued_subtitle(title, abs_sub, aud_title, aud_sub, abs_series=None):
     parts_ = [x for x in re.split(r'\s*:\s*', title or '') if x]
     if aud_title and len(parts_) >= 3 and n(parts_[-1]) == n(parts_[-2]) and n(': '.join(parts_[:-1])) == n(aud_title) and n(aud_title) != n(title):
         return 'title'  # the same part twice at the end ('Defiance of the Fall 4: A LitRPG Adventure: A LitRPG Adventure'; Audible has no subtitle field)
+    if abs_sub and aud_title and not aud_sub and n(aud_title) == n(title) and (m_ := re.match(r'^(.*\d)\s*:\s*(.+)$', title)) and n(m_.group(2)) == n(abs_sub):
+        return 'title'  # run 2026-11-15: Audible glued it too ('Defiance of the Fall 4: A LitRPG Adventure' + that ABS subtitle) - volume number before the colon
     if not (title and aud_title and aud_sub) or n(aud_title) == n(title) or ':' not in title: return None
     if abs_sub and n(title) == n(f"{aud_title}: {abs_sub}"): return 'title'  # 'Casual Farming: Sowing Season, Book 1' + that subtitle
     if n(title) not in (n(f"{aud_title}: {aud_sub}"), n(f"{aud_title}: {aud_sub}: {aud_sub}")): return None
@@ -4631,10 +4637,13 @@ def process_queue(work_queue, history, failed, recheck):
                     elif aud_title and (glued := glued_subtitle(title, meta.get('subtitle'), aud_title, aud_sub, [s_.get('name') for s_ in (meta.get('series') or [])])):
                         # library 2026-11-09: the subtitle glued into the title ('Sojourn: Legend of Drizzt: Dark Elf Trilogy, Book 3' with that
                         # subtitle, 'Defiance of the Fall 4: A LitRPG Adventure: A LitRPG Adventure') - ABS title = Audible title + subtitle
-                        if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{aud_title}'")
-                        else:
-                            abs_updates['title'] = aud_title
-                            log_updates.append(f"Title: '{title}' -> '{aud_title}' (subtitle was glued into the title)")
+                        # run 2026-11-15: Audible's own title can carry the subtitle too ('Defiance of the Fall 4: A LitRPG Adventure') - cut it once more
+                        sub_ = aud_sub or meta.get('subtitle')
+                        new_t = (re.sub(rf'\s*:\s*{re.escape(sub_.strip())}\s*$', '', aud_title, flags=re.I) or aud_title) if sub_ else aud_title
+                        if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{new_t}'")
+                        elif new_t != title:
+                            abs_updates['title'] = new_t
+                            log_updates.append(f"Title: '{title}' -> '{new_t}' (subtitle was glued into the title)")
                             if glued == 'subtitle' and 'lock_subtitle' not in tags:
                                 abs_updates['subtitle'] = aud_sub
                                 log_updates.append(f"Subtitle: '{meta.get('subtitle') or ''}' -> '{aud_sub}'")
@@ -5163,12 +5172,12 @@ def process_queue(work_queue, history, failed, recheck):
                     if aud_data.get('cover_url') and not lang_conflict and cover_verified and ((FILL_COVERS and not has_cover) or  # user rule: covers only for a VERIFIED ASIN
                                                                                                ((UPDATE_COVERS or id_switch) and has_cover and COVER_STATE.get(iid) != cover_token(asin))):
                         if 'lock_cover' in tags: logging.info("        🔒 Cover Update Skipped (Locked)")
-                        elif abs_set_cover(iid, key, title, aud_data['cover_url'], 'audible_cover' if not has_cover else 'audible_cover_verified', replace=has_cover) or (
-                                aud_data.get('cover_url_small') and aud_data['cover_url_small'] != aud_data['cover_url']
-                                and abs_set_cover(iid, key, title, aud_data['cover_url_small'], 'audible_cover' if not has_cover else 'audible_cover_verified', replace=has_cover)):
+                        elif cover_used := next((u for u in dict.fromkeys(filter(None, (aud_data['cover_url'], aud_data.get('cover_url_small'))))
+                                                 if abs_set_cover(iid, key, title, u, 'audible_cover' if not has_cover else 'audible_cover_verified', replace=has_cover,
+                                                                  fallback=u == aud_data['cover_url'] and bool(aud_data.get('cover_url_small')) and aud_data['cover_url_small'] != u)), None):
                             stats['cover_added'] += 1
                             COVER_STATE[iid] = cover_token(asin)
-                            logging.info(f"        🖼️ Cover {'would be ' if DRY_RUN else ''}{'replaced (verified book)' if has_cover else 'set'} from Audible: {aud_data['cover_url']}")
+                            logging.info(f"        🖼️ Cover {'would be ' if DRY_RUN else ''}{'replaced (verified book)' if has_cover else 'set'} from Audible: {cover_used}")
 
                     # Chapters (user 2026-11-10): Audible's chapters for poorly chaptered files of the SAME recording, only when they fit reliably
                     chs0_ = (item_data.get('media') or {}).get('chapters') or []
