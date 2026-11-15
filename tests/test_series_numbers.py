@@ -55,3 +55,50 @@ def test_folder_series_respects_lock_and_other_authors():
 def test_folder_series_needs_every_other_book():
     recs = kyralia(); recs[5]['series'] = [('Traitor Spy Trilogy', '2')] and [{'name': 'Traitor Spy Trilogy', 'sequence': '2'}]; c, _ = ctx()
     assert S.fill_folder_series(c, recs) == 0
+
+
+def test_same_series_twice_on_a_book():
+    d = 'Fuurou/So You Want to Live the Slow Life! A Guide to Life in the Beastly Wilds/'
+    long_ = 'So You Want to Live the Slow Life! A Guide to Life in the Beastly Wilds'
+    recs = [rec(1, 'Vol. 1', '2023', [('So You Want to Live the Slow Life?', '1')], d + '1 - v1', author='Fuurou'),
+            rec(2, 'Vol. 2', '2023', [('So You Want to Live the Slow Life?', '2')], d + '2 - v2', author='Fuurou'),
+            rec(3, 'Vol. 3', '2024', [('So You Want to Live the Slow Life?', '3'), (long_, '3')], d + '3 - v3', author='Fuurou'),
+            rec(4, 'Vol. 4', '2025', [('So You Want to Live the Slow Life?', '4'), (long_, '4')], d + '4 - v4', author='Fuurou')]
+    c, _ = ctx()
+    assert S.drop_duplicate_series(c, recs) == 2
+    assert all([x['name'] for x in r['series']] == ['So You Want to Live the Slow Life?'] for r in recs)
+
+
+def test_umbrella_with_other_numbers_stays():
+    recs = kyralia(); c, _ = ctx()
+    assert S.drop_duplicate_series(c, recs) == 0  # 'Kyralia Universe' vs 'Black Magician Trilogy': no name prefix
+    recs = [rec(1, 'a', '2020', [('The Long Saga Name', '1'), ('The Long Saga Name Novellas', '2')], 'A/S/1 - a')]
+    assert S.drop_duplicate_series(c, recs) == 0  # different numbers: a real sub-series
+
+
+def test_one_word_short_name():
+    recs = [rec(i, f'v{i}', '2020', [("Konosuba: God's Blessing on This Wonderful World!", str(i))], f'N/Konosuba/{i} - v', author='N') for i in range(1, 4)]
+    recs.append(rec(13, 'v13', '2026', [("Konosuba: God's Blessing on This Wonderful World!", '13'), ('Konosuba', '13')], 'N/Konosuba/13 - v', author='N'))
+    c, _ = ctx()
+    assert S.drop_duplicate_series(c, recs) == 1 and [x['name'] for x in recs[-1]['series']] == ["Konosuba: God's Blessing on This Wonderful World!"]
+
+
+def test_real_sub_series_stay():
+    # fake-write test 2026-11-15: these were removed by the first version of the rule
+    fl = [rec(1, 'The Blade Itself', '2006', [('First Law World', '1'), ('The First Law Trilogy', '1')], 'J/First Law World/1 - a', author='J'),
+          rec(2, 'Before They Are Hanged', '2007', [('First Law World', '2'), ('The First Law Trilogy', '2')], 'J/First Law World/2 - b', author='J'),
+          rec(3, 'Best Served Cold', '2009', [('First Law World', '4')], 'J/First Law World/4 - c', author='J')]
+    c, _ = ctx()
+    assert S.drop_duplicate_series(c, fl) == 0
+    ij = [rec(i, f'c{i}', '2024', [("Irwin's Journey", str(i)), ("Irwin's Journey: The Cardsmith", str(i))], f'J/Irwin/{i} - c', author='J') for i in (1, 2, 3)]
+    assert S.drop_duplicate_series(c, ij) == 0  # always together: umbrella + sub-series
+    mb = [rec(i, f'm{i}', '2006', [('The Mistborn Saga', str(i)), ('Mistborn, Era 1: Original Trilogy', str(i))], f'B/Mistborn/{i} - m', author='B') for i in (1, 2, 3)]
+    mb.append(rec(4, 'm4', '2011', [('The Mistborn Saga', '4')], 'B/Mistborn/4 - m', author='B'))
+    assert S.drop_duplicate_series(c, mb) == 0
+
+
+def test_same_name_twice_punctuation():
+    n1, n2 = 'The Haunted Bookstore - Gateway to a Parallel Universe', 'The Haunted Bookstore_ Gateway to a Parallel Universe'
+    recs = [rec(1, 'v1', '2023', [(n1, '1')], 'S/x/1', author='S'), rec(2, 'v2', '2024', [(n1, '2'), (n2, '2')], 'S/x/2', author='S')]
+    c, _ = ctx()
+    assert S.drop_duplicate_series(c, recs) == 1 and [x['name'] for x in recs[1]['series']] == [n1]

@@ -612,6 +612,7 @@ class RunManager:
             extra = {'RUN_ID': run_id, 'DRY_RUN': 'true' if dry else 'false'}
             if kind == 'series': extra['SERIES_ONLY'] = 'true'
             if kind == 'item' or (kind == 'full' and only_items): extra['ONLY_ITEMS'] = ','.join(only_items or [])
+            if kind == 'full' and only_items: extra['FOLLOW_UP_TASKS'] = 'true'  # selection run: merges + missing volumes afterwards
             env = script_env(s, extra)
             if (run_settings or {}).get('REMOVE_RATINGS'): env['REMOVE_RATINGS'] = run_settings['REMOVE_RATINGS']  # remove-ratings task
             if (run_settings or {}).get('REWRITE_RATING_SYMBOLS'): env['REWRITE_RATING_SYMBOLS'] = 'true'  # rewrite all rating symbols

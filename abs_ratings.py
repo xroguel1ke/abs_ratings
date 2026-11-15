@@ -140,6 +140,7 @@ RUN_ID = os.getenv('RUN_ID') or datetime.now().strftime('%Y%m%d-%H%M%S')  # the 
 RESULTS_FILE = os.path.join(SCRIPT_DIR, "results.json")      # last result per book (status, reason, log excerpt)
 OVERRIDES_FILE = os.path.join(SCRIPT_DIR, "overrides.json")  # manual fixes from the web UI: asin, goodreads, ignore
 ONLY_ITEMS = [x.strip() for x in os.getenv('ONLY_ITEMS', '').split(',') if x.strip()]  # 'libid_itemid' -> single-book mode
+FOLLOW_UP_TASKS = os.getenv('FOLLOW_UP_TASKS', 'false').lower() == 'true'  # a selection run (dashboard 'only new'): series task + missing volumes after it
 ABS_BACKUP = os.getenv('ABS_BACKUP', 'false').lower() == 'true'  # create an ABS backup before a real run
 ABS_BACKUP_HOURS = float(os.getenv('ABS_BACKUP_HOURS', '24') or 24)  # no new backup when ABS has one younger than this
 BOOK_LANGUAGES = []  # filled after LANGUAGE_MAP (below): languages the library holds; an Audible product in another language is never taken
@@ -841,6 +842,34 @@ def same_recording(abs_dur, abs_narrators, aud):
     if not (abs_dur and aud and aud.get('runtime_sec') and abs(abs_dur - aud['runtime_sec']) <= 120): return False
     n = lambda xs: {re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in (xs or []) if x}
     return bool(n(abs_narrators) & n(aud.get('narrators_raw')))
+
+def verified_recording(abs_dur, abs_narrators, abs_authors, aud):
+    """Same recording, also for NEW books whose file tags lack the narrator (2026-11-15: 'Among the Burning Flowers' had only author and
+    title, so its cover was never replaced): runtime ±2 min and a shared narrator - or, WITHOUT any ABS narrator, a matching author
+    (or the author field holding Audible's narrator: 'Of Empires and Dust' had the narrator as author)."""
+    if same_recording(abs_dur, abs_narrators, aud): return True
+    if not (abs_dur and aud and aud.get('runtime_sec') and abs(abs_dur - aud['runtime_sec']) <= 120): return False
+    if any(n for n in (abs_narrators or [])): return False
+    n = lambda xs: {re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in (xs or []) if x}
+    return bool(abs_authors and (match_author(abs_authors, ', '.join(aud.get('authors_raw') or [])) or n(abs_authors) & n(aud.get('narrators_raw'))))
+
+def new_book_title_ok(abs_t, aud_t):
+    """A NEW book takes Audible's title of the verified recording - except when Audible only appends marketing words without a number
+    ('Beware of Chicken 2' + ': A Xianxia Cultivation Novel'); 'Konosuba' -> 'Konosuba: ..., Vol. 13' (the number) is taken."""
+    a, b = normalize_title_text(abs_t), normalize_title_text(aud_t)
+    return not (a and b.startswith(a + ' ') and not re.search(r'\d', b[len(a):]))
+
+def folder_book_title(item_data):
+    """Title part of the book folder ('13 - The King's Secret - Saskia Maarleveld' -> 'The King's Secret'): a search fallback when the
+    ABS title (file tags) is only the series name ('Zero Enigma', 'Konosuba', 'Dogs of War') or messy ('Roots of Chaos, BK 0.5 - ...')."""
+    base = str((item_data or {}).get('relPath') or '').replace('\\', '/').split('/')[-1]
+    t = re.sub(r'\{[^}]*\}', '', base)
+    t = re.sub(r'(?i)^\s*(?:book\s*)?\d+(?:\.\d+)?\s*-\s*', '', t).strip()
+    parts = [x.strip() for x in t.split(' - ') if x.strip()]
+    if len(parts) >= 2 and folder_narrators(item_data): parts = parts[:-1]
+    t = ' - '.join(parts).strip()
+    if not t or re.fullmatch(r'(?i)(?:vol(?:ume)?\.?|book|part|teil|band)\s*\d+', t): return None
+    return t
 
 BOXSET_RE = re.compile(r"\b\d+\s*[-–]\s*\d+\b|\b(trilog(y|ie)|box\s*set|boxed set|omnibus|sammelband|gesamtausgabe|publisher.?s pack|complete (series|collection)|collection)\b|\bbooks?\s+\d+\s*(?:-|–|&|and|,)\s*\d+", re.I)
 def is_boxset_title(t): return bool(t and BOXSET_RE.search(t))
@@ -2213,6 +2242,9 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 continue
             found_title = p.get('title_raw') or ''
             t_score = search_match_score(title, found_title, p.get('subtitle_raw'))
+            if t_score < 0.85 and p.get('subtitle_raw') and len(normalize_title_text(title).split()) >= 3 \
+                    and normalize_title_text(title) == normalize_title_text(p['subtitle_raw']):
+                t_score = 0.9  # ABS title = Audible SUBTITLE ('The Half-Elf Demigod Part I' = 'Overlord, Vol. 15', 2026-11-15)
             if t_score < 0.85 and abs_series:  # 'Bloodline' vs 'Bloodline: The Root of All Evil': the extension is exactly ABS's own series name
                 na, nf = normalize_title_text(title), normalize_title_text(found_title)
                 rest = nf[len(na):].strip() if nf.startswith(na + ' ') else ''
@@ -2302,6 +2334,16 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             if swapped_:
                 auth_ok = True
                 logging.info(f"        ℹ️ '{found_title}' [{cand}]: author and narrator are swapped in ABS - the roles match crosswise")
+            # no ABS narrator and the ABS AUTHOR is the candidate's narrator (file tags: 'Of Empires and Dust' artist = Derek Perkins,
+            # 2026-11-15) with the runtime to 2 min: one recording, the author field holds the narrator
+            # (the searched narrators may come from the book folder = the same person: no contradiction either)
+            narr_as_author = bool(not swapped_ and c_narr and narr_keys(authors_list) and narr_keys(authors_list) <= c_narr
+                                  and not narr_keys(authors_list) & narr_keys(p.get('authors_raw'))
+                                  and (not a_narr or a_narr <= c_narr or a_narr & narr_keys(p.get('authors_raw')))
+                                  and duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120)
+            if narr_as_author:
+                auth_ok = True
+                logging.info(f"        ℹ️ '{found_title}' [{cand}]: the ABS author is this recording's narrator (file tags) - runtime agrees")
             if a_narr and c_narr and not a_narr & c_narr and not swapped_:  # other recording (e.g. UK vs US narrator): known and different narrators veto the hit, with or without an existing ASIN
                 logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (narrator {', '.join(p.get('narrators_raw') or [])} differs)")
                 continue
@@ -2332,7 +2374,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             else:
                 accept = t_score >= 0.8 and auth_ok and not dur_conflict or t_score >= 0.85 and dur_ok
             if accept:
-                narr_hit = bool(a_narr and c_narr and a_narr & c_narr)
+                narr_hit = bool(a_narr and c_narr and a_narr & c_narr) or swapped_ or narr_as_author
                 vol_hit = bool(f_nums and t_nums and f_nums & t_nums)
                 ser_hit = any(an is not None and cn is not None and an == cn and (ak == ck or difflib.SequenceMatcher(None, ak, ck).ratio() >= 0.9)
                               for ak, an in _series_pairs(abs_series) for ck, cn in _series_pairs((p.get('meta_raw') or {}).get('series')))
@@ -4347,6 +4389,16 @@ def process_queue(work_queue, history, failed, recheck):
                                                              strict=strict_search and bool(asin), narrators=search_narr,
                                                              abs_series=search_series(lib_id, meta.get('series')))
                     
+                    if not found and USE_AUDIBLE_API and abs_dur and not search_only and not folder_fix and 'lock_asin' not in tags \
+                            and (ft_ := folder_book_title(item_data)) and normalize_title_text(ft_) != normalize_title_text(search_title):
+                        # 2026-11-15: the ABS title from the file tags was only the series name ('Konosuba', 'Dogs of War') or messy ('Roots
+                        # of Chaos, BK 0.5 - A Day of Fallen Night'); the book folder names the volume. Runtime must match to ±2 min.
+                        # without a narrator the runtime must match to ±2 min; with one the narrator check vetoes other recordings
+                        # (Bee Speaker: 3 narrators + author agree, the file is 5 min shorter)
+                        logging.info(f"        🔎 Searching with the book folder's title '{ft_}'" + ('' if search_narr else ' (runtime must match to ±2 min)'))
+                        LAST_MATCH.clear(); SEARCH_CTX['need_exact_rt'] = not search_narr
+                        found = find_missing_asin(ft_, authors, abs_dur, lang, raw_title=None, required_lang=lang_target, strict=False,
+                                                  only_domain=None, narrators=search_narr, abs_series=search_series(lib_id, meta.get('series')))
                     if not found and weak_ and weak_.get('series_ok') and 'lock_asin' not in tags and not (ASIN_OWNERS.get(weak_['asin'], set()) - {key}):
                         found = weak_['asin']
                         logging.info(f"        ✅ Taken: '{weak_['title']}' [{found}] - same author, narrator, runtime (±2 min), series and number; only the title differs")
@@ -4445,6 +4497,29 @@ def process_queue(work_queue, history, failed, recheck):
                         elif new_t != title:
                             abs_updates['title'] = new_t
                             log_updates.append(f"Title: '{title}' -> '{new_t}' (was another volume's title)")
+                    elif aud_title and key not in history and not lang_conflict and (verified_recording(abs_dur, meta.get('narrators'), authors, aud_data) or (
+                            asin_from_search and narr_keys(meta.get('narrators')) & narr_keys(aud_data.get('narrators_raw'))
+                            and abs_dur and aud_data.get('runtime_sec') and not runtime_mismatch(abs_dur, aud_data['runtime_sec']))):  # Bee Speaker: 3 narrators, file 5 min shorter
+                        # user 2026-11-15: a NEW book's title comes from its file tags ('Book 20 - Volume 07 - Part 06 - Memory's Flame - The
+                        # Wandering Inn Series', 'Crow's Fortune - Ramón de Ocampo', 'Zero Enigma'): the verified recording's Audible title.
+                        # Like the user's own fixes: a format label goes ('(Unabridged)', '(Light Novel)'); title + Audible subtitle glued
+                        # ('Lux: A Texas Reckoners Novel', 'Sword Art Online 17: Alicization Awakening') stays unless the subtitle is a series
+                        # label ('Theurge: Spellmonger, Book 19' -> 'Theurge'); a missing subtitle comes from Audible.
+                        fmt_ = lambda x: re.sub(r'(?i)\s*\((?:unabridged|ungek(?:ü|ue)rzt|light novel|novel)\)\s*$', '', x or '').strip()
+                        cur_ = fmt_(title)
+                        sub_series = bool(aud_sub and re.search(r'(?i)\b(?:book|vol(?:ume)?\.?|band|teil)\s*\d', aud_sub))
+                        glued_ = bool(aud_sub and not sub_series and ':' in cur_ and normalize_title_text(cur_).endswith(' ' + normalize_title_text(aud_sub))
+                                      and title_similarity(cur_.rsplit(':', 1)[0], aud_title) >= 0.8)
+                        new_t = cur_ if glued_ or normalize_title_text(aud_title) == normalize_title_text(cur_) or not new_book_title_ok(cur_, aud_title) else fmt_(aud_title)
+                        if new_t and new_t != title:
+                            if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{new_t}'")
+                            else:
+                                abs_updates['title'] = new_t
+                                log_updates.append(f"Title: '{title}' -> '{new_t}' (new book, same recording on Audible)")
+                        if aud_sub and not meta.get('subtitle') and 'lock_subtitle' not in tags and 'lock_title' not in tags \
+                                and normalize_title_text(aud_sub) != normalize_title_text(new_t or title):
+                            abs_updates['subtitle'] = aud_sub
+                            log_updates.append(f"Subtitle: '' -> '{aud_sub}' (new book)")
                     elif aud_title and aud_title != title and same_recording(abs_dur, meta.get('narrators'), aud_data) and (
                             re.sub(r'(?i)\s*\((?:unabridged|ungek(?:ü|ue)rzt)\)\s*$', '', title) == aud_title
                             or re.sub(r'\b0+(\d)', r'\1', title) == re.sub(r'\b0+(\d)', r'\1', aud_title) and re.search(r'\b0\d', title) and not re.search(r'\b0\d', aud_title)):
@@ -4828,6 +4903,12 @@ def process_queue(work_queue, history, failed, recheck):
                         else:
                             abs_updates['authors'] = [{'name': n} for n in a_auth]; abs_updates['narrators'] = list(a_narr)
                             log_updates.append(f"Authors/narrators were swapped: authors -> {a_auth}, narrators -> {a_narr}")
+                    elif exact_rec and a_auth and a_narr and authors and not meta.get('narrators') and set(_nk(authors)) <= set(_nk(a_narr)) \
+                            and not set(_nk(authors)) & set(_nk(a_auth)):  # no ABS narrator, the ABS author is the narrator (Of Empires and Dust)
+                        if 'lock_authors' in tags or 'lock_narrators' in tags: logging.info("        🔒 Author field holds the narrator, but locked")
+                        else:
+                            abs_updates['authors'] = [{'name': n} for n in a_auth]; abs_updates['narrators'] = list(a_narr)
+                            log_updates.append(f"Author field held the narrator: authors -> {a_auth}, narrators -> {a_narr}")
                     elif exact_rec and len(authors) == 1 and len(a_auth) >= 2 and 'lock_authors' not in tags \
                             and ''.join(_nk(authors)) in (''.join(re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in a_auth),
                                                           ''.join(re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in reversed(a_auth))):
@@ -4906,6 +4987,15 @@ def process_queue(work_queue, history, failed, recheck):
                             if re.sub(r'[^a-z]', '', fold_accents(an).lower()) not in abs_norm and match_author(authors, an):
                                 AUTHOR_NOTES.append({'title': title, 'abs': authors, 'audible': an})
                                 logging.info(f"        ℹ️ Author spelling differs: ABS {authors} vs Audible '{an}' (not changed, listed in report)")
+                        ko2_ = lambda n_: ''.join(sorted(re.findall(r'[a-z]+', fold_accents_s(n_).lower())))
+                        if key not in history and 'lock_authors' not in tags and not abs_updates.get('authors') and len(authors) == len(aud_auth) \
+                                and verified_recording(abs_dur, meta.get('narrators'), authors, aud_data) and (
+                                    (any(re.search(r'[^\x00-ɏ]', a_) for a_ in authors) and not any(re.search(r'[^\x00-ɏ]', a_) for a_ in aud_auth))
+                                    or ({ko2_(a_) for a_ in authors} == {ko2_(a_) for a_ in aud_auth} and _nk(authors) != _nk(aud_auth))):
+                            # user 2026-11-15 (Berserk of Gluttony): a NEW book's author in another script ('一色一凛') or with first and last
+                            # name swapped ('Isshiki Ichika') -> Audible's spelling of the same recording (kept the series from merging)
+                            abs_updates['authors'] = [{'name': n_} for n_ in aud_auth]
+                            log_updates.append(f"Authors: {authors} -> {aud_auth} (new book: Audible's spelling of the same recording)")
                         if not match_author(authors, ', '.join(aud_auth)) and not any(re.search(r'[^\x00-ɏ]', a_) for a_ in aud_auth) \
                                 and 'lock_authors' not in tags and same_recording(abs_dur, meta.get('narrators'), aud_data):
                             # same recording (runtime 2 min + narrator), but NO author in common ('War of the Spider Queen' books by Thomas M.
@@ -4967,7 +5057,12 @@ def process_queue(work_queue, history, failed, recheck):
                     has_cover = bool((item_data.get('media') or {}).get('coverPath'))
                     rt_exact = bool(abs_dur and aud_data.get('runtime_sec') and abs(abs_dur - aud_data['runtime_sec']) <= 120)
                     cover_verified = (same_recording(abs_dur, meta.get('narrators'), aud_data) and key not in FILLED_NARR) or (asin_from_search and rt_exact) \
-                        or id_switch  # confirmed other book: the old cover shows the other book (Orb of Cairado's on Ambassador's Mission)
+                        or id_switch \
+                        or (key not in history and not lang_conflict and verified_recording(abs_dur, meta.get('narrators'), authors, aud_data)
+                            and (asin_from_search or 'title' in abs_updates or title_similarity(clean_title(title), clean_title(aud_data.get('title_raw') or '')) >= 0.85))
+                    # (id_switch: confirmed other book - the old cover shows it; new book without narrator tag: runtime + author + title, 2026-11-15)
+                    if aud_data.get('cover_url') and has_cover and UPDATE_COVERS and not cover_verified and key not in history and COVER_STATE.get(iid) != asin:
+                        logging.info("        🖼️ Cover kept: the recording is not verified (runtime ±2 min + narrator, or author and title without a narrator)")
                     if aud_data.get('cover_url') and not lang_conflict and cover_verified and ((FILL_COVERS and not has_cover) or  # user rule: covers only for a VERIFIED ASIN
                                                                                                ((UPDATE_COVERS or id_switch) and has_cover and COVER_STATE.get(iid) != asin)):
                         if 'lock_cover' in tags: logging.info("        🔒 Cover Update Skipped (Locked)")
@@ -5500,7 +5595,7 @@ def main():
         if not DRY_RUN: rw_json(FILLED_NARR_FILE, sorted(FILLED_NARR))
 
     series_result = {}
-    if (SERIES_MERGE or LIBRARY_REPORT) and not ONLY_ITEMS:
+    if (SERIES_MERGE or LIBRARY_REPORT) and (not ONLY_ITEMS or FOLLOW_UP_TASKS):  # user 2026-11-15: 'only new' left merges + missing list undone
         lib_written = set()
         def lib_update(iid, key, *a, **kw):  # library-task writes are OUR writes: not a 'manual update' in the next run
             ok = abs_update(iid, key, *a, **kw)
@@ -5530,7 +5625,7 @@ def main():
             logging.error("abs_series.py not found next to abs_ratings.py - series task skipped.")
         except Exception as e:
             logging.exception(f"Series task failed: {e}")
-    if MISSING_SERIES and not ONLY_ITEMS and USE_AUDIBLE_API and 'audible' not in SOURCE_DOWN:
+    if MISSING_SERIES and (not ONLY_ITEMS or FOLLOW_UP_TASKS) and USE_AUDIBLE_API and 'audible' not in SOURCE_DOWN:
         try: missing_in_series_task()
         except Exception as e: logging.exception(f"Missing-volumes report failed: {e}")
     if not ONLY_ITEMS:  # source traffic light for the web UI overview (user 2026-11-09)

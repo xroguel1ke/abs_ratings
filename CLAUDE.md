@@ -35,6 +35,11 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   Glued subtitle (library 2026-11-09, 49 books checked by hand): ABS title = Audible title + ': ' + Audible subtitle AND the ABS subtitle
   field is Audible's (shown twice), a series label of a series the book is not in, or empty with the subtitle twice in the title
   -> Audible's title (`glued_subtitle`). 'Mistborn: The Final Empire' without subtitle field stays.
+  NEW books (not in history yet, user 2026-11-15 - file-tag titles like 'Book 20 - Volume 07 - Part 06 - Memory's Flame - The Wandering
+  Inn Series'): the verified recording's Audible title (`verified_recording`: runtime ±2 min + narrator, or without an ABS narrator the
+  author; or ASIN found by search + narrator + runtime in tolerance). Format labels '(Unabridged)'/'(Light Novel)' go; title + Audible
+  subtitle glued stays unless the subtitle is a series label ('Book N'); Audible's marketing tail without a number is never added;
+  a missing subtitle comes from Audible. Authors of a new verified book in another script / with swapped name order -> Audible's spelling.
 - **ASIN search:** different volume numbers = always reject (also an ABS series number: same title + runtime ±2 min + narrator is NOT
   enough to ignore it - The Hunter's Code 1 and 2 share title and narrator and differ by 2 min, regress reg_syn_21).
   ONLY exception (user wish 2026-11-08): the ABS number is PROVABLY wrong - same recording (identical title, runtime ±2 min, a shared
@@ -167,6 +172,15 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     explain up to 2 min. Journal keeps chapter start/end/title; undo/apply support it.
   - tools/regress.sh runs at most 10 test containers at a time (REGRESS_JOBS); ~100 parallel containers disturbed the server.
   - ABS_BACKUP: at most one ABS backup per ABS_BACKUP_HOURS (24); 6 run backups a day had pushed every older one out of ABS's keep-limit.
+  - Search fallbacks for messy file tags (2026-11-15): ABS title = Audible SUBTITLE ('The Half-Elf Demigod Part I' = Overlord 15);
+    the book folder's title ('13 - The King's Secret - Narrator') when nothing was found (runtime ±2 min without a narrator); the ABS
+    author being the candidate's narrator (author/narrator swapped or narrator in the author field) counts as author + narrator.
+    Cover of a new book is also replaced when verified by author + title + runtime without a narrator tag; a kept cover is logged.
+  - Series task `drop_duplicate_series`: one series twice on a book under two names with the same number - punctuation only, or one
+    name's full words start the other's AND every book of the dropped name holds the kept one AND the kept one has own books.
+    (First Law Trilogy / Mistborn Era 1 / Irwin's Journey stay - a fake-write test caught the first, looser version.)
+  - Dashboard selection runs ('only new') set FOLLOW_UP_TASKS: series task + missing volumes run afterwards (they were skipped).
+  - tools/run_round.sh: FOLLOW_UP_TASKS, FAKE_WRITE=1 (writes ONLY into the fake ABS: tests the library task after per-book changes).
   - Moved-item guard (item_paths.json): ABS 2.x's folder watcher gives a NEW folder an existing entry when the inode matches, without
     checking that the entry's own folder is gone; Unraid /mnt/user (shfs) inodes are not stable, so stale stored inodes collide (Ambassador's
     Mission got the 'Orb of Cairado' entry, 2026-11-10). An entry whose path changed while neither title nor author word is in the new path

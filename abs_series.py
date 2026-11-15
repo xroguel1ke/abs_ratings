@@ -726,6 +726,63 @@ def fill_folder_numbers(ctx, records):
     return changed
 
 
+def drop_duplicate_series(ctx, records):
+    """The SAME series twice on one book under two names (user 2026-11-15: 'So You Want to Live the Slow Life?' #3 and 'So You Want to Live
+    the Slow Life! A Guide to Life in the Beastly Wilds' #3; 'Konosuba' #13 from the folder next to 'Konosuba: God's Blessing on This
+    Wonderful World!' #13): two series on one book look like umbrella + sub-series, so the merge never joined them.
+    A name D goes only when (1) its full words (punctuation and a leading article aside - NOT the generic-word stripping of series_key:
+    'The First Law Trilogy' is no prefix of 'First Law World') start with, or are the start of, the other name K, (2) EVERY book of D
+    also holds K with the same number, and (3) K also has books without D (K stands on its own; 'Irwin's Journey' and 'Irwin's
+    Journey: The Cardsmith' always together = umbrella + sub-series, both stay). Fake-write test 2026-11-15: First Law Trilogy,
+    Mistborn Era 1 and Irwin's Journey must stay. lock_series respected."""
+    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    num = lambda q: float(q) if re.fullmatch(r"\d+(\.\d+)?", str(q or '').strip()) else None
+    def words(n):
+        w = re.sub(r"[^a-z0-9\s]", ' ', fold_accents((n or '').lower()).replace("'", '')).split()  # '_' is punctuation too
+        while w and w[0] in LEADING_ARTICLES: w = w[1:]
+        return ' '.join(w)
+    changed = 0
+    raw_n = {}
+    for r in records:
+        for x in r['series']: raw_n[(r['lib'], x['name'])] = raw_n.get((r['lib'], x['name']), 0) + 1
+    for r in records:  # the same name twice, only punctuation differs ('The Haunted Bookstore - Gateway...' / '..._ Gateway...'), same number
+        if 'lock_series' in r['tags'] or 'lock_all' in r['tags'] or 'lock_metadata' in r['tags']: continue
+        pos, new = {}, []
+        for x in r['series']:
+            k_ = (words(x['name']), num(x.get('sequence')))
+            if k_[1] is not None and k_ in pos:  # keep the spelling more books use
+                if raw_n.get((r['lib'], x['name']), 0) > raw_n.get((r['lib'], new[pos[k_]]['name']), 0): new[pos[k_]] = dict(x)
+                continue
+            pos[k_] = len(new); new.append(dict(x))
+        if len(new) < len(r['series']) and abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'series': new}, {'series': r['series']}, 'duplicate_series'):
+            changed += 1
+            logging.info(f"   📚 SERIES{' (DRY_RUN)' if dry else ''}: '{r['title']}': one series name twice (punctuation) -> {', '.join(x['name'] for x in new)}")
+            r['series'] = new
+    books_of = {}
+    for r in records:
+        for x in r['series']: books_of.setdefault((r['lib'], words(x['name'])), []).append((r, num(x.get('sequence'))))
+    drop = {}
+    for (lib, kd), lst in books_of.items():
+        for (lib2, kk), lst2 in books_of.items():
+            if lib2 != lib or kk == kd or not kd or not kk: continue
+            if not (kk.startswith(kd + ' ') or kd.startswith(kk + ' ')): continue
+            ids_k = {id(r) for r, _ in lst2}
+            if not all(any(series_key(y['name']) and words(y['name']) == kk and num(y.get('sequence')) == q and q is not None for y in r['series']) for r, q in lst): continue
+            if not any(id(r) not in {id(r_) for r_, _ in lst} for r, _ in lst2): continue  # K has books of its own
+            drop[(lib, kd)] = kk
+    for (lib, kd), kk in drop.items():
+        books = [r for r, _ in books_of[(lib, kd)]]
+        if any('lock_series' in r['tags'] or 'lock_all' in r['tags'] or 'lock_metadata' in r['tags'] for r in books): continue
+        for r in books:
+            gone = [x['name'] for x in r['series'] if words(x['name']) == kd]
+            new = [dict(x) for x in r['series'] if words(x['name']) != kd]
+            if gone and abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'series': new}, {'series': r['series']}, 'duplicate_series'):
+                changed += 1
+                logging.info(f"   📚 SERIES{' (DRY_RUN)' if dry else ''}: '{r['title']}': removed '{gone[0]}' (same series as '{next(x['name'] for x in new if words(x['name']) == kk)}', same number)")
+                r['series'] = new
+    return changed
+
+
 def fill_folder_series(ctx, records):
     """A book in a series folder 'Author/S/Book' without series S while EVERY other book of that folder (at least 2) has S and shares
     an author with it -> S is added without a number (user 2026-11-10: The Ambassador's Mission sat in 'Kyralia Universe' next to The
@@ -1113,6 +1170,7 @@ def run(ctx):
     if ctx.get('book_languages'):
         ctx['languages_fixed'] = fix_languages(ctx, records, ctx['book_languages'])
     if ctx.get('merge'):
+        ctx['duplicate_series'] = drop_duplicate_series(ctx, records)
         ctx['folder_series'] = fill_folder_series(ctx, records)
         ctx['folder_numbers'] = fill_folder_numbers(ctx, records)
         ctx['subseries_numbers'] = fill_from_subseries(ctx, records)
