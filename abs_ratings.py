@@ -853,6 +853,32 @@ def same_recording(abs_dur, abs_narrators, aud):
     n = lambda xs: {re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in (xs or []) if x}
     return bool(n(abs_narrators) & n(aud.get('narrators_raw')))
 
+TMP_AUDIO_RE = re.compile(r'(?i)\.(?:tmp|temp|part|partial|crdownload)(?:\.[a-z0-9]{2,4})?$|\.tmp\.')
+
+def exclude_temp_tracks(iid, key, title, item_data):
+    """A half-written copy next to the real audio file ('... Book 3.tmp.mp4' of an aborted conversion, 2026-11-15: The Hyena and the
+    Hawk showed 1993 min instead of 1014) is excluded from playback via ABS's own track list (the file is NOT deleted) and goes on the
+    review list. Returns the duration without it (None = nothing to do)."""
+    afs = (item_data.get('media') or {}).get('audioFiles') or []
+    name = lambda a: (a.get('metadata') or {}).get('filename') or ''
+    tmp = [a for a in afs if not a.get('exclude') and TMP_AUDIO_RE.search(name(a))]
+    real = [a for a in afs if a not in tmp and not a.get('exclude')]
+    if not tmp or not real: return None
+    dur = sum(float(a.get('duration') or 0) for a in real)
+    names = ', '.join(name(a) for a in tmp)
+    logging.info(f"      -> 🧹 Temporary audio file next to the real one: {names} - excluded from playback{' (DRY_RUN: would be)' if DRY_RUN else ''}, "
+                 f"the file is not deleted (duration without it: {format_time(dur)})")
+    add_review(key, title, 'tmpfile', names, 'a temporary copy of an aborted conversion/download lies next to the real audio file; it is '
+               'excluded from playback - delete the file in the book folder')
+    if not DRY_RUN:
+        order = sorted(afs, key=lambda a: (a.get('index') if a.get('index') not in (None, -1) else 10 ** 6, name(a)))
+        try:
+            r = abs_session.patch(f"{ABS_URL}/api/items/{iid}/tracks", json={'orderedFileData': [{'ino': a['ino'], 'exclude': bool(a in tmp or a.get('exclude'))} for a in order]}, timeout=30)
+            if r.status_code != 200: logging.warning(f"        Track list not updated (HTTP {r.status_code})")
+            else: abs_session.post(f"{ABS_URL}/api/items/{iid}/scan", timeout=60)  # ABS recomputes the duration on a rescan
+        except requests.RequestException as e: logging.warning(f"        Track list not updated: {e}")
+    return dur
+
 def verified_recording(abs_dur, abs_narrators, abs_authors, aud):
     """Same recording, also for NEW books whose file tags lack the narrator (2026-11-15: 'Among the Burning Flowers' had only author and
     title, so its cover was never replaced): runtime ±2 min and a shared narrator - or, WITHOUT any ABS narrator, a matching author
@@ -4245,6 +4271,7 @@ def process_queue(work_queue, history, failed, recheck):
                 narr_override = None  # narrators from the book folder when ABS narrator + ASIN belong to another recording
                 skip_meta = False
                 abs_dur = (item_data.get('media') or {}).get('duration') or (item.get('media') or {}).get('duration')
+                if (tmp_dur := exclude_temp_tracks(iid, key, title, item_data)): abs_dur = tmp_dur
                 src_due = set((SST.SOURCES if (item.get('_manual_trigger') or ONLY_ITEMS) else SST.due_sources(SOURCE_STATE, key, list(SST.SOURCES), REFRESH_DAYS)))
 
                 asin_hint_note = None
@@ -5687,6 +5714,7 @@ def main():
                 'author_links': {n: sorted(a) for n, a in AUTHOR_LINKS.items()},
                 'remove_role_credits': REMOVE_ROLE_CREDITS, 'genre_cleanup': GENRE_CLEANUP, 'book_languages': list(BOOK_LANGUAGES), 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
                 'audible_series_names': set(SERIES_ASINS),
+                'new_book_days': NEW_BOOK_DAYS,
                 'extra': {'author_notes': AUTHOR_NOTES, 'unmapped_genres': UNMAPPED_GENRES},
             })
             stats['series_merged'] = series_result.get('merges', 0)

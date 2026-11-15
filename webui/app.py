@@ -451,6 +451,9 @@ def explain_entry(x, res_all):
     elif kind == 'incomplete':
         what = T('The audio file seems to lack about %(m)s minutes.', m=cand)
         why = T("Its chapters and Audible's runtime of the same book are longer than the file - an incomplete download or another (shorter) edition. Check the end of the book.")
+    elif kind == 'tmpfile':
+        what = T('A temporary file lies next to the real audio file: %(f)s', f=cand)
+        why = T('It is a half-written copy of an aborted conversion or download. It was excluded from playback (the duration is correct again), but the file is still in the book folder: delete it there.')
     elif kind == 'moved':
         ev = x.get('evidence') or []
         what = T('ABS gave the newly added folder "%(n)s" the entry of another book ("%(t)s", folder "%(o)s").', n=cand, t=x.get('title') or '?', o=ev[0] if ev else '?')

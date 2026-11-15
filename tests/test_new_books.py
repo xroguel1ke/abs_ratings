@@ -44,3 +44,27 @@ def test_box_set_detection():
     assert not A.is_boxset_title('AC/DC: The Story')
     assert A.is_boxset_subtitle('Die Chroniken von Waldsee Trilogie 1-3')
     assert not A.is_boxset_subtitle('Black Magician Trilogy, Book 3')
+
+
+def test_temp_track_excluded(monkeypatch, tmp_path):
+    monkeypatch.setattr(A, 'REVIEW_FILE', str(tmp_path / 'review.json'))
+    monkeypatch.setattr(A, 'SCRIPT_DIR', str(tmp_path))
+    calls = []
+
+    class R:
+        status_code = 200
+        def json(self): return {}
+
+    class S:
+        def patch(self, url, json=None, **kw): calls.append(('patch', url, json)); return R()
+        def post(self, url, **kw): calls.append(('post', url)); return R()
+    monkeypatch.setattr(A, 'abs_session', S())
+    monkeypatch.setattr(A, 'DRY_RUN', False)
+    item = {'media': {'audioFiles': [
+        {'ino': '1', 'index': 1, 'duration': 60830.8, 'metadata': {'filename': 'The Hyena and the Hawk Echoes of the Fall, Book 3.mp4'}},
+        {'ino': '2', 'index': 2, 'duration': 58777.0, 'metadata': {'filename': 'The Hyena and the Hawk Echoes of the Fall, Book 3.tmp.mp4'}}]}}
+    assert round(A.exclude_temp_tracks('i', 'l_i', 'T', item)) == 60831
+    assert calls[0][0] == 'patch' and calls[0][2]['orderedFileData'] == [{'ino': '1', 'exclude': False}, {'ino': '2', 'exclude': True}]
+    assert A.rw_json(A.REVIEW_FILE)[0]['kind'] == 'tmpfile'
+    only_tmp = {'media': {'audioFiles': [{'ino': '2', 'index': 1, 'duration': 5, 'metadata': {'filename': 'x.tmp.mp4'}}]}}
+    assert A.exclude_temp_tracks('i', 'l_i', 'T', only_tmp) is None  # never the only file

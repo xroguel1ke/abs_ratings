@@ -334,7 +334,7 @@ def collect_records(ctx):
                 'series': [{'name': s.get('name'), 'sequence': s.get('sequence')} for s in (md.get('series') or []) if s.get('name')],
                 'media_tags': list(media.get('tags') or []), 'tags': expand_locks({t.strip() for t in raw_tags if isinstance(t, str)}),
                 'description': md.get('description') or '', 'language': md.get('language'), 'genres': md.get('genres') or [],
-                'cover': media.get('coverPath'), 'duration': media.get('duration'),
+                'cover': media.get('coverPath'), 'duration': media.get('duration'), 'added': d.get('addedAt'),
             })
     return records
 
@@ -765,7 +765,10 @@ def drop_duplicate_series(ctx, records):
     for (lib, kd), lst in books_of.items():
         for (lib2, kk), lst2 in books_of.items():
             if lib2 != lib or kk == kd or not kd or not kk: continue
-            if not (kk.startswith(kd + ' ') or kd.startswith(kk + ' ')): continue
+            # one name starts the other (either way: 'Slow Life?' / 'Slow Life! A Guide to ...'), or the DROPPED name is the shorter one
+            # inside the kept ('Witness' in 'Tales of Witness (Malazan Universe)'). Never a longer name inside a shorter one: 'The Last
+            # King of Osten Ard' is a real sub-series of 'Osten Ard' with the same numbers (fake-write check 2026-11-15)
+            if not (kk.startswith(kd + ' ') or kd.startswith(kk + ' ') or f' {kd} ' in f' {kk} '): continue
             ids_k = {id(r) for r, _ in lst2}
             if not all(any(series_key(y['name']) and words(y['name']) == kk and num(y.get('sequence')) == q and q is not None for y in r['series']) for r, q in lst): continue
             if not any(id(r) not in {id(r_) for r_, _ in lst} for r, _ in lst2): continue  # K has books of its own
@@ -780,6 +783,36 @@ def drop_duplicate_series(ctx, records):
                 changed += 1
                 logging.info(f"   📚 SERIES{' (DRY_RUN)' if dry else ''}: '{r['title']}': removed '{gone[0]}' (same series as '{next(x['name'] for x in new if words(x['name']) == kk)}', same number)")
                 r['series'] = new
+    return changed
+
+
+def drop_folder_only_series(ctx, records):
+    """A NEW book (added within new_book_days) holds a series that only came from its folder name: the name of the book's parent
+    folder, Audible does not list it, no other book has it - while the book also has a series Audible lists. (2026-11-15: 'No Life
+    Forsaken' sat in 'Malazan (In-World Chronological Order)/2 - ...' and got that series #2 next to Audible's 'Tales of Witness' #2;
+    user: series must be right even when a folder is named wrong.) lock_series respected."""
+    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    aud = {series_key(n) for n in (ctx.get('audible_series_names') or ())}
+    days = float(ctx.get('new_book_days') or 0)
+    if not aud or not days: return 0
+    import time as _t
+    count = {}
+    for r in records:
+        for x in r['series']: count[(r['lib'], series_key(x['name']))] = count.get((r['lib'], series_key(x['name'])), 0) + 1
+    changed = 0
+    for r in records:
+        if 'lock_series' in r['tags'] or 'lock_all' in r['tags'] or 'lock_metadata' in r['tags']: continue
+        if not r.get('added') or _t.time() - r['added'] / 1000 > days * 86400: continue
+        parts = [p for p in str(r.get('path') or '').replace('\\', '/').split('/') if p.strip()]
+        if len(parts) < 3: continue
+        fk = series_key(parts[-2])
+        gone = [x for x in r['series'] if series_key(x['name']) == fk and fk not in aud and count.get((r['lib'], fk), 0) == 1]
+        keep = [x for x in r['series'] if x not in gone]
+        if not gone or not any(series_key(x['name']) in aud for x in keep): continue
+        if abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'series': [dict(x) for x in keep]}, {'series': r['series']}, 'folder_only_series'):
+            changed += 1
+            logging.info(f"   📚 SERIES{' (DRY_RUN)' if dry else ''}: '{r['title']}': removed '{gone[0]['name']}' (only from the folder name, Audible does not list it)")
+            r['series'] = keep
     return changed
 
 
@@ -1171,6 +1204,7 @@ def run(ctx):
         ctx['languages_fixed'] = fix_languages(ctx, records, ctx['book_languages'])
     if ctx.get('merge'):
         ctx['duplicate_series'] = drop_duplicate_series(ctx, records)
+        ctx['folder_only_series'] = drop_folder_only_series(ctx, records)
         ctx['folder_series'] = fill_folder_series(ctx, records)
         ctx['folder_numbers'] = fill_folder_numbers(ctx, records)
         ctx['subseries_numbers'] = fill_from_subseries(ctx, records)

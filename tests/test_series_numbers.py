@@ -102,3 +102,30 @@ def test_same_name_twice_punctuation():
     recs = [rec(1, 'v1', '2023', [(n1, '1')], 'S/x/1', author='S'), rec(2, 'v2', '2024', [(n1, '2'), (n2, '2')], 'S/x/2', author='S')]
     c, _ = ctx()
     assert S.drop_duplicate_series(c, recs) == 1 and [x['name'] for x in recs[1]['series']] == [n1]
+
+
+def test_name_contained_in_the_other():
+    t = 'Tales of Witness (Malazan Universe)'
+    recs = [rec(1, 'Legacies of Betrayal', '2026', [(t, '3')], 'S/x/3 - a', author='E'),
+            rec(2, 'No Life Forsaken', '2025', [('Witness', '2'), (t, '2')], 'S/x/2 - b', author='E')]
+    c, _ = ctx()
+    assert S.drop_duplicate_series(c, recs) == 1 and [x['name'] for x in recs[1]['series']] == [t]
+
+
+def test_folder_only_series_of_a_new_book():
+    import time
+    c, _ = ctx(); c['audible_series_names'] = {'Tales of Witness (Malazan Universe)'}; c['new_book_days'] = 30
+    folder = 'Malazan (In-World Chronological Order)'
+    new = rec(2, 'No Life Forsaken', '2025', [(folder, '2'), ('Tales of Witness (Malazan Universe)', '2')], f'Steven Erikson/{folder}/2 - No Life Forsaken', author='E')
+    new['added'] = time.time() * 1000
+    old = rec(3, 'Old', '2020', [(folder, '1'), ('Tales of Witness (Malazan Universe)', '1')], f'Steven Erikson/{folder}/1 - Old', author='E')
+    old['added'] = (time.time() - 400 * 86400) * 1000
+    assert S.drop_folder_only_series(c, [new]) == 1 and [x['name'] for x in new['series']] == ['Tales of Witness (Malazan Universe)']
+    assert S.drop_folder_only_series(c, [old]) == 0  # not a new book
+
+
+def test_sub_series_inside_umbrella_name_stays():
+    oa = [rec(1, 'The Dragonbone Chair', '1988', [('Osten Ard', '1')], 'T/Osten Ard/1 - a', author='T'),
+          rec(2, 'The Witchwood Crown', '2017', [('Osten Ard', '5'), ('The Last King of Osten Ard', '5')], 'T/Osten Ard/5 - b', author='T')]
+    c, _ = ctx()
+    assert S.drop_duplicate_series(c, oa) == 0  # fake-write check 2026-11-15: the sub-series must stay
