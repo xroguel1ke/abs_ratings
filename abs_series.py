@@ -881,6 +881,7 @@ def normalize_genres(ctx, records):
 
 
 RATING_TAGS = (4.5, 4.7, 4.9)  # Audible overall rating tags (at least 50 ratings; user 2026-11-15: 4.9 instead of 4.8)
+HC_RATING_TAGS = (4.0, 4.2, 4.4)  # Hardcover rating tags (user 2026-11-15; at least 10 ratings - Hardcover has far fewer)
 FULL_CAST_RE = re.compile(r'(?i)full[\s-]*cast|dramati[sz](?:ed|ation)|audio\s*drama|radio\s*drama|h(?:ö|oe)rspiel|graphic\s*audio')
 
 
@@ -891,7 +892,7 @@ def manage_tags(ctx, records):
     is set per book (ratings)."""
     from collections import Counter
     abs_update, dry = ctx['abs_update'], ctx['dry_run']
-    managed = set(_THEME_TAG.values()) | {'Full Cast'} | {f'Audible {lim}+' for lim in RATING_TAGS}
+    managed = set(_THEME_TAG.values()) | {'Full Cast'} | {f'Audible {lim}+' for lim in RATING_TAGS} | {f'Hardcover {lim}+' for lim in HC_RATING_TAGS}
     known = {genre_key(g) for r in records for g in r['genres'] if isinstance(g, str)} | set(_GENRE_CANON) | set(_GENRE_SYN_KEYS) | set(_THEME_KEYS) \
             | {genre_key(g) for g in ctx.get('audible_genres') or ()} | {genre_key(x) for x in (
                 'Genre Fiction', 'Literatur & Belletristik', 'Klassiker', 'Action & Abenteuer', 'Abenteuer', 'Dystopien', 'Family & Relationships',
@@ -916,6 +917,12 @@ def manage_tags(ctx, records):
         for lim in RATING_TAGS:
             tag_ = f'Audible {lim}+'
             top = bool(m_ and int(m_.group(1)) >= 50 and float(m_.group(2)) >= lim)
+            if top and tag_ not in new: new.append(tag_)
+            elif not top and tag_ in new: new.remove(tag_)
+        h_ = re.search(r'Hardcover \((\d+)\):(?:<br\s*/?>|\s)*\S*\s*\S*\s*([\d.]+) / 5 - (?:Rating|Bewertung)', r.get('description') or '')
+        for lim in HC_RATING_TAGS:
+            tag_ = f'Hardcover {lim}+'
+            top = bool(h_ and int(h_.group(1)) >= 10 and float(h_.group(2)) >= lim)
             if top and tag_ not in new: new.append(tag_)
             elif not top and tag_ in new: new.remove(tag_)
         marker = ' '.join([r['title'] or '', r.get('subtitle') or '', r.get('path') or ''] + [x['name'] or '' for x in r['series']] + [str(g) for g in r['genres']] + list(r['narrators']))

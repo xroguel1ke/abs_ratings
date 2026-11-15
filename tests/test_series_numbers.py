@@ -316,3 +316,15 @@ def test_epic_on_fantasy_and_science_fiction():
     assert got[1] == ['Epic'], got[1]  # 'Epic' alone stays (user 2026-11-15), the umbrella goes
     assert 2 not in got  # nothing to change
     assert got[3] == ['Fantasy', 'Epic Fantasy'], got[3]  # both: Epic Fantasy
+
+
+def test_hardcover_rating_tags():
+    r = rec(1, 'x', '2020', [], 'A/x', author='A')
+    r.update(genres=['Fantasy'], narrators=['A B'], subtitle='', media_tags=['Hardcover 4.4+'], _themes=set(),
+             description='Audible (12):<br />🏆 x 4.9 / 5 - Overall<br />Hardcover (25):<br />🏆 🌕🌕🌕🌕🌑 4.3 / 5 - Rating<br />')
+    few = dict(r, id=2, media_tags=[], description='Hardcover (6):<br />🏆 x 4.8 / 5 - Rating<br />')
+    got = {}
+    ctx_ = {'dry_run': True, 'abs_update': lambda iid, key, title, upd, old, src, tags=None, old_tags=None, **kw: got.__setitem__(iid, tags) or True}
+    S.manage_tags(ctx_, [r, few])
+    assert got[1] == ['Hardcover 4.0+', 'Hardcover 4.2+'], got[1]  # 4.3 with 25 ratings; 4.4+ removed; Audible: only 12 ratings
+    assert 2 not in got  # 6 Hardcover ratings: no tag

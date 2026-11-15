@@ -213,7 +213,7 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     Short Stories, Graphic Novel; Sword & Sorcery stays); umbrellas go (Science Fiction & Fantasy, Literature & Fiction, Fiction);
     'Epic' next to 'Epic Fantasy' goes, 'Epic' alone stays (per book: not re-added next to Epic Fantasy); themes are English TAGS
     (_THEME_TAG: Dragons, Magic, Time Travel, Tie-In ...); order: main genre, specific ones, audience, broad (Adventure) last.
-    manage_tags: genre copies leave the tags, lock_* and own tags stay, rating tags cumulative (Audible 4.5+ / 4.7+ / 4.9+), 'Full Cast' only when marked (full cast / dramatized /
+    manage_tags: genre copies leave the tags, lock_* and own tags stay, rating tags cumulative (Audible 4.5+ / 4.7+ / 4.9+ with 50+ ratings, Hardcover 4.0+ / 4.2+ / 4.4+ with 10+), 'Full Cast' only when marked (full cast / dramatized /
     Hörspiel / GraphicAudio) or 5+ narrators, 'Audible 4.5+' from the rating block (>= 4.5 with >= 50 ratings, removed when lower).
   - Check of the first big real run 2026-11-15: Hardcover's release_year can come from ONE wrongly merged edition (HWFWM 7 = 2006,
     Fellowship = 1937) or from another book found by an alternative title (Dragonsblood -> Dragon's Kin): the year is only taken from
