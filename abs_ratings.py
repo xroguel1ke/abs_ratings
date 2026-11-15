@@ -5700,6 +5700,9 @@ def main():
         except Exception as e:
             logging.exception(f"Series task failed: {e}")
     if MISSING_SERIES and (not ONLY_ITEMS or FOLLOW_UP_TASKS) and USE_AUDIBLE_API and 'audible' not in SOURCE_DOWN:
+        # the library task may have merged / renamed series in THIS run: the series of the listing loaded at the start are stale
+        # (2026-11-15: 'Spice and Wolf' and 'Spice and Wolf (Light Novel)' both on the list right after their merge) -> reload
+        if series_result: SERIES_BOOKS.clear()
         try: missing_in_series_task()
         except Exception as e: logging.exception(f"Missing-volumes report failed: {e}")
     if not ONLY_ITEMS:  # source traffic light for the web UI overview (user 2026-11-09)
