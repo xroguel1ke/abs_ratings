@@ -1011,8 +1011,28 @@ def series_seq_conflict(abs_series, cand_series):
 
 _SERIES_SEQ, _ASIN_TITLE = {}, {}  # (host, series asin) -> [(child asin, sequence)]; (host, asin) -> title (cached per run)
 
+_MEMBERS_CACHE = {}
+
+def _members_file_cache():
+    """series_members.json, read once per run (written by the missing-volumes report)."""
+    if 'd' not in _MEMBERS_CACHE:
+        try: _MEMBERS_CACHE['d'] = rw_json(SERIES_MEMBERS_FILE) or {}
+        except Exception: _MEMBERS_CACHE['d'] = {}
+    return _MEMBERS_CACHE['d']
+
 def _series_members(host, series_asin):
     """Children of an Audible series with their numbers and titles (2 requests per series, cached)."""
+    if (host, series_asin) not in _SERIES_SEQ:
+        # speed 2026-11-15: the missing-volumes report keeps every series list (series_members.json, fresh for SERIES_LIST_DAYS) - used
+        # here too instead of 2 requests per series in every run
+        c_ = _members_file_cache().get(f"v2|{host}|{series_asin}")
+        try: fresh_ = c_ and datetime.now(timezone.utc) - datetime.fromisoformat(c_['ts']) < timedelta(days=SERIES_LIST_DAYS) and c_.get('members')
+        except (KeyError, ValueError, TypeError): fresh_ = False
+        if fresh_:
+            _SERIES_SEQ[(host, series_asin)] = [(m['asin'], str(m.get('num') or '').strip()) for m in c_['members'] if m.get('asin')]
+            with IO_LOCK:
+                for m in c_['members']:
+                    if m.get('asin') and m.get('title'): _ASIN_TITLE.setdefault((host, m['asin']), m['title'])
     if (host, series_asin) not in _SERIES_SEQ:
         hdr = {"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}
         throttle('audible_api', host)
@@ -1804,6 +1824,21 @@ def get_audible_api(asin, domain):
 AUD_PREFETCH = {}  # (api host, asin) -> catalog product of this run (bulk request, 50 per request)
 
 
+def aud_prefetch_asins(host, asins):
+    """Search candidates of one store in ONE bulk request (speed check 2026-11-15: about every third Audible request of a run was a
+    single candidate product, each waiting for the per-host throttle). Products the answer lacks are asked singly as before."""
+    asins = [a for a in dict.fromkeys(asins) if re.fullmatch(r'[A-Z0-9]{10}', str(a or ''))]
+    if len(asins) < 2: return
+    throttle('audible_api', host)
+    try:
+        r = requests.get(f"https://{host}/1.0/catalog/products", params={"asins": ",".join(asins[:50]), "response_groups": AUDIBLE_API_GROUPS,
+                         "image_sizes": "500,1215"}, headers={"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}, timeout=30)
+        prods = r.json().get('products') if r.status_code == 200 else None
+    except (requests.RequestException, ValueError): prods = None
+    for p in prods or []:
+        if p.get('asin') in asins and p.get('title'):
+            with IO_LOCK: AUD_PREFETCH[(host, p['asin'])] = p
+
 def aud_prefetch(items):
     """The product of every queued book from its preferred store in bulk (50 ASINs per request instead of one request per book -
     each single request waits for the per-host throttle). A product the bulk answer does not contain is asked singly as before."""
@@ -2370,7 +2405,9 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
         if not candidates and not only_extra: logging.info(f"        ↪️ No search results on {domain} ({len(queries)} queries)")
         # series-listing candidates are all checked (closest runtime first); the hits of the search queries are appended AFTER them and get
         # their own room (otherwise a long series listing cuts them off: the .de hit of a German volume was never looked at)
-        for cand in candidates[:len(extra_candidates or []) + max(6, 12 if only_queries else 0)]:
+        to_check = candidates[:len(extra_candidates or []) + max(6, 12 if only_queries else 0)]
+        aud_prefetch_asins(host, [c_ for c_ in to_check if (host, c_) not in AUD_PREFETCH])  # speed 2026-11-15: one request, not one per candidate
+        for cand in to_check:
             p = get_audible_api(cand, domain)
             owners_ = (ASIN_OWNERS.get(cand, set()) - {SEARCH_CTX['key']}) if SEARCH_CTX.get('key') else set()
             if owners_ and isinstance(p, dict) and p.get('runtime_sec') and not any(KEY_DUR.get(o) and abs(KEY_DUR[o] - p['runtime_sec']) <= 120 for o in owners_):

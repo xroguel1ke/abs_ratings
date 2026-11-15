@@ -319,10 +319,16 @@ def collect_records(ctx):
         except Exception as e:
             logging.error(f"Series task: cannot load library {lib}: {e}"); continue
         logging.info(f"   Loading {len(items)} items of library {lib} ...")
-        for it in items:
-            try: d = sess.get(f"{url}/api/items/{it['id']}").json()
-            except Exception as e:
-                logging.warning(f"   Could not load item {it.get('id')}: {e}"); continue
+        # speed 2026-11-15: the full items are fetched in parallel (one at a time took ~1 min for 2000 books); order kept
+        from concurrent.futures import ThreadPoolExecutor
+        def _get(it):
+            try: return it, sess.get(f"{url}/api/items/{it['id']}").json(), None
+            except Exception as e: return it, None, e
+        with ThreadPoolExecutor(max_workers=int(ctx.get('load_workers') or 3)) as ex_:
+            loaded = list(ex_.map(_get, items))
+        for it, d, err in loaded:
+            if err is not None or not isinstance(d, dict):
+                logging.warning(f"   Could not load item {it.get('id')}: {err}"); continue
             media = d.get('media') or {}
             md = media.get('metadata') or {}
             if d.get('mediaType', 'book') != 'book': continue
