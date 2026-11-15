@@ -969,6 +969,10 @@ def settings():
             s['schedule_days'] = [int(d) for d in request.form.getlist('schedule_days')]
             s['schedule_time'] = request.form.get('schedule_time') or '02:30'
             s['schedule_cron'] = (request.form.get('schedule_cron') or '').strip() or '30 2 * * *'
+            if s['schedule_mode'] == 'cron' and s['schedule_enabled'] and not core.next_run_time(s):
+                # 2026-11-15: '0 */6* * *' (a missing space) was saved and silently stopped every scheduled scan for a day
+                flash(T('Schedule: invalid cron expression "%(c)s" - not saved. It needs 5 fields separated by spaces: minute hour day month weekday, e.g. 0 */6 * * *', c=s['schedule_cron']), 'error')
+                return redirect(url_for('settings') + '#' + core.section_slug(sec))
         if sec == 'Notifications':
             s['apprise_url'] = (request.form.get('apprise_url') or '').strip()
             s['notify_events'] = [e for e in core.NOTIFY_EVENTS if request.form.get('ev_' + e) == 'on']
