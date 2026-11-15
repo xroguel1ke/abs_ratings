@@ -81,8 +81,8 @@ class _BookLogRouter(logging.Handler):
         super().__init__(); self.real = handlers
     def emit(self, record):
         buf = getattr(_TL, 'logbuf', None)
-        if buf is not None: buf.append(record); return
-        for h in self.real: h.handle(record)
+        if buf is not None and not getattr(record, 'now', False): buf.append(record); return
+        for h in self.real: h.handle(record)  # 'now' records (pauses) are written at once, also from a worker (user 2026-11-15)
     def flush_book(self):
         buf = getattr(_TL, 'logbuf', None)
         if not buf: return
@@ -98,6 +98,11 @@ class _BookLogRouter(logging.Handler):
             for r in buf:
                 for h in self.real: h.handle(r)
 LOG_ROUTER = None
+
+def log_pause(book, why, seconds):
+    """A long wait is logged AT ONCE (not with the book's buffered block), with the time it ends: a scan that seems to hang is explained."""
+    until = (datetime.now() + timedelta(seconds=seconds)).strftime('%H:%M:%S')
+    logging.warning(f"⏸️ PAUSE {seconds:.0f}s until {until} - {why}" + (f" (book: '{book}')" if book else ''), extra={'now': True})
 BOOKS_DONE = [0]  # finished books of the current run_books() (progress numbering with parallel workers)
 RUN_T0 = [None]   # start of the current run_books()
 DONE_TS = __import__('collections').deque(maxlen=150)  # finish times of the last books (rolling speed)
@@ -235,6 +240,7 @@ FILL_COVERS = os.getenv('FILL_COVERS', 'true').lower() == 'true'      # Set Audi
 UPDATE_COVERS = os.getenv('UPDATE_COVERS', 'true').lower() == 'true'  # Replace an existing cover by the Audible cover when the book is VERIFIED (same recording); old cover backed up for undo
 COVER_STATE_FILE = os.path.join(SCRIPT_DIR, "cover_state.json")  # item id -> ASIN whose Audible cover was set (no re-upload every run)
 COVER_STATE = {}
+cover_token = lambda asin: f"{asin}@orig"  # '@orig' = the original-size cover (2026-11-15); a plain ASIN = the old 1215 px one -> replaced once
 FILLED_NARR_FILE = os.path.join(SCRIPT_DIR, "filled_narrators.json")  # item keys whose narrators WE copied from Audible (no self-confirmation)
 FILLED_NARR = set()
 GENRE_LANGUAGE = os.getenv('GENRE_LANGUAGE', 'en').lower()            # 'en' = translate audible.de genres, 'keep' = as delivered
@@ -412,6 +418,10 @@ SUMMARY_INDEX_FILE = os.path.join(SCRIPT_DIR, 'summary_index.json')  # asin -> [
 SUMMARY_INDEX = {}
 IDENTITY_DESC_FILE = os.path.join(SCRIPT_DIR, 'identity_desc.json')  # books whose description was replaced after a confirmed other-book ASIN
 IDENTITY_DESC = set()
+IDENTITY_META_FILE = os.path.join(SCRIPT_DIR, 'identity_meta.json')  # books whose title/authors/series came once from a confirmed other-book ASIN
+IDENTITY_META = set()
+SERIES_LIST_DAYS = float(os.getenv('SERIES_LIST_DAYS', 1))  # missing volumes: Audible series lists cached this long (user 2026-11-15: was 7 days, new volumes came a week late)
+NEW_BOOK_DAYS = int(os.getenv('NEW_BOOK_DAYS', 30))  # 'new book' = never processed and added to ABS within these days
 NEW_VOLUMES = []  # missing volumes that became available since the last report (run summary / notification)
 SOURCE_DOWN = {}  # source -> reason: failed canary check or tripped breaker (source_health.py); nothing is counted or written from it
 BREAKER = None
@@ -872,7 +882,11 @@ def folder_book_title(item_data):
     return t
 
 BOXSET_RE = re.compile(r"\b\d+\s*[-–]\s*\d+\b|\b(trilog(y|ie)|box\s*set|boxed set|omnibus|sammelband|gesamtausgabe|publisher.?s pack|complete (series|collection)|collection)\b|\bbooks?\s+\d+\s*(?:-|–|&|and|,)\s*\d+", re.I)
-def is_boxset_title(t): return bool(t and BOXSET_RE.search(t))
+def is_boxset_title(t): return bool(t and (BOXSET_RE.search(t) or re.search(r'\S\s+/\s+\S.*\S\s+/\s+\S', t)))  # 'Dämonenblut / Nachtfeuer / Perlmond'
+
+def is_boxset_subtitle(t):
+    """A subtitle naming a range of volumes with a collection word ('Die Chroniken von Waldsee Trilogie 1-3') - not 'X Trilogy, Book 3'."""
+    return bool(t and re.search(r'(?i)\b(?:trilog\w*|box|omnibus|gesamtausgabe|sammelband|collection|books)\b.*\b\d+\s*[-–]\s*\d+\b', t))
 
 ASIN_OWNERS = {}  # asin -> set of item keys (ABS library + ASINs planned in this run); an ASIN is never given to a second book
 ISBN_OWNERS = {}  # isbn -> set of item keys (an ISBN is never given to a second book)
@@ -1387,6 +1401,9 @@ def glued_subtitle(title, abs_sub, aud_title, aud_sub, abs_series=None):
     The ABS subtitle must be Audible's, a foreign series label, or empty with the subtitle twice in the title: an own subtitle (or none:
     'Mistborn: The Final Empire' is a normal title) keeps the title as it is."""
     n = lambda x: normalize_title_text(x or '')
+    parts_ = [x for x in re.split(r'\s*:\s*', title or '') if x]
+    if aud_title and len(parts_) >= 3 and n(parts_[-1]) == n(parts_[-2]) and n(': '.join(parts_[:-1])) == n(aud_title) and n(aud_title) != n(title):
+        return 'title'  # the same part twice at the end ('Defiance of the Fall 4: A LitRPG Adventure: A LitRPG Adventure'; Audible has no subtitle field)
     if not (title and aud_title and aud_sub) or n(aud_title) == n(title) or ':' not in title: return None
     if abs_sub and n(title) == n(f"{aud_title}: {abs_sub}"): return 'title'  # 'Casual Farming: Sowing Season, Book 1' + that subtitle
     if n(title) not in (n(f"{aud_title}: {aud_sub}"), n(f"{aud_title}: {aud_sub}: {aud_sub}")): return None
@@ -1727,7 +1744,11 @@ def audible_result(p, asin, domain):
         with IO_LOCK: SUMMARY_INDEX[p['asin']] = [p.get('title') or '', _sum_norm(res['summary'])[:800]]
     res['adult'] = bool(p.get('is_adult_product'))
     imgs = {k: v for k, v in (p.get('product_images') or {}).items() if str(k).isdigit() and v}
-    if imgs: res['cover_url'] = imgs[max(imgs, key=int)]
+    if imgs:
+        # the original size: the largest requested size (1215) without its size suffix '._SL1215_' (user 2026-11-15: ABS's own Audible
+        # match gives 2400x2400, the script gave 1215x1215); the sized URL stays as fallback
+        res['cover_url_small'] = imgs[max(imgs, key=int)]
+        res['cover_url'] = re.sub(r'\._[A-Z]{2}\d+_(?=\.[a-z]+$)', '', res['cover_url_small'])
     res['meta_raw'] = {
         'language': p.get('language'),
         'publisher': {'name': p.get('publisher_name')} if p.get('publisher_name') else None,
@@ -2590,11 +2611,16 @@ def get_goodreads_data(isbn, title, authors, prim_auth, cached_url=None, hc_ids=
         try:
             return _goodreads_lookup(isbn, title, authors, prim_auth, cached_url, hc_ids)
         except SourceBlockedException as e:
-            if GR_STATE['cooldowns'] < GR_MAX_COOLDOWNS:
+            # selection runs ('only new', quick mode, single fixes) never wait: Goodreads is skipped and asked again in a later run
+            # (a quick run waited 15 min for one book, 2026-11-15); the source state keeps it due
+            max_cd = 0 if ONLY_ITEMS else GR_MAX_COOLDOWNS
+            if GR_STATE['cooldowns'] < max_cd:
                 GR_STATE['cooldowns'] += 1
                 pause = max(GR_BLOCK_COOLDOWN, GR_STATE.pop('retry_after', 0) or 0)  # the server's Retry-After wins when longer
-                logging.warning(f"        ⏸️ Goodreads blocks requests: {e}. Cool-down {pause}s, then retrying ({GR_STATE['cooldowns']}/{GR_MAX_COOLDOWNS})...")
+                logging.warning(f"        ⏸️ Goodreads blocks requests: {e}. Cool-down {pause}s, then retrying ({GR_STATE['cooldowns']}/{max_cd})...")
+                log_pause(title, f"Goodreads blocks requests ({e}); retry {GR_STATE['cooldowns']}/{max_cd}", pause)
                 time.sleep(pause)
+                logging.warning(f"▶️ Goodreads pause over, retrying (book: '{title}')", extra={'now': True})
                 continue
             GR_STATE['blocked'] = True
             logging.warning(f"        🛑 Goodreads still blocks requests: {e}. Skipping Goodreads for the rest of this run.")
@@ -3157,6 +3183,7 @@ def get_hardcover_data(key, targets, authors, asin, isbn, manual_url=None, use_c
             if go_on and not HC_STATE['disabled']:
                 wait = max(1, 60 - (time.monotonic() - HC_STATE['cool_ts']))
                 logging.warning(f"        ⏸️ Hardcover per-minute limit ({e}). Waiting {wait:.0f}s ({HC_STATE['cooldowns']}/2)...")
+                if wait >= 10: log_pause(abs_title, f"Hardcover per-minute limit ({e})", wait)
                 time.sleep(wait); continue
             left = HC_STATE.get('daily_left')
             HC_STATE['disabled'] = f"per-minute limit (HTTP 429){f', daily requests left: {left}' if left is not None else ''}"
@@ -3499,6 +3526,9 @@ def run_libraries(history, failed, recheck):
     # run mode: build-up = the whole library over several runs (new books first); maintenance = new / changed books always + a small
     # random sample of the due ones. auto = build-up until every book was completed once.
     urgent = [it for it in pool if f"{it['_lib']}_{it['id']}" not in history or it.get('_manual_trigger') or it.get('_reverted')]
+    # never processed books before 'manual updates' (loop 2026-11-15: an ABS rescan stamped ~1900 books as updated, 25 of them per run
+    # pushed new books back by days); the order inside each group stays random
+    urgent.sort(key=lambda it: f"{it['_lib']}_{it['id']}" in history)
     rest = [it for it in pool if it not in urgent]
     never = sum(1 for it in pool if f"{it['_lib']}_{it['id']}" not in history and f"{it['_lib']}_{it['id']}" not in failed)
     mode = RUN_MODE if RUN_MODE in ('buildup', 'maintain') else ('buildup' if never or not history else 'maintain')
@@ -3633,6 +3663,18 @@ def guard_moved_items(lib_id, items):
         rw_json(ITEM_PATHS_FILE, snap)
     return keep
 
+META_FP_FILE = os.path.join(SCRIPT_DIR, 'meta_fingerprints.json')  # key -> metadata fingerprint seen at the last queue build
+
+def meta_fingerprint(item):
+    """What a person can change on a book (listing fields): a scan that only refreshes inode/path keeps it."""
+    media = item.get('media') or {}; md = media.get('metadata') or {}
+    keys_ = ('title', 'subtitle', 'authorName', 'narratorName', 'seriesName', 'genres', 'publishedYear', 'publisher', 'description', 'isbn',
+             'asin', 'language', 'explicit', 'abridged')
+    raw = json.dumps([md.get(k) for k in keys_] + [media.get('coverPath'), sorted(media.get('tags') or []), round(float(media.get('duration') or 0)),
+                      media.get('numAudioFiles') or media.get('numTracks')], ensure_ascii=False, sort_keys=True, default=str)
+    import hashlib
+    return hashlib.sha1(raw.encode('utf-8')).hexdigest()[:16]
+
 def build_queue(lib_id, history, recheck):
     """Due books of one library (new, manually changed, due for refresh, re-checks). Each item gets '_lib'."""
     logging.info(f"--- Library: {lib_id} ---")
@@ -3641,6 +3683,8 @@ def build_queue(lib_id, history, recheck):
         items = r.json()['results']
     except Exception as e: logging.error(f"Lib Error: {e}"); return []
     items = guard_moved_items(lib_id, items)
+    fp_store = rw_json(META_FP_FILE) or {}
+    fp_skipped = 0
 
     # --- NEW QUEUE LOGIC (UTC ONLY) ---
     work_queue = []
@@ -3706,6 +3750,10 @@ def build_queue(lib_id, history, recheck):
                 if own_dt and own_dt.tzinfo is None: own_dt = own_dt.replace(tzinfo=timezone.utc)
                 if abs_dt > (max(last_run_dt, own_dt or last_run_dt) + timedelta(seconds=60)):
                     is_manual_update = True
+                    # ABS also stamps an item when a scan only refreshes its inode/path (mover, 2026-11-10: ~1900 'manual updates',
+                    # 25 per run): a manual update needs a changed metadata fingerprint (unknown fingerprint: as before)
+                    if fp_store.get(key) and fp_store[key] == meta_fingerprint(item):
+                        is_manual_update = False; fp_skipped += 1
             except: 
                 pass
 
@@ -3737,6 +3785,10 @@ def build_queue(lib_id, history, recheck):
             work_queue.append(item); count_rating += 1
 
     count_fresh = len(items) - count_locked - len(work_queue)
+    if fp_skipped: logging.info(f"   {fp_skipped} book(s) with a newer ABS time stamp but unchanged metadata (scan / file move): no manual update")
+    if not DRY_RUN:  # the state seen now is the reference for the next run (also after our own writes of this run: they are stamped)
+        fp_store.update({f"{lib_id}_{it['id']}": meta_fingerprint(it) for it in items})
+        rw_json(META_FP_FILE, fp_store)
     logging.info(f"Due: {count_new} New, {count_manual} Manual Updates, {count_due} Due, {count_recheck} Re-checks, {count_rating} only missing ratings ({count_locked} locked via lock_all). "
                  f"{count_fresh} books are up to date (refreshed within the last {REFRESH_DAYS} days).")
     stats['skipped'] += count_locked
@@ -3954,11 +4006,11 @@ def sst_record(key, source, status, hits=None, aud_facts=None):
 SERIES_MEMBERS_FILE = os.path.join(SCRIPT_DIR, 'series_members.json')  # {host|series asin: {'ts', 'members'}}, 7 days
 
 def series_members_full(host, sasin, cache):
-    """Audible series list with number, title, release date and language of every volume (cached 7 days). None = unknown."""
+    """Audible series list with number, title, release date and language of every volume (cached SERIES_LIST_DAYS). None = unknown."""
     ck = f"v2|{host}|{sasin}"
     c = cache.get(ck)
     try:
-        if c and datetime.now(timezone.utc) - datetime.fromisoformat(c['ts']) < timedelta(days=7): return c['members']
+        if c and datetime.now(timezone.utc) - datetime.fromisoformat(c['ts']) < timedelta(days=SERIES_LIST_DAYS): return c['members']
     except (KeyError, ValueError): pass
     hdr = {"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}
     throttle('audible_api', host)
@@ -4146,6 +4198,10 @@ def process_queue(work_queue, history, failed, recheck):
                     with IO_LOCK: RESULTS.pop(key, None)
                     break
                 item_data = r_item.json()
+                # NEW book (title/author/cover rules for messy file tags): never processed AND added to ABS in the last NEW_BOOK_DAYS -
+                # a first run over a whole library (new install, new library) must not rewrite the user's curated titles (loop 2026-11-15)
+                added_ = float(item_data.get('addedAt') or 0) / 1000
+                new_book = key not in history and bool(added_) and time.time() - added_ <= NEW_BOOK_DAYS * 86400
                 from abs_series import expand_locks
                 tags = expand_locks(item_tags(item_data))
                 meta = item_data['media']['metadata']
@@ -4397,7 +4453,7 @@ def process_queue(work_queue, history, failed, recheck):
                         # (Bee Speaker: 3 narrators + author agree, the file is 5 min shorter)
                         logging.info(f"        🔎 Searching with the book folder's title '{ft_}'" + ('' if search_narr else ' (runtime must match to ±2 min)'))
                         LAST_MATCH.clear(); SEARCH_CTX['need_exact_rt'] = not search_narr
-                        found = find_missing_asin(ft_, authors, abs_dur, lang, raw_title=None, required_lang=lang_target, strict=False,
+                        found = find_missing_asin(ft_, authors, abs_dur, lang, raw_title=None, required_lang=lang_target, strict=strict_search and bool(asin),
                                                   only_domain=None, narrators=search_narr, abs_series=search_series(lib_id, meta.get('series')))
                     if not found and weak_ and weak_.get('series_ok') and 'lock_asin' not in tags and not (ASIN_OWNERS.get(weak_['asin'], set()) - {key}):
                         found = weak_['asin']
@@ -4497,20 +4553,16 @@ def process_queue(work_queue, history, failed, recheck):
                         elif new_t != title:
                             abs_updates['title'] = new_t
                             log_updates.append(f"Title: '{title}' -> '{new_t}' (was another volume's title)")
-                    elif aud_title and key not in history and not lang_conflict and (verified_recording(abs_dur, meta.get('narrators'), authors, aud_data) or (
+                    elif aud_title and new_book and not lang_conflict and (verified_recording(abs_dur, meta.get('narrators'), authors, aud_data) or (
                             asin_from_search and narr_keys(meta.get('narrators')) & narr_keys(aud_data.get('narrators_raw'))
                             and abs_dur and aud_data.get('runtime_sec') and not runtime_mismatch(abs_dur, aud_data['runtime_sec']))):  # Bee Speaker: 3 narrators, file 5 min shorter
                         # user 2026-11-15: a NEW book's title comes from its file tags ('Book 20 - Volume 07 - Part 06 - Memory's Flame - The
                         # Wandering Inn Series', 'Crow's Fortune - Ramón de Ocampo', 'Zero Enigma'): the verified recording's Audible title.
-                        # Like the user's own fixes: a format label goes ('(Unabridged)', '(Light Novel)'); title + Audible subtitle glued
-                        # ('Lux: A Texas Reckoners Novel', 'Sword Art Online 17: Alicization Awakening') stays unless the subtitle is a series
-                        # label ('Theurge: Spellmonger, Book 19' -> 'Theurge'); a missing subtitle comes from Audible.
+                        # A format label goes ('(Unabridged)', '(Light Novel)'); a missing subtitle comes from Audible.
+                        # (user 2026-11-15: title + subtitle glued came from ABS's own match, not wanted - Audible's split like the glued_subtitle rule)
                         fmt_ = lambda x: re.sub(r'(?i)\s*\((?:unabridged|ungek(?:ü|ue)rzt|light novel|novel)\)\s*$', '', x or '').strip()
                         cur_ = fmt_(title)
-                        sub_series = bool(aud_sub and re.search(r'(?i)\b(?:book|vol(?:ume)?\.?|band|teil)\s*\d', aud_sub))
-                        glued_ = bool(aud_sub and not sub_series and ':' in cur_ and normalize_title_text(cur_).endswith(' ' + normalize_title_text(aud_sub))
-                                      and title_similarity(cur_.rsplit(':', 1)[0], aud_title) >= 0.8)
-                        new_t = cur_ if glued_ or normalize_title_text(aud_title) == normalize_title_text(cur_) or not new_book_title_ok(cur_, aud_title) else fmt_(aud_title)
+                        new_t = cur_ if normalize_title_text(aud_title) == normalize_title_text(cur_) or not new_book_title_ok(cur_, aud_title) else fmt_(aud_title)
                         if new_t and new_t != title:
                             if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{new_t}'")
                             else:
@@ -4549,7 +4601,7 @@ def process_queue(work_queue, history, failed, recheck):
                             if aud_sub and not meta.get('subtitle') and 'lock_subtitle' not in tags and new_t == aud_title:
                                 abs_updates['subtitle'] = aud_sub
                                 log_updates.append(f"Subtitle: '' -> '{aud_sub}'")
-                    elif aud_title and aud_sub and (glued := glued_subtitle(title, meta.get('subtitle'), aud_title, aud_sub, [s_.get('name') for s_ in (meta.get('series') or [])])):
+                    elif aud_title and (glued := glued_subtitle(title, meta.get('subtitle'), aud_title, aud_sub, [s_.get('name') for s_ in (meta.get('series') or [])])):
                         # library 2026-11-09: the subtitle glued into the title ('Sojourn: Legend of Drizzt: Dark Elf Trilogy, Book 3' with that
                         # subtitle, 'Defiance of the Fall 4: A LitRPG Adventure: A LitRPG Adventure') - ABS title = Audible title + subtitle
                         if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{aud_title}'")
@@ -4571,6 +4623,13 @@ def process_queue(work_queue, history, failed, recheck):
                                 abs_updates['subtitle'] = aud_sub
                                 log_updates.append(f"Subtitle: -> '{aud_sub}'")
 
+                    fl_t = re.sub(r'(?i)\s*\((?:unabridged|ungek(?:ü|ue)rzt|light novel)\)\s*$', '', title).strip()  # user 2026-11-15: '(Light Novel)' too
+                    if 'title' not in abs_updates and fl_t and fl_t != title:
+                        # '(Unabridged)' is a format label, never part of a title - also when the ASIN is another recording (Witch King, loop 2026-11-15)
+                        if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{fl_t}'")
+                        else:
+                            abs_updates['title'] = fl_t
+                            log_updates.append(f"Title: '{title}' -> '{fl_t}' (format label)")
                     from abs_series import foreign_for_book as _ffs
                     if meta.get('subtitle') and 'lock_title' not in tags and 'subtitle' not in abs_updates and _ffs(meta['subtitle'], meta.get('language') or lang) \
                             and not (aud_sub and normalize_title_text(aud_sub) == normalize_title_text(meta['subtitle'])):
@@ -4746,7 +4805,7 @@ def process_queue(work_queue, history, failed, recheck):
                                     # user decision 2026-11-09: a pack / omnibus keeps Audible's own range as its number ('1-2' for Publisher's
                                     # Pack 1, '3-4' for Pack 2) - it says exactly which volumes the book holds
                                     s_seq = f"{rng_.group(1)}-{rng_.group(2)}"
-                                elif s_seq is not None and (is_boxset_title(title) or is_boxset_title(aud_data.get('title_raw') or '')):  # 'Trilogie 1-3' is not book 5; Audible's TITLE only ('Black Magician Trilogy, Book 3' as subtitle is no box set)
+                                elif s_seq is not None and (is_boxset_title(title) or is_boxset_title(aud_data.get('title_raw') or '') or is_boxset_subtitle(aud_data.get('subtitle_raw'))):  # 'Trilogie 1-3' is not book 5; Audible's TITLE only ('Black Magician Trilogy, Book 3' as subtitle is no box set)
                                     logging.info(f"        ℹ️ Series '{s_name}': no number for a box set / collection ('{title}')")
                                     s_seq = None
                                 elif s_seq is None and not is_boxset_title(title):
@@ -4988,7 +5047,7 @@ def process_queue(work_queue, history, failed, recheck):
                                 AUTHOR_NOTES.append({'title': title, 'abs': authors, 'audible': an})
                                 logging.info(f"        ℹ️ Author spelling differs: ABS {authors} vs Audible '{an}' (not changed, listed in report)")
                         ko2_ = lambda n_: ''.join(sorted(re.findall(r'[a-z]+', fold_accents_s(n_).lower())))
-                        if key not in history and 'lock_authors' not in tags and not abs_updates.get('authors') and len(authors) == len(aud_auth) \
+                        if new_book and 'lock_authors' not in tags and not abs_updates.get('authors') and len(authors) == len(aud_auth) \
                                 and verified_recording(abs_dur, meta.get('narrators'), authors, aud_data) and (
                                     (any(re.search(r'[^\x00-ɏ]', a_) for a_ in authors) and not any(re.search(r'[^\x00-ɏ]', a_) for a_ in aud_auth))
                                     or ({ko2_(a_) for a_ in authors} == {ko2_(a_) for a_ in aud_auth} and _nk(authors) != _nk(aud_auth))):
@@ -4996,6 +5055,13 @@ def process_queue(work_queue, history, failed, recheck):
                             # name swapped ('Isshiki Ichika') -> Audible's spelling of the same recording (kept the series from merging)
                             abs_updates['authors'] = [{'name': n_} for n_ in aud_auth]
                             log_updates.append(f"Authors: {authors} -> {aud_auth} (new book: Audible's spelling of the same recording)")
+                        elif new_book and 'lock_authors' not in tags and not abs_updates.get('authors') and len(authors) > len(aud_auth) \
+                                and verified_recording(abs_dur, meta.get('narrators'), authors, aud_data) \
+                                and all(any(match_author([a_], b_) for a_ in authors) for b_ in aud_auth):
+                            # quick run 2026-11-15: file tags add the illustrator / translator ('Shirabii', 'Roman Lempert - translator',
+                            # 'Taishi - Translator - translator') - every Audible author is there, the extra names are no author of this recording
+                            abs_updates['authors'] = [{'name': next((a_ for a_ in authors if match_author([a_], b_)), b_)} for b_ in aud_auth]
+                            log_updates.append(f"Authors: {authors} -> {[x['name'] for x in abs_updates['authors']]} (new book: names Audible does not list as authors of this recording)")
                         if not match_author(authors, ', '.join(aud_auth)) and not any(re.search(r'[^\x00-ɏ]', a_) for a_ in aud_auth) \
                                 and 'lock_authors' not in tags and same_recording(abs_dur, meta.get('narrators'), aud_data):
                             # same recording (runtime 2 min + narrator), but NO author in common ('War of the Spider Queen' books by Thomas M.
@@ -5014,7 +5080,11 @@ def process_queue(work_queue, history, failed, recheck):
                     # authors, series (replaced, not added), narrators. Lock tags respected. (2026-11-09: author and old series had stayed)
                     id_switch = bool(ov.get('identity') and ov.get('asin') == asin and aud_data.get('title_raw') and abs_dur and aud_data.get('runtime_sec')
                                      and abs(abs_dur - aud_data['runtime_sec']) <= 120)
-                    if id_switch:
+                    # ONCE per book (dry run 2026-11-15: it replaced the series every run and removed 'Kyralia Universe #4' that the library
+                    # task had added to The Ambassador's Mission - a ping-pong); afterwards the normal rules apply. A book whose description
+                    # was already replaced by the identity rule (IDENTITY_DESC) had it applied before this marker existed.
+                    if id_switch and key not in IDENTITY_META and key not in IDENTITY_DESC:
+                        if not DRY_RUN: IDENTITY_META.add(key); rw_json(IDENTITY_META_FILE, sorted(IDENTITY_META))
                         id_aut = [n for n in (aud_data.get('authors_raw') or []) if not is_role_credit(n)]
                         id_ser = [{'name': canonical_series(lib_id, (x.get('name') or '').strip(), id_aut)[0], 'sequence': aud_part(x.get('part'))}
                                   for x in (md_raw.get('series') or []) if (x.get('name') or '').strip()]
@@ -5058,17 +5128,19 @@ def process_queue(work_queue, history, failed, recheck):
                     rt_exact = bool(abs_dur and aud_data.get('runtime_sec') and abs(abs_dur - aud_data['runtime_sec']) <= 120)
                     cover_verified = (same_recording(abs_dur, meta.get('narrators'), aud_data) and key not in FILLED_NARR) or (asin_from_search and rt_exact) \
                         or id_switch \
-                        or (key not in history and not lang_conflict and verified_recording(abs_dur, meta.get('narrators'), authors, aud_data)
+                        or (new_book and not lang_conflict and verified_recording(abs_dur, meta.get('narrators'), authors, aud_data)
                             and (asin_from_search or 'title' in abs_updates or title_similarity(clean_title(title), clean_title(aud_data.get('title_raw') or '')) >= 0.85))
                     # (id_switch: confirmed other book - the old cover shows it; new book without narrator tag: runtime + author + title, 2026-11-15)
-                    if aud_data.get('cover_url') and has_cover and UPDATE_COVERS and not cover_verified and key not in history and COVER_STATE.get(iid) != asin:
+                    if aud_data.get('cover_url') and has_cover and UPDATE_COVERS and not cover_verified and new_book and COVER_STATE.get(iid) != cover_token(asin):
                         logging.info("        🖼️ Cover kept: the recording is not verified (runtime ±2 min + narrator, or author and title without a narrator)")
                     if aud_data.get('cover_url') and not lang_conflict and cover_verified and ((FILL_COVERS and not has_cover) or  # user rule: covers only for a VERIFIED ASIN
-                                                                                               ((UPDATE_COVERS or id_switch) and has_cover and COVER_STATE.get(iid) != asin)):
+                                                                                               ((UPDATE_COVERS or id_switch) and has_cover and COVER_STATE.get(iid) != cover_token(asin))):
                         if 'lock_cover' in tags: logging.info("        🔒 Cover Update Skipped (Locked)")
-                        elif abs_set_cover(iid, key, title, aud_data['cover_url'], 'audible_cover' if not has_cover else 'audible_cover_verified', replace=has_cover):
+                        elif abs_set_cover(iid, key, title, aud_data['cover_url'], 'audible_cover' if not has_cover else 'audible_cover_verified', replace=has_cover) or (
+                                aud_data.get('cover_url_small') and aud_data['cover_url_small'] != aud_data['cover_url']
+                                and abs_set_cover(iid, key, title, aud_data['cover_url_small'], 'audible_cover' if not has_cover else 'audible_cover_verified', replace=has_cover)):
                             stats['cover_added'] += 1
-                            COVER_STATE[iid] = asin
+                            COVER_STATE[iid] = cover_token(asin)
                             logging.info(f"        🖼️ Cover {'would be ' if DRY_RUN else ''}{'replaced (verified book)' if has_cover else 'set'} from Audible: {aud_data['cover_url']}")
 
                     # Chapters (user 2026-11-10): Audible's chapters for poorly chaptered files of the SAME recording, only when they fit reliably
@@ -5338,6 +5410,7 @@ def process_queue(work_queue, history, failed, recheck):
                 logging.warning(f"🛑 Rate Limit DETECTED: {e}")
                 if e.is_hard or consecutive_rl >= MAX_CONSECUTIVE_RL: 
                     logging.error("🛑 ABORTING script due to Rate Limits."); stats['aborted_ratelimit'] = True; break
+                log_pause(((item.get('media') or {}).get('metadata') or {}).get('title'), f"rate limit ({e}), attempt {consecutive_rl}", RECOVERY_PAUSE * consecutive_rl)
                 time.sleep(RECOVERY_PAUSE * consecutive_rl)
             except Exception as e:
                 logging.exception(f"Item Error: {e}"); stats['failed'] += 1
@@ -5560,6 +5633,7 @@ def main():
     LAST_WRITTEN.update(rw_json(LAST_WRITTEN_FILE) or {}); MANUAL_FIELDS.update(rw_json(MANUAL_FIELDS_FILE) or {})
     FILLED_NARR.update(rw_json(FILLED_NARR_FILE) or [])
     IDENTITY_DESC.update(rw_json(IDENTITY_DESC_FILE) or [])
+    IDENTITY_META.update(rw_json(IDENTITY_META_FILE) or [])
     SUMMARY_INDEX.update(rw_json(SUMMARY_INDEX_FILE) or {})
     try:  # also every narrator fill already in the journal (runs before this file existed)
         with open(CHANGES_FILE, encoding='utf-8') as f_:

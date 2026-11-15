@@ -10,6 +10,7 @@ SET=/mnt/user/appdata/audiobookshelf/abs_scripts/settings.json     # read only
 mkdir -p "$DATA/logs" "$DEV/tests/private/recordings"
 [ -f /mnt/user/appdata/abs_scripts_test/series_index.json ] && cp -n /mnt/user/appdata/abs_scripts_test/series_index.json "$DATA/" || true
 [ -f "$DEV/tests/private/audible_series.json" ] && cp -n "$DEV/tests/private/audible_series.json" "$DATA/" || true
+[ -f /mnt/user/appdata/audiobookshelf/abs_scripts/role_credits.json ] && cp -n /mnt/user/appdata/audiobookshelf/abs_scripts/role_credits.json "$DATA/" || true  # known role names (illustrators ...), read only
 ONLY=$(paste -sd, "$KEYS")
 if [ -n "$SYNTH" ]; then  # SYNTH=<seed>: add 30 synthetic books that are not in the library (generated once per seed, public data)
   SF="$DEV/tests/synthetic/batch_${SYNTH}.json"

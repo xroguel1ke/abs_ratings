@@ -29,3 +29,18 @@ def test_folder_book_title():
     assert f('Samantha Shannon/The Roots of Chaos/2 - A Day of Fallen Night - Ellie Kendrick + Hanako Footman') == 'A Day of Fallen Night'
     assert f('Martha Wells/The Murderbot Diaries/08 - Platform Decay') == 'Platform Decay'
     assert f('Shinobumaru/The Haunted Bookstore_ Gateway to a Parallel Universe/Volume 02 {Alexa Magro}') is None
+
+
+def test_same_tail_twice():
+    t = 'Defiance of the Fall 4: A LitRPG Adventure: A LitRPG Adventure'
+    assert A.glued_subtitle(t, 'A LitRPG Adventure', 'Defiance of the Fall 4: A LitRPG Adventure', None) == 'title'
+    assert A.glued_subtitle('Mistborn: The Final Empire', None, 'Mistborn', None) is None  # a normal title stays
+    assert A.glued_subtitle('Dune: Dune', None, 'Dune', None) is None  # needs three parts
+
+
+def test_box_set_detection():
+    assert A.is_boxset_title('Dämonenblut / Nachtfeuer / Perlmond')
+    assert not A.is_boxset_title('Fire / Ice')  # two titles: no evidence
+    assert not A.is_boxset_title('AC/DC: The Story')
+    assert A.is_boxset_subtitle('Die Chroniken von Waldsee Trilogie 1-3')
+    assert not A.is_boxset_subtitle('Black Magician Trilogy, Book 3')
