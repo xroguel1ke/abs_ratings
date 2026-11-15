@@ -220,6 +220,9 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   - ABS cron scans (every 30 min) that overlap a run overwrite our writes from the audio tags (cleared subtitles came back):
     wait_for_abs_scan before the book step and the series task, scan_gate (every 30 s, all workers) before books and library writes.
     The local ABS host is no longer serialized (ABS_PARALLEL=3); the per-host lock stays for Audible / Hardcover / Goodreads.
+  - Speed 2026-11-16 (dry run of the whole library): the book step is bound by the Audible throttle (0.5 s per request), not by ABS.
+    Search candidates come in one bulk request (aud_prefetch_asins), series member lists from series_members.json, the series task
+    loads items in parallel: book step 10.5 -> 8 min, planned changes identical. Schedule '5 */6 * * *' (ABS scans at :00 / :30).
   - Check of the first big real run 2026-11-15: Hardcover's release_year can come from ONE wrongly merged edition (HWFWM 7 = 2006,
     Fellowship = 1937) or from another book found by an alternative title (Dragonsblood -> Dragon's Kin): the year is only taken from
     an ASIN/ISBN match or a close title AND when hc_year_plausible (an edition within a year, not a lone edition > 5 years before the

@@ -69,6 +69,7 @@ Legend: ✅ done · ⏳ in progress / waiting · ⚠️ partly · ❌ open
 | [U] 2026-11-15 improvements: file problems on the review list (nested folders, too long), genre synonyms (593 -> ~180 genres), same-run subtitle clean-up, co-author suggestions, warning status, safe test tools; German books: all 55 already have German ASINs, English texts on them are replaced by the German Audible summary | ✅ | replay runs, regress green |
 | [U] 2026-11-15 check of the big real run (1015 books): Hardcover year plausibility + manual fix of 25 implausible years (backup year_fix_backup_20261115.json), author case merge, em-dash role credits, short wrong-language descriptions; manual: Malice / Divine Witness subtitles, 5 wrong review suggestions removed | ✅ | journal analysis, library-wide checks, regress green |
 | [U] 2026-11-15 genres: max 6, no umbrella / '&' names, themes as tags, Epic rule; tags: genre copies out, Audible 4.5+, Full Cast (marked or 5+ narrators) | ✅ | replay runs 1+2 (stable), regress green |
+| [U] 2026-11-16 night: fingerprints after own writes (0 manual updates instead of 1884), no writes during ABS scans (subtitle ping-pong), faster runs (10.5 -> 8 min book step), highest rating tag only, schedule back on at :05 | ✅ | journal checks, dry runs against the real ABS, regress green |
 
 ## Goodreads (experimental)
 | Item | State | Note |
