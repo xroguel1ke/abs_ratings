@@ -41,6 +41,15 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   the fill from the series' majority (never generic, sub-genres only with their main, Fantasy/SF only for books with neither), and the
   book step's rules again (genre_ladders, genre_hc). Origin/format names (German literature, Novella ...) are no genres.
   Check loop tools: tests/private/loop + scratchpad genre_loop.sh (simulation from the pre-rework state, 3 passes, all checks).
+  NEW BOOKS WITH BAD METADATA (test 2026-11-16, tests/private/newbooks: 18 real books reset to 'just imported' with file-name titles, no
+  ASIN/narrator/tags; make_adv.py: 52 adversarial variants - wrong runtime / author / volume title - must get NO ASIN): file junk
+  ([Audiobook], [2022], 64kbps, mp3, '_') is stripped from the search title (format labels like '(ungekürzt)' stay: recordings);
+  a candidate's own author / narrator names are taken out of the ABS title when comparing (a narrator in the title is narrator
+  evidence); a book WITHOUT ASIN and WITHOUT narrator is confirmed by title >= 0.95 + author + runtime +-2 min of a 2 h+ recording;
+  the Hardcover edition ASIN path needs +-2 min too without a narrator (it took 'Caliban's War' on another volume's file); an ASIN
+  found via Hardcover gets a second pass in the same run; a new book keeps the new-book rules until matched (new_pending.json);
+  Hardcover description / series / genres need a matching author for a title-only search hit. Result: 3/18 -> 14/18 complete in one
+  run, 0/52 false positives; books without any author are left alone on purpose.
   HARDCOVER METADATA (user 2026-11-16): fewer than GENRE_MAX genres / 6 tags (rating + lock_* tags do not count) -> filled up from
   Hardcover's reader-voted genres (top genre >= 10 votes, genre >= 5 votes and >= 30 % of the top; cleaned like Audible's: GENRE_RULES, canonical names, no
   duplicates, themes -> tags, Epic rule; only names the script knows; at most ONE main genre and only if the book has none; no

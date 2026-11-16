@@ -133,7 +133,7 @@ ABS_URL = ABS_URL.rstrip('/')
 # speed 2026-11-15: the per-host lock is for the rate-limited sources; the user's own ABS server takes the workers' requests in parallel
 # (the book step spent most of its 12 min waiting for this lock: ~3 ABS requests per book, one at a time)
 if (_abs_host := urllib.parse.urlsplit(ABS_URL).hostname):
-    _HOST_LOCKS[_abs_host] = threading.BoundedSemaphore(int(os.getenv('ABS_PARALLEL', '3') or 1))
+    _HOST_LOCKS[_abs_host] = threading.BoundedSemaphore(int(os.getenv('ABS_PARALLEL', '6') or 1))  # 2026-11-16: 6 (series task loading)
 API_TOKEN, _TOKEN_REMOVED = clean_env('API_TOKEN', r'A-Za-z0-9._\-')  # JWT: only these characters
 LIBRARY_IDS = [l.strip() for l in os.getenv('LIBRARY_IDS', '').split(',') if l.strip()]
 
@@ -431,6 +431,8 @@ SHARED_DESC = set()
 IDENTITY_META_FILE = os.path.join(SCRIPT_DIR, 'identity_meta.json')  # books whose title/authors/series came once from a confirmed other-book ASIN
 IDENTITY_META = set()
 SERIES_LIST_DAYS = float(os.getenv('SERIES_LIST_DAYS', 1))  # missing volumes: Audible series lists cached this long (user 2026-11-15: was 7 days, new volumes came a week late)
+NEW_PENDING_FILE = os.path.join(SCRIPT_DIR, 'new_pending.json')  # new books not matched yet (they keep the new-book rules)
+NEW_PENDING = set()
 NEW_BOOK_DAYS = int(os.getenv('NEW_BOOK_DAYS', 30))  # 'new book' = never processed and added to ABS within these days
 NEW_VOLUMES = []  # missing volumes that became available since the last report (run summary / notification)
 SOURCE_DOWN = {}  # source -> reason: failed canary check or tripped breaker (source_health.py); nothing is counted or written from it
@@ -1260,6 +1262,7 @@ def scan_gate():
         _SCAN_GATE['t'] = time.monotonic()
 
 OUR_WRITTEN = set()  # keys this run wrote to
+SECOND_PASS = []  # books whose ASIN came from Hardcover in this run: processed once more after the book step
 
 def refresh_own_fingerprints():
     """Check of the run 2026-11-15: 1884 'manual updates' after a run that changed genres / tags of most books - the fingerprints were
@@ -1466,7 +1469,7 @@ def clean_title(t): return RE_CLEAN_TITLE.sub('', t).split(':')[0].split(' - ')[
 def normalize_title_text(t):
     if not t: return ""
     t = RE_CLEAN_TITLE.sub(' ', t)
-    t = t.lower()
+    t = t.lower().replace('_', ' ')  # new-books test 2026-11-16: 'overlord_vol_3' (file name) - '_' is a word character for \w
     t = re.sub(r"[^\w\s]", ' ', t)  # all punctuation (commas, apostrophes, colons ...)
     for word, digit in NUMBER_MAP.items():
         t = re.sub(r'\b' + word + r'\b', digit, t)
@@ -1590,6 +1593,22 @@ def parse_messy_title(t, abs_series_names=None):
         if len(rest_.split()) >= 2 or (re.fullmatch(r'0[1-9]', m.group(1)) and len(rest_) >= 3):  # '03 Blutmale', '06 Rick' yes ('0N' = file-name prefix; the match still needs the full evidence), '007 Skyfall' no
             return {'title': rest_, 'sequence': str(int(m.group(1))), 'kind': 'number_prefix'}
     return None
+
+RE_FILE_JUNK = re.compile(r'(?i)[\[(]\s*(?:audiobook|h(?:ö|oe)rbuch|mp3|m4b|m4a|(?:un)?abridged|ungek(?:ü|ue)rzt|(?:19|20)\d\d|\d{2,3}\s?k(?:bps|b/s)?)\s*[\])]|\{[^}]*\}'
+                          r'|\b\d{2,3}\s?k(?:bps|b/s)\b|\b(?:mp3|m4b|m4a)\b')
+
+def strip_title_junk(title, people=(), keep_format=False):
+    """A file-name style title without format junk ('[Audiobook] [2022]', '64kbps', 'mp3') and without the given people's names
+    ('Red Rising - Tim Gerard Reynolds - 64kbps', 'He Who Fights with Monsters 7 Shirtaloon'). Returns (clean title, set of the people
+    whose name was in it). New-books test 2026-11-16: the right Audible product was in the hit list and rejected for the title."""
+    t = (title or '').replace('_', ' ') if ' ' not in (title or '').strip() else (title or '')
+    t = RE_FILE_JUNK.sub(lambda m: m.group(0) if keep_format and re.search(r'(?i)abridged|ungek', m.group(0)) else ' ', t); hit = set()
+    for name in sorted({str(x).strip() for x in people or () if x and len(str(x).strip()) >= 5}, key=len, reverse=True):
+        t2 = re.sub(r'(?i)(?<![\w])' + re.escape(name) + r'(?![\w])', ' ', t)
+        if t2 != t: hit.add(name); t = t2
+    t = re.sub(r'\s+', ' ', t); t = re.sub(r'(?:\s*[-–—:,|]\s*)+$', '', t); t = re.sub(r'^(?:\s*[-–—:,|]\s*)+', '', t)
+    t = re.sub(r'\s+[-–—|]\s+(?:[-–—|]\s+)+', ' - ', t)
+    return t.strip(), hit
 
 def title_similarity(a, b):
     na, nb = normalize_title_text(a), normalize_title_text(b)
@@ -2448,6 +2467,16 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 continue
             found_title = p.get('title_raw') or ''
             t_score = search_match_score(title, found_title, p.get('subtitle_raw'))
+            narr_in_title = False
+            if t_score < 0.95:
+                # new-books test 2026-11-16: file-name titles carry the narrator / author / bitrate ('Red Rising - Tim Gerard Reynolds -
+                # 64kbps', 'He Who Fights with Monsters 7 Shirtaloon'): compared without the CANDIDATE's own people names and file junk.
+                # A narrator named in the title is narrator evidence.
+                t_clean, hit_ = strip_title_junk(title, list(p.get('authors_raw') or []) + list(p.get('narrators_raw') or []))
+                if t_clean and t_clean != title and len(normalize_title_text(t_clean)) >= 3:
+                    s2_ = search_match_score(t_clean, found_title, p.get('subtitle_raw'))
+                    if s2_ > t_score:
+                        t_score = s2_; narr_in_title = bool(hit_ & set(p.get('narrators_raw') or []))
             if t_score < 0.85 and p.get('subtitle_raw') and len(normalize_title_text(title).split()) >= 3 \
                     and normalize_title_text(title) == normalize_title_text(p['subtitle_raw']):
                 t_score = 0.9  # ABS title = Audible SUBTITLE ('The Half-Elf Demigod Part I' = 'Overlord, Vol. 15', 2026-11-15)
@@ -2580,7 +2609,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             else:
                 accept = t_score >= 0.8 and auth_ok and not dur_conflict or t_score >= 0.85 and dur_ok
             if accept:
-                narr_hit = bool(a_narr and c_narr and a_narr & c_narr) or swapped_ or narr_as_author
+                narr_hit = bool(a_narr and c_narr and a_narr & c_narr) or swapped_ or narr_as_author or narr_in_title
                 vol_hit = bool(f_nums and t_nums and f_nums & t_nums)
                 ser_hit = any(an is not None and cn is not None and an == cn and (ak == ck or difflib.SequenceMatcher(None, ak, ck).ratio() >= 0.9)
                               for ak, an in _series_pairs(abs_series) for ck, cn in _series_pairs((p.get('meta_raw') or {}).get('series')))
@@ -2601,6 +2630,13 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                                                   for _, an in _series_pairs(abs_series) for _, cn in _series_pairs((p.get('meta_raw') or {}).get('series')))
                 if ser_loose and not dur_ok: evidence.append('series-number(other name)')
                 confirmed = auth_ok and t_score >= 0.85 and ((dur_ok and extra >= 1) or (dur_near_n and not dur_ok and extra + ser_loose >= 2) or extra >= 2)
+                # new-books test 2026-11-16 (user: only without false positives): a book WITHOUT an ASIN and WITHOUT any narrator in ABS has no
+                # narrator evidence to give. Title (>= 0.95), author and the runtime to +-2 min of a recording of 2 h or more identify the
+                # recording (the rule 'verified_recording' already used for a new book's title and cover). Not when an ASIN is replaced.
+                solo_exact = bool(not strict and not SEARCH_CTX.get('has_asin') and not a_narr and auth_ok and t_score >= 0.95 and exact_rt
+                                  and duration and duration >= 7200)
+                if solo_exact and not confirmed:
+                    confirmed = True; evidence.append('exact-runtime(no narrator in ABS)')
                 ev_txt = ", ".join(evidence)
                 LAST_MATCH.clear(); LAST_MATCH.update({'asin': cand, 'confirmed': confirmed, 'evidence': evidence, 'title': found_title, 'domain': domain,
                                    'runtime': p.get('runtime_sec'), 'narrators': p.get('narrators_raw') or [], 'authors': p.get('authors_raw') or [], 'pub_year': pub_year,
@@ -3499,6 +3535,9 @@ def hc_audio_asin(hc, abs_dur, authors, targets, narrators, lang):
         norm_n = lambda n: re.sub(r'[^a-z]', '', fold_accents(n).lower())
         a_narr, c_narr = narr_keys(narrators), narr_keys(p.get('narrators_raw'))
         narr_contra = bool(a_narr and c_narr and not a_narr & c_narr)
+        # false-positive test 2026-11-16: without a narrator in ABS nothing confirms the recording but the runtime - +-2 min like the
+        # Audible search ('Caliban's War' on a file of another volume, 6 min off, was taken here while the search rejected it)
+        if not a_narr and dur_ok and abs(abs_dur - p['runtime_sec']) > 120: dur_ok = False
         logging.info(f"        🔗 Hardcover edition ASIN {asin} ('{p['title_raw']}'): author {'✓' if auth_ok else '✗'}, runtime {'✓' if dur_ok else '✗'}, "
                      f"title vs ABS {t_abs:.2f}, vs Hardcover {t_hc:.2f}{' (ISBN-confirmed)' if hc_solid else ''}{', narrator differs' if narr_contra else ''}")
         if auth_ok and dur_ok and not narr_contra and (t_abs >= 0.85 or (hc_solid and t_hc >= 0.85)):
@@ -3564,12 +3603,12 @@ def desc_language_wrong(own, audible, book_lang):
 
 DESC_MIN_LEN = int(os.getenv('DESC_MIN_LEN', 200))  # user 2026-11-16: Audible's / Hardcover's text is used from this length on
 
-def hc_description_ok(hc, title, book_lang):
+def hc_description_ok(hc, title, book_lang, authors=None):
     """Hardcover's description as fallback: only for a sure match (ASIN / ISBN / manual link or a close title), at least DESC_MIN_LEN
     characters and clearly in the book's language (Hardcover's texts are mostly English: German books rarely get one)."""
     d = str((hc or {}).get('description') or '').strip()
     if not d or len(d) < DESC_MIN_LEN or text_language(d) != book_lang: return ''
-    if not hc_sure_match(hc, title): return ''
+    if not hc_sure_match(hc, title, authors): return ''
     if description_is_reviews(d) or description_junk(d): return ''
     return '<p>' + '</p><p>'.join(html_lib.escape(x.strip()) for x in re.split(r'\n\s*\n', d) if x.strip()).replace('\n', '<br>') + '</p>'
 
@@ -3623,10 +3662,14 @@ def known_genre_keys():
     from abs_series import genre_key as _gk, _GENRE_SYN_KEYS
     with IO_LOCK: return {_gk(g) for g in AUD_GENRES} | set(_GENRE_SYN_KEYS)
 
-def hc_sure_match(hc, title):
+def hc_sure_match(hc, title, authors=None):
     """The Hardcover book is surely this book: matched by ASIN / ISBN / manual link, or a close title (a title search can land on another
     book listing this title as an alternative - 2026-11-15 year check)."""
-    return bool(hc) and (hc.get('source') in ('ASIN', 'ISBN', 'manual link') or title_similarity(title, hc.get('title') or '') >= 0.85)
+    if not hc: return False
+    if hc.get('source') in ('ASIN', 'ISBN', 'manual link'): return True
+    # new-books test 2026-11-16: a title-only hit without any ABS author ('piranesi') is no proof - Hardcover's description / series /
+    # genres only with a matching author
+    return title_similarity(title, hc.get('title') or '') >= 0.85 and bool(authors) and match_author(authors, ', '.join(hc.get('authors') or []))
 
 def description_junk(own):
     """The ABS text is no description at all (user 2026-11-16: 'complete nonsense' is emptied when no source has a text): only reader
@@ -4436,7 +4479,8 @@ def source_canaries(only=None):
 
 def source_note(key, source):
     e = (SOURCE_STATE.get(key) or {}).get(source) or {}
-    return f"{'found' if e.get('st') == 'found' else e.get('why') or e.get('st')} on {str(e.get('ts', ''))[:10]}, next check after {REFRESH_DAYS} days"
+    nxt = f"{SST.RETRY_HOURS} h" if e.get('st') == 'missing' else f"{REFRESH_DAYS} days"  # log check 2026-11-16: 'missing' waits RETRY_HOURS, not REFRESH_DAYS
+    return f"{'found' if e.get('st') == 'found' else e.get('why') or e.get('st')} on {str(e.get('ts', ''))[:10]}, next check after {nxt}"
 
 def rating_only_pass(item, key, idx, total):
     """Audible is fresh for this book, only some rating sources are due (user rule): no Audible request, no metadata change -
@@ -4533,7 +4577,12 @@ def process_queue(work_queue, history, failed, recheck):
                 # NEW book (title/author/cover rules for messy file tags): never processed AND added to ABS in the last NEW_BOOK_DAYS -
                 # a first run over a whole library (new install, new library) must not rewrite the user's curated titles (loop 2026-11-15)
                 added_ = float(item_data.get('addedAt') or 0) / 1000
-                new_book = key not in history and bool(added_) and time.time() - added_ <= NEW_BOOK_DAYS * 86400
+                recent_ = bool(added_) and time.time() - added_ <= NEW_BOOK_DAYS * 86400
+                new_book = recent_ and (key not in history or key in NEW_PENDING)
+                # new-books test 2026-11-16: a new book whose first run found no ASIN was no 'new book' in the run that found it (history
+                # entry): it stays new until its metadata were synced with a verified ASIN once
+                if new_book:
+                    with IO_LOCK: NEW_PENDING.add(key)
                 from abs_series import expand_locks
                 tags = expand_locks(item_tags(item_data))
                 meta = item_data['media']['metadata']
@@ -4568,6 +4617,10 @@ def process_queue(work_queue, history, failed, recheck):
                 messy = parse_messy_title(title, [s_.get('name') for s_ in (meta.get('series') or [])])  # a one-word series prefix counts when it IS the ABS series ('Heist 01 Heist')
                 search_title = messy['title'] if messy else title
                 if messy: logging.info(f"      -> 🧹 Messy title detected ({messy['kind']}), searching as '{search_title}'")
+                st_j = strip_title_junk(search_title, keep_format=True)[0]  # '(ungekürzt)' / '(Unabridged)': the search handled them before
+                if st_j and st_j != search_title and len(normalize_title_text(st_j)) >= 3:
+                    logging.info(f"      -> 🧹 File-name junk in the title, searching as '{st_j}'")
+                    search_title = st_j
                 if not messy and authors and meta.get('series') and normalize_title_text(search_title) in {normalize_title_text(a_) for a_ in authors}:
                     # ABS title = author name (folder name): the real title is in the series field ('Jules Verne' / series '20.000 Meilen unter dem Meer')
                     logging.info(f"      -> 🧹 Title '{search_title}' is the author's name; searching with the series name '{meta['series'][0].get('name')}' instead")
@@ -4734,7 +4787,7 @@ def process_queue(work_queue, history, failed, recheck):
                     search_narr = narr_override or ([] if plaus == "wrong" else (meta.get("narrators") or []))
                     SEARCH_CTX['dup_claim'] = bool(asin and (ASIN_OWNERS.get(asin, set()) - {key}))  # another ABS book has the same ASIN
                     SEARCH_CTX['pub'], SEARCH_CTX['year'] = meta.get('publisher'), meta.get('publishedYear')
-                    SEARCH_CTX['key'] = key
+                    SEARCH_CTX['key'] = key; SEARCH_CTX['has_asin'] = bool(asin)
                     if folder_fix or SEARCH_CTX_need_exact: SEARCH_CTX['need_exact_rt'] = True
                     SEARCH_CTX['want_vol'] = extract_volume(search_title)  # the volume we are looking for (twin check)
                     if asin and aud_data and aud_data.get('title_raw'):
@@ -4901,6 +4954,10 @@ def process_queue(work_queue, history, failed, recheck):
                         same_lbl = _sl(cur_, ser_) and _sl(fmt_(aud_title), ser_) and _sl(cur_, ser_)[1] == _sl(fmt_(aud_title), ser_)[1]
                         # 'Defiance of the Fall 10' vs Audible 'Defiance of the Fall, Book 10': the series task chose the form, keep it
                         new_t = cur_ if same_lbl or normalize_title_text(aud_title) == normalize_title_text(cur_) or not new_book_title_ok(cur_, aud_title) else fmt_(aud_title)
+                        # new-books test 2026-11-16: the same title with file junk or in file-name case ('The Primal Hunter 3 [Audiobook] [2022]',
+                        # 'GUARDS! GUARDS!', 'overlord_vol_3') - Audible's spelling
+                        junk_ = strip_title_junk(cur_)[0] != cur_ or '_' in cur_ or (len(cur_) >= 6 and (cur_.isupper() or cur_.islower()))
+                        if junk_ and not same_lbl and normalize_title_text(strip_title_junk(cur_)[0]) == normalize_title_text(fmt_(aud_title)): new_t = fmt_(aud_title)
                         if new_t and new_t != title:
                             if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{new_t}'")
                             else:
@@ -5638,6 +5695,8 @@ def process_queue(work_queue, history, failed, recheck):
                         for upd in log_updates: logging.info(f"          -> {upd}")
                         if abs_update(iid, key, title, abs_updates, meta, 'audible_meta'): stats['meta_updated'] += 1
                     else: logging.info("        ✅ No metadata updates necessary.")
+                    if asin and not aud_data.get('related_edition'):
+                        with IO_LOCK: NEW_PENDING.discard(key)  # matched and synced once: the new-book rules end
 
                     # Cover: set when ABS has none; REPLACED when the book is verified as the same recording (runtime ±2 min + narrator,
                     # or an ASIN confirmed by this run's search + runtime ±2 min). cover_state.json avoids re-uploading the same cover every run.
@@ -5747,7 +5806,7 @@ def process_queue(work_queue, history, failed, recheck):
                                 and str(hy_) != str(meta.get('publishedYear') or '').strip() and 'lock_year' not in tags and not skip_meta \
                                 and abs_update(iid, key, title, {'publishedYear': str(hy_)}, meta, 'book_year'):
                             logging.info(f"        📅 Year: '{meta.get('publishedYear')}' -> '{hy_}' (first release of the book, Hardcover){' (DRY_RUN, not saved)' if DRY_RUN else ''}")
-                if hc_data and hc_sure_match(hc_data, title):
+                if hc_data and hc_sure_match(hc_data, title, authors):
                     # user 2026-11-16: Hardcover fills EMPTY series / genres when Audible has none (books not on Audible, e.g. 'Malice')
                     hc_aud_ser = bool(aud_data and (aud_data.get('series') or (aud_data.get('meta_raw') or {}).get('series')))
                     upd_ = {}
@@ -5789,6 +5848,10 @@ def process_queue(work_queue, history, failed, recheck):
                             logging.info(f"        💾 ASIN {'would be updated (DRY_RUN)' if DRY_RUN else 'updated in ABS'}.")
                         asin, aud_data = via[0], via[2]
                         stats['asin_found'] += 1; stats['asin_migrated'] += 1
+                        if not DRY_RUN and not item.get('_second_pass'):
+                            # new-books test 2026-11-16: the metadata sync ran before Hardcover - the book is processed once more at the end
+                            # of the book step with its new ASIN (title, series, narrators, cover in ONE run)
+                            with IO_LOCK: SECOND_PASS.append(item)
 
                 isbn_written = False
                 bad_isbn = isbn_bad_reason(meta.get('isbn'))
@@ -5920,7 +5983,7 @@ def process_queue(work_queue, history, failed, recheck):
                         base_desc = summary  # user rule 2026-11-03: only a provably truncated / very short text, never an own long one
                         stats['desc_filled'] += 1
                         logging.info(f"        📝 Description replaced by Audible's complete summary ({why_d})")
-                    hc_desc = hc_description_ok(hc_data, title, b_lang) if not aud_good and base_desc == cur_desc else ''
+                    hc_desc = hc_description_ok(hc_data, title, b_lang, authors) if not aud_good and base_desc == cur_desc else ''
                     if hc_desc and _sum_norm(own_) != _sum_norm(hc_desc):
                         # user 2026-11-16: Hardcover's text as fallback when Audible has nothing usable (no product, < 200 characters)
                         base_desc = hc_desc
@@ -6045,6 +6108,10 @@ def process_queue(work_queue, history, failed, recheck):
         if sleep_dur > 0: time.sleep(sleep_dur)
 
     run_books(work_queue, one)
+    if SECOND_PASS:
+        again = [dict(it, _second_pass=True) for it in SECOND_PASS]; SECOND_PASS.clear()
+        logging.info(f"   🔁 {len(again)} book(s) got their ASIN from Hardcover: metadata synced now (second pass)")
+        for i_, it_ in enumerate(again): one(total + i_, it_)
 
 def _author_lane(item):
     """Books of the same primary author always go through the same worker, one after another: two copies of one book
@@ -6244,6 +6311,7 @@ def main():
     SERIES_INDEX.update(rw_json(SERIES_INDEX_FILE))
     AUD_GENRES.update((rw_json(AUD_GENRES_FILE) or {}).get('genres') or [])
     GENRE_DROPS.update(rw_json(GENRE_DROPS_FILE) or {})
+    NEW_PENDING.update(rw_json(NEW_PENDING_FILE) or [])
     GENRE_SERIES_DROPS.update(rw_json(GENRE_SERIES_DROPS_FILE) or {})
     if SERIES_ALIASES or SERIES_INDEX:
         logging.info(f"Series aliases: {sum(len(v) for v in SERIES_ALIASES.values())} | Known series: {sum(len(v) for v in SERIES_INDEX.values())}")
@@ -6280,7 +6348,7 @@ def main():
         if 'audible' in SOURCE_DOWN: logging.error("🚨 Per-book part skipped: the Audible check failed (see above). The library task still runs.")
         run_libraries(history, failed, recheck)
         group_confirm()
-        if not DRY_RUN: rw_json(HISTORY_FILE, history); rw_json(FAILED_FILE, failed); rw_json(RECHECK_FILE, recheck); rw_json(HC_CACHE_FILE, HC_CACHE)
+        if not DRY_RUN: rw_json(HISTORY_FILE, history); rw_json(FAILED_FILE, failed); rw_json(RECHECK_FILE, recheck); rw_json(HC_CACHE_FILE, HC_CACHE); rw_json(NEW_PENDING_FILE, sorted(NEW_PENDING))
         save_reports()
         if AUTHOR_NOTES: rw_json(os.path.join(REPORT_DIR, "author_variants.json"), AUTHOR_NOTES)
         rw_json(RESULTS_FILE, RESULTS)  # also in DRY_RUN: it is the web UI's view of the last check
@@ -6310,7 +6378,7 @@ def main():
                 'decisions_file': os.path.join(SCRIPT_DIR, 'merge_decisions.json'), 'merges_file': os.path.join(SCRIPT_DIR, 'merges.json'),
                 'review_file': os.path.join(SCRIPT_DIR, 'merge_review.json'), 'shared_desc_file': SHARED_DESC_FILE, 'summary_index': SUMMARY_INDEX,
                 'author_links': {n: sorted(a) for n, a in AUTHOR_LINKS.items()},
-                'remove_role_credits': REMOVE_ROLE_CREDITS, 'genre_cleanup': GENRE_CLEANUP, 'audible_genres': AUD_GENRES, 'genre_drops': GENRE_DROPS, 'genre_series_drops': GENRE_SERIES_DROPS, 'genre_ladders': GENRE_LADDERS,
+                'remove_role_credits': REMOVE_ROLE_CREDITS, 'genre_cleanup': GENRE_CLEANUP, 'audible_genres': AUD_GENRES, 'genre_drops': GENRE_DROPS, 'genre_series_drops': GENRE_SERIES_DROPS, 'genre_ladders': GENRE_LADDERS, 'load_workers': int(os.getenv('ABS_PARALLEL', '6') or 3),
                 'genre_hc': {**{k_: v_['gv'] for k_, v_ in HC_CACHE.items() if isinstance(v_, dict) and v_.get('gv')}, **GENRE_HC}, 'genre_max': GENRE_MAX, 'book_languages': list(BOOK_LANGUAGES), 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
                 'audible_series_names': set(SERIES_ASINS),
                 'new_book_days': NEW_BOOK_DAYS,

@@ -136,3 +136,16 @@ def test_series_check_drops_off_series_big_genre():
     rs = [rec(1, ['Fantasy', 'Science Fiction', 'Hard Science Fiction'])] + [rec(i, ['Science Fiction', 'Hard Science Fiction']) for i in range(2, 6)]
     S.series_genre_fill(ctx, rs)
     assert rs[0]['genres'] == ['Science Fiction', 'Hard Science Fiction'] and 'fantasy' in ctx['genre_series_drops']['L_1']
+
+
+def test_series_check_keeps_last_big_genre():
+    # Mitosis: Audible names Fantasy and Science Fiction, Hardcover readers decided Fantasy, the series (Reckoners) is science fiction:
+    # the series check must not take the last of the two away
+    both = L('Science Fiction & Fantasy > Fantasy > Paranormal & Urban > Urban', 'Science Fiction & Fantasy > Science Fiction > Dystopian')
+    sf = L('Science Fiction & Fantasy > Science Fiction > Dystopian')
+    lads = {'L_1': both, 'L_2': sf, 'L_3': sf, 'L_4': sf}
+    ctx = {'abs_update': lambda *a, **k: True, 'dry_run': False, 'genre_max': 6, 'genre_ladders': lads, 'genre_series_drops': {}}
+    rec = lambda i, g: {'id': str(i), 'lib': 'L', 'title': f'b{i}', 'genres': g, 'tags': set(), 'series': [{'name': 'Reckoners'}]}
+    rs = [rec(1, ['Fantasy', 'Young Adult'])] + [rec(i, ['Science Fiction', 'Dystopian']) for i in range(2, 5)]
+    S.series_genre_fill(ctx, rs)
+    assert {'fantasy', 'sciencefiction'} & {S.genre_key(g) for g in rs[0]['genres']}

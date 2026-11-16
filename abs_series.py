@@ -915,6 +915,9 @@ def series_genre_fill(ctx, records):
                            and (big_named(lads_all[key_(o)], 'fantasy') or big_named(lads_all[key_(o)], 'sciencefiction'))]
                     lit_ = 'litrpg' in {genre_key(g) for g in r['genres'] if isinstance(g, str)}
                     if len(oth) < 2 or sum(1 for l in oth if big_named(l, big)) / len(oth) > 1 / 3 or big_evidence(lads_all.get(key_(r)), big, lit_): continue
+                    other_big = 'sciencefiction' if big == 'fantasy' else 'fantasy'
+                    if other_big not in {genre_key(g) for g in r['genres'] if isinstance(g, str)} and big_named(lads_all.get(key_(r)), big):
+                        continue  # log check 2026-11-16: never the LAST of the two when Audible names it (Mitosis, Sword Art Online 9/10 had neither)
                     sdrops.setdefault(key_(r), set()).update({big} | subs)
                     new_ = [g for g in r['genres'] if not (isinstance(g, str) and genre_key(g) in sdrops[key_(r)])]
                     if new_ and new_ != r['genres']: r['genres'] = new_; moved_ = True  # never leave a book without any genre

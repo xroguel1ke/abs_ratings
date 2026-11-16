@@ -76,12 +76,14 @@ def test_description_junk_2026_11_16():
 def test_hardcover_description_fallback_2026_11_16():
     txt = ('A black sun is rising. Young Corban watches enviously as boys become warriors under King Brenin’s rule, learning the art of '
            'sword and shield. He will learn the true meaning of courage, honour and loyalty while the world around him is at war.\n\nThe second paragraph.')
-    hc = {'source': 'search', 'title': 'Malice', 'description': txt}
-    out = A.hc_description_ok(hc, 'Malice', 'English')
+    hc = {'source': 'search', 'title': 'Malice', 'description': txt, 'authors': ['John Gwynne']}
+    au = ['John Gwynne']
+    out = A.hc_description_ok(hc, 'Malice', 'English', au)
     assert out.startswith('<p>A black sun') and '</p><p>The second paragraph.</p>' in out
-    assert A.hc_description_ok(hc, 'Malice', 'German') == ''                       # language must be the book's
-    assert A.hc_description_ok(dict(hc, title='Malice Aforethought'), 'Malice', 'English') == ''  # not a sure match
-    assert A.hc_description_ok(dict(hc, description='Too short.'), 'Malice', 'English') == ''
+    assert A.hc_description_ok(hc, 'Malice', 'German', au) == ''                       # language must be the book's
+    assert A.hc_description_ok(dict(hc, title='Malice Aforethought'), 'Malice', 'English', au) == ''
+    assert A.hc_description_ok(hc, 'Malice', 'English') == ''  # 2026-11-16: no ABS author -> a title-only hit is no proof  # not a sure match
+    assert A.hc_description_ok(dict(hc, description='Too short.'), 'Malice', 'English', au) == ''
     assert A.hc_sure_match({'source': 'ISBN', 'title': 'Other'}, 'Malice')
 
 
@@ -111,3 +113,13 @@ def test_hardcover_genres_only_known_names_2026_11_16():
 def test_triple_line_breaks_collapsed_2026_11_16():
     out = A.build_description('Text one.<br /><br /><br />Text two.<br><br>Three.', {}, {})
     assert 'Text one.<br><br>Text two.<br><br>Three.' in out
+
+
+def test_file_name_junk_2026_11_16():
+    assert A.strip_title_junk('Red Rising - Tim Gerard Reynolds - 64kbps', ['Pierce Brown', 'Tim Gerard Reynolds']) == ('Red Rising', {'Tim Gerard Reynolds'})
+    assert A.strip_title_junk('He Who Fights with Monsters 7 Shirtaloon', ['Shirtaloon'])[0] == 'He Who Fights with Monsters 7'
+    assert A.strip_title_junk('The Primal Hunter 3 [Audiobook] [2022]')[0] == 'The Primal Hunter 3'
+    assert A.strip_title_junk('overlord_vol_3')[0] == 'overlord vol 3'
+    for real in ('[Traveling] Merchant Crab (Book 2)', 'Enemy A[n]t the Gates', 'Catch-22', '1984'):
+        assert A.strip_title_junk(real)[0] == real
+    assert A.strip_title_junk('Die letzte Nacht (ungekürzt)', keep_format=True)[0] == 'Die letzte Nacht (ungekürzt)'
