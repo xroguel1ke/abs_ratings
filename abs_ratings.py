@@ -3712,6 +3712,7 @@ def build_description(current_desc, fresh, old):
     clean_d = re.sub(r'(?s)\*\*Audible\*\*.*?---\s*\n*', '', clean_d)
     clean_d = re.sub(r'^(?:\s|<br\s*/?>)+', '', clean_d, flags=re.I).strip()
     clean_d = clean_d.replace('\\r\\n', '<br>').replace('\\n', '<br>')  # description loop 2026-11-15: a literal '\n' from a source text
+    clean_d = re.sub(r'(?:<br\s*/?>\s*){3,}', '<br><br>', clean_d, flags=re.I)  # 2026-11-16: Audible's '<br /><br /><br />' = an empty line too many
     if len(lines) == 1: return clean_d  # No ratings at all: don't write an empty rating block
     lines.append(BLOCK_END)
     if RATING_POSITION == 'bottom':

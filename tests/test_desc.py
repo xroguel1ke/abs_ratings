@@ -107,3 +107,8 @@ def test_hardcover_genres_foreign_names_2026_11_16():
 def test_hardcover_genres_only_known_names_2026_11_16():
     from abs_series import genre_key as gk
     assert A.hc_fill_genres(['Fantasy'], [('Imaginary wars and battles', 5), ('LitRPG', 3)], 6, 'English', {gk('LitRPG'), gk('Fantasy')}) == ['LitRPG']
+
+
+def test_triple_line_breaks_collapsed_2026_11_16():
+    out = A.build_description('Text one.<br /><br /><br />Text two.<br><br>Three.', {}, {})
+    assert 'Text one.<br><br>Text two.<br><br>Three.' in out
