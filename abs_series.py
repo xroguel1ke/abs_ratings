@@ -682,7 +682,10 @@ _GENRE_SYN = {
           'Physical & Emotional Abuse', 'Difficult Situations', 'Family Life', 'Emotions & Feelings', 'Explore the World', 'Self Esteem & Self Image',
           'Clean & Wholesome', 'Small Town & Rural', 'Asian American & Pacific Islander', 'Words, Language & Grammar', 'Arts & Entertainment',
           'Metaphysical & Visionary', 'Family', 'Bullying', 'Belletristik', 'Literatur & Belletristik', 'Mystery, Thriller & Suspense', 'Holidays', 'Modern', 'Dark', 'second chance', 'Multicultural', 'European', 'Southern',
-          'Literary History & Criticism', 'Writing & Publishing', 'Politics & Government', 'Roman'],  # audit 2026-11-16: no fiction genres
+          'Literary History & Criticism', 'Writing & Publishing', 'Politics & Government', 'Roman',
+          # genre loop 2026-11-16: origin / format / audience topics are no genres ('German literature' on Tad Williams)
+          'Japanese literature', 'German literature', 'World Literature', 'Asian', 'African American', 'Indigenous', 'Japan', 'Novella', 'Web',
+          'Adaptations', 'Violence', 'History'],  # audit 2026-11-16: no fiction genres
 }
 # themes are no genres (user 2026-11-15: 'Dragons & Mythical Creatures' is a tag) -> an English tag
 _THEME_TAG = {
@@ -695,7 +698,7 @@ _THEME_TAG = {
     'Artificial Intelligence': 'Artificial Intelligence', 'Space Exploration': 'Space Exploration', 'Coming of Age': 'Coming of Age', 'LGBTQ': 'LGBTQ',
     'Lgbt': 'LGBTQ', 'LGBTQ+': 'LGBTQ', 'Queer': 'LGBTQ', 'Gay': 'LGBTQ', 'Lesbian': 'LGBTQ', 'Cozy': 'Cozy', 'cozy fantasy': 'Cozy', 'Cozy Fantasy': 'Cozy',
     'Cosy': 'Cozy', 'Harem': 'Harem', 'Friendship': 'Friendship', 'Medieval': 'Medieval', 'Forgotten Realms': 'Forgotten Realms',
-    'Dungeons and dragons': 'Dungeons & Dragons', 'Star wars': 'Star Wars', 'gods': 'Gods', 'fae': 'Fae', 'Pirates': 'Pirates', 'Spicy': 'Spicy', 'Space': 'Space', 'Books & Libraries': 'Books & Libraries', 'Found Family': 'Found Family',
+    'Dungeons and dragons': 'Dungeons & Dragons', 'Star wars': 'Star Wars', 'gods': 'Gods', 'fae': 'Fae', 'Pirates': 'Pirates', 'Spicy': 'Spicy', 'Space': 'Space', 'Books & Libraries': 'Books & Libraries', '40k': 'Warhammer 40k', 'Found Family': 'Found Family',
 }
 _GENRE_CANON = {genre_key(v): k for k, vs in _GENRE_SYN.items() for v in vs}
 _GENRE_SYN_KEYS = {genre_key(k): k for k in _GENRE_SYN if k != '-'}  # canonical key -> its spelling
@@ -717,10 +720,22 @@ GENRE_CTX = {  # (parent, leaf) -> genre; None = no genre ('Fantasy > Action & A
     ('Teen & Young Adult', 'Literature & Fiction'): None,
 }
 GENRE_TOP = {'Teen & Young Adult': 'Young Adult', "Children's Audiobooks": "Children's Audiobooks"}  # audience roots
-FORMAT_GENRES = {genre_key(x) for x in ('Manga', 'Graphic Novel')}  # wrong next to 'Light Novel' on an audiobook
+FORMAT_GENRES = {genre_key(x) for x in ('Manga', 'Graphic Novel')}
+# Audible files these under Science Fiction, but they are as common in fantasy: no evidence that a book IS science fiction (genre loop
+# 2026-11-16: 'Blood over Bright Haven', 'Second Chance Swordsman' are fantasy) - the genre itself stays
+WEAK_SF_LEAVES = {genre_key(x) for x in ('Steampunk', 'Alternate History')}  # Temeraire: 'Science Fiction > Alternate History'
+# Audible has no LitRPG category: publishers file LitRPG under these - on a LitRPG book they are no evidence for science fiction
+LITRPG_SF_PROXIES = {genre_key(x) for x in ('Cyberpunk', 'Dystopian', 'Post Apocalyptic')}
+UMBRELLA_NODES = {'Science Fiction & Fantasy', 'Literature & Fiction', 'Genre Fiction', 'Teen & Young Adult', "Children's Audiobooks",
+                  'Mystery, Thriller & Suspense', 'Comedy & Humor', 'Science-Fiction & Fantasy', 'Literatur & Belletristik'}
+# sub-genres of one big genre: wrong on a book Audible files only under the other one ('Epic Fantasy' on Dune, 'Space Opera' on pure fantasy)
+FANTASY_SUBGENRES = {genre_key(x) for x in ('Epic Fantasy', 'High Fantasy', 'Dark Fantasy', 'Historical Fantasy', 'Military Fantasy', 'Contemporary Fantasy',
+                                            'Urban Fantasy', 'Sword & Sorcery', 'Fantasy Romance', 'Grimdark', 'Gaslamp', 'Fairy Tales')}
+SF_SUBGENRES = {genre_key(x) for x in ('Space Opera', 'Cyberpunk', 'Hard Science Fiction', 'Military Science Fiction', 'Space Exploration',
+                                       'First Contact', 'Galactic Empire', 'Alien Invasion', 'Colonization', 'Genetic Engineering')}  # wrong next to 'Light Novel' on an audiobook
 
 
-def genres_from_audible(ladders, cur=None):
+def genres_from_audible(ladders, cur=None, hc=None):
     """Audible's category ladders -> (main genres, specific genres, genres to drop) with context; themes are left to theme_tag().
     User 2026-11-16: no 'Science Fiction' on fantasy books that have nothing to do with it - publishers add one off-genre category
     ('Science Fiction > Dystopian' on The Faithful and the Fallen, 'Science Fiction > Cyberpunk' on LitRPG: Audible has no LitRPG category,
@@ -728,39 +743,83 @@ def genres_from_audible(ladders, cur=None):
     (a) one with only generic / bare ladders goes when the other has a real sub-category,
     (b) one with a single ladder goes when the other has 2+ (with its sub-category),
     (c) Science Fiction whose only sub-category is Cyberpunk goes on a LitRPG book."""
-    mains, spec, lad_main = [], [], []
+    spec, lad_main, mcount = [], [], {}
+    lit_ = 'litrpg' in {genre_key(g) for g in cur or [] if isinstance(g, str)}
     for lad in ladders or []:
         n = [str(x or '').strip() for x in lad if str(x or '').strip()]
         if not n: continue
         if n[0] in GENRE_TOP: spec.append(GENRE_TOP[n[0]])
-        ctx = GENRE_CTX.get((n[-2], n[-1]), '?') if len(n) >= 2 else '?'
-        leaf_g = None if ctx is None else (ctx if ctx != '?' else canonical_genre(n[-1]))
-        main_here = None
-        for x in n:
-            c = canonical_genre(x)
-            if c and genre_key(c) in MAIN_GENRES:
-                if c not in mains: mains.append(c)
-                if main_here is None and genre_key(c) in ('fantasy', 'sciencefiction'): main_here = c
-        real = bool(leaf_g) and genre_key(leaf_g) not in GENERIC_GENRES and leaf_g != main_here or theme_tag(n[-1]) is not None
+        # genre loop 2026-11-16: the main genre of a ladder is its FIRST real level; a deeper 'Fantasy' ('Teen & Young Adult > Romance >
+        # Science Fiction & Fantasy > Fantasy' on Scythe) is a sub-genre of that ladder, no main genre of the book
+        core = [x for x in n if x not in UMBRELLA_NODES]
+        if not core: continue
+        c0 = canonical_genre(core[0])
+        main_here = c0 if c0 and genre_key(c0) in MAIN_GENRES else None
+        if main_here: mcount[main_here] = mcount.get(main_here, 0) + 1
+        leaf_g = None
+        if len(core) >= 2:
+            ctx = GENRE_CTX.get((core[-2], core[-1]), '?')
+            leaf_g = None if ctx is None else (ctx if ctx != '?' else canonical_genre(core[-1]))
+            if leaf_g and genre_key(leaf_g) in MAIN_GENRES and leaf_g != main_here and main_here:
+                leaf_g = None if genre_key(leaf_g) in ('fantasy', 'sciencefiction') else leaf_g  # nested big genre: no own main genre
+        real = (bool(leaf_g) and genre_key(leaf_g) not in GENERIC_GENRES and leaf_g != main_here or theme_tag(core[-1]) is not None) \
+            and not (main_here == 'Science Fiction' and leaf_g and genre_key(leaf_g) in WEAK_SF_LEAVES) \
+            and not (lit_ and main_here == 'Science Fiction' and leaf_g and genre_key(leaf_g) in LITRPG_SF_PROXIES)  # LitRPG stand-ins
         if leaf_g and genre_key(leaf_g) not in MAIN_GENRES: spec.append(leaf_g)
-        elif leaf_g and leaf_g != main_here and leaf_g not in mains: mains.append(leaf_g)  # 'Fantasy > Humorous'
+        elif leaf_g and leaf_g != main_here: mcount[leaf_g] = mcount.get(leaf_g, 0) + 1  # 'Fantasy > Humorous'
         lad_main.append((main_here, real, leaf_g if leaf_g and genre_key(leaf_g) not in MAIN_GENRES else None))
+    # main genres by weight: a main genre of a single stray ladder next to one with many does not count (Scythe: 'Thriller' once)
+    top_ = max(mcount.values() or [0])
+    mains = [m for m, c in mcount.items() if c * 3 >= top_ or genre_key(m) in ('fantasy', 'sciencefiction')]
     drop = set()
     F, SF = 'Fantasy', 'Science Fiction'
     if F in mains and SF in mains:
         nr = {m: sum(1 for mh, r, _ in lad_main if mh == m and r) for m in (F, SF)}
         leaves = {m: {genre_key(l) for mh, _, l in lad_main if mh == m and l} for m in (F, SF)}
         minor = None
+        # genre loop 2026-11-16: Fantasy is never dropped when Audible names it at all (Time War, Hollow City: 'Fantasy' bare next to
+        # 'Science Fiction > Time Travel'); only an off-genre Science Fiction goes
         if nr[F] and not nr[SF]: minor = SF
-        elif nr[SF] and not nr[F]: minor = F
         elif nr[F] >= 2 and nr[SF] == 1: minor = SF
-        elif nr[SF] >= 2 and nr[F] == 1: minor = F
-        elif leaves[SF] <= {'cyberpunk'} and 'litrpg' in {genre_key(g) for g in cur or [] if isinstance(g, str)}: minor = SF
+        # never the other way round (user 2026-11-16, Fantasy library): 'Fantasy > Epic' next to 'Science Fiction > Cyberpunk / First
+        # Contact' is LitRPG (Defiance of the Fall) - Fantasy only goes when Audible names it without any sub-category (rule above)
+        elif leaves[SF] <= LITRPG_SF_PROXIES and 'litrpg' in {genre_key(g) for g in cur or [] if isinstance(g, str)}: minor = SF
+        # Hardcover's readers as arbiter, only when clear (>= 5 votes and twice the other): Audible files Children of Dune under 'Fantasy >
+        # Epic' too (SF 23 : Fantasy 0), Operation Bounce House (SF 6 : 3)
+        if not minor and hc:
+            hf, hs = int(hc.get('Fantasy') or 0), int(hc.get('Science Fiction') or 0)
+            if hs >= 5 and hs >= 2 * hf: minor = F
+            elif hf >= 5 and hf >= 2 * hs: minor = SF
         if minor:
-            drop = {genre_key(minor)} | (leaves[minor] - leaves[F if minor == SF else SF])
+            drop = {genre_key(minor)} | (leaves[minor] - leaves[F if minor == SF else SF] - WEAK_SF_LEAVES - ({'postapocalyptic'} if lit_ else set()))
             mains = [m for m in mains if m != minor]
             spec = [g for g in spec if genre_key(g) not in drop]
     return mains, spec, drop
+
+
+def _core(lad):
+    return [str(x or '').strip() for x in lad if str(x or '').strip() and str(x or '').strip() not in UMBRELLA_NODES]
+
+
+def big_named(ladders, big):
+    """Audible files the book under Fantasy / Science Fiction anywhere in a ladder ('Romance > Fantasy' too)."""
+    return any(genre_key(canonical_genre(x) or '') == big for lad in ladders or [] for x in _core(lad))
+
+
+def big_evidence(ladders, big, litrpg=False):
+    """Audible files the book under Fantasy / Science Fiction WITH a real sub-category ('Fantasy > Epic' = Epic Fantasy, 'Romance > Fantasy'
+    = Fantasy Romance) - not bare, not 'Fantasy > Action & Adventure'."""
+    for lad in ladders or []:
+        core = _core(lad)
+        for i, x in enumerate(core):
+            if genre_key(canonical_genre(x) or '') != big: continue
+            if i > 0: return True  # nested under another genre: 'Romance > Fantasy'
+            if len(core) > i + 1:
+                ctx = GENRE_CTX.get((core[-2], core[-1]), '?')
+                leaf = None if ctx is None else (ctx if ctx != '?' else canonical_genre(core[-1]))
+                if leaf and genre_key(leaf) not in GENERIC_GENRES | WEAK_SF_LEAVES \
+                        and not (litrpg and big == 'sciencefiction' and genre_key(leaf) in LITRPG_SF_PROXIES): return True
+    return False
 
 
 def light_novel_rule(genres):
@@ -770,22 +829,47 @@ def light_novel_rule(genres):
     return [g for g in genres if not (isinstance(g, str) and genre_key(g) in FORMAT_GENRES)]
 
 
-def rebuild_genres(cur, ladders, gmax=6):
+def rebuild_genres(cur, ladders, gmax=6, extra_drop=None, hc=None):
     """The book's genres from a VERIFIED Audible product: Audible's main genres (others go - 'Science Fiction' on a fantasy book came
     from old data), Audible's specific genres with context, then the existing specific genres (LitRPG, Dark Fantasy, Light Novel ... from
     earlier sources, the series fill or Hardcover). Generic ones (Adventure, Epic ...) only when Audible itself gives them. Themes are
     no genres. Idempotent: rebuild_genres(rebuild_genres(x)) == rebuild_genres(x) (no ping-pong with the series task)."""
-    mains, spec, drop = genres_from_audible(ladders, cur)
-    if not mains and not spec: return list(cur or [])
-    out = list(mains) + list(spec)
+    mains, spec, drop = genres_from_audible(ladders, cur, hc)
+    if not mains and not spec: return [g for g in cur or [] if not (isinstance(g, str) and genre_key(g) in set(extra_drop or ()))]
+    if extra_drop:  # dropped by the series check (a volume off its series' big genre)
+        drop = set(drop) | set(extra_drop)
+        mains = [m for m in mains if genre_key(m) not in drop]; spec = [g for g in spec if genre_key(g) not in drop]
+    am = {genre_key(m) for m in mains}
+    lit_cur = 'litrpg' in {genre_key(x) for x in cur or [] if isinstance(x, str)}
+    keep, old_mains, big_old = [], [], []
     for g in cur or []:
         if not isinstance(g, str): continue
         k = genre_key(g)
+        if k in GENERIC_GENRES or k in drop: continue  # drop: the off-genre category ('Dystopian' from 'Science Fiction > Dystopian')
         if k in MAIN_GENRES:
-            if not mains: out.append(g)  # Audible names no main genre: the existing ones stay
+            # genre loop 2026-11-16: an existing main genre goes only when Audible contradicts it - Fantasy when Audible files the book
+            # under Science Fiction and not Fantasy (Hunger Games), Science Fiction the other way round (Discworld). Otherwise it stays
+            # (Piranesi, The Song of Achilles, Earthsea: Audible names only Literary Fiction / Classics)
+            if k == 'fantasy' and 'sciencefiction' in am and 'fantasy' not in am and big_evidence(ladders, 'sciencefiction', lit_cur): continue
+            if k == 'sciencefiction' and 'sciencefiction' not in am: continue  # old 'Science Fiction' (Earthsea, Kingkiller, Drizzt): only with Audible
+            if k not in am: (big_old if k in ('fantasy', 'sciencefiction') else old_mains).append(g)
             continue
-        if k in GENERIC_GENRES or k in drop: continue  # drop: the off-genre category's leaf ('Dystopian' from 'Science Fiction > Dystopian')
-        out.append({'epic': 'Epic Fantasy'}.get(k, g))
+        keep.append(g)
+    fm = am | {genre_key(g) for g in old_mains + big_old}
+    if {'fantasy', 'sciencefiction'} <= fm and not big_evidence(ladders, 'sciencefiction', lit_cur):
+        # Fantasy (old or Audible) next to a Science Fiction without real evidence ('Science Fiction > Steampunk' on Second Chance Swordsman,
+        # bare 'Science Fiction'): the science fiction goes
+        mains = [m for m in mains if genre_key(m) != 'sciencefiction']; big_old = [g for g in big_old if genre_key(g) != 'sciencefiction']
+        fm = fm - {'sciencefiction'}
+    def ok(g):
+        k = genre_key(g)
+        if 'sciencefiction' in fm and 'fantasy' not in fm and k in FANTASY_SUBGENRES: return False  # 'Epic Fantasy' on Dune (old 'Epic')
+        if 'fantasy' in fm and 'sciencefiction' not in fm and k in SF_SUBGENRES: return False      # 'Space Opera' on pure fantasy
+        return True
+    # Fantasy / Science Fiction always in front (an old 'Fantasy' cut off at the end came back in front one run later: ping-pong)
+    out = list(mains) + big_old
+    if 'fantasy' not in fm and 'sciencefiction' not in fm and any(genre_key(g) in FANTASY_SUBGENRES for g in spec + keep): out.append('Fantasy')
+    out += [g for g in spec if ok(g)] + [g for g in keep if ok(g)] + old_mains  # Audible's first; old main genres fill what is left
     seen, res = set(), []
     for g in out:
         k = genre_key(g)
@@ -807,19 +891,69 @@ def series_genre_fill(ctx, records):
         for x in r['series']:
             if x.get('name'): by_series[(r['lib'], series_key(x['name']))].append(r)
     changed, orig = 0, {id(r): list(r['genres']) if isinstance(r.get('genres'), list) else None for r in records}
-    for _round in range(4):  # the siblings' fill changes the consensus: repeat until nothing moves (else it settles one run later)
-      moved = False
-      for r in records:
-        if not isinstance(r.get('genres'), list) or len(r['genres']) >= gmax or r['tags'] & {'lock_genres', 'lock_all', 'lock_metadata'}: continue
+    lads_all = ctx.get('genre_ladders') or {}
+    drops = ctx.get('genre_drops') if isinstance(ctx.get('genre_drops'), dict) else None
+    key_ = lambda r: f"{r['lib']}_{r['id']}"
+    # 1) Fantasy / Science Fiction against the series (genre loop 2026-11-16): a volume that has one of them although at most a third of
+    # the other volumes are filed under it by Audible, and only on weak evidence (old data, no Audible data, or Audible names it without a
+    # sub-category), loses it with its sub-genres ('Science Fiction' on Malice / The Wise Man's Fear / Drizzt, 'Fantasy' on All Systems
+    # Red). Judged from Audible's static data only (counting current genres made volumes flip each other) and remembered for the book step.
+    sdrops = {}
+
+    def series_check():
+        """returns True when it removed something (re-run after each fill round: a book that just got 'LitRPG' from its series judges
+        its 'Science Fiction > Post-Apocalyptic' as a LitRPG stand-in now - Saviors needed a second run before)"""
+        moved_ = False
+        for grp in by_series.values():
+            grp = list({id(o): o for o in grp}.values())
+            if len(grp) < 3: continue
+            for big, subs in (('fantasy', FANTASY_SUBGENRES), ('sciencefiction', SF_SUBGENRES)):
+                for r in grp:
+                    if not isinstance(r.get('genres'), list) or r['tags'] & {'lock_genres', 'lock_all', 'lock_metadata'}: continue
+                    # only volumes Audible files under Fantasy or Science Fiction at all count (German Eragon: only the umbrella category)
+                    oth = [lads_all[key_(o)] for o in grp if o is not r and key_(o) in lads_all
+                           and (big_named(lads_all[key_(o)], 'fantasy') or big_named(lads_all[key_(o)], 'sciencefiction'))]
+                    lit_ = 'litrpg' in {genre_key(g) for g in r['genres'] if isinstance(g, str)}
+                    if len(oth) < 2 or sum(1 for l in oth if big_named(l, big)) / len(oth) > 1 / 3 or big_evidence(lads_all.get(key_(r)), big, lit_): continue
+                    sdrops.setdefault(key_(r), set()).update({big} | subs)
+                    new_ = [g for g in r['genres'] if not (isinstance(g, str) and genre_key(g) in sdrops[key_(r)])]
+                    if new_ and new_ != r['genres']: r['genres'] = new_; moved_ = True  # never leave a book without any genre
+        # 'Classics' from old data that the series does not share (the LitRPG Castle of the Noobs): gone when Audible does not name it for
+        # this book and at most a third of the other volumes with real genres have it (only ever removes - cannot flip)
+        for grp in by_series.values():
+            grp = list({id(o): o for o in grp}.values())
+            if len(grp) < 3: continue
+            for r in grp:
+                if not isinstance(r.get('genres'), list) or r['tags'] & {'lock_genres', 'lock_all', 'lock_metadata'}: continue
+                oth = [o for o in grp if o is not r and isinstance(o.get('genres'), list)
+                       and any(isinstance(x, str) and canonical_genre(x) == x for x in o['genres'])]  # volumes with real genres only
+                if len(oth) < 2: continue
+                for g in list(r['genres']):
+                    k = genre_key(g) if isinstance(g, str) else ''
+                    # only 'Classics' (junk from old data on LitRPG / modern series); Romance, Mystery, Thriller ... vary inside a series
+                    # (Discworld's City Watch novels are mysteries) - the series majority is no measure for them
+                    if k != 'classics' or big_named(lads_all.get(key_(r)), k): continue
+                    if sum(1 for o in oth if k in {genre_key(x) for x in o['genres'] if isinstance(x, str)}) / max(1, len(oth)) > 1 / 3: continue
+                    new_ = [x for x in r['genres'] if x != g]
+                    if new_: r['genres'] = new_; sdrops.setdefault(key_(r), set()).add(k); moved_ = True
+        if isinstance(ctx.get('genre_series_drops'), dict):
+            ctx['genre_series_drops'].clear(); ctx['genre_series_drops'].update({k: sorted(v) for k, v in sdrops.items()})
+        return moved_
+
+    series_check()
+
+    def fill_one(r):
+        """2) up to GENRE_MAX from the genres most other volumes of the series have."""
+        if not isinstance(r.get('genres'), list) or len(r['genres']) >= gmax or r['tags'] & {'lock_genres', 'lock_all', 'lock_metadata'}: return False
         sib = {id(o): o for x in r['series'] if x.get('name') for o in by_series[(r['lib'], series_key(x['name']))] if o is not r}
-        if len(sib) < 2: continue
+        if len(sib) < 2: return False
         cnt = Counter(genre_key(g) for o in sib.values() for g in dict.fromkeys(o['genres']) if isinstance(g, str))
         names = {}
         for o in sib.values():
             for g in o['genres']:
                 if isinstance(g, str): names.setdefault(genre_key(g), g)
         have = {genre_key(g) for g in r['genres'] if isinstance(g, str)}
-        blocked = set((ctx.get('genre_drops') or {}).get(f"{r['lib']}_{r['id']}") or ())  # off-genre for this book by Audible (book step)
+        blocked = set((ctx.get('genre_drops') or {}).get(key_(r)) or ()) | sdrops.get(key_(r), set())
         has_main = bool(have & MAIN_GENRES)
         # a book with no real genre at all ('Literature & Fiction' only: Audible has nothing better) takes them from ONE other volume too
         need = 1 if not any(isinstance(g, str) and canonical_genre(g) == g for g in r['genres']) else max(2, (len(sib) + 1) // 2)
@@ -827,38 +961,46 @@ def series_genre_fill(ctx, records):
         for k, n in cnt.most_common():
             if len(r['genres']) + len(add) >= gmax: break
             if n < need or k in have or k in blocked or k in GENERIC_GENRES or theme_tag(names[k]): continue
-            if canonical_genre(names[k]) is None or genre_key(canonical_genre(names[k])) != k: continue  # 2026-11-16: only clean genres
-            # ('Literature & Fiction' of two volumes came back right after the cleanup removed it: every run)
+            if canonical_genre(names[k]) is None or genre_key(canonical_genre(names[k])) != k: continue  # only clean genres
             if k in ('fantasy', 'sciencefiction') and have & {'fantasy', 'sciencefiction'}: continue  # never Fantasy <-> Science Fiction
             # a further main genre only for a book that had no real genre (Audible gave none, so the book step keeps it); otherwise the
             # book step would drop a main genre Audible does not name and this step would add it again (ping-pong)
-            if k in MAIN_GENRES and has_main and need != 1: continue
+            # Fantasy / Science Fiction may come from the series when the book has neither (Kingkiller novella with only 'Humorous'):
+            # the book step only drops an existing Fantasy for real science fiction on Audible, so this does not flip
+            big_ok = k in ('fantasy', 'sciencefiction') and not have & {'fantasy', 'sciencefiction'}
+            if k in MAIN_GENRES and has_main and need != 1 and not big_ok: continue
             if k in FORMAT_GENRES and 'lightnovel' in have: continue
             if k == 'epic' and 'epicfantasy' in have: continue
+            if (k in SF_SUBGENRES and 'sciencefiction' not in have) or (k in FANTASY_SUBGENRES and 'fantasy' not in have): continue  # sub-genre needs its main
             add.append(names[k]); have.add(k); has_main = has_main or k in MAIN_GENRES
-        if add:
-            new_ = r['genres'] + add
-            if need == 1: new_ = [g for g in new_ if not (isinstance(g, str) and canonical_genre(g) is None)]  # umbrella goes once real genres are there
-            if {'epic', 'epicfantasy'} <= {genre_key(g) for g in new_ if isinstance(g, str)}: new_ = [g for g in new_ if not (isinstance(g, str) and genre_key(g) == 'epic')]
-            r['genres'] = new_; moved = True
-      if not moved: break
-    # user 2026-11-16: all in ONE run - the filled genres get the book step's Audible rules right away (a book that got 'LitRPG' from its
-    # series loses the Cyberpunk-only 'Science Fiction' now, not one run later); the rebuild never adds back what the fill may not
-    lads_all = ctx.get('genre_ladders') or {}
-    drops = ctx.get('genre_drops') if isinstance(ctx.get('genre_drops'), dict) else None
-    for r in records:
-        o, k_ = orig.get(id(r)), f"{r['lib']}_{r['id']}"
-        if o is None or r['genres'] == o or k_ not in lads_all: continue
-        new_ = rebuild_genres(r['genres'], lads_all[k_], gmax)
-        if drops is not None:
-            dr_ = genres_from_audible(lads_all[k_], new_)[2]
-            if dr_: drops[k_] = sorted(set(drops.get(k_) or ()) | dr_)
+        if not add: return False
+        new_ = r['genres'] + add
+        if need == 1: new_ = [g for g in new_ if not (isinstance(g, str) and canonical_genre(g) is None)]  # umbrella goes once real genres are there
+        if {'epic', 'epicfantasy'} <= {genre_key(g) for g in new_ if isinstance(g, str)}: new_ = [g for g in new_ if not (isinstance(g, str) and genre_key(g) == 'epic')]
         r['genres'] = new_
+        return True
+
+    for _round in range(5):  # 2) fill, 3) the book step's Audible rules on what changed - until nothing moves (all in ONE run)
+        moved = False
+        for r in records:
+            moved = fill_one(r) or moved
+        moved = series_check() or moved
+        for r in records:
+            o, k_ = orig.get(id(r)), key_(r)
+            if o is None or k_ not in lads_all: continue
+            hc_ = (ctx.get('genre_hc') or {}).get(k_)
+            new_ = rebuild_genres(r['genres'], lads_all[k_], gmax, sdrops.get(k_), hc_)
+            if drops is not None:
+                dr_ = genres_from_audible(lads_all[k_], new_, hc_)[2]
+                if dr_: drops[k_] = sorted(set(drops.get(k_) or ()) | dr_)
+            if new_ != r['genres']: r['genres'] = new_; moved = True
+        if not moved: break
     for r in records:
         o = orig.get(id(r))
         if o is not None and r['genres'] != o and abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'genres': r['genres']}, {'genres': o}, 'genre_series'):
             changed += 1
-            logging.info(f"   🏷️ GENRES{' (DRY_RUN)' if dry else ''}: '{r['title']}': +{', '.join(g for g in r['genres'] if g not in o)} (most volumes of the series have them)")
+            add_l, gone_l = [g for g in r['genres'] if g not in o], [g for g in o if g not in r['genres']]
+            logging.info(f"   🏷️ GENRES{' (DRY_RUN)' if dry else ''}: '{r['title']}': {' '.join(['+' + g for g in add_l] + ['-' + g for g in gone_l])} (series / Audible check)")
     return changed
 
 

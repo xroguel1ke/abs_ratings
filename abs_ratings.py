@@ -444,7 +444,10 @@ SERIES_ALIASES, SERIES_INDEX = {}, {}  # Loaded in main()
 AUD_GENRES = set()  # genres mapped from Audible categories (all runs, AUD_GENRES_FILE)
 GENRE_DROPS_FILE = os.path.join(SCRIPT_DIR, 'genre_drops.json')  # key -> genre keys Audible shows as off-genre for this book (2026-11-16)
 GENRE_DROPS = {}  # the series fill never adds them (else 'Cyberpunk' dropped by the book step came back from the other volumes)
-GENRE_LADDERS = {}  # key -> Audible's category ladders of this run: the series task applies the same rules after its fill (one run)
+GENRE_SERIES_DROPS_FILE = os.path.join(SCRIPT_DIR, 'genre_series_drops.json')  # key -> big genre + sub-genres the series check removed
+GENRE_SERIES_DROPS = {}
+GENRE_LADDERS = {}
+GENRE_HC = {}  # key -> Hardcover readers' votes {'Fantasy': n, 'Science Fiction': m} (arbiter between the two, genre loop 2026-11-16)  # key -> Audible's category ladders of this run: the series task applies the same rules after its fill (one run)
 SEQ_TITLES = {}  # (lib, series name lower, number) -> normalized titles holding it (filled by build_queue)
 
 def _first_author(names):
@@ -5134,8 +5137,9 @@ def process_queue(work_queue, history, failed, recheck):
                         lads_ = md_raw.get('ladders') or []
                         if lads_:
                             # genre rework 2026-11-16: Audible's ladders with context decide the main genres; existing specific genres stay
-                            rebuilt_ = _rg(current_genres, lads_, GENRE_MAX or 6)
-                            m_, sp_, drop_ = _gfa(lads_, current_genres)
+                            hcv_ = GENRE_HC.get(key) or (HC_CACHE.get(key) or {}).get('gv')
+                            rebuilt_ = _rg(current_genres, lads_, GENRE_MAX or 6, GENRE_SERIES_DROPS.get(key), hcv_)
+                            m_, sp_, drop_ = _gfa(lads_, current_genres, hcv_)
                             with IO_LOCK:
                                 GENRE_LADDERS[key] = lads_
                                 if drop_: GENRE_DROPS[key] = sorted(drop_)
@@ -5753,6 +5757,14 @@ def process_queue(work_queue, history, failed, recheck):
                         logging.info(f"        🔖 Tags: +{th2_} (themes from Hardcover's genres){' (DRY_RUN, not saved)' if DRY_RUN else ''}")
                     if upd_ and abs_update(iid, key, title, upd_, meta, 'hardcover_meta'):
                         logging.info(f"        📚 From Hardcover: {upd_}{' (DRY_RUN, not saved)' if DRY_RUN else ''}")
+                if hc_data and hc_data.get('genre_votes') is not None:
+                    from abs_series import canonical_genre as _cg3
+                    gv_ = {'Fantasy': 0, 'Science Fiction': 0}
+                    for t_, c_ in hc_data.get('genre_votes') or []:
+                        if _cg3(t_ or '') in gv_: gv_[_cg3(t_)] = max(gv_[_cg3(t_)], int(c_ or 0))
+                    with IO_LOCK:
+                        GENRE_HC[key] = gv_
+                        if key in HC_CACHE and not DRY_RUN: HC_CACHE[key]['gv'] = gv_  # for the genre step of the next run (it runs before Hardcover)
                 if HARDCOVER_ENABLED and hc_status != 'fresh': stats['hc_found' if hc_data else 'hc_missing'] += 1
                 sst_record(key, 'hardcover', 'found' if hc_data else hc_status, LOOKUP_HITS['hardcover'])
                 if hc_data and (not aud_data or aud_data.get('related_edition')) and 'lock_asin' not in tags:
@@ -6219,6 +6231,7 @@ def main():
     SERIES_INDEX.update(rw_json(SERIES_INDEX_FILE))
     AUD_GENRES.update((rw_json(AUD_GENRES_FILE) or {}).get('genres') or [])
     GENRE_DROPS.update(rw_json(GENRE_DROPS_FILE) or {})
+    GENRE_SERIES_DROPS.update(rw_json(GENRE_SERIES_DROPS_FILE) or {})
     if SERIES_ALIASES or SERIES_INDEX:
         logging.info(f"Series aliases: {sum(len(v) for v in SERIES_ALIASES.values())} | Known series: {sum(len(v) for v in SERIES_INDEX.values())}")
     RESULTS.update(rw_json(RESULTS_FILE)); OVERRIDES.update(rw_json(OVERRIDES_FILE))
@@ -6284,14 +6297,15 @@ def main():
                 'decisions_file': os.path.join(SCRIPT_DIR, 'merge_decisions.json'), 'merges_file': os.path.join(SCRIPT_DIR, 'merges.json'),
                 'review_file': os.path.join(SCRIPT_DIR, 'merge_review.json'), 'shared_desc_file': SHARED_DESC_FILE, 'summary_index': SUMMARY_INDEX,
                 'author_links': {n: sorted(a) for n, a in AUTHOR_LINKS.items()},
-                'remove_role_credits': REMOVE_ROLE_CREDITS, 'genre_cleanup': GENRE_CLEANUP, 'audible_genres': AUD_GENRES, 'genre_drops': GENRE_DROPS, 'genre_ladders': GENRE_LADDERS, 'genre_max': GENRE_MAX, 'book_languages': list(BOOK_LANGUAGES), 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
+                'remove_role_credits': REMOVE_ROLE_CREDITS, 'genre_cleanup': GENRE_CLEANUP, 'audible_genres': AUD_GENRES, 'genre_drops': GENRE_DROPS, 'genre_series_drops': GENRE_SERIES_DROPS, 'genre_ladders': GENRE_LADDERS,
+                'genre_hc': {**{k_: v_['gv'] for k_, v_ in HC_CACHE.items() if isinstance(v_, dict) and v_.get('gv')}, **GENRE_HC}, 'genre_max': GENRE_MAX, 'book_languages': list(BOOK_LANGUAGES), 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
                 'audible_series_names': set(SERIES_ASINS),
                 'new_book_days': NEW_BOOK_DAYS,
                 'extra': {'author_notes': AUTHOR_NOTES, 'unmapped_genres': UNMAPPED_GENRES},
             })
             stats['series_merged'] = series_result.get('merges', 0)
             if not DRY_RUN and AUD_GENRES: rw_json(AUD_GENRES_FILE, {'genres': sorted(AUD_GENRES)})
-            if not DRY_RUN: rw_json(GENRE_DROPS_FILE, GENRE_DROPS)
+            if not DRY_RUN: rw_json(GENRE_DROPS_FILE, GENRE_DROPS); rw_json(GENRE_SERIES_DROPS_FILE, GENRE_SERIES_DROPS)
             if lib_written:  # 2026-11-09: 188 genre writes made 193 'manual updates' (full lookups, 1800 Hardcover requests) next run
                 stamp = datetime.now(timezone.utc).isoformat(timespec='seconds')
                 for k_ in lib_written:

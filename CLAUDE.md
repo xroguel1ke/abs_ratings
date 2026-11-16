@@ -29,14 +29,18 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   >= 200 characters, book's language); else the existing text stays - emptied only when it is no description at all (only reviews,
   only a link, only a credit: description_junk). A foreign-language text with no replacement goes to the review list. lock_description
   keeps any text; journaled. Text comparison is text-only (_sum_norm: Audible's <p> vs ABS's <br> is no difference).
-  GENRES (rework 2026-11-16, user: Adventure on nearly every book, Science Fiction on fantasy): with a verified Audible product the book
-  step REBUILDS the genres from Audible's category LADDERS (meta_raw 'ladders'), abs_series.rebuild_genres: main genres from the ladders
-  (others go), leaves with context (GENRE_CTX: Fantasy>Epic = Epic Fantasy, Fantasy>Action & Adventure = nothing), existing specific
-  genres stay, generic ones (Adventure, Epic, Historical ...) only from Audible. Fantasy vs Science Fiction: a generic-only / single-ladder
-  one goes next to a strong other one, Cyberpunk-only SF goes on LitRPG (publishers' off-genre category) - those leaves are stored in
-  genre_drops.json. The series task then fills up to 6 from the series' majority (series_genre_fill: never generic, never a 2nd main
-  genre, never a dropped one) and applies the same Audible rules to the filled books right away (genre_ladders): ONE run is enough
-  (sim from the pre-rework state: pass 2 = 0 changes). Manga / Graphic Novel go next to Light Novel.
+  GENRES (rework + 14 check loops 2026-11-16, user: Adventure everywhere, Science Fiction on fantasy, too few genres): with a verified
+  Audible product the book step rebuilds the genres from Audible's category LADDERS (abs_series.rebuild_genres): a ladder's main genre is
+  its first real level (umbrella nodes skipped, weighted), leaves get context (GENRE_CTX: Fantasy>Epic = Epic Fantasy, Fantasy>Action &
+  Adventure = nothing), existing specific genres stay, generic ones only from Audible. Fantasy vs Science Fiction (Fantasy library):
+  Fantasy is never dropped when Audible names it; an off-genre SF goes (generic/bare/single ladder next to strong Fantasy; Steampunk and
+  Alternate History are no SF evidence; Cyberpunk/Dystopian/Post-Apocalyptic are LitRPG stand-ins on LitRPG books); an old Fantasy only
+  goes for REAL Audible science fiction; Hardcover readers decide when clear (>= 5 votes, twice the other: Children of Dune).
+  The series task (series_genre_fill) then, in rounds until nothing moves (ONE run): the series check (a volume off its series' big genre
+  on weak evidence loses it - judged from Audible's static data, remembered in genre_series_drops.json; 'Classics' off the series goes),
+  the fill from the series' majority (never generic, sub-genres only with their main, Fantasy/SF only for books with neither), and the
+  book step's rules again (genre_ladders, genre_hc). Origin/format names (German literature, Novella ...) are no genres.
+  Check loop tools: tests/private/loop + scratchpad genre_loop.sh (simulation from the pre-rework state, 3 passes, all checks).
   HARDCOVER METADATA (user 2026-11-16): fewer than GENRE_MAX genres / 6 tags (rating + lock_* tags do not count) -> filled up from
   Hardcover's reader-voted genres (top genre >= 10 votes, genre >= 5 votes and >= 30 % of the top; cleaned like Audible's: GENRE_RULES, canonical names, no
   duplicates, themes -> tags, Epic rule; only names the script knows; at most ONE main genre and only if the book has none; no
