@@ -24,7 +24,17 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
 ## Hard rules (learned from real dry runs on ~2000 books – don't loosen without data)
 - **Every ABS write goes through `abs_update()` / `abs_set_cover()`** → journaled (old → new), DRY_RUN only plans.
 - **Fill only when empty:** publisher, year, narrators, authors, ISBN (Goodreads ISBN is the print edition), cover, description base.
-  Exception DESCRIPTION (user wish 2026-11-03, built 2026-11-05): Audible's summary replaces the ABS text only if it is provably not an own text: a truncated beginning of Audible's text, or very short (< 30 % and < 300 characters; library: chapter names, "Phantom", converter URLs). Never with lock_description; journaled.
+  Exception DESCRIPTION (user 2026-11-16, replaces the rule of 2026-11-03): Audible's summary of the verified recording wins when it has
+  >= DESC_MIN_LEN (200) characters in the book's language; else Hardcover's description (sure match: ASIN/ISBN/manual or title >= 0.85,
+  >= 200 characters, book's language); else the existing text stays - emptied only when it is no description at all (only reviews,
+  only a link, only a credit: description_junk). A foreign-language text with no replacement goes to the review list. lock_description
+  keeps any text; journaled. Text comparison is text-only (_sum_norm: Audible's <p> vs ABS's <br> is no difference).
+  HARDCOVER METADATA (user 2026-11-16): fewer than GENRE_MAX genres / 6 tags (rating + lock_* tags do not count) -> filled up from
+  Hardcover's reader-voted genres (>= 2 votes and >= 20 % of the top; cleaned like Audible's: GENRE_RULES, canonical names, no
+  duplicates, themes -> tags, Epic rule; only names the script knows; at most ONE main genre and only if the book has none; no
+  'Graphic Novel'; no foreign names on English books). Hardcover's 'Tag'/'Mood' categories are opinions: not used. Added genres join
+  AUD_GENRES (never 'rare'). An EMPTY series is filled from Hardcover's featured series when Audible has none (not when it is named
+  like the book). Publisher/cover never from Hardcover (print edition).
   Exception COVER (user decision 2026-11-04): for a VERIFIED ASIN (same recording: runtime ±2 min + narrator, or ASIN confirmed by this run's search + runtime ±2 min) the Audible cover is set even if ABS has one (UPDATE_COVERS). The old cover is backed up first (cover_backup/), undo uploads it again; lock_cover respected; cover_state.json prevents re-uploading. Without verification no cover at all (also not for empty covers).
   ISBN = the PRINT edition (user decision 2026-11-04: the audiobook is identified by the ASIN). Order: print ISBN-13 of the verified book (Hardcover, same language) -> print ISBN from Goodreads (empty field only) -> LAST fallback the audio-edition ISBN from Audible (same recording, checksum, never the ASIN itself). A wrong ISBN (e.g. an ASIN in the field) with no better value stays as it is (review list).
   Exception ISBN (user decision 2026-11-03): an existing ISBN may be replaced only if it is provably wrong (invalid checksum, e.g. an ASIN in the ISBN field, or it resolves to a DIFFERENT work with title and author contradicting), the book is verified, and a verified replacement exists; otherwise review list. Journaled, lock_isbn respected.

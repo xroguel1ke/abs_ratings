@@ -61,3 +61,49 @@ def test_reviews_only_description_2026_11_16():
     rev = 'Review "The way this story evolved lead to me being more and more excited to read the next chapter. I blitzed through this book." - 5 stars. Richard White.'
     assert A.description_is_reviews(rev)
     assert not A.description_is_reviews('As the dust settles on the battlefield of Carthage, Alexander finds himself struggling. "A great read" - 5 stars.')
+
+
+def test_description_junk_2026_11_16():
+    assert A.description_junk('Book 1 of [Fellowship of the Ring](https://openlibrary.org/works/OL14933414W/The_Fellowship_of_the_Ring)')
+    assert A.description_junk('MacLeod Andrews (Narrator)')
+    assert A.description_junk('Review "Loved every page of it, could not put it down at all." - 5 stars. Jane Doe')
+    assert A.description_junk('https://www.example.com/book')
+    assert not A.description_junk('Sanderson Curiosities: Dragonsteel Prime, the 2001 Alternate Version')
+    assert not A.description_junk('Il y a bien longtemps que les humains sont arrivés sur les Terres Bannies.')  # wrong language is no nonsense
+    assert not A.description_junk('More than a quarter of a century after The Sword of Shannara ... Description taken from https://www.amazon.com/x and a long text ' * 2)
+
+
+def test_hardcover_description_fallback_2026_11_16():
+    txt = ('A black sun is rising. Young Corban watches enviously as boys become warriors under King Brenin’s rule, learning the art of '
+           'sword and shield. He will learn the true meaning of courage, honour and loyalty while the world around him is at war.\n\nThe second paragraph.')
+    hc = {'source': 'search', 'title': 'Malice', 'description': txt}
+    out = A.hc_description_ok(hc, 'Malice', 'English')
+    assert out.startswith('<p>A black sun') and '</p><p>The second paragraph.</p>' in out
+    assert A.hc_description_ok(hc, 'Malice', 'German') == ''                       # language must be the book's
+    assert A.hc_description_ok(dict(hc, title='Malice Aforethought'), 'Malice', 'English') == ''  # not a sure match
+    assert A.hc_description_ok(dict(hc, description='Too short.'), 'Malice', 'English') == ''
+    assert A.hc_sure_match({'source': 'ISBN', 'title': 'Other'}, 'Malice')
+
+
+def test_hardcover_fills_genres_and_theme_tags_2026_11_16():
+    votes = [('Fantasy', 9), ('Epic Fantasy', 3), ('Adventure', 2), ('Grimdark', 1), ('Sci-fi', 2), ('["Fantasy"', 2), ('Science Fiction & Fantasy', 3),
+             ('Action & Adventure', 2), ('Dragons', 3), ('Epic', 2)]
+    # cleaned like Audible's: 'Sci-fi' -> Science Fiction, umbrella 'Science Fiction & Fantasy' dropped, 'Action & Adventure' = Adventure
+    # (no duplicate), 'Dragons' is a theme (tag, no genre), 'Epic' not next to Epic Fantasy, junk and single votes dropped
+    assert A.hc_fill_genres(['Fantasy'], votes, 6) == ['Epic Fantasy', 'Adventure']  # no 2nd main genre (Sci-fi)
+    assert A.hc_fill_genres(['Adventure'], votes, 6) == ['Fantasy', 'Epic Fantasy']  # only the top-voted main genre
+    assert A.hc_fill_genres([], [('Graphic Novel', 5), ('Fantasy', 3)], 6) == ['Fantasy']
+    assert A.hc_fill_genres(['fantasy', 'LitRPG', 'A', 'B', 'C'], votes, 6) == ['Epic Fantasy']  # only up to 6, 'fantasy' = Fantasy
+    assert A.hc_fill_genres(['A', 'B', 'C', 'D', 'E', 'F'], votes, 6) == []
+    assert A.hc_fill_theme_tags(['Audible 4.5+', 'lock_title'], votes) == ['Dragons']   # rating / lock tags do not count
+    assert A.hc_fill_theme_tags(['dragons'], votes) == []                                # no duplicate
+    assert A.hc_fill_theme_tags(['a', 'b', 'c', 'd', 'e', 'f'], votes) == []             # 6 real tags: full
+
+
+def test_hardcover_genres_foreign_names_2026_11_16():
+    assert A.hc_fill_genres(['Fantasy'], [('Action & Abenteuer', 4), ('LitRPG', 3)], 6, 'English') == ['LitRPG']
+
+
+def test_hardcover_genres_only_known_names_2026_11_16():
+    from abs_series import genre_key as gk
+    assert A.hc_fill_genres(['Fantasy'], [('Imaginary wars and battles', 5), ('LitRPG', 3)], 6, 'English', {gk('LitRPG'), gk('Fantasy')}) == ['LitRPG']

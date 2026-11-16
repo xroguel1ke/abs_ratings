@@ -3089,6 +3089,7 @@ HC_BOOK_FIELDS = "id title subtitle slug rating ratings_count compilation cached
 if not (recorder.RECORD_DIR or recorder.REPLAY_DIR):  # live: also the role of every contributor (illustrator, translator, ...); recordings keep the old query
     HC_BOOK_FIELDS = HC_BOOK_FIELDS.replace("contributions { author { name } }", "contributions { contribution author { name } }")
     HC_BOOK_FIELDS += " release_year editions(limit:60){ release_date }"  # user 2026-11-15: the BOOK's release (+ editions to check it)
+    HC_BOOK_FIELDS += " description cached_tags"  # user 2026-11-16: fallback description / genres when Audible has none
 # Hits that are not the book itself (unless the ABS title says so too)
 RE_HC_SPECIAL = re.compile(r'(?i)\b(graphic novel|comic|manga|coloring|colouring|adventure module|sourcebook|summary of|study guide|'
                            r'sparknotes|cliffsnotes|box(?:ed)? set|boxset|omnibus|collection|collector\W?s edition|books? \d+\s*[-–&]\s*\d+|summary|workbook)\b')
@@ -3218,6 +3219,8 @@ def hc_result(book, source):
             'authors': [a for a in hc_authors(book) if a], 'contributions': book.get('contributions') or [], 'year': book.get('release_year'),
             'edition_years': sorted(int(e['release_date'][:4]) for e in (book.get('editions') or []) if re.match(r'\d{4}', str((e or {}).get('release_date') or ''))),
             'alts': [t for t in (book.get('alternative_titles') or []) if t],
+            'description': str(book.get('description') or '').strip(),
+            'genre_votes': [(str(t.get('tag') or '').strip(), int(t.get('count') or 0)) for t in ((book.get('cached_tags') or {}).get('Genre') or [])[:15] if isinstance(t, dict)],
             'series': [(re.sub(r'\s*\([^)]*\)\s*$', '', ((book.get('featured_series') or book.get('cached_featured_series') or {}).get('series') or {}).get('name') or ''),
                         (book.get('featured_series') or book.get('cached_featured_series') or {}).get('position'))]}
 
@@ -3547,6 +3550,78 @@ def desc_language_wrong(own, audible, book_lang):
     if l not in _LANG_WORDS: return False
     a, b = text_language(own), text_language(audible)
     return bool(a and a != l and b == l)
+
+DESC_MIN_LEN = int(os.getenv('DESC_MIN_LEN', 200))  # user 2026-11-16: Audible's / Hardcover's text is used from this length on
+
+def hc_description_ok(hc, title, book_lang):
+    """Hardcover's description as fallback: only for a sure match (ASIN / ISBN / manual link or a close title), at least DESC_MIN_LEN
+    characters and clearly in the book's language (Hardcover's texts are mostly English: German books rarely get one)."""
+    d = str((hc or {}).get('description') or '').strip()
+    if not d or len(d) < DESC_MIN_LEN or text_language(d) != book_lang: return ''
+    if not hc_sure_match(hc, title): return ''
+    if description_is_reviews(d) or description_junk(d): return ''
+    return '<p>' + '</p><p>'.join(html_lib.escape(x.strip()) for x in re.split(r'\n\s*\n', d) if x.strip()).replace('\n', '<br>') + '</p>'
+
+def hc_voted_genres(votes):
+    """Hardcover's reader-voted genres that count: >= 2 votes and >= 20 % of the top genre's (single votes are often junk like
+    '["Fantasy"' or 'Calibre Import'), with the user's own genre rules (GENRE_RULES) applied like to Audible's names."""
+    votes = [(str(t or '').strip(), int(c or 0)) for t, c in (votes or [])]
+    top = max([c for _, c in votes] or [0])
+    out = [apply_genre_rules(t) for t, c in votes if c >= 2 and c >= 0.2 * top and re.fullmatch(r"[A-Za-z][A-Za-z '&-]{1,40}", t)]
+    return [t for t in out if t]
+
+def hc_fill_genres(cur, votes, gmax, lang=None, known=None):
+    """User 2026-11-16: fewer than gmax genres after Audible -> filled up with Hardcover's voted genres, cleaned like Audible's (one name
+    per genre, no umbrella categories, themes are no genres, no duplicate in another spelling, 'Epic' not next to 'Epic Fantasy')."""
+    from abs_series import canonical_genre as _cg, genre_key as _gk, MAIN_GENRES as _MAIN, _FOREIGN_GENRE
+    cur = [g for g in cur or [] if isinstance(g, str)]
+    if len(cur) >= gmax: return []
+    have, add = {_gk(x) for x in cur}, []
+    # dry run 2026-11-16: readers' votes scatter ('Science Fiction' on Knife of Dreams, 'Fantasy' on Exit Strategy): at most ONE main genre
+    # from Hardcover - its top-voted one - and only when the book has none; 'Graphic Novel' counts the comic edition, not the audiobook
+    main_ok = not any(_gk(x) in _MAIN for x in cur)
+    for t in hc_voted_genres(votes):
+        if lang == 'English' and _FOREIGN_GENRE.search(t): continue  # 'Action & Abenteuer' on an English book (like the genre cleanup)
+        g = _cg(t)
+        if not g or _gk(g) in have or (_gk(g) == 'epic' and 'epicfantasy' in have) or _gk(g) == 'graphicnovel': continue
+        if known is not None and _gk(g) not in known: continue  # only genre names the library / Audible know ('Imaginary wars and battles', 'General': no)
+        if _gk(g) in _MAIN:
+            if not main_ok: continue
+            main_ok = False
+        have.add(_gk(g)); add.append(g)
+    return add[:gmax - len(cur)]
+
+def hc_fill_theme_tags(cur_tags, votes, limit=6):
+    """User 2026-11-16: fewer than 6 tags (rating tags and lock_* do not count) -> themes from Hardcover's voted genres ('Dragons'); its
+    'Tag' / 'Mood' categories are reader opinions ('Weak Character Development', 'dark') and are not used."""
+    from abs_series import theme_tag as _tt
+    cur = [t for t in cur_tags or [] if isinstance(t, str)]
+    real = [t for t in cur if not t.startswith('lock_') and not re.match(r'(?i)^(audible|hardcover)\s+\d', t)]
+    if len(real) >= limit: return []
+    low = {t.lower() for t in cur}
+    return [x for x in dict.fromkeys(_tt(t) for t in hc_voted_genres(votes)) if x and x.lower() not in low][:limit - len(real)]
+
+def known_genre_keys():
+    """Genre names the script knows: every genre that came from Audible (AUD_GENRES, all runs) and the names of the synonym table."""
+    from abs_series import genre_key as _gk, _GENRE_SYN_KEYS
+    with IO_LOCK: return {_gk(g) for g in AUD_GENRES} | set(_GENRE_SYN_KEYS)
+
+def hc_sure_match(hc, title):
+    """The Hardcover book is surely this book: matched by ASIN / ISBN / manual link, or a close title (a title search can land on another
+    book listing this title as an alternative - 2026-11-15 year check)."""
+    return bool(hc) and (hc.get('source') in ('ASIN', 'ISBN', 'manual link') or title_similarity(title, hc.get('title') or '') >= 0.85)
+
+def description_junk(own):
+    """The ABS text is no description at all (user 2026-11-16: 'complete nonsense' is emptied when no source has a text): only reader
+    reviews, only links ('Book 1 of [Fellowship of the Ring](https://openlibrary...)'), only a credit ('MacLeod Andrews (Narrator)')."""
+    t = _plain_text(own)
+    if not t: return None
+    if description_is_reviews(t): return 'only reader reviews'
+    rest = re.sub(r'\[([^\]]*)\]\(https?://[^)]*\)', r'\1', t)
+    if re.search(r'https?://|www\.', t) and len(re.sub(r'https?://\S+|www\.\S+', '', t).strip()) < 40: return 'only a link'
+    if rest != t and len(rest) < 120 and re.match(r'(?i)^(book|volume|part)\s+\d+\s+of\b', rest): return 'only a series link'
+    if re.fullmatch(r"(?i)[\w .,'’-]{2,60}\((?:narrator|author|translator|reader)\)", t): return 'only a credit'
+    return None
 
 def description_is_reviews(own):
     """The ABS text is only reader reviews / praise, no description ('Review "The way this story evolved ..." - 5 stars. Richard White'
@@ -5628,6 +5703,29 @@ def process_queue(work_queue, history, failed, recheck):
                                 and str(hy_) != str(meta.get('publishedYear') or '').strip() and 'lock_year' not in tags and not skip_meta \
                                 and abs_update(iid, key, title, {'publishedYear': str(hy_)}, meta, 'book_year'):
                             logging.info(f"        📅 Year: '{meta.get('publishedYear')}' -> '{hy_}' (first release of the book, Hardcover){' (DRY_RUN, not saved)' if DRY_RUN else ''}")
+                if hc_data and hc_sure_match(hc_data, title):
+                    # user 2026-11-16: Hardcover fills EMPTY series / genres when Audible has none (books not on Audible, e.g. 'Malice')
+                    hc_aud_ser = bool(aud_data and (aud_data.get('series') or (aud_data.get('meta_raw') or {}).get('series')))
+                    upd_ = {}
+                    hs_name, hs_pos = ((hc_data.get('series') or [('', None)])[0])
+                    if not meta.get('series') and not hc_aud_ser and hs_name and hs_pos is not None and 'lock_series' not in tags \
+                            and normalize_title_text(hs_name) != normalize_title_text(title):  # 'The Tatami Galaxy' #1 on The Tatami Galaxy: noise
+                        q_ = str(hs_pos).rstrip('0').rstrip('.') if '.' in str(hs_pos) else str(hs_pos)
+                        if re.fullmatch(r'\d+(\.\d+)?', q_): upd_['series'] = [{'name': hs_name, 'sequence': q_}]
+                    # user 2026-11-16: fewer than GENRE_MAX genres / 6 tags after Audible -> filled up with Hardcover's (voted genres only:
+                    # >= 2 votes and >= 20 % of the top genre's; single votes are often junk like '["Fantasy"' or 'Calibre Import')
+                    g_now = [g for g in ((locals().get('abs_updates') or {}).get('genres') or meta.get('genres') or []) if isinstance(g, str)]
+                    add_ = hc_fill_genres(g_now, hc_data.get('genre_votes'), GENRE_MAX or 6, map_language(meta.get('language') or lang), known_genre_keys()) if 'lock_genres' not in tags else []
+                    if add_:
+                        upd_['genres'] = g_now + add_
+                        with IO_LOCK: AUD_GENRES.update(add_)  # like Audible's: never removed as 'only this book has it' (no ping-pong)
+                    t_now = [t for t in ((item_data.get('media') or {}).get('tags') or []) if isinstance(t, str)]
+                    t_now += [t for t in (locals().get('th_') or []) if t not in t_now]  # theme tags just added from Audible's categories
+                    th2_ = hc_fill_theme_tags(t_now, hc_data.get('genre_votes')) if not ({'lock_tags', 'lock_all'} & set(tags)) else []
+                    if th2_ and abs_update(iid, key, title, {}, meta, 'theme_tags', tags=t_now + th2_, old_tags=t_now):
+                        logging.info(f"        🔖 Tags: +{th2_} (themes from Hardcover's genres){' (DRY_RUN, not saved)' if DRY_RUN else ''}")
+                    if upd_ and abs_update(iid, key, title, upd_, meta, 'hardcover_meta'):
+                        logging.info(f"        📚 From Hardcover: {upd_}{' (DRY_RUN, not saved)' if DRY_RUN else ''}")
                 if HARDCOVER_ENABLED and hc_status != 'fresh': stats['hc_found' if hc_data else 'hc_missing'] += 1
                 sst_record(key, 'hardcover', 'found' if hc_data else hc_status, LOOKUP_HITS['hardcover'])
                 if hc_data and (not aud_data or aud_data.get('related_edition')) and 'lock_asin' not in tags:
@@ -5726,7 +5824,17 @@ def process_queue(work_queue, history, failed, recheck):
                     # Empty description (apart from our rating block): use Audible's summary
                     summary = (aud_data or {}).get('summary') if not skip_meta else None
                     base_desc = cur_desc
-                    if summary and ov.get('identity') and ov.get('asin') == asin and normalize_desc(strip_rating_block(cur_desc)) != normalize_desc(summary) \
+                    own_ = strip_rating_block(cur_desc); b_lang = map_language(meta.get('language') or lang)
+                    aud_ok = bool(summary and aud_data and not aud_data.get('related_edition')
+                                  and (same_recording(abs_dur, meta.get('narrators'), aud_data) or title_similarity(title, aud_data.get('title_raw') or '') >= 0.7))
+                    aud_good = aud_ok and len(_plain_text(summary)) >= DESC_MIN_LEN and text_language(summary) in (None, b_lang)
+                    if aud_good and _sum_norm(own_) != _sum_norm(summary):  # text only: Audible's <p> vs ABS's <br> is no difference
+                        # user 2026-11-16: Audible's text of the verified recording wins when it has a minimum length (lock_description keeps
+                        # an own text); before, an existing long text was never replaced (274 books had texts of other editions / sources)
+                        base_desc = summary
+                        stats['desc_filled'] += 1
+                        logging.info(f"        📝 Description replaced by Audible's summary ({'was empty' if not own_ else 'Audible wins'})")
+                    elif summary and ov.get('identity') and ov.get('asin') == asin and normalize_desc(strip_rating_block(cur_desc)) != normalize_desc(summary) \
                             and key not in IDENTITY_DESC:
                         base_desc = summary  # the old text describes the other book (identity confirmed by the user)
                         with IO_LOCK:
@@ -5760,7 +5868,17 @@ def process_queue(work_queue, history, failed, recheck):
                         base_desc = summary  # user rule 2026-11-03: only a provably truncated / very short text, never an own long one
                         stats['desc_filled'] += 1
                         logging.info(f"        📝 Description replaced by Audible's complete summary ({why_d})")
-                    if not summary and not skip_meta and (l_own := text_language(strip_rating_block(cur_desc))) \
+                    hc_desc = hc_description_ok(hc_data, title, b_lang) if not aud_good and base_desc == cur_desc else ''
+                    if hc_desc and _sum_norm(own_) != _sum_norm(hc_desc):
+                        # user 2026-11-16: Hardcover's text as fallback when Audible has nothing usable (no product, < 200 characters)
+                        base_desc = hc_desc
+                        stats['desc_filled'] += 1
+                        logging.info("        📝 Description from Hardcover (Audible has no usable text for this book)")
+                    elif not aud_good and not hc_desc and base_desc == cur_desc and (why_j := description_junk(own_)):
+                        # user 2026-11-16: neither source has a text and the existing one is no description at all -> empty
+                        base_desc = ''
+                        logging.info(f"        📝 Description emptied: {why_j}, and neither Audible nor Hardcover has a text")
+                    if not summary and not hc_desc and not skip_meta and (l_own := text_language(strip_rating_block(cur_desc))) \
                             and map_language(meta.get('language') or lang) in _LANG_WORDS and l_own != map_language(meta.get('language') or lang):
                         # 2026-11-16: French text on the English 'Malice' (recording not on Audible): nothing to replace it with -> review list
                         logging.info(f"        ⚠️ The description is in {l_own}, the book in {map_language(meta.get('language') or lang)} - no Audible text for this recording: review list")
