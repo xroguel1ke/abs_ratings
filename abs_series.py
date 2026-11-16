@@ -682,7 +682,7 @@ _GENRE_SYN = {
           'Physical & Emotional Abuse', 'Difficult Situations', 'Family Life', 'Emotions & Feelings', 'Explore the World', 'Self Esteem & Self Image',
           'Clean & Wholesome', 'Small Town & Rural', 'Asian American & Pacific Islander', 'Words, Language & Grammar', 'Arts & Entertainment',
           'Metaphysical & Visionary', 'Family', 'Bullying', 'Belletristik', 'Literatur & Belletristik', 'Mystery, Thriller & Suspense', 'Holidays', 'Modern', 'Dark', 'second chance', 'Multicultural', 'European', 'Southern',
-          'Literary History & Criticism', 'Writing & Publishing', 'Politics & Government'],  # audit 2026-11-16: no fiction genres
+          'Literary History & Criticism', 'Writing & Publishing', 'Politics & Government', 'Roman'],  # audit 2026-11-16: no fiction genres
 }
 # themes are no genres (user 2026-11-15: 'Dragons & Mythical Creatures' is a tag) -> an English tag
 _THEME_TAG = {
@@ -695,7 +695,7 @@ _THEME_TAG = {
     'Artificial Intelligence': 'Artificial Intelligence', 'Space Exploration': 'Space Exploration', 'Coming of Age': 'Coming of Age', 'LGBTQ': 'LGBTQ',
     'Lgbt': 'LGBTQ', 'LGBTQ+': 'LGBTQ', 'Queer': 'LGBTQ', 'Gay': 'LGBTQ', 'Lesbian': 'LGBTQ', 'Cozy': 'Cozy', 'cozy fantasy': 'Cozy', 'Cozy Fantasy': 'Cozy',
     'Cosy': 'Cozy', 'Harem': 'Harem', 'Friendship': 'Friendship', 'Medieval': 'Medieval', 'Forgotten Realms': 'Forgotten Realms',
-    'Dungeons and dragons': 'Dungeons & Dragons', 'Star wars': 'Star Wars', 'gods': 'Gods', 'fae': 'Fae', 'Pirates': 'Pirates', 'Spicy': 'Spicy', 'Space': 'Space', 'Books & Libraries': 'Books & Libraries',
+    'Dungeons and dragons': 'Dungeons & Dragons', 'Star wars': 'Star Wars', 'gods': 'Gods', 'fae': 'Fae', 'Pirates': 'Pirates', 'Spicy': 'Spicy', 'Space': 'Space', 'Books & Libraries': 'Books & Libraries', 'Found Family': 'Found Family',
 }
 _GENRE_CANON = {genre_key(v): k for k, vs in _GENRE_SYN.items() for v in vs}
 _GENRE_SYN_KEYS = {genre_key(k): k for k in _GENRE_SYN if k != '-'}  # canonical key -> its spelling
@@ -821,7 +821,8 @@ def normalize_genres(ctx, records):
     best = {}
     for g, n in cnt.items():
         k, cur = genre_key(g), best.get(genre_key(g))
-        if k and (cur is None or (n, g[:1].isupper(), g.count(' '), g) > (cnt[cur], cur[:1].isupper(), cur.count(' '), cur)): best[k] = g
+        # 2026-11-16: a capitalized spelling wins over a more used lowercase one ('Erotica' over 'erotica' on 3 books)
+        if k and (cur is None or (g[:1].isupper(), n, g.count(' '), g) > (cur[:1].isupper(), cnt[cur], cur.count(' '), cur)): best[k] = g
     changed = 0
     gmax = int(ctx.get('genre_max') or 0)
     cnt_all = Counter(genre_key(x) for r in records for g in r['genres'] if isinstance(g, str) for x in split_(g))  # books per genre
@@ -852,7 +853,9 @@ def normalize_genres(ctx, records):
                 if g is None: continue
             k = genre_key(g) if isinstance(g, str) else ''
             if not k or k.isdigit() or k in seen or (en_de and not is_latin(g)): continue
-            seen.add(k); out.append(_GENRE_SYN_KEYS.get(k) or best.get(k, g.strip()))
+            g_ = _GENRE_SYN_KEYS.get(k) or best.get(k, g.strip())
+            if isinstance(g_, str) and g_[:1].islower() and g_.isascii(): g_ = ' '.join(w[:1].upper() + w[1:] for w in g_.split(' '))  # 'speculative fiction'
+            seen.add(k); out.append(g_)
         if {'epic', 'epicfantasy'} <= {genre_key(g) for g in out if isinstance(g, str)}:
             # user 2026-11-15: 'Epic' next to 'Epic Fantasy' is a duplicate -> Epic Fantasy stays; 'Epic' alone stays 'Epic'
             out = [g for g in out if not (isinstance(g, str) and genre_key(g) == 'epic')]

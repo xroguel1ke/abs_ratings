@@ -4260,7 +4260,10 @@ def missing_in_series_task():
     for t, asins in list(SERIES_ASINS.items()): by_key.setdefault(_k(t), set()).update(asins)
     hosts = {'German': ['api.audible.de'], 'English': ['api.audible.com', 'api.audible.co.uk']}
     out, asked, checked = [], 0, []
-    for (lib, _), books in sorted(SERIES_BOOKS.items()):
+    todo_ = sorted(SERIES_BOOKS.items())
+    logging.info(f"📚 Missing volumes: checking {len(todo_)} series (Audible series lists are refreshed after {SERIES_LIST_DAYS:g} day(s))")
+    for n_, ((lib, _), books) in enumerate(todo_, 1):
+        if n_ % 100 == 0: logging.info(f"   … {n_}/{len(todo_)} series checked")  # 2026-11-16: the daily list refresh took 15 min without a line (looked stuck)
         name = books[0]['name']
         langs = [b['lang'] for b in books if b.get('lang')]
         lang = max(set(langs), key=langs.count) if langs else None
