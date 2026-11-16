@@ -24,6 +24,17 @@ for f in tests/synthetic/merge_*.json; do n=$(basename $f .json | sed 's/merge_/
 done; wait_ok=0; for j in $(jobs -p); do wait $j || wait_ok=1; done; [ $wait_ok = 0 ] && echo "merge batches: all clean" || fail=1
 echo "== 3d missing volumes against real Audible series lists"
 for f in tests/synthetic/missing_*.json; do py tools/missing_test.py eval $f | tail -1 | grep -q "missing volumes: \([0-9]*\)/\1 ok" || { echo "missing-volume test $f deviates"; py tools/missing_test.py eval $f | tail -5; fail=1; }; done; echo "missing volumes: checked $(ls tests/synthetic/missing_*.json | wc -l) files"
+echo "== 3e new books with bad metadata + adversarial books (no false positive allowed)"
+if [ -f tests/private/newbooks/expect.json ]; then
+  py tests/private/newbooks/make.py > /dev/null && py tests/private/newbooks/make_adv.py > /dev/null  # fresh 'added' date: the books must be NEW
+  rm -rf /mnt/user/appdata/abs_scripts_test/reg_nb /mnt/user/appdata/abs_scripts_test/reg_nbadv
+  ( RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com SNAPSHOT=/src/tests/private/newbooks/snapshot.json FAKE_WRITE=1 FOLLOW_UP_TASKS=true REUSE=1 FAKE_PORT=19090 \
+      tools/run_round.sh reg_nb tests/private/newbooks/keys.txt record > /tmp/claude-0/regress_nb.out 2>&1 ) &
+  ( RECORD_NO_LIVE=audible,api.hardcover.app,www.goodreads.com SNAPSHOT=/src/tests/private/newbooks/snapshot_adv.json FAKE_WRITE=1 REUSE=1 FAKE_PORT=19091 \
+      tools/run_round.sh reg_nbadv tests/private/newbooks/adv_keys.txt record > /tmp/claude-0/regress_nbadv.out 2>&1 ) &
+  wait
+  docker run --rm --cpuset-cpus=${ABS_CPUS:-0-9,12-31} --name abs_ratings_test_nbcheck -v $DEV:/src:ro -v /mnt/user/appdata/abs_scripts_test:/d:ro $IMG python -I /src/tests/private/newbooks/check.py reg_nb reg_nbadv || fail=1
+fi
 echo "== 4 golden rounds"
 i=0
 for k in tests/private/round*_keys.txt tests/private/wl0*_keys.txt; do
