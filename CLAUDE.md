@@ -50,6 +50,21 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   found via Hardcover gets a second pass in the same run; a new book keeps the new-book rules until matched (new_pending.json);
   Hardcover description / series / genres need a matching author for a title-only search hit. Result: 3/18 -> 14/18 complete in one
   run, 0/52 false positives; books without any author are left alone on purpose.
+  REALISTIC NEW BOOKS (2026-11-17, tests/private/newbooks/make_real.py: 100 library books reset to what ABS makes of the real file tags +
+  folder 'Author/Series/N - Title - Narrator'; eval_real.py): 87 -> 92/100 the library's ASIN, the other 5 the same recording as another
+  .com publisher listing, 0 wrong books. Fixes: (1) a book WITHOUT an ASIN may take a hit with the same narrator and the runtime off by
+  <= 20 min AND <= 3 % only with narrator + series/volume number + title >= 0.95 (near_only; a long title is no evidence - regress had
+  'Homestead Recipe Book' for '... Garden'; 'Homeland' 30 min off stays unmatched as in golden); (2) preferred_twin: INTO the preferred
+  store one rating is enough (the 'at least as many ratings' guard of 2026-11-04 applies within a store); when audible.com's API search
+  does not list the edition (region-locked US editions: Golden Fool, Blood of Dragons, Titanchild) ONE web search of that store with a
+  plain UA + overrideBaseCountry (the script's full browser headers get another result list!), a miss is remembered 180 days in
+  twin_web_misses.json (user: web search only as the last resort, another store is fine then); (3) 'ABS number provably wrong' is not
+  applied when Audible's number belongs to another library book of that series (own reading order: The Heroes = First Law World #5);
+  (4) an unnumbered Audible series that the library numbers gets no number borrowed from the folder series (Witchwood Crown was MS&T #1).
+  DESCRIPTION ADS (user 2026-11-17, 'very carefully'): strip_promo_lead() on Audible's summary - a first paragraph or a bold lead whose
+  EVERY sentence matches PROMO_SENTENCES (Brought to you by X / NYT-WSJ bestseller / now an original series / over N million sold /
+  inspiration for the Netflix series), <= 250 chars, >= DESC_MIN_LEN left. Dry run on the library: 58 of 2043 texts, all pure ads, 0 texts
+  altered after the lead. Quotes, taglines and mixed sentences are never touched (tests/test_desc.py).
   HARDCOVER METADATA (user 2026-11-16): fewer than GENRE_MAX genres / 6 tags (rating + lock_* tags do not count) -> filled up from
   Hardcover's reader-voted genres (top genre >= 10 votes, genre >= 5 votes and >= 30 % of the top; cleaned like Audible's: GENRE_RULES, canonical names, no
   duplicates, themes -> tags, Epic rule; only names the script knows; at most ONE main genre and only if the book has none; no

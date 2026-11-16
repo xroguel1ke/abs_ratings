@@ -431,6 +431,8 @@ SHARED_DESC = set()
 IDENTITY_META_FILE = os.path.join(SCRIPT_DIR, 'identity_meta.json')  # books whose title/authors/series came once from a confirmed other-book ASIN
 IDENTITY_META = set()
 SERIES_LIST_DAYS = float(os.getenv('SERIES_LIST_DAYS', 1))  # missing volumes: Audible series lists cached this long (user 2026-11-15: was 7 days, new volumes came a week late)
+FIXED_USER_AGENT_WEB = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36'  # twin web search only
+TWIN_WEB_FILE = os.path.join(SCRIPT_DIR, 'twin_web_misses.json')  # hit ASIN -> time: the preferred store's web search found no twin (not asked again for 180 days)
 NEW_PENDING_FILE = os.path.join(SCRIPT_DIR, 'new_pending.json')  # new books not matched yet (they keep the new-book rules)
 NEW_PENDING = set()
 NEW_BOOK_DAYS = int(os.getenv('NEW_BOOK_DAYS', 30))  # 'new book' = never processed and added to ABS within these days
@@ -1937,7 +1939,7 @@ def audible_result(p, asin, domain):
             up_ = next((n_ for n_ in (x.get('name') for x in reversed(lad[:-1]) if isinstance(x, dict)) if n_ and _cg(map_genre(n_, domain))), None)
             if up_ and up_ not in categories: categories.append(up_)
     res['narrators_raw'] = [n.get('name') for n in (p.get('narrators') or []) if n.get('name')]
-    res['summary'] = p.get('publisher_summary') or p.get('merchandising_summary')
+    res['summary'] = strip_promo_lead(p.get('publisher_summary') or p.get('merchandising_summary'))
     if res['summary'] and p.get('asin'):
         with IO_LOCK: SUMMARY_INDEX[p['asin']] = [p.get('title') or '', _sum_norm(res['summary'])[:800]]
     res['adult'] = bool(p.get('is_adult_product'))
@@ -2280,23 +2282,49 @@ def preferred_twin(lang, key):
                          headers={"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}, timeout=15)
         prods = (r.json().get('products') or []) if r.status_code == 200 else []
     except (requests.RequestException, ValueError): return None
-    best = None
-    for prod in prods:
-        c = prod.get('asin')
-        if not c or c == m['asin'] or (ASIN_OWNERS.get(c, set()) - {key}): continue
-        p = get_audible_api(c, domain)
-        if not isinstance(p, dict) or not p.get('runtime_sec') or abs(p['runtime_sec'] - m['runtime']) > 120: continue
-        if norm(p.get('narrators_raw') or []) != norm(m['narrators']) or not match_author(m['authors'], ", ".join(p.get('authors_raw') or [])): continue
-        if search_match_score(m['title'], p.get('title_raw') or '', p.get('subtitle_raw')) < 0.85 and search_match_score(p.get('title_raw') or '', m['title'], None) < 0.85: continue
-        tv, want = volume_of(p.get('title_raw'), p.get('subtitle_raw')), (extract_volume(m['title']) or SEARCH_CTX.get('want_vol') or set())
-        if tv and want and not tv & want: continue  # 'Mushoku Tensei: ..., Vol. 21' is no twin of the bare-titled vol. 22 (same narrator, similar runtime)
-        pub = ((p.get('meta_raw') or {}).get('publisher') or {}).get('name') or ''
-        yr = str(parse_release_year((p.get('meta_raw') or {}).get('releaseDate')) or '')
-        pub_ok = bool(SEARCH_CTX.get('pub') and re.sub(r'[^a-z0-9]', '', pub.lower()) == re.sub(r'[^a-z0-9]', '', str(SEARCH_CTX['pub']).lower()) and yr == str(SEARCH_CTX.get('year')))
-        if want_pub and not pub_ok and not other_store: continue  # same store: only a publisher+year match is a better listing
-        cnt = int(p.get('count') or 0)
-        if cnt < m.get('count', 0): continue  # fewer ratings than the hit: never a better listing
-        if best is None or (cnt, pub_ok) > (best[3], best[2]): best = (c, p.get('title_raw'), pub_ok, cnt)
+    def pick(asins, best):
+        for c in asins:
+            if not c or c == m['asin'] or (ASIN_OWNERS.get(c, set()) - {key}): continue
+            p = get_audible_api(c, domain)
+            if not isinstance(p, dict) or not p.get('runtime_sec') or abs(p['runtime_sec'] - m['runtime']) > 120: continue
+            if norm(p.get('narrators_raw') or []) != norm(m['narrators']) or not match_author(m['authors'], ", ".join(p.get('authors_raw') or [])): continue
+            if search_match_score(m['title'], p.get('title_raw') or '', p.get('subtitle_raw')) < 0.85 and search_match_score(p.get('title_raw') or '', m['title'], None) < 0.85: continue
+            tv, want = volume_of(p.get('title_raw'), p.get('subtitle_raw')), (extract_volume(m['title']) or SEARCH_CTX.get('want_vol') or set())
+            if tv and want and not tv & want: continue  # 'Mushoku Tensei: ..., Vol. 21' is no twin of the bare-titled vol. 22 (same narrator, similar runtime)
+            pub = ((p.get('meta_raw') or {}).get('publisher') or {}).get('name') or ''
+            yr = str(parse_release_year((p.get('meta_raw') or {}).get('releaseDate')) or '')
+            pub_ok = bool(SEARCH_CTX.get('pub') and re.sub(r'[^a-z0-9]', '', pub.lower()) == re.sub(r'[^a-z0-9]', '', str(SEARCH_CTX['pub']).lower()) and yr == str(SEARCH_CTX.get('year')))
+            if want_pub and not pub_ok and not other_store: continue  # same store: only a publisher+year match is a better listing
+            cnt = int(p.get('count') or 0)
+            # user rule 2026-11-08/17: English -> audible.com, German -> audible.de is very important. The ratings guard (2026-11-04:
+            # a UK listing must not push out the US one) applies within a store; INTO the preferred store one rating is enough
+            # (none -> '0 ratings' would send the book back to the other store)
+            if (cnt < 1) if other_store else (cnt < m.get('count', 0)): continue  # fewer ratings than the hit: never a better listing (same store)
+            if best is None or (cnt, pub_ok) > (best[3], best[2]): best = (c, p.get('title_raw'), pub_ok, cnt)
+        return best
+    best = pick([prod.get('asin') for prod in prods], None)
+    misses_ = rw_json(TWIN_WEB_FILE) or {}
+    if not best and other_store and time.time() - float(misses_.get(m['asin']) or 0) < 180 * 86400:
+        logging.info(f"        ℹ️ No twin of {m['asin']} on {domain} (its web search found none before): {m.get('domain')} listing kept")
+    elif not best and other_store:
+        # user 2026-11-17: the web search is the last resort - ONE request per book, a miss is remembered (180 days), then the other store is fine
+        # realistic new-books test 2026-11-17: audible.com's API search does not list some US editions at all ('The Golden Fool'
+        # B00BFF4B6I, 'Blood of Dragons' B07BB3D7CR - the UK hit was kept); the store's web search does. Same strict checks.
+        # 2026-11-17: with the script's full browser headers (Sec-Fetch-*, Upgrade-Insecure-Requests) audible.com serves another result
+        # list WITHOUT these editions; a plain UA + language finds them (9/9 tries). overrideBaseCountry: results of the store, not of the
+        # server's country. Own request (fetch_url's headers are used by every other page fetch and stay unchanged).
+        soup_, page_ = None, ''
+        throttle('audible_web')
+        try:
+            r_ = requests.get(f"https://{domain}/search", params={"keywords": f"{m['title']} {m['authors'][0]}", "ipRedirectOverride": "true", "overrideBaseCountry": "true"},
+                              headers={"User-Agent": FIXED_USER_AGENT_WEB, "Accept-Language": get_headers(domain)['Accept-Language']}, timeout=20)
+            if r_.status_code == 200: page_ = r_.text; soup_ = True
+        except requests.RequestException: pass
+        web_ = list(dict.fromkeys(re.findall(r'data-asin="([A-Z0-9]{10})"', page_) + re.findall(r'/pd/[^/"?]+/([A-Z0-9]{10})', page_)))
+        if web_: best = pick(web_[:20], None)
+        if best: logging.info(f"        🔎 {domain} API search does not list this edition - found via the store's web search")
+        elif soup_ is not None and not DRY_RUN:  # a failed request (None) is no miss: tried again next time
+            with IO_LOCK: misses_ = rw_json(TWIN_WEB_FILE) or {}; misses_[m['asin']] = int(time.time()); rw_json(TWIN_WEB_FILE, misses_)
     if not best: return None
     return best[0], f"same recording as {m['asin']} ({m.get('domain')}): {'preferred store ' + domain if other_store else ''}{' + ' if other_store and best[2] else ''}{'ABS publisher+year' if best[2] else ''}"
 REVIEW_FILE = os.path.join(SCRIPT_DIR, 'review_queue.json')
@@ -2608,6 +2636,15 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                 accept = t_score >= 0.85 and auth_ok and (dur_ok or dur_near_n)
             else:
                 accept = t_score >= 0.8 and auth_ok and not dur_conflict or t_score >= 0.85 and dur_ok
+            # realistic new-books test 2026-11-16: 'Night of the Hunter' / 'Passage to Dawn' / 'A Thousand Li 3' - title, author, narrator and
+            # series number agree, the file is 14-30 min off Audible's runtime: a book WITHOUT an ASIN was rejected while the same evidence
+            # was enough to REPLACE an ASIN. Accepted only when confirmed by narrator + one more signal (series / volume number,
+            # distinctive title) - see near_only below; a candidate with the exact runtime still wins.
+            # regress 2026-11-17: 'Homeland' (golden: no ASIN - the file's own listing is gone, the found recording is 30 min longer) -> at most
+            # 20 min AND 3 % off ('Night of the Hunter' 17 min / 1.8 %, 'A Thousand Li 3' 14 min / 2.6 %; 'Passage to Dawn' 30 min stays unmatched)
+            rt_off_ = abs((duration or 0) - (p.get('runtime_sec') or 0))
+            near_only = bool(not strict and not accept and dur_near_n and t_score >= 0.85 and auth_ok and rt_off_ <= 1200 and rt_off_ <= 0.03 * (p.get('runtime_sec') or 0))
+            if near_only: accept = True
             if accept:
                 narr_hit = bool(a_narr and c_narr and a_narr & c_narr) or swapped_ or narr_as_author or narr_in_title
                 vol_hit = bool(f_nums and t_nums and f_nums & t_nums)
@@ -2637,13 +2674,19 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
                                   and duration and duration >= 7200)
                 if solo_exact and not confirmed:
                     confirmed = True; evidence.append('exact-runtime(no narrator in ABS)')
+                # regress 2026-11-17: a long title is no second signal here ('The Self-Sufficient Homestead Recipe Book' for '... Garden',
+                # another 'Strange Things in the Forest' recording) - narrator AND series / volume number AND title >= 0.95
+                if near_only and not (confirmed and narr_hit and (vol_hit or ser_hit) and t_score >= 0.95):
+                    logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (title {t_score:.2f}, author ✓, runtime off by "
+                                 f"{abs(duration - p['runtime_sec']) / 60:.0f} min and not enough other evidence)")
+                    continue
                 ev_txt = ", ".join(evidence)
                 LAST_MATCH.clear(); LAST_MATCH.update({'asin': cand, 'confirmed': confirmed, 'evidence': evidence, 'title': found_title, 'domain': domain,
                                    'runtime': p.get('runtime_sec'), 'narrators': p.get('narrators_raw') or [], 'authors': p.get('authors_raw') or [], 'pub_year': pub_year,
                                    'count': int(p.get('count') or 0), 'lang': (p.get('meta_raw') or {}).get('language')})
                 msg = (f"        ✅ API match on {domain}: '{found_title}' [{cand}] (title {t_score:.2f}, author {'✓' if auth_ok else '✗'}, "
                        f"runtime {'✓' if dur_ok else '≈ (same narrator, inside tolerance)'}) evidence: {ev_txt}")
-                if strict and not dur_ok and dur_near_n:  # keep looking: a candidate with exact runtime beats an approximate one
+                if (strict or near_only) and not dur_ok and dur_near_n:  # keep looking: a candidate with exact runtime beats an approximate one
                     if near_pick is None: near_pick = (cand, dict(LAST_MATCH), msg)
                     continue
                 if t_score < 0.99:
@@ -3758,6 +3801,41 @@ def source_lines(src, d):
     lines = [f"{src} ({d.get('count', 0)}):"]
     if (v := d.get('val')) and is_valid_rating(v): lines.append(f"🏆 {moon_rating(v)} {round(safe_float(v), 1)} / 5 - {L['rating']}")
     return lines
+
+# user 2026-11-17 ("very carefully, it must not break my descriptions"): advertising lines in FRONT of Audible's text. Only the FIRST
+# paragraph, only when EVERY sentence of it is one of these patterns (collected from the library), at most 250 characters, and at least
+# DESC_MIN_LEN characters of text stay. Quotes, reviews, taglines and sentences that mix praise with content are never touched.
+PROMO_SENTENCES = [re.compile(x, re.I) for x in (
+    r"brought to you by [\w&.,' -]{2,40}",
+    r"(?:an? |the )?(?:#1 |number one |instant |international |internationally )*(?:new york times|usa today|wall street journal|sunday times|washington post)"
+    r"\s*-?\s*best[- ]?sell(?:er|ing)(?: (?:phenomenon|series|novel))?",
+    r"(?:(?:the )?[\w' :-]{2,60} (?:is|are) )?now an? (?:original |major |epic |hit |new )*(?:amazon |netflix |prime video |hbo |tv |television )*"
+    r"(?:series|show|film|movie|motion picture)(?: (?:on|from|streaming on) [\w ]{2,30})?(?:,? starring [\w .,'&-]{2,80})?",
+    r"the inspiration for the (?:netflix|hbo|amazon|prime video|tv) (?:series|show|film) [\w' :-]{1,40}",
+    r"(?:with )?over [\d.,]+ (?:million|thousand) [\w' -]{0,40}sold\b[^.!]{0,140}",
+)]
+
+def strip_promo_lead(html):
+    """Audible summary without leading advertising (see PROMO_SENTENCES): a first paragraph, or a BOLD lead inside the first
+    paragraph ('<p><b>Brought to you by Penguin.</b> Murder, Politics ...'), whose every sentence is advertising. Unchanged when in doubt."""
+    if not html: return html
+    def promo(lead):
+        lead = re.sub(r'\s+', ' ', html_lib.unescape(re.sub(r'<[^>]+>', ' ', lead))).strip()
+        if not lead or len(lead) > 250: return False
+        sents = [x.strip(' *•–—-') for x in re.split(r'(?<=[.!])\s+|\s+[•*]\s+', lead) if x.strip(' *•–—-')]
+        return bool(sents) and all(any(pt.fullmatch(x.rstrip(' .!')) for pt in PROMO_SENTENCES) for x in sents)
+    out = html
+    for _ in range(3):  # 'Brought to you by Penguin.' + 'Over 1 million Discworld audiobooks sold ...' as two leads
+        mb = re.match(r'(?is)(\s*(?:<p[^>]*>)?\s*)<(b|strong)>((?:(?!</?(?:b|strong)>).){1,300}?)</\2>', out)
+        mp = re.match(r'(?is)\s*(?:<p[^>]*>)?(.*?)(?:</p>|<br\s*/?>)\s*(?:<br\s*/?>)?', out)
+        if mb and promo(mb.group(3)):
+            rest = mb.group(1) + re.sub(r'^(?:\s|<br\s*/?>)+', '', out[mb.end():], flags=re.I)
+        elif mp and promo(mp.group(1)):
+            rest = out[mp.end():].lstrip()
+        else: break
+        if len(_plain_text(rest)) < DESC_MIN_LEN: break
+        out = rest
+    return out
 
 def build_description(current_desc, fresh, old):
     """fresh: {source: data from this run}, old: {source: text from the existing block} (kept if nothing new).
@@ -5379,7 +5457,10 @@ def process_queue(work_queue, history, failed, recheck):
                                             # the ABS number is the first volume of Audible's range (Publisher's Pack 4 = #7): the range says more ('7-8')
                                             logging.info(f"        🔢 Series '{canon}': #{existing['sequence']} -> #{s_seq} (the pack holds volumes {s_seq})")
                                             existing['sequence'] = s_seq
-                                        elif ver and any(k == ck_ or difflib.SequenceMatcher(None, k, ck_).ratio() >= 0.9 for k in proven_fix for ck_, _ in _series_pairs([{'name': existing['name']}])):
+                                        elif ver and any(k == ck_ or difflib.SequenceMatcher(None, k, ck_).ratio() >= 0.9 for k in proven_fix for ck_, _ in _series_pairs([{'name': existing['name']}])) \
+                                                and not {t_.split('|')[0] for t_ in SEQ_TITLES.get((lib_id, str(existing['name']).strip().lower(), str(s_seq).strip()), ())} - {normalize_title_text(title)}:
+                                            # realistic test 2026-11-16: 'The Heroes' is First Law World #5 in the user's reading order (1-10), Audible's
+                                            # list says #2 - which is 'Before They Are Hanged' in this library: an own, consistent numbering, not an error
                                             logging.info(f"        🔢 Series '{canon}': ABS #{existing['sequence']} was proven wrong by Audible's series list -> #{s_seq}")
                                             existing['sequence'] = s_seq
                                         elif ver and any(o is not existing and str(o.get('sequence') or '') == str(existing['sequence']) and not same(o['name'], existing['name'])
@@ -5418,6 +5499,18 @@ def process_queue(work_queue, history, failed, recheck):
                                 new_list = [x for x in new_list if x not in added] + [dict(x) for x in bad_fd]  # Audible's series is unknown here: folder name stays
                                 added, bad_fd = [], []
                             bad = bad_nl + bad_fd
+                            if bad and added:
+                                # realistic test 2026-11-17: Audible lists 'The Witchwood Crown' in 'Memory, Sorrow & Thorn' WITHOUT a number; the folder's
+                                # '#1' (of 'The Last King of Osten Ard') made it MS&T #1 = 'The Dragonbone Chair' in this library. A series that is
+                                # numbered in the library gets no borrowed number - it is not added; the folder series stays.
+                                for x in list(added):
+                                    f_n = SERIES_FACTS.get((lib_id, str(x['name']).strip().lower())) or {}
+                                    if not x.get('sequence') and f_n.get('n', 0) >= 2 and f_n.get('numbered', 0) > 0.25 * f_n.get('n', 0):
+                                        logging.info(f"        ⏭️ Series '{x['name']}' not added: Audible gives no number for this book and the library numbers this series")
+                                        added.remove(x); new_list = [y for y in new_list if y is not x]
+                                if not added:
+                                    new_list += [dict(b) for b in bad_fd if not any(same(b['name'], y['name']) for y in new_list)]
+                                    bad_fd, bad = [], bad_nl
                             if bad and added:
                                 for x in added:  # Audible gave no number: keep the one of the replaced series
                                     if not x.get('sequence'): x['sequence'] = next((b['sequence'] for b in bad if b.get('sequence')), None)

@@ -123,3 +123,24 @@ def test_file_name_junk_2026_11_16():
     for real in ('[Traveling] Merchant Crab (Book 2)', 'Enemy A[n]t the Gates', 'Catch-22', '1984'):
         assert A.strip_title_junk(real)[0] == real
     assert A.strip_title_junk('Die letzte Nacht (ungekürzt)', keep_format=True)[0] == 'Die letzte Nacht (ungekürzt)'
+
+
+BODY_ = '<p>' + 'Celehar has always been an outsider, and now the city of Amalo needs him more than ever before. ' * 4 + '</p>'
+
+def test_promo_lead_removed_2026_11_17():
+    assert A.strip_promo_lead('<p>Brought to you by Penguin.</p>' + BODY_) == BODY_
+    assert A.strip_promo_lead('<p><b>Brought to you by Penguin.</b> <b>Over 1 million Discworld audiobooks sold – discover the extraordinary universe of '
+                              'Terry Pratchett’s Discworld like never before</b> ' + BODY_[3:]) == '<p>' + BODY_[3:]
+    assert A.strip_promo_lead('<b><i>NEW YORK TIMES </i>BESTSELLER</b> ' + BODY_) == BODY_
+    assert A.strip_promo_lead('<p>The Wheel of Time is now an original series on Prime Video, starring Rosamund Pike as Moiraine!</p>' + BODY_) == BODY_
+    assert A.strip_promo_lead('<p>A Wall Street Journal bestseller.</p>' + BODY_) == BODY_
+
+def test_promo_lead_kept_2026_11_17():
+    keep = ['<p>From #1 New York Times bestselling author Brandon Sanderson, the Mistborn series is a heist story of political intrigue.</p>' + BODY_,
+            '<p><b>FEAR NOT THE DARK</b></p>' + BODY_,
+            '<p>“A skillful narration of this story makes this a fun and enjoyable performance.” — AudioFile</p>' + BODY_,
+            '<p><b>Murder, Politics and Intrigue.</b> ' + BODY_[3:],
+            '<p>Sequel to the number one bestselling global phenomenon!</p>' + BODY_,
+            '<p>Brought to you by Penguin.</p><p>Too short to stand alone.</p>',  # less than DESC_MIN_LEN would stay
+            BODY_]
+    for d in keep: assert A.strip_promo_lead(d) == d, d[:60]
