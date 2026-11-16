@@ -669,7 +669,10 @@ _GENRE_SYN = {
     'Romance': ['Liebesromane'],
     'Sword & Sorcery': ['Schwerter & Magie'],
     'Adventure': ['Action & Adventure', 'Action', 'Action and Adventure', 'Sea Adventures'],
-    'Mystery': ['Mysteries', 'Detective and mystery stories'],
+    'Mystery': ['Mysteries', 'Detective and mystery stories', 'International Mystery & Crime'],
+    'Paranormal': ['Paranormal & Supernatural'],
+    'Espionage': ['Spies & Politics'],
+    'Fairy Tales': ['Fairy Tales, Folk Tales & Myths'],
     "Children's Audiobooks": ['childrens', "Children's", 'Juvenile Fiction', 'Middle Grade', 'Juvenile Literature', 'Kinder-Hörbücher'],
     'Anime & Manga': ['anime'],
     'Mythology': ['Greek & Roman', 'Norse'],
@@ -678,7 +681,8 @@ _GENRE_SYN = {
           'Fiction', 'Novels', 'Literature', 'Fiction & Literature', 'Genre Fiction', 'Social & Life Skills', 'Growing Up & Facts of Life', 'Death & Dying',
           'Physical & Emotional Abuse', 'Difficult Situations', 'Family Life', 'Emotions & Feelings', 'Explore the World', 'Self Esteem & Self Image',
           'Clean & Wholesome', 'Small Town & Rural', 'Asian American & Pacific Islander', 'Words, Language & Grammar', 'Arts & Entertainment',
-          'Metaphysical & Visionary', 'Family', 'Bullying', 'Belletristik', 'Literatur & Belletristik', 'Mystery, Thriller & Suspense', 'Holidays', 'Modern', 'Dark', 'second chance', 'Multicultural', 'European', 'Southern'],
+          'Metaphysical & Visionary', 'Family', 'Bullying', 'Belletristik', 'Literatur & Belletristik', 'Mystery, Thriller & Suspense', 'Holidays', 'Modern', 'Dark', 'second chance', 'Multicultural', 'European', 'Southern',
+          'Literary History & Criticism', 'Writing & Publishing', 'Politics & Government'],  # audit 2026-11-16: no fiction genres
 }
 # themes are no genres (user 2026-11-15: 'Dragons & Mythical Creatures' is a tag) -> an English tag
 _THEME_TAG = {
@@ -691,7 +695,7 @@ _THEME_TAG = {
     'Artificial Intelligence': 'Artificial Intelligence', 'Space Exploration': 'Space Exploration', 'Coming of Age': 'Coming of Age', 'LGBTQ': 'LGBTQ',
     'Lgbt': 'LGBTQ', 'LGBTQ+': 'LGBTQ', 'Queer': 'LGBTQ', 'Gay': 'LGBTQ', 'Lesbian': 'LGBTQ', 'Cozy': 'Cozy', 'cozy fantasy': 'Cozy', 'Cozy Fantasy': 'Cozy',
     'Cosy': 'Cozy', 'Harem': 'Harem', 'Friendship': 'Friendship', 'Medieval': 'Medieval', 'Forgotten Realms': 'Forgotten Realms',
-    'Dungeons and dragons': 'Dungeons & Dragons', 'Star wars': 'Star Wars', 'gods': 'Gods', 'fae': 'Fae', 'Pirates': 'Pirates', 'Spicy': 'Spicy', 'Space': 'Space',
+    'Dungeons and dragons': 'Dungeons & Dragons', 'Star wars': 'Star Wars', 'gods': 'Gods', 'fae': 'Fae', 'Pirates': 'Pirates', 'Spicy': 'Spicy', 'Space': 'Space', 'Books & Libraries': 'Books & Libraries',
 }
 _GENRE_CANON = {genre_key(v): k for k, vs in _GENRE_SYN.items() for v in vs}
 _GENRE_SYN_KEYS = {genre_key(k): k for k in _GENRE_SYN if k != '-'}  # canonical key -> its spelling

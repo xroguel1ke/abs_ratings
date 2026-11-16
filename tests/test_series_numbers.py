@@ -255,7 +255,7 @@ def test_genre_loop_keeps_real_genres():
     c, calls = ctx()
     S.normalize_genres(c, [r])
     # 2026-11-15: 'Dragons & Mythical Creatures' / tie-ins are themes (tags), the comma genre stays one genre
-    assert calls[0][3]['genres'] == ['Fairy Tales, Folk Tales & Myths', 'Fantasy'] and r['_themes'] == {'Dragons', 'Tie-In'}
+    assert calls[0][3]['genres'] == ['Fairy Tales', 'Fantasy'] and r['_themes'] == {'Dragons', 'Tie-In'}  # audit 2026-11-16: no '&' names
 
 
 def test_number_shared_titles():

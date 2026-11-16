@@ -220,6 +220,10 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   - ABS cron scans (every 30 min) that overlap a run overwrite our writes from the audio tags (cleared subtitles came back):
     wait_for_abs_scan before the book step and the series task, scan_gate (every 30 s, all workers) before books and library writes.
     The local ABS host is no longer serialized (ABS_PARALLEL=3); the per-host lock stays for Audible / Hardcover / Goodreads.
+  - Subtitles 2026-11-16: ABS fills an EMPTY subtitle from the audio file's subtitle tag at EVERY library scan (not only when a scan
+    overlaps our writes). A subtitle that the file has as tag is never cleared (file_tag_subtitle) - else the same 41 ping-pong forever.
+  - Genres 2026-11-16: a product whose leaves are all themes / no genres gets the nearest real genre above (audible_result); the
+    genre cleanup never writes an empty list. More '&' categories mapped (Mystery, Paranormal, Espionage, Fairy Tales, dropped).
   - Descriptions 2026-11-16: Audible's FULL publisher summary is only in the response group product_extended_attrs (live runs only,
     recordings keep the old query). Before, every 'summary' was the short merchandising text, so short/junk ABS texts (OpenLibrary
     'Book 1 of [..](link)', 'MacLeod Andrews (Narrator)') were never replaced. First live run replaces about 273 descriptions.

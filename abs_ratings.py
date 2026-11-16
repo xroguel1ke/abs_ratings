@@ -1826,6 +1826,13 @@ def get_audible_api(asin, domain):
 AUD_PREFETCH = {}  # (api host, asin) -> catalog product of this run (bulk request, 50 per request)
 
 
+def file_tag_subtitle(item):
+    """The subtitle tag of the book's audio files (ABS puts it back into an empty subtitle at every scan), or ''."""
+    for f in ((item or {}).get('media') or {}).get('audioFiles') or []:
+        t = str(((f or {}).get('metaTags') or {}).get('tagSubtitle') or '').strip()
+        if t: return t
+    return ''
+
 def aud_prefetch_asins(host, asins):
     """Search candidates of one store in ONE bulk request (speed check 2026-11-15: about every third Audible request of a run was a
     single candidate product, each waiting for the per-host throttle). Products the answer lacks are asked singly as before."""
@@ -1897,6 +1904,13 @@ def audible_result(p, asin, domain):
         # Only the finest level of each ladder ('Space Opera' instead of 'Science Fiction & Fantasy' > 'Science Fiction' > 'Space Opera')
         leaf = ((ladder.get('ladder') or [{}])[-1] or {}).get('name')
         if leaf and leaf not in categories: categories.append(leaf)
+    # audit 2026-11-16: leaves that are only themes ('Time Travel', 'Coming of Age' -> tags) or no genre ('Literature & Fiction') left the
+    # book with NO genre ('Bookbound Bunny 2': the genre cleanup never writes an empty list) - then the nearest real genre above each leaf
+    from abs_series import canonical_genre as _cg
+    if categories and not any(_cg(map_genre(c_, domain)) for c_ in categories):
+        for lad in ladders:
+            up_ = next((n_ for n_ in (x.get('name') for x in reversed(lad[:-1]) if isinstance(x, dict)) if n_ and _cg(map_genre(n_, domain))), None)
+            if up_ and up_ not in categories: categories.append(up_)
     res['narrators_raw'] = [n.get('name') for n in (p.get('narrators') or []) if n.get('name')]
     res['summary'] = p.get('publisher_summary') or p.get('merchandising_summary')
     if res['summary'] and p.get('asin'):
@@ -5470,6 +5484,11 @@ def process_queue(work_queue, history, failed, recheck):
                         if s_new != s_cur:
                             abs_updates['subtitle'] = s_new
                             log_updates.append(f"Subtitle: '{s_cur}' -> '{s_new}' (only the series name and number)")
+                    if 'subtitle' in abs_updates and not abs_updates['subtitle'] and meta.get('subtitle') and file_tag_subtitle(item_data):
+                        # audit 2026-11-16: ABS fills an EMPTY subtitle from the audio file's subtitle tag at every library scan (every 30 min):
+                        # the same 41 subtitles were cleared in every run and back 15 min later - an empty subtitle cannot stick, keep it
+                        abs_updates.pop('subtitle'); log_updates[:] = [x for x in log_updates if not x.startswith('Subtitle:')]
+                        logging.info("        ℹ️ Subtitle not cleared: the audio file has it as tag, ABS's scan would restore it")
                     if abs_updates:
                         logging.info(f"        🛠️ Meta Updates{' (DRY_RUN, not saved)' if DRY_RUN else ''}:")
                         for upd in log_updates: logging.info(f"          -> {upd}")
