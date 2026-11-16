@@ -235,7 +235,7 @@ add({
     'Check first (write nothing)': 'Erst prüfen (nichts schreiben)', 'Really write %(n)s changes to ABS now?': '%(n)s Änderungen jetzt wirklich in ABS schreiben?',
     'Planned changes': 'Geplante Änderungen', 'Changes made': 'Durchgeführte Änderungen', 'Before': 'Vorher', 'After': 'Nachher', 'No changes.': 'Keine Änderungen.',
     '%(n)s more in the log / planned_changes.': '%(n)s weitere im Log / planned_changes.',
-    'Starting …': 'Startet …', 'Time left': 'Restzeit', 'ready at about': 'fertig gegen', 'books/min': 'Bücher/min', 'Titles': 'Titel', 'Covers': 'Cover', 'Audible found': 'Audible gefunden', 'without Audible data': 'ohne Audible-Daten',
+    'Starting …': 'Startet …', 'Library tasks (series, authors, report) …': 'Bibliotheksaufgaben (Reihen, Autoren, Bericht) …', 'Checking missing volumes …': 'Prüfe fehlende Bände …', 'Time left': 'Restzeit', 'ready at about': 'fertig gegen', 'books/min': 'Bücher/min', 'Titles': 'Titel', 'Covers': 'Cover', 'Audible found': 'Audible gefunden', 'without Audible data': 'ohne Audible-Daten',
     'blocked': 'gesperrt', 'new ASIN': 'neue ASIN',
     # run review
     'Review test run': 'Testlauf prüfen', 'risky change: check carefully': 'riskante Änderung: genau prüfen', 'back to the test run': 'zum Testlauf',

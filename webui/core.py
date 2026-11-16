@@ -4,7 +4,7 @@ notifications (Apprise) and readers for the files the script writes into the dat
 The script itself stays a normal command line program; the UI only passes environment variables.
 """
 import glob, json, os, re, secrets, signal, subprocess, sys, threading, time, zipfile, io
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import requests
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -1022,12 +1022,12 @@ def safe_path(kind, name):
 RE_PROG = re.compile(r'\((\d+)/(\d+)\) \[ETA: ([^\]]*)\] (.+?) \[ASIN: ([^\]]*)\]')
 _prog_cache = {}
 
-def run_progress(log_path):
+def run_progress(log_path, run=None):
     """Live numbers parsed from the run log: position, ETA, current book and counters."""
     try: st = os.stat(log_path)
     except OSError: return {}
     hit = _prog_cache.get(log_path)
-    if hit and hit[0] == (st.st_size, st.st_mtime): return hit[1]
+    if hit and hit[0] == (st.st_size, st.st_mtime): return _with_tail(hit[1], run)
     try: txt = open(log_path, encoding='utf-8', errors='replace').read()
     except OSError: return {}
     pos = RE_PROG.findall(txt)
@@ -1051,8 +1051,105 @@ def run_progress(log_path):
                 if d['speed'] > 0 and left > 0:
                     d['finish'] = (datetime.now() + timedelta(minutes=left / d['speed'])).strftime('%H:%M')
         except ValueError: pass
+    try:
+        m_ = None
+        for m_ in re.finditer(r'… (\d+)/(\d+) series checked', txt): pass
+        d['_t'], d['_mp'] = _log_times(txt), ((int(m_.group(1)), int(m_.group(2))) if m_ else None)
+    except Exception: d['_t'], d['_mp'] = None, None
     _prog_cache[log_path] = ((st.st_size, st.st_mtime), d)
-    return d
+    return _with_tail(d, run)
+
+def _with_tail(d, run):
+    """The cached log numbers + the time-dependent estimate (recomputed each call: quiet phases would freeze it)."""
+    out = {k: v for k, v in d.items() if not k.startswith('_')}
+    try:
+        if d.get('_t'): _tail_eta(out, d['_t'], d['_mp'], run)
+    except Exception: pass  # the estimate is a nicety: never break the progress view
+    return out
+
+
+_RE_TS = r'^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+ - \w+ - '
+_tail_cache = {}
+
+def _fmt_left(sec):
+    sec = max(0, int(sec))
+    return f"{sec // 3600}h {sec % 3600 // 60}m" if sec >= 3600 else (f"{sec // 60}m {sec % 60}s" if sec >= 60 else f"{sec}s")
+
+def _log_times(txt):
+    """Time stamps of a run log: last book line, series task start, fingerprint refresh (= missing volumes start), end."""
+    ts = lambda m: datetime.strptime(m.group(1), '%Y-%m-%d %H:%M:%S') if m else None
+    last = None
+    for last in re.finditer(_RE_TS + r'\(\d+/\d+\) \[ETA', txt, re.M): pass
+    return {'start': ts(re.search(_RE_TS, txt, re.M)), 'books_end': ts(last),
+            'series': ts(re.search(_RE_TS + r'.*SERIES & LIBRARY TASK', txt, re.M)),
+            'missing': ts(re.search(_RE_TS + r'.*(?:Fingerprints refreshed|Missing volumes: checking)', txt, re.M)),
+            'end': ts(re.search(_RE_TS + r'.*Duration: ', txt, re.M))}
+
+def _prev_tail(kind, current_log):
+    """Seconds the last finished run of the same kind spent AFTER its books, before the missing-volumes step (series & library
+    task, author/series merges, report). The missing-volumes step is estimated separately (it varies 30 s - 15 min)."""
+    key = (kind, current_log)
+    if key in _tail_cache: return _tail_cache[key]
+    val = None
+    runs_ = [r for r in RUNNER.runs() if r.get('kind') == kind and r.get('status') in ('ok', 'warning') and r.get('log')]
+    for r in runs_[:5]:
+        p = safe_path('log', r['log'])
+        if not p or os.path.realpath(p) == os.path.realpath(current_log): continue
+        try: t = _log_times(open(p, encoding='utf-8', errors='replace').read())
+        except OSError: continue
+        if t['books_end'] and t['end']:
+            a = ((t['missing'] or t['end']) - t['books_end']).total_seconds()
+            val = (max(0.0, a), bool(t['series']), bool(t['missing']))
+            break
+    _tail_cache[key] = val
+    return val
+
+def _missing_estimate(at):
+    """Missing-volumes step: about 30 s with fresh Audible series lists, plus ~1.3 s per list that has expired by then
+    (2026-11-16: 358 expired lists took 8 min - the run looked stuck at 100 %)."""
+    try:
+        days = float(load_settings().get('SERIES_LIST_DAYS') or 1)
+        cache = _load_json(os.path.join(CONFIG_DIR, 'series_members.json'), {})
+    except Exception: return 30
+    lim = datetime.now(timezone.utc) + (at - datetime.now()) - timedelta(days=days)  # lists older than this have expired by 'at'
+    old = 0
+    for k, v in cache.items():
+        if not k.startswith('v2|') or not isinstance(v, dict): continue
+        try: old += datetime.fromisoformat(v['ts']) < lim
+        except (KeyError, TypeError, ValueError): pass
+    return 30 + 1.3 * old
+
+def _tail_eta(d, t, mp, run):
+    """Time left INCLUDING the tasks after the books (user 2026-11-16: the ETA ended with the last book, the library tasks were
+    not counted - the run sat at 100 % for 10+ minutes). Sets eta / finish / pct for the whole run and a phase label."""
+    kind = (run or {}).get('kind') or 'full'
+    if kind not in ('full', 'series'): return
+    prev = _prev_tail(kind, (run or {}).get('_log_path') or '')
+    if not prev: return
+    tail_a, has_series, has_missing = prev
+    now = datetime.now()
+    if not t['start']: return
+    books_left = 0.0
+    if d.get('total') and d.get('n', 0) < d['total'] and not t['series']:
+        if not d.get('speed'): return  # no speed yet: keep the script's own book ETA
+        books_left = (d['total'] - d['n']) / d['speed'] * 60
+    miss_ = (_missing_estimate(now + timedelta(seconds=books_left + tail_a)) if has_missing else 0)
+    if t['missing']:  # missing-volumes step running: its progress lines refine the estimate
+        el = (now - t['missing']).total_seconds()
+        if mp and mp[0] > 0: left = max(el / mp[0] * (mp[1] - mp[0]), 10)
+        else: left = max(miss_ - el, 15)
+        d['phase'] = 'missing'
+    elif t['series'] or (d.get('total') and d.get('n') == d['total']):
+        el = (now - (t['books_end'] or now)).total_seconds()
+        left = max(tail_a - el, 15) + miss_
+        d['phase'] = 'library'
+    else:
+        left = books_left + tail_a + miss_
+        d['phase'] = 'books'
+    done_s = (now - t['start']).total_seconds()
+    d['eta'] = _fmt_left(left)
+    d['finish'] = (now + timedelta(seconds=left)).strftime('%H:%M')
+    d['pct'] = round(min(99.5, 100 * done_s / (done_s + left)), 1) if done_s + left > 0 else d.get('pct', 0)
 
 def read_tail(path, offset=0, max_bytes=400_000):
     try:

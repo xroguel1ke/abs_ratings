@@ -733,7 +733,7 @@ def run_view(run_id):
 def api_run_progress(run_id):
     run = core.RUNNER.get(run_id) or abort(404)
     p = core.safe_path('log', run['log']) if run.get('log') else None
-    return jsonify(status=run['status'], **(core.run_progress(p) if p else {}))
+    return jsonify(status=run['status'], **(core.run_progress(p, dict(run, _log_path=p)) if p else {}))
 
 
 @app.route('/api/run/<run_id>/log')

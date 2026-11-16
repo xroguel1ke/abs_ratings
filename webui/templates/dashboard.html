@@ -13,7 +13,7 @@
   if(j.status!=='running'){ location.reload(); return; }
   document.getElementById('lv-bar').style.width=(j.pct||0)+'%';
   document.getElementById('lv-pos').textContent=j.total? j.n+' / '+j.total+' ('+Math.round(j.pct||0)+' %)' : '';
-  document.getElementById('lv-title').textContent=j.title||'';
+  document.getElementById('lv-title').textContent=({library:T('Library tasks (series, authors, report) …'),missing:T('Checking missing volumes …')}[j.phase])||j.title||'';
   document.getElementById('lv-eta').textContent=(j.finish? '{{ _('done around') }} '+j.finish : (j.eta||''))+(j.speed? ' · '+j.speed+' {{ _('books/min') }}':'');
   document.getElementById('lv-cnt').innerHTML=Object.keys(L).filter(k=>j[k]).map(k=>'<span class="badge'+(k==='errors'?' err':'')+'">'+L[k]+' '+j[k]+'</span>').join('');
  }catch(e){} setTimeout(tick, 4000); } tick(); })();</script>{% endif %}
