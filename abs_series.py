@@ -780,9 +780,19 @@ def shared_descriptions(ctx, records):
     for r in records:
         b = body(r.get('description'))
         if len(b) >= 120: groups[(r['lib'], b)].append(r)
-    keys = sorted(f"{r['lib']}_{r['id']}" for lst in groups.values() if len({r.get('asin') for r in lst}) > 1 for r in lst)
+    # 2026-11-16: a text that IS Audible's summary of this very ASIN stays (Audible uses one blurb for several volumes: 6 Harry Potter
+    # full-cast editions, Shield Hero 1/3/4) - it was listed in every run with 'takes its own summary next run' and never changed
+    idx = ctx.get('summary_index') or {}
+    sn = lambda t: re.sub(r'[^a-z0-9]+', ' ', html.unescape(re.sub(r'<[^>]+>', ' ', t or '')).lower()).strip()
+    def own_(r):
+        a = (idx.get(r.get('asin') or '') or [None, ''])[1]
+        t = sn(re.sub(r'(?s)─── .*? ───.*?─{6,}(?:<br\s*/?>)?', '', r.get('description') or ''))
+        return bool(a) and len(t) >= 60 and t[:300] == a[:300]
+    keys = sorted(f"{r['lib']}_{r['id']}" for lst in groups.values() if len({r.get('asin') for r in lst}) > 1 for r in lst if not own_(r))
     if ctx.get('shared_desc_file') and not ctx['dry_run']: _save(ctx['shared_desc_file'], keys)
     if keys: logging.info(f"   📝 Descriptions shared by several books: {len(keys)} (each takes its own Audible summary in the next run)")
+    n_own = sum(1 for lst in groups.values() if len({r.get('asin') for r in lst}) > 1 for r in lst if own_(r))
+    if n_own: logging.info(f"   ℹ️ {n_own} book(s) share a text that is Audible's own summary of their edition (Audible uses one text for several volumes): kept")
     return keys
 
 

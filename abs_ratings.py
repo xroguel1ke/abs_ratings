@@ -6104,7 +6104,7 @@ def main():
                 'lock_after_merge': SERIES_LOCK_AFTER_MERGE, 'author_normalize': AUTHOR_NORMALIZE,
                 'aliases': SERIES_ALIASES, 'aliases_file': SERIES_ALIASES_FILE, 'index_file': SERIES_INDEX_FILE,
                 'decisions_file': os.path.join(SCRIPT_DIR, 'merge_decisions.json'), 'merges_file': os.path.join(SCRIPT_DIR, 'merges.json'),
-                'review_file': os.path.join(SCRIPT_DIR, 'merge_review.json'), 'shared_desc_file': SHARED_DESC_FILE,
+                'review_file': os.path.join(SCRIPT_DIR, 'merge_review.json'), 'shared_desc_file': SHARED_DESC_FILE, 'summary_index': SUMMARY_INDEX,
                 'author_links': {n: sorted(a) for n, a in AUTHOR_LINKS.items()},
                 'remove_role_credits': REMOVE_ROLE_CREDITS, 'genre_cleanup': GENRE_CLEANUP, 'audible_genres': AUD_GENRES, 'genre_max': GENRE_MAX, 'book_languages': list(BOOK_LANGUAGES), 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
                 'audible_series_names': set(SERIES_ASINS),
