@@ -86,27 +86,26 @@ def test_hardcover_description_fallback_2026_11_16():
 
 
 def test_hardcover_fills_genres_and_theme_tags_2026_11_16():
-    votes = [('Fantasy', 9), ('Epic Fantasy', 3), ('Adventure', 2), ('Grimdark', 1), ('Sci-fi', 2), ('["Fantasy"', 2), ('Science Fiction & Fantasy', 3),
-             ('Action & Adventure', 2), ('Dragons', 3), ('Epic', 2)]
-    # cleaned like Audible's: 'Sci-fi' -> Science Fiction, umbrella 'Science Fiction & Fantasy' dropped, 'Action & Adventure' = Adventure
-    # (no duplicate), 'Dragons' is a theme (tag, no genre), 'Epic' not next to Epic Fantasy, junk and single votes dropped
-    assert A.hc_fill_genres(['Fantasy'], votes, 6) == ['Epic Fantasy', 'Adventure']  # no 2nd main genre (Sci-fi)
-    assert A.hc_fill_genres(['Adventure'], votes, 6) == ['Fantasy', 'Epic Fantasy']  # only the top-voted main genre
-    assert A.hc_fill_genres([], [('Graphic Novel', 5), ('Fantasy', 3)], 6) == ['Fantasy']
-    assert A.hc_fill_genres(['fantasy', 'LitRPG', 'A', 'B', 'C'], votes, 6) == ['Epic Fantasy']  # only up to 6, 'fantasy' = Fantasy
+    # only well-known books (top genre >= 10 votes), only genres with >= 5 votes and >= 30 % of the top; cleaned like Audible's
+    votes = [('Fantasy', 40), ('Epic Fantasy', 15), ('Dark Fantasy', 13), ('Adventure', 20), ('Grimdark', 4), ('Sci-fi', 14), ('["Fantasy"', 12),
+             ('Science Fiction & Fantasy', 30), ('Dragons', 16), ('Epic', 12)]
+    assert A.hc_fill_genres(['Fantasy'], votes, 6) == ['Epic Fantasy', 'Dark Fantasy']  # no Adventure (generic), no 2nd main genre, Grimdark too few
+    assert A.hc_fill_genres(['Fantasy', 'LitRPG', 'A', 'B', 'C'], votes, 6) == ['Epic Fantasy']  # only up to 6
     assert A.hc_fill_genres(['A', 'B', 'C', 'D', 'E', 'F'], votes, 6) == []
+    assert A.hc_fill_genres(['Fantasy'], [('Fantasy', 9), ('Epic Fantasy', 8)], 6) == []  # top genre < 10 votes: source too thin
     assert A.hc_fill_theme_tags(['Audible 4.5+', 'lock_title'], votes) == ['Dragons']   # rating / lock tags do not count
-    assert A.hc_fill_theme_tags(['dragons'], votes) == []                                # no duplicate
-    assert A.hc_fill_theme_tags(['a', 'b', 'c', 'd', 'e', 'f'], votes) == []             # 6 real tags: full
+    assert A.hc_fill_theme_tags(['dragons'], votes) == []
+    assert A.hc_fill_theme_tags(['a', 'b', 'c', 'd', 'e', 'f'], votes) == []
+    assert A.hc_fill_genres([], [('Graphic Novel', 25), ('Fantasy', 20)], 6) == ['Fantasy']
 
 
 def test_hardcover_genres_foreign_names_2026_11_16():
-    assert A.hc_fill_genres(['Fantasy'], [('Action & Abenteuer', 4), ('LitRPG', 3)], 6, 'English') == ['LitRPG']
+    assert A.hc_fill_genres(['Fantasy'], [('Fantasy', 20), ('Action & Abenteuer', 9), ('LitRPG', 8)], 6, 'English') == ['LitRPG']
 
 
 def test_hardcover_genres_only_known_names_2026_11_16():
     from abs_series import genre_key as gk
-    assert A.hc_fill_genres(['Fantasy'], [('Imaginary wars and battles', 5), ('LitRPG', 3)], 6, 'English', {gk('LitRPG'), gk('Fantasy')}) == ['LitRPG']
+    assert A.hc_fill_genres(['Fantasy'], [('Fantasy', 20), ('Imaginary wars and battles', 9), ('LitRPG', 8)], 6, 'English', {gk('LitRPG'), gk('Fantasy')}) == ['LitRPG']
 
 
 def test_triple_line_breaks_collapsed_2026_11_16():

@@ -706,6 +706,142 @@ AUDIENCE_GENRES = {genre_key(x) for x in ('Young Adult', "Children's Audiobooks"
 BROAD_GENRES = {genre_key(x) for x in ('Adventure', 'Contemporary', 'Historical')}  # on most books: only for places left over
 
 
+# genre rework 2026-11-16 (user: 'Adventure' on nearly every book, 'Science Fiction' on fantasy, few genres): Audible's categories are
+# ladders ('Science Fiction & Fantasy > Fantasy > Epic'); only the leaf was taken, without its context
+GENERIC_GENRES = {genre_key(x) for x in ('Adventure', 'Epic', 'Contemporary', 'Historical', 'Military')}  # say nothing without context
+GENRE_CTX = {  # (parent, leaf) -> genre; None = no genre ('Fantasy > Action & Adventure' says no more than 'Fantasy')
+    ('Fantasy', 'Epic'): 'Epic Fantasy', ('Fantasy', 'Historical'): 'Historical Fantasy', ('Fantasy', 'Military'): 'Military Fantasy',
+    ('Science Fiction', 'Military'): 'Military Science Fiction', ('Paranormal & Urban', 'Contemporary'): 'Contemporary Fantasy',
+    ('Paranormal & Urban', 'Urban'): 'Urban Fantasy', ('Fantasy', 'Action & Adventure'): None, ('Science Fiction', 'Adventure'): None,
+    ('Science Fiction', 'Action & Adventure'): None, ('Romance', 'Fantasy'): 'Fantasy Romance', ('Romance', 'Paranormal'): 'Paranormal Romance',
+    ('Teen & Young Adult', 'Literature & Fiction'): None,
+}
+GENRE_TOP = {'Teen & Young Adult': 'Young Adult', "Children's Audiobooks": "Children's Audiobooks"}  # audience roots
+FORMAT_GENRES = {genre_key(x) for x in ('Manga', 'Graphic Novel')}  # wrong next to 'Light Novel' on an audiobook
+
+
+def genres_from_audible(ladders, cur=None):
+    """Audible's category ladders -> (main genres, specific genres, genres to drop) with context; themes are left to theme_tag().
+    User 2026-11-16: no 'Science Fiction' on fantasy books that have nothing to do with it - publishers add one off-genre category
+    ('Science Fiction > Dystopian' on The Faithful and the Fallen, 'Science Fiction > Cyberpunk' on LitRPG: Audible has no LitRPG category,
+    'Science Fiction > Adventure' on Overlord). Between Fantasy and Science Fiction:
+    (a) one with only generic / bare ladders goes when the other has a real sub-category,
+    (b) one with a single ladder goes when the other has 2+ (with its sub-category),
+    (c) Science Fiction whose only sub-category is Cyberpunk goes on a LitRPG book."""
+    mains, spec, lad_main = [], [], []
+    for lad in ladders or []:
+        n = [str(x or '').strip() for x in lad if str(x or '').strip()]
+        if not n: continue
+        if n[0] in GENRE_TOP: spec.append(GENRE_TOP[n[0]])
+        ctx = GENRE_CTX.get((n[-2], n[-1]), '?') if len(n) >= 2 else '?'
+        leaf_g = None if ctx is None else (ctx if ctx != '?' else canonical_genre(n[-1]))
+        main_here = None
+        for x in n:
+            c = canonical_genre(x)
+            if c and genre_key(c) in MAIN_GENRES:
+                if c not in mains: mains.append(c)
+                if main_here is None and genre_key(c) in ('fantasy', 'sciencefiction'): main_here = c
+        real = bool(leaf_g) and genre_key(leaf_g) not in GENERIC_GENRES and leaf_g != main_here or theme_tag(n[-1]) is not None
+        if leaf_g and genre_key(leaf_g) not in MAIN_GENRES: spec.append(leaf_g)
+        elif leaf_g and leaf_g != main_here and leaf_g not in mains: mains.append(leaf_g)  # 'Fantasy > Humorous'
+        lad_main.append((main_here, real, leaf_g if leaf_g and genre_key(leaf_g) not in MAIN_GENRES else None))
+    drop = set()
+    F, SF = 'Fantasy', 'Science Fiction'
+    if F in mains and SF in mains:
+        nr = {m: sum(1 for mh, r, _ in lad_main if mh == m and r) for m in (F, SF)}
+        leaves = {m: {genre_key(l) for mh, _, l in lad_main if mh == m and l} for m in (F, SF)}
+        minor = None
+        if nr[F] and not nr[SF]: minor = SF
+        elif nr[SF] and not nr[F]: minor = F
+        elif nr[F] >= 2 and nr[SF] == 1: minor = SF
+        elif nr[SF] >= 2 and nr[F] == 1: minor = F
+        elif leaves[SF] <= {'cyberpunk'} and 'litrpg' in {genre_key(g) for g in cur or [] if isinstance(g, str)}: minor = SF
+        if minor:
+            drop = {genre_key(minor)} | (leaves[minor] - leaves[F if minor == SF else SF])
+            mains = [m for m in mains if m != minor]
+            spec = [g for g in spec if genre_key(g) not in drop]
+    return mains, spec, drop
+
+
+def light_novel_rule(genres):
+    """'Light Novel' stays; 'Manga' / 'Graphic Novel' next to it are the wrong format for an audiobook (user 2026-11-16)."""
+    keys = {genre_key(g) for g in genres if isinstance(g, str)}
+    if 'lightnovel' not in keys: return list(genres)
+    return [g for g in genres if not (isinstance(g, str) and genre_key(g) in FORMAT_GENRES)]
+
+
+def rebuild_genres(cur, ladders, gmax=6):
+    """The book's genres from a VERIFIED Audible product: Audible's main genres (others go - 'Science Fiction' on a fantasy book came
+    from old data), Audible's specific genres with context, then the existing specific genres (LitRPG, Dark Fantasy, Light Novel ... from
+    earlier sources, the series fill or Hardcover). Generic ones (Adventure, Epic ...) only when Audible itself gives them. Themes are
+    no genres. Idempotent: rebuild_genres(rebuild_genres(x)) == rebuild_genres(x) (no ping-pong with the series task)."""
+    mains, spec, drop = genres_from_audible(ladders, cur)
+    if not mains and not spec: return list(cur or [])
+    out = list(mains) + list(spec)
+    for g in cur or []:
+        if not isinstance(g, str): continue
+        k = genre_key(g)
+        if k in MAIN_GENRES:
+            if not mains: out.append(g)  # Audible names no main genre: the existing ones stay
+            continue
+        if k in GENERIC_GENRES or k in drop: continue  # drop: the off-genre category's leaf ('Dystopian' from 'Science Fiction > Dystopian')
+        out.append({'epic': 'Epic Fantasy'}.get(k, g))
+    seen, res = set(), []
+    for g in out:
+        k = genre_key(g)
+        if not k or k in seen or theme_tag(g): continue
+        seen.add(k); res.append(g)
+    if {'epic', 'epicfantasy'} <= seen: res = [g for g in res if genre_key(g) != 'epic']
+    return light_novel_rule(res)[:gmax]
+
+
+def series_genre_fill(ctx, records):
+    """Fewer than GENRE_MAX genres -> the genres most books of the same series have (user 2026-11-16: volumes of one series share their
+    genres; Hardcover's votes are too thin). Never a generic genre, a main genre only for a book without one, no Manga / Graphic Novel next
+    to Light Novel, lock_genres respected. Runs after the genre cleanup."""
+    from collections import Counter
+    abs_update, dry = ctx['abs_update'], ctx['dry_run']
+    gmax = int(ctx.get('genre_max') or 6)
+    by_series = defaultdict(list)
+    for r in records:
+        for x in r['series']:
+            if x.get('name'): by_series[(r['lib'], series_key(x['name']))].append(r)
+    changed, orig = 0, {id(r): list(r['genres']) if isinstance(r.get('genres'), list) else None for r in records}
+    for _round in range(4):  # the siblings' fill changes the consensus: repeat until nothing moves (else it settles one run later)
+      moved = False
+      for r in records:
+        if not isinstance(r.get('genres'), list) or len(r['genres']) >= gmax or r['tags'] & {'lock_genres', 'lock_all', 'lock_metadata'}: continue
+        sib = {id(o): o for x in r['series'] if x.get('name') for o in by_series[(r['lib'], series_key(x['name']))] if o is not r}
+        if len(sib) < 2: continue
+        cnt = Counter(genre_key(g) for o in sib.values() for g in dict.fromkeys(o['genres']) if isinstance(g, str))
+        names = {}
+        for o in sib.values():
+            for g in o['genres']:
+                if isinstance(g, str): names.setdefault(genre_key(g), g)
+        have = {genre_key(g) for g in r['genres'] if isinstance(g, str)}
+        blocked = set((ctx.get('genre_drops') or {}).get(f"{r['lib']}_{r['id']}") or ())  # off-genre for this book by Audible (book step)
+        has_main = bool(have & MAIN_GENRES)
+        add = []
+        for k, n in cnt.most_common():
+            if len(r['genres']) + len(add) >= gmax: break
+            if n < max(2, (len(sib) + 1) // 2) or k in have or k in blocked or k in GENERIC_GENRES or theme_tag(names[k]): continue
+            if k in MAIN_GENRES and has_main: continue
+            if k in FORMAT_GENRES and 'lightnovel' in have: continue
+            if k == 'epic' and 'epicfantasy' in have: continue
+            add.append(names[k]); have.add(k); has_main = has_main or k in MAIN_GENRES
+        if add:
+            new_ = r['genres'] + add
+            if {'epic', 'epicfantasy'} <= {genre_key(g) for g in new_ if isinstance(g, str)}: new_ = [g for g in new_ if not (isinstance(g, str) and genre_key(g) == 'epic')]
+            r['genres'] = new_; moved = True
+      if not moved: break
+    for r in records:
+        o = orig.get(id(r))
+        if o is not None and r['genres'] != o and abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'genres': r['genres']}, {'genres': o}, 'genre_series'):
+            changed += 1
+            logging.info(f"   🏷️ GENRES{' (DRY_RUN)' if dry else ''}: '{r['title']}': +{', '.join(g for g in r['genres'] if g not in o)} (most volumes of the series have them)")
+    return changed
+
+
 def canonical_genre(g):
     """One name for a genre ('Humor' / 'comedy' -> 'Humorous', 'Action & Adventure' -> 'Adventure'); None = no genre ('adult', umbrella
     categories like 'Science Fiction & Fantasy', themes - see theme_tag)."""
@@ -866,6 +1002,7 @@ def normalize_genres(ctx, records):
             g_ = _GENRE_SYN_KEYS.get(k) or best.get(k, g.strip())
             if isinstance(g_, str) and g_[:1].islower() and g_.isascii(): g_ = ' '.join(w[:1].upper() + w[1:] for w in g_.split(' '))  # 'speculative fiction'
             seen.add(k); out.append(g_)
+        out = light_novel_rule(out)  # 2026-11-16: no Manga / Graphic Novel next to Light Novel
         if {'epic', 'epicfantasy'} <= {genre_key(g) for g in out if isinstance(g, str)}:
             # user 2026-11-15: 'Epic' next to 'Epic Fantasy' is a duplicate -> Epic Fantasy stays; 'Epic' alone stays 'Epic'
             out = [g for g in out if not (isinstance(g, str) and genre_key(g) == 'epic')]
@@ -900,6 +1037,7 @@ def normalize_genres(ctx, records):
                 changed += 1
                 gone = [g for g in r['genres'] if g not in out]
                 logging.info(f"   🏷️ GENRES{' (DRY_RUN)' if dry else ''}: '{r['title']}': {', '.join(map(str, gone))} -> {len(out)} genres")
+                r['genres'] = out  # the series fill after this step works on the cleaned list
     return changed
 
 
@@ -1685,6 +1823,7 @@ def run(ctx):
     ctx['shared_desc'] = len(shared_descriptions(ctx, records))
     if ctx.get('genre_cleanup'):
         ctx['genres_cleaned'] = normalize_genres(ctx, records)
+        ctx['genres_series'] = series_genre_fill(ctx, records)
         ctx['tags_changed'] = manage_tags(ctx, records)
         logging.info(f"   Genre spellings cleaned: {ctx['genres_cleaned']} books")
     # Web UI files: merge history, uncertain cases, decisions (a confirmed merge may have been reopened)

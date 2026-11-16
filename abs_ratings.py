@@ -442,6 +442,8 @@ reports = {"audible": {}, "goodreads": {}, "isbn": {}}
 AUTHOR_NOTES = []  # Author spelling differences between ABS and Audible (report only)
 SERIES_ALIASES, SERIES_INDEX = {}, {}  # Loaded in main()
 AUD_GENRES = set()  # genres mapped from Audible categories (all runs, AUD_GENRES_FILE)
+GENRE_DROPS_FILE = os.path.join(SCRIPT_DIR, 'genre_drops.json')  # key -> genre keys Audible shows as off-genre for this book (2026-11-16)
+GENRE_DROPS = {}  # the series fill never adds them (else 'Cyberpunk' dropped by the book step came back from the other volumes)
 SEQ_TITLES = {}  # (lib, series name lower, number) -> normalized titles holding it (filled by build_queue)
 
 def _first_author(names):
@@ -1928,6 +1930,8 @@ def audible_result(p, asin, domain):
         'releaseDate': p.get('release_date') or p.get('issue_date'),
         'format': p.get('format_type'),
         'categories': [{'name': c} for c in categories],
+        # genre rework 2026-11-16: the whole ladders (English names) - the leaf alone lost its context ('Fantasy > Epic' -> 'Epic')
+        'ladders': [[(map_genre(x.get('name'), domain) or '') for x in lad if isinstance(x, dict)] for lad in ladders],
         # series loop 2026-11-15: Audible's 'The Sword of Shannara (Unabridged)' series - the format label is no part of a series name
         'series': [{'name': __import__('abs_series').strip_series_format(s.get('title')), 'part': aud_part(s.get('sequence')), 'asin': s.get('asin')}
                    for s in (p.get('series') or []) if s.get('title')],
@@ -3562,18 +3566,23 @@ def hc_description_ok(hc, title, book_lang):
     if description_is_reviews(d) or description_junk(d): return ''
     return '<p>' + '</p><p>'.join(html_lib.escape(x.strip()) for x in re.split(r'\n\s*\n', d) if x.strip()).replace('\n', '<br>') + '</p>'
 
+HC_GENRE_TOP = int(os.getenv('HC_GENRE_TOP', 10))  # Hardcover genres only for books whose top genre has this many votes
+HC_GENRE_MIN = int(os.getenv('HC_GENRE_MIN', 5))   # ... and only genres with at least this many votes
+
 def hc_voted_genres(votes):
-    """Hardcover's reader-voted genres that count: >= 2 votes and >= 20 % of the top genre's (single votes are often junk like
-    '["Fantasy"' or 'Calibre Import'), with the user's own genre rules (GENRE_RULES) applied like to Audible's names."""
+    """Hardcover's reader-voted genres that count (user 2026-11-16: only when the source is good - well-known books with many votes):
+    the book's top genre has >= HC_GENRE_TOP votes, the genre itself >= HC_GENRE_MIN votes and >= 30 % of the top's. The user's own genre
+    rules (GENRE_RULES) apply like to Audible's names. (Median over the library: ONE genre with 2+ votes - most books get nothing.)"""
     votes = [(str(t or '').strip(), int(c or 0)) for t, c in (votes or [])]
     top = max([c for _, c in votes] or [0])
-    out = [apply_genre_rules(t) for t, c in votes if c >= 2 and c >= 0.2 * top and re.fullmatch(r"[A-Za-z][A-Za-z '&-]{1,40}", t)]
+    if top < HC_GENRE_TOP: return []
+    out = [apply_genre_rules(t) for t, c in votes if c >= HC_GENRE_MIN and c >= 0.3 * top and re.fullmatch(r"[A-Za-z][A-Za-z '&-]{1,40}", t)]
     return [t for t in out if t]
 
 def hc_fill_genres(cur, votes, gmax, lang=None, known=None):
     """User 2026-11-16: fewer than gmax genres after Audible -> filled up with Hardcover's voted genres, cleaned like Audible's (one name
     per genre, no umbrella categories, themes are no genres, no duplicate in another spelling, 'Epic' not next to 'Epic Fantasy')."""
-    from abs_series import canonical_genre as _cg, genre_key as _gk, MAIN_GENRES as _MAIN, _FOREIGN_GENRE
+    from abs_series import canonical_genre as _cg, genre_key as _gk, MAIN_GENRES as _MAIN, _FOREIGN_GENRE, GENERIC_GENRES
     cur = [g for g in cur or [] if isinstance(g, str)]
     if len(cur) >= gmax: return []
     have, add = {_gk(x) for x in cur}, []
@@ -3584,6 +3593,7 @@ def hc_fill_genres(cur, votes, gmax, lang=None, known=None):
         if lang == 'English' and _FOREIGN_GENRE.search(t): continue  # 'Action & Abenteuer' on an English book (like the genre cleanup)
         g = _cg(t)
         if not g or _gk(g) in have or (_gk(g) == 'epic' and 'epicfantasy' in have) or _gk(g) == 'graphicnovel': continue
+        if _gk(g) in GENERIC_GENRES or (_gk(g) == 'manga' and 'lightnovel' in have): continue  # 2026-11-16: never a generic genre
         if known is not None and _gk(g) not in known: continue  # only genre names the library / Audible know ('Imaginary wars and battles', 'General': no)
         if _gk(g) in _MAIN:
             if not main_ok: continue
@@ -5119,10 +5129,24 @@ def process_queue(work_queue, history, failed, recheck):
                         from abs_series import canonical_genre as _cg  # genre loop 2026-11-15: the series task's names (no ping-pong)
                         new_genres_list = [g for g in dict.fromkeys(_cg(x) if x else None for x in (map_genre(c.get('name'), aud_data.get('domain'))
                                                                                                     for c in (md_raw.get('categories') or []) if c.get('name'))) if g]
-                        from abs_series import genre_key as _gk
-                        have_g = {_gk(c) for c in current_genres}  # 'Science fiction' already there = 'Science Fiction' (no re-add after the genre cleanup)
-                        added_genres = [g for g in new_genres_list if _gk(g) not in have_g and not have_g.add(_gk(g))
-                                        and not (_gk(g) == 'epic' and 'epicfantasy' in have_g)]  # the series task drops 'Epic' next to Epic Fantasy
+                        from abs_series import genre_key as _gk, rebuild_genres as _rg, genres_from_audible as _gfa
+                        lads_ = md_raw.get('ladders') or []
+                        if lads_:
+                            # genre rework 2026-11-16: Audible's ladders with context decide the main genres; existing specific genres stay
+                            rebuilt_ = _rg(current_genres, lads_, GENRE_MAX or 6)
+                            m_, sp_, drop_ = _gfa(lads_, current_genres)
+                            with IO_LOCK:
+                                if drop_: GENRE_DROPS[key] = sorted(drop_)
+                                else: GENRE_DROPS.pop(key, None)
+                            new_genres_list = list(dict.fromkeys(new_genres_list + m_ + sp_))
+                            added_genres = []
+                            if [_gk(x) for x in rebuilt_] != [_gk(x) for x in current_genres if isinstance(x, str)]:
+                                abs_updates['genres'] = rebuilt_
+                                log_updates.append(f"Genres: {current_genres} -> {rebuilt_}")
+                        else:
+                            have_g = {_gk(c) for c in current_genres}  # 'Science fiction' already there = 'Science Fiction' (no re-add after the genre cleanup)
+                            added_genres = [g for g in new_genres_list if _gk(g) not in have_g and not have_g.add(_gk(g))
+                                            and not (_gk(g) == 'epic' and 'epicfantasy' in have_g)]  # the series task drops 'Epic' next to Epic Fantasy
                         with IO_LOCK: AUD_GENRES.update(new_genres_list)
                         from abs_series import theme_tag as _tt
                         cur_tags_ = [t_ for t_ in ((item_data.get('media') or {}).get('tags') or []) if isinstance(t_, str)]
@@ -6192,6 +6216,7 @@ def main():
     SERIES_ALIASES.update(rw_json(SERIES_ALIASES_FILE))
     SERIES_INDEX.update(rw_json(SERIES_INDEX_FILE))
     AUD_GENRES.update((rw_json(AUD_GENRES_FILE) or {}).get('genres') or [])
+    GENRE_DROPS.update(rw_json(GENRE_DROPS_FILE) or {})
     if SERIES_ALIASES or SERIES_INDEX:
         logging.info(f"Series aliases: {sum(len(v) for v in SERIES_ALIASES.values())} | Known series: {sum(len(v) for v in SERIES_INDEX.values())}")
     RESULTS.update(rw_json(RESULTS_FILE)); OVERRIDES.update(rw_json(OVERRIDES_FILE))
@@ -6257,13 +6282,14 @@ def main():
                 'decisions_file': os.path.join(SCRIPT_DIR, 'merge_decisions.json'), 'merges_file': os.path.join(SCRIPT_DIR, 'merges.json'),
                 'review_file': os.path.join(SCRIPT_DIR, 'merge_review.json'), 'shared_desc_file': SHARED_DESC_FILE, 'summary_index': SUMMARY_INDEX,
                 'author_links': {n: sorted(a) for n, a in AUTHOR_LINKS.items()},
-                'remove_role_credits': REMOVE_ROLE_CREDITS, 'genre_cleanup': GENRE_CLEANUP, 'audible_genres': AUD_GENRES, 'genre_max': GENRE_MAX, 'book_languages': list(BOOK_LANGUAGES), 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
+                'remove_role_credits': REMOVE_ROLE_CREDITS, 'genre_cleanup': GENRE_CLEANUP, 'audible_genres': AUD_GENRES, 'genre_drops': GENRE_DROPS, 'genre_max': GENRE_MAX, 'book_languages': list(BOOK_LANGUAGES), 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
                 'audible_series_names': set(SERIES_ASINS),
                 'new_book_days': NEW_BOOK_DAYS,
                 'extra': {'author_notes': AUTHOR_NOTES, 'unmapped_genres': UNMAPPED_GENRES},
             })
             stats['series_merged'] = series_result.get('merges', 0)
             if not DRY_RUN and AUD_GENRES: rw_json(AUD_GENRES_FILE, {'genres': sorted(AUD_GENRES)})
+            if not DRY_RUN: rw_json(GENRE_DROPS_FILE, GENRE_DROPS)
             if lib_written:  # 2026-11-09: 188 genre writes made 193 'manual updates' (full lookups, 1800 Hardcover requests) next run
                 stamp = datetime.now(timezone.utc).isoformat(timespec='seconds')
                 for k_ in lib_written:

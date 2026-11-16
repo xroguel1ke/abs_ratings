@@ -279,12 +279,13 @@ def test_genre_taxonomy_2026_11_15():
                'Magic', 'LitRPG', 'Young Adult', 'High Fantasy', 'Dark Fantasy', 'Humorous'])
     b = mk(2, ['Science Fiction & Fantasy', 'Science Fiction', 'Epic', 'Space Opera'])
     fill = [mk(10 + i, ['Fantasy', 'Epic Fantasy', 'Adventure', 'LitRPG', 'Young Adult', 'High Fantasy', 'Dark Fantasy', 'Humorous', 'Space Opera', 'Science Fiction']) for i in range(3)]
+    ga, gb = list(a['genres']), list(b['genres'])  # normalize_genres updates the records in place (2026-11-16)
     ctx_ = {'dry_run': True, 'abs_update': lambda iid, key, title, upd, old, src, **kw: True, 'genre_max': 6}
     S.normalize_genres(ctx_, [a, b] + fill)
     # read back via a recording ctx
     got = {}
     ctx2 = {'dry_run': True, 'abs_update': lambda iid, key, title, upd, old, src, **kw: got.__setitem__(iid, upd.get('genres')) or True, 'genre_max': 6}
-    S.normalize_genres(ctx2, [mk(1, a['genres']), mk(2, b['genres'])] + fill)
+    S.normalize_genres(ctx2, [mk(1, ga), mk(2, gb)] + fill)
     assert len(got[1]) <= 6 and got[1][0] == 'Fantasy' and 'Epic' not in got[1] and 'Science Fiction & Fantasy' not in got[1] and 'Young Adult' not in got[1], got[1]
     assert got[2] == ['Science Fiction', 'Epic', 'Space Opera'], got[2]  # 'Epic' alone stays 'Epic'
 
