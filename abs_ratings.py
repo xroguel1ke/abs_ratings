@@ -235,6 +235,8 @@ MARKET_BY_LANG = {'German': 'de', 'French': 'fr', 'Italian': 'it', 'Spanish': 'e
 # if it can be matched unambiguously (title, author, runtime, narrator). Otherwise the existing ASIN stays.
 PREFERRED_STORE = {'English': 'www.audible.com', 'German': 'www.audible.de'}
 AUDIBLE_API_GROUPS = "rating,series,product_attrs,product_desc,category_ladders,contributors,media"
+if not (recorder.RECORD_DIR or recorder.REPLAY_DIR):  # check 2026-11-16: the FULL publisher summary is only in product_extended_attrs - without it
+    AUDIBLE_API_GROUPS += ",product_extended_attrs"  # every description came from the short merchandising text (recordings keep the old query)
 DRY_RUN = os.getenv('DRY_RUN', 'False').lower() == 'true'
 ABS_TIMEOUT = int(os.getenv('ABS_TIMEOUT', 30))  # Seconds per ABS API request
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
