@@ -444,6 +444,7 @@ SERIES_ALIASES, SERIES_INDEX = {}, {}  # Loaded in main()
 AUD_GENRES = set()  # genres mapped from Audible categories (all runs, AUD_GENRES_FILE)
 GENRE_DROPS_FILE = os.path.join(SCRIPT_DIR, 'genre_drops.json')  # key -> genre keys Audible shows as off-genre for this book (2026-11-16)
 GENRE_DROPS = {}  # the series fill never adds them (else 'Cyberpunk' dropped by the book step came back from the other volumes)
+GENRE_LADDERS = {}  # key -> Audible's category ladders of this run: the series task applies the same rules after its fill (one run)
 SEQ_TITLES = {}  # (lib, series name lower, number) -> normalized titles holding it (filled by build_queue)
 
 def _first_author(names):
@@ -5136,6 +5137,7 @@ def process_queue(work_queue, history, failed, recheck):
                             rebuilt_ = _rg(current_genres, lads_, GENRE_MAX or 6)
                             m_, sp_, drop_ = _gfa(lads_, current_genres)
                             with IO_LOCK:
+                                GENRE_LADDERS[key] = lads_
                                 if drop_: GENRE_DROPS[key] = sorted(drop_)
                                 else: GENRE_DROPS.pop(key, None)
                             new_genres_list = list(dict.fromkeys(new_genres_list + m_ + sp_))
@@ -6282,7 +6284,7 @@ def main():
                 'decisions_file': os.path.join(SCRIPT_DIR, 'merge_decisions.json'), 'merges_file': os.path.join(SCRIPT_DIR, 'merges.json'),
                 'review_file': os.path.join(SCRIPT_DIR, 'merge_review.json'), 'shared_desc_file': SHARED_DESC_FILE, 'summary_index': SUMMARY_INDEX,
                 'author_links': {n: sorted(a) for n, a in AUTHOR_LINKS.items()},
-                'remove_role_credits': REMOVE_ROLE_CREDITS, 'genre_cleanup': GENRE_CLEANUP, 'audible_genres': AUD_GENRES, 'genre_drops': GENRE_DROPS, 'genre_max': GENRE_MAX, 'book_languages': list(BOOK_LANGUAGES), 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
+                'remove_role_credits': REMOVE_ROLE_CREDITS, 'genre_cleanup': GENRE_CLEANUP, 'audible_genres': AUD_GENRES, 'genre_drops': GENRE_DROPS, 'genre_ladders': GENRE_LADDERS, 'genre_max': GENRE_MAX, 'book_languages': list(BOOK_LANGUAGES), 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
                 'audible_series_names': set(SERIES_ASINS),
                 'new_book_days': NEW_BOOK_DAYS,
                 'extra': {'author_notes': AUTHOR_NOTES, 'unmapped_genres': UNMAPPED_GENRES},

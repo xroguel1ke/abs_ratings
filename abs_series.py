@@ -838,9 +838,22 @@ def series_genre_fill(ctx, records):
             add.append(names[k]); have.add(k); has_main = has_main or k in MAIN_GENRES
         if add:
             new_ = r['genres'] + add
+            if need == 1: new_ = [g for g in new_ if not (isinstance(g, str) and canonical_genre(g) is None)]  # umbrella goes once real genres are there
             if {'epic', 'epicfantasy'} <= {genre_key(g) for g in new_ if isinstance(g, str)}: new_ = [g for g in new_ if not (isinstance(g, str) and genre_key(g) == 'epic')]
             r['genres'] = new_; moved = True
       if not moved: break
+    # user 2026-11-16: all in ONE run - the filled genres get the book step's Audible rules right away (a book that got 'LitRPG' from its
+    # series loses the Cyberpunk-only 'Science Fiction' now, not one run later); the rebuild never adds back what the fill may not
+    lads_all = ctx.get('genre_ladders') or {}
+    drops = ctx.get('genre_drops') if isinstance(ctx.get('genre_drops'), dict) else None
+    for r in records:
+        o, k_ = orig.get(id(r)), f"{r['lib']}_{r['id']}"
+        if o is None or r['genres'] == o or k_ not in lads_all: continue
+        new_ = rebuild_genres(r['genres'], lads_all[k_], gmax)
+        if drops is not None:
+            dr_ = genres_from_audible(lads_all[k_], new_)[2]
+            if dr_: drops[k_] = sorted(set(drops.get(k_) or ()) | dr_)
+        r['genres'] = new_
     for r in records:
         o = orig.get(id(r))
         if o is not None and r['genres'] != o and abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'genres': r['genres']}, {'genres': o}, 'genre_series'):

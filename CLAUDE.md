@@ -35,7 +35,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   genres stay, generic ones (Adventure, Epic, Historical ...) only from Audible. Fantasy vs Science Fiction: a generic-only / single-ladder
   one goes next to a strong other one, Cyberpunk-only SF goes on LitRPG (publishers' off-genre category) - those leaves are stored in
   genre_drops.json. The series task then fills up to 6 from the series' majority (series_genre_fill: never generic, never a 2nd main
-  genre, never a dropped one). Manga / Graphic Novel go next to Light Novel. Converges in 2 runs (sim: pass 3 = 0 changes).
+  genre, never a dropped one) and applies the same Audible rules to the filled books right away (genre_ladders): ONE run is enough
+  (sim from the pre-rework state: pass 2 = 0 changes). Manga / Graphic Novel go next to Light Novel.
   HARDCOVER METADATA (user 2026-11-16): fewer than GENRE_MAX genres / 6 tags (rating + lock_* tags do not count) -> filled up from
   Hardcover's reader-voted genres (top genre >= 10 votes, genre >= 5 votes and >= 30 % of the top; cleaned like Audible's: GENRE_RULES, canonical names, no
   duplicates, themes -> tags, Epic rule; only names the script knows; at most ONE main genre and only if the book has none; no
