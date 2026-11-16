@@ -3520,18 +3520,40 @@ def _plain_text(html_text):
 def _sum_norm(t):
     return re.sub(r'[^a-z0-9]+', ' ', re.sub(r'<[^>]+>', ' ', html_lib.unescape(t or '')).lower()).strip()
 
+_LANG_WORDS = {  # frequent short words per language (description check 2026-11-16: French text on 'Malice', Spanish on 'Dreams of Steel')
+    'English': ('the', 'and', 'of', 'is', 'his', 'her', 'with', 'to', 'that', 'he', 'she', 'from'),
+    'German': ('der', 'die', 'und', 'das', 'ist', 'nicht', 'ein', 'eine', 'mit', 'sich', 'auf', 'dem', 'den', 'von'),
+    'French': ('les', 'des', 'est', 'une', 'dans', 'qui', 'que', 'pour', 'sur', 'avec', 'il', 'elle', 'aux', 'du', 'ont'),
+    'Spanish': ('el', 'los', 'las', 'una', 'que', 'por', 'con', 'para', 'del', 'como', 'había', 'pero', 'su', 'se'),
+    'Italian': ('il', 'gli', 'della', 'che', 'una', 'per', 'con', 'non', 'sono', 'nel', 'alla', 'questo'),
+    'Dutch': ('het', 'een', 'van', 'en', 'de', 'niet', 'zijn', 'met', 'voor', 'dat', 'hij', 'zij'),
+    'Portuguese': ('os', 'uma', 'que', 'não', 'com', 'para', 'por', 'dos', 'das', 'ele', 'ela', 'seu'),
+}
+
+def text_language(t):
+    """The language a text is clearly written in (by its short function words), or None when unclear / too short."""
+    ws = re.findall(r"[a-zäöüßàâçéèêëîïôûùüÿñáíóú]+", _plain_text(t).lower())
+    if len(ws) < 8: return None
+    sc = sorted(((sum(w in v for w in ws), k) for k, v in _LANG_WORDS.items()), reverse=True)
+    (n1, l1), (n2, _) = sc[0], sc[1]
+    return l1 if n1 >= 3 and n1 >= 3 * max(n2, 0.67) else None
+
 def desc_language_wrong(own, audible, book_lang):
-    """An English text on a German book or a German one on an English book, while Audible's summary is in the book's language."""
-    w = lambda t: re.findall(r"[a-zäöüß]+", _plain_text(t).lower())
-    de = lambda xs: sum(x in ('der', 'die', 'und', 'das', 'ist', 'nicht', 'ein', 'eine', 'mit', 'sich', 'auf', 'dem', 'den', 'von') for x in xs)
-    en = lambda xs: sum(x in ('the', 'and', 'of', 'is', 'his', 'her', 'with', 'to', 'that', 'he', 'she', 'from') for x in xs)
-    a, b = w(own), w(audible); l = str(map_language(book_lang) or '')
+    """The ABS text is clearly in another language than the book (English text on a German book, French / Spanish text on an English
+    book) while Audible's summary is in the book's language."""
     # check 2026-11-15: short texts too ('Book 1 of [Fellowship of the Ring](openlibrary...)' on Die Gefährten) and Audible's short
     # merchandising summary (Huckleberry Finn) - the language must still be clear on both sides
-    if len(a) < 5 or len(b) < 12: return False
-    if l == 'German': return en(a) >= max(2, 3 * de(a)) and de(b) >= max(2, 3 * en(b))
-    if l == 'English': return de(a) >= max(2, 3 * en(a)) and en(b) >= max(2, 3 * de(b))
-    return False
+    l = str(map_language(book_lang) or '')
+    if l not in _LANG_WORDS: return False
+    a, b = text_language(own), text_language(audible)
+    return bool(a and a != l and b == l)
+
+def description_is_reviews(own):
+    """The ABS text is only reader reviews / praise, no description ('Review "The way this story evolved ..." - 5 stars. Richard White'
+    on Portal to Nova Roma 3, 2026-11-16)."""
+    t = _plain_text(own)
+    return bool(re.match(r'(?i)^(?:editorial\s+)?(?:reviews?|praise(?:\s+for\b[^"“]{0,80})?)\s*:?\s*["“]', t)) \
+        and len(re.findall(r'(?i)\b\d\s*stars?\b|["“][^"”]{20,}["”]\s*[-–—]', t)) >= 1
 
 def description_of_other_book(own, asin, title):
     """The ABS description (without our block) is Audible's summary of ANOTHER book (round 3, 2026-11-09: 86 Vol. 4 had Vol. 5's text,
@@ -5729,10 +5751,20 @@ def process_queue(work_queue, history, failed, recheck):
                         base_desc = summary
                         stats['desc_filled'] += 1
                         logging.info(f"        📝 Description replaced by Audible's summary ({'another book of the library has the same text' if key in SHARED_DESC else 'the text was in another language'})")
+                    elif summary and aud_data and not aud_data.get('related_edition') and description_is_reviews(strip_rating_block(cur_desc)) \
+                            and (same_recording(abs_dur, meta.get('narrators'), aud_data) or title_similarity(title, aud_data.get('title_raw') or '') >= 0.7):
+                        base_desc = summary  # only reader reviews, no description (2026-11-16)
+                        stats['desc_filled'] += 1
+                        logging.info("        📝 Description replaced by Audible's summary (the text was only reader reviews)")
                     elif summary and (why_d := description_replaceable(strip_rating_block(cur_desc), summary)):
                         base_desc = summary  # user rule 2026-11-03: only a provably truncated / very short text, never an own long one
                         stats['desc_filled'] += 1
                         logging.info(f"        📝 Description replaced by Audible's complete summary ({why_d})")
+                    if not summary and not skip_meta and (l_own := text_language(strip_rating_block(cur_desc))) \
+                            and map_language(meta.get('language') or lang) in _LANG_WORDS and l_own != map_language(meta.get('language') or lang):
+                        # 2026-11-16: French text on the English 'Malice' (recording not on Audible): nothing to replace it with -> review list
+                        logging.info(f"        ⚠️ The description is in {l_own}, the book in {map_language(meta.get('language') or lang)} - no Audible text for this recording: review list")
+                        add_review(key, title, 'description', l_own, f"description is in {l_own} - please replace it in ABS (no {map_language(meta.get('language') or lang)} text on Audible for this recording)")
                     if not summary and (other_d := description_of_other_book(strip_rating_block(cur_desc), asin, title)):
                         logging.info(f"        ⚠️ The description is the one of '{other_d}' and Audible has no summary for this book: review list")
                         add_review(key, title, 'description', other_d, f"description belongs to '{other_d}' - Audible has no text for this book, please replace it in ABS")

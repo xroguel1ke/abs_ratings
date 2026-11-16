@@ -45,3 +45,19 @@ if __name__ == '__main__':
     for n, f in sorted(globals().items()):
         if n.startswith('test_'): f(); print('ok', n)
     print('description tests passed')
+
+
+def test_foreign_language_description_2026_11_16():
+    fr = "Il y a bien longtemps que les humains sont arrivés sur les Terres Bannies, qu'ils ont disputées victorieusement aux clans de géants qui les peuplaient. Mais une guerre se prépare dans les ombres et elle est menée par des forces que les hommes ont oubliées."
+    es = "Restábamos ya solo cinco candidatos. El ídolo se había movido. Había posado el pie que había mantenido alzado, aplastando una cabeza, y ahora levantaba su otra extremidad inferior con la espada en la mano."
+    en = "Croaker has fallen and, following the Company's disastrous defeat at Dejagore, Lady is one of the few survivors, determined to avenge the Company and herself against the Shadowmasters."
+    assert A.text_language(fr) == 'French' and A.text_language(es) == 'Spanish' and A.text_language(en) == 'English'
+    assert A.desc_language_wrong(fr, en, 'English') and A.desc_language_wrong(es, en, 'English')
+    assert not A.desc_language_wrong(en, en, 'English') and not A.desc_language_wrong(fr, '', 'English')
+    assert A.text_language('Dragonsteel Prime, the 2001 version') is None  # too short: unclear
+
+
+def test_reviews_only_description_2026_11_16():
+    rev = 'Review "The way this story evolved lead to me being more and more excited to read the next chapter. I blitzed through this book." - 5 stars. Richard White.'
+    assert A.description_is_reviews(rev)
+    assert not A.description_is_reviews('As the dust settles on the battlefield of Carthage, Alexander finds himself struggling. "A great read" - 5 stars.')
