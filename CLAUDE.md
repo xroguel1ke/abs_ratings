@@ -222,6 +222,10 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     The local ABS host is no longer serialized (ABS_PARALLEL=3); the per-host lock stays for Audible / Hardcover / Goodreads.
   - Subtitles 2026-11-16: ABS fills an EMPTY subtitle from the audio file's subtitle tag at EVERY library scan (not only when a scan
     overlaps our writes). A subtitle that the file has as tag is never cleared (file_tag_subtitle) - else the same 41 ping-pong forever.
+    Removing a tag from the FILE is not enough: ABS's AudioMetaTags.isEqual only compares tags still present, so the DB keeps the old
+    tag; and absMetadata (metadata.json in the book folder) is read first. Fixed 2026-11-16 for the 41 books: file tag removed (backup
+    /mnt/cache/abs_subtitle_backup_20261116), DB tagSubtitle removed with ABS stopped (backup absdatabase.before-subtitle-20261116.sqlite),
+    then subtitle cleared via the API (ABS rewrites metadata.json; rescan only after ~10 s or it reads the old file).
   - Genres 2026-11-16: a product whose leaves are all themes / no genres gets the nearest real genre above (audible_result); the
     genre cleanup never writes an empty list. More '&' categories mapped (Mystery, Paranormal, Espionage, Fairy Tales, dropped).
   - Descriptions 2026-11-16: Audible's FULL publisher summary is only in the response group product_extended_attrs (live runs only,
