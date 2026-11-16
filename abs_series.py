@@ -821,11 +821,18 @@ def series_genre_fill(ctx, records):
         have = {genre_key(g) for g in r['genres'] if isinstance(g, str)}
         blocked = set((ctx.get('genre_drops') or {}).get(f"{r['lib']}_{r['id']}") or ())  # off-genre for this book by Audible (book step)
         has_main = bool(have & MAIN_GENRES)
+        # a book with no real genre at all ('Literature & Fiction' only: Audible has nothing better) takes them from ONE other volume too
+        need = 1 if not any(isinstance(g, str) and canonical_genre(g) == g for g in r['genres']) else max(2, (len(sib) + 1) // 2)
         add = []
         for k, n in cnt.most_common():
             if len(r['genres']) + len(add) >= gmax: break
-            if n < max(2, (len(sib) + 1) // 2) or k in have or k in blocked or k in GENERIC_GENRES or theme_tag(names[k]): continue
-            if k in MAIN_GENRES and has_main: continue
+            if n < need or k in have or k in blocked or k in GENERIC_GENRES or theme_tag(names[k]): continue
+            if canonical_genre(names[k]) is None or genre_key(canonical_genre(names[k])) != k: continue  # 2026-11-16: only clean genres
+            # ('Literature & Fiction' of two volumes came back right after the cleanup removed it: every run)
+            if k in ('fantasy', 'sciencefiction') and have & {'fantasy', 'sciencefiction'}: continue  # never Fantasy <-> Science Fiction
+            # a further main genre only for a book that had no real genre (Audible gave none, so the book step keeps it); otherwise the
+            # book step would drop a main genre Audible does not name and this step would add it again (ping-pong)
+            if k in MAIN_GENRES and has_main and need != 1: continue
             if k in FORMAT_GENRES and 'lightnovel' in have: continue
             if k == 'epic' and 'epicfantasy' in have: continue
             add.append(names[k]); have.add(k); has_main = has_main or k in MAIN_GENRES
