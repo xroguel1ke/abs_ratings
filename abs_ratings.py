@@ -3150,6 +3150,9 @@ def hc_query(query, variables=None):
             logging.warning(f"        🛑 Hardcover rejects the token ({msg}). Skipping Hardcover for the rest of this run.")
         else: logging.info(f"        ⚠️ Hardcover error: {msg}")
         return None
+    if j.get('data') is None:  # log check 2026-11-16: HTTP 200 without data (throttled?) - say what came back, count it as no answer
+        logging.info(f"        ⚠️ Hardcover answer without data: {str(j)[:200]}")
+        return None
     if HC_STATE['daily_left'] is not None and HC_STATE['daily_left'] < HC_DAILY_RESERVE:
         HC_STATE['disabled'] = 'daily request limit reached'
         logging.warning(f"        ⏭️ Hardcover daily request limit almost used up ({HC_STATE['daily_left']} left). Remaining books follow in the next runs.")
@@ -4263,6 +4266,8 @@ def reapply_reverted(item, iid, key, title, meta, tags):
         e = journal_last(key, field)
         src = str((e or {}).get('source') or '')
         if not e or f'lock_{field}' in tags or not (src == 'group_confirm' or src.startswith('applied:') or (field == 'title' and src == 'audible_meta')):
+            with IO_LOCK:  # not written again: the current value is accepted (no re-check in every run)
+                if (LAST_WRITTEN.get(key) or {}).get(field): LAST_WRITTEN[key][field]['ours'] = listing_value(field, meta.get(field))
             continue
         a_e = journal_last(key, 'asin')
         if a_e and str(a_e.get('new') or '') != str(meta.get('asin') or ''): continue  # the ASIN changed since: the normal rules decide
@@ -4289,9 +4294,11 @@ def watch_changes(key, item):
         # 'ours' becomes the current value, so a value the script then accepts does not trigger a re-check in every run.
         reverted = True
         how = 'is back at its old value' if (e.get('old') and lst(cur) == lst(e.get('old'))) else 'was changed outside the script'
-        if how != 'is back at its old value':
+        if how != 'is back at its old value' or field not in REAPPLY_FIELDS:
+            # log check 2026-11-16: also a value back at its OLD state (years / series reset by hand) - the re-check decides; if it keeps the
+            # value, the same 15 books were 're-checked' in every run (only re-apply fields keep 'ours' for the write-again below)
             with IO_LOCK: e['ours'] = cur
-        elif field in REAPPLY_FIELDS: item.setdefault('_reapply', []).append(field)
+        else: item.setdefault('_reapply', []).append(field)
         logging.info(f"  ↩️ '{(item.get('media') or {}).get('metadata', {}).get('title')}': {field} {how} - checked again (lock_ tags protect a field)")
     return 'reverted' if reverted else None
 
@@ -4417,6 +4424,12 @@ def source_canaries(only=None):
     hc_search = (lambda q: hc_query("query($q:String!){ search(query:$q, query_type:\"Book\", per_page:8, page:1){ results } }", {'q': q})) \
         if HARDCOVER_ENABLED and not HC_STATE['disabled'] else None
     down = SH.run_canaries(get_audible_api, hc_search, log=logging.warning, only=only)
+    for wait_ in ((15, 45) if 'hardcover' in down and not only else ()):
+        # log check 2026-11-16: ONE answer without data (throttled after many searches) switched Hardcover off for the whole run -
+        # asked again twice before that
+        logging.info(f"Hardcover check failed ({down['hardcover']}) - asking again in {wait_} s")
+        time.sleep(wait_)
+        if not SH.run_canaries(get_audible_api, hc_search, log=logging.warning, only='hardcover'): down.pop('hardcover'); break
     if only: return down.get(only, '')
     for s_, why in down.items(): source_down(s_, why)
     logging.info(f"Source check: {'all OK' if not down else 'PROBLEM - ' + '; '.join(f'{k}: {v}' for k, v in down.items())}")
