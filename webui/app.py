@@ -1045,7 +1045,7 @@ def settings():
     libs = core.abs_libraries(s) if s.get('ABS_URL') and s.get('API_TOKEN') else []
     groups = {}
     for f in core.FIELDS: groups.setdefault(f[5], []).append(f)
-    return render_template('settings.html', notify_events=core.notify_events(s), s=s, groups=groups, sections=core.SECTIONS, slug=core.section_slug, adv=core.ADVANCED, providers=core.PROVIDERS,
+    return render_template('settings.html', notify_events=core.notify_events(s), gcal_state=core.calendar_state(), s=s, groups=groups, sections=core.SECTIONS, slug=core.section_slug, adv=core.ADVANCED, providers=core.PROVIDERS,
                            libs=libs, selected=set((s.get('LIBRARY_IDS') or '').split(',')), next_run=core.next_run_time(s))
 
 
@@ -1101,6 +1101,13 @@ def api_test(what):
                 chk = core.ntfy_check(u, 'ABS Ratings: Test')
                 if chk == 'redirect': ok, msg = False, T('ntfy: the server redirects http to https - use ntfys:// (nothing arrived).')
                 elif chk == 'not_stored': ok, msg = False, T('ntfy: the server did not store the message - no permission for this topic? (with a login: user:password@ or tk_token@ before the host)')
+    elif what in ('gcal', 'gcal_sync'):  # check access + what a sync would do / sync now
+        ok, n, err = core.calendar_sync(s, dry=(what == 'gcal'), key=request.form.get('key') or None, cal=request.form.get('cal') or None)
+        if not ok: msg = T('Calendar: %(e)s', e=err)
+        else:
+            msg = T('%(w)s announced volumes with a date · %(c)s new · %(u)s changed · %(d)s removed · %(k)s unchanged',
+                    w=n['wanted'], c=n['created'], u=n['updated'], d=n['deleted'], k=n['unchanged'])
+            msg = (T('Access OK.') + ' ' + T('A sync would write:') + ' ' + msg) if what == 'gcal' else (T('Synced.') + ' ' + msg)
     elif what == 'cron':
         tmp = dict(s, schedule_enabled=True, schedule_mode='cron', schedule_cron=request.form.get('cron', ''))
         nxt = core.next_run_time(tmp)

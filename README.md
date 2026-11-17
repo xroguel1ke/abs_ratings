@@ -50,6 +50,28 @@ The block is added at the top (or bottom) of the description and updated in plac
 > 🏆 🌕🌕🌕🌕🌗 4.4 / 5 - Rating<br>
 > ⭐
 
+## Release calendar (Google)
+
+Announced volumes of your series that have a release date can appear as all-day events in **one Google calendar**. The server
+only sends (outgoing HTTPS to Google) - nothing has to reach it from outside, it can stay local. The calendar is synced after
+every scan; *Settings → Calendar → Sync now* does it at once. Only events the tool created are ever changed or deleted.
+
+One-time setup (about 10 minutes):
+
+1. **Calendar:** in Google Calendar create a new calendar, e.g. *Audiobook releases*. In its settings, *Integrate calendar*,
+   copy the **Calendar ID** (`…@group.calendar.google.com`).
+2. **Google Cloud project:** open <https://console.cloud.google.com/>, create a project (any name), then
+   *APIs & Services → Library → Google Calendar API → Enable*.
+3. **Service account:** *IAM & Admin → Service accounts → Create service account* (any name, no roles needed).
+   Open it, *Keys → Add key → Create new key → JSON*. A key file is downloaded. Copy the service account's e-mail address
+   (`…@….iam.gserviceaccount.com`).
+4. **Share the calendar:** back in the calendar's settings, *Share with specific people → Add people*: the service account's
+   e-mail address with **Make changes to events**.
+5. **ABS Ratings:** *Settings → Calendar*: switch it on, paste the Calendar ID and the **content** of the key file, *Save*,
+   then *Test* and *Sync now*.
+
+The service account can only reach calendars that are shared with it - nothing else of your Google account.
+
 ## Lock tags
 
 Add these tags to a book in Audiobookshelf to keep the tool away from a field:

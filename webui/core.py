@@ -84,6 +84,10 @@ FIELDS = [
     ('SERIES_LOCK_AFTER_MERGE', 'Set lock_series after a merge', 'bool', False, 'Old variant, not recommended', 'Series & authors'),
 
     ('UI_LANGUAGE', 'Language', 'choice:en|de', 'en', '', 'Interface'),
+
+    ('GCAL_ENABLED', 'Release calendar in Google Calendar', 'bool', False, 'Announced volumes of your series with a release date become all-day events. Synced after every scan', 'Calendar'),
+    ('GCAL_CALENDAR_ID', 'Calendar ID', 'str', '', 'Google Calendar → settings of the calendar → Integrate calendar → Calendar ID', 'Calendar'),
+    ('GCAL_KEY', 'Service account key (JSON)', 'secret', '', 'Paste the content of the downloaded key file. Only this one calendar is shared with it', 'Calendar'),
 ]
 CHOICE_LABELS = {'en': 'English', 'de': 'Deutsch', 'moons': '🌕🌕🌕🌗🌑', 'stars': '★★★⯪☆', 'circles': '●●●◐○', 'squares': '■■■◧□', 'diamonds': '◆◆◆⬖◇',
                  'yellow_stars': '⭐⭐⭐✨', 'hearts': '❤️❤️❤️💗🤍', 'traffic': '🟢🟢🟢🟡⚪', 'green_squares': '🟩🟩🟩🟨⬜', 'orange_circles': '🟠🟠🟠🟡⚪', 'top': 'Above the description', 'bottom': 'Below the description',
@@ -95,13 +99,14 @@ ADVANCED = {'ABS_TIMEOUT', 'SLEEP_TIMER', 'NO_RATINGS_RECHECK_DAYS', 'USE_AUDIBL
             'GR_MAX_COOLDOWNS', 'GR_MISSING_RECHECK_DAYS', 'GR_BOOK_PAGES', 'GOODREADS_PAGES_PER_RUN', 'SERIES_LOCK_AFTER_MERGE'}
 # settings sections (left menu, one form + save button each) -> the field groups (cards) they contain
 SECTIONS = {'Connection': ['Connection'], 'Run': ['Run'], 'Sources': ['Audible', 'Hardcover', 'Goodreads'], 'Metadata': ['Metadata'],
-            'Series & authors': ['Series & authors'], 'Logs': ['Logs'], 'Schedule': [], 'Notifications': [], 'Interface': ['Interface']}
+            'Series & authors': ['Series & authors'], 'Logs': ['Logs'], 'Schedule': [], 'Notifications': [], 'Calendar': ['Calendar'],
+            'Interface': ['Interface']}
 def section_slug(name): return re.sub(r'[^a-z0-9]+', '-', name.lower().replace('&', 'and')).strip('-')
 # cards that belong to a data source: colour dot
 PROVIDERS = {'Audible': ('', '#c8833a', 'Main source: ASIN, ratings, metadata, cover'),
              'Hardcover': ('', '#6f7f5a', 'Ratings and print ISBN'),
              'Goodreads': ('', '#8a6f52', 'Ratings – experimental')}
-SCRIPT_KEYS = [f[0] for f in FIELDS if f[0] not in ('LOG_RETENTION_DAYS', 'UI_LANGUAGE')]
+SCRIPT_KEYS = [f[0] for f in FIELDS if f[0] not in ('LOG_RETENTION_DAYS', 'UI_LANGUAGE') and not f[0].startswith('GCAL_')]  # the calendar is the web UI's job
 DEFAULTS = {f[0]: f[3] for f in FIELDS}
 DEFAULTS.update({
     'schedule_enabled': False, 'schedule_mode': 'simple', 'schedule_days': [0, 1, 2, 3, 4, 5, 6],
@@ -666,6 +671,7 @@ class RunManager:
         self.current = None
         if run['kind'] in ('full', 'series'):
             notify_run(s, run)
+            if s.get('GCAL_ENABLED'): calendar_sync(load_settings())  # never raises: a calendar problem must not touch the run
 
     def stop(self):
         if self.running():
@@ -1227,3 +1233,31 @@ def select_items(s, mode, text='', limit=300):
         keys = list(dict.fromkeys(keys))
         return keys[:limit], f"{len(keys)} books from the list" + (f"; not found: {', '.join(unknown[:5])}" if unknown else '')
     return None, 'all due books'
+
+
+# ---------------------------------------------------------------- release calendar (Google)
+CALENDAR_STATE_FILE = os.path.join(CONFIG_DIR, 'calendar_state.json')
+
+
+def calendar_state(): return _load_json(CALENDAR_STATE_FILE, {})
+
+
+def calendar_sync(s, dry=False, key=None, cal=None):
+    """Announced volumes -> the Google calendar (webui/gcal.py). Returns (ok, counts or None, error text). Never raises;
+    a real sync remembers its result in calendar_state.json (settings page)."""
+    from webui import gcal
+    key, cal = key or s.get('GCAL_KEY') or '', (cal or s.get('GCAL_CALENDAR_ID') or '').strip()
+    res = (False, None, '')
+    try:
+        if not key or not cal: raise gcal.CalendarError('calendar ID and service account key are needed')
+        sess, _email = gcal.session(key)
+        rep = _load_json(os.path.join(REPORT_DIR, 'missing_in_series.json'), {})
+        wanted = gcal.wanted_events(rep, missing_hidden())
+        res = (True, dict(gcal.sync(sess, cal, wanted, dry=dry), wanted=len(wanted)), '')
+    except gcal.CalendarError as e: res = (False, None, str(e))
+    except Exception as e: res = (False, None, f'{type(e).__name__}: {e}')
+    if not dry:
+        _save_json(CALENDAR_STATE_FILE, {'at': datetime.now().isoformat(timespec='seconds'), 'ok': res[0], 'counts': res[1], 'error': res[2]})
+        if not res[0]:
+            import logging; logging.getLogger('webui').warning(f"Release calendar: {res[2]}")
+    return res

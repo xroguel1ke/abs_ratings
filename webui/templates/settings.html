@@ -9,7 +9,7 @@
  <label class="f"><span>{{ _(label) }}</span>
   {% if ftype == 'bool' %}<span><input type="checkbox" name="{{ key }}" {{ 'checked' if s[key] }}></span>
   {% elif ftype == 'secret' %}<span class="row"><input type="password" name="{{ key }}" id="{{ key }}" placeholder="{{ _('•••••••• saved - leave empty = unchanged') if s[key] else _('not set') }}" autocomplete="new-password" style="flex:1">
-     {% if key=='API_TOKEN' %}<button type="button" onclick="test('abs')">{{ _('Test connection') }}</button>{% elif key=='HARDCOVER_TOKEN' %}<button type="button" onclick="test('hardcover')">{{ _('Test') }}</button>{% endif %}</span>
+     {% if key=='API_TOKEN' %}<button type="button" onclick="test('abs')">{{ _('Test connection') }}</button>{% elif key=='HARDCOVER_TOKEN' %}<button type="button" onclick="test('hardcover')">{{ _('Test') }}</button>{% elif key=='GCAL_KEY' %}<button type="button" onclick="test('gcal')">{{ _('Test') }}</button><button type="button" onclick="test('gcal_sync')">{{ _('Sync now') }}</button>{% endif %}</span>
   {% elif ftype == 'text' %}<textarea name="{{ key }}" id="{{ key }}" rows="4" placeholder="Movie, TV &amp; Video Game Tie-Ins => -">{{ s[key] }}</textarea>
   {% elif ftype.startswith('order:') %}{% set cur = (s[key] or '').split(',') %}{% set allsrc = ftype[6:].split('|') %}
    <span><input type="hidden" name="{{ key }}" id="{{ key }}" value="{{ s[key] }}">
@@ -35,7 +35,7 @@
  <label class="chk"><input type="checkbox" form="rewritesym" name="dry"> {{ _('Test run') }}</label><label class="chk"><input type="checkbox" form="rewritesym" name="backup"> {{ _('ABS backup') }}</label>
  <span class="muted">{{ _('Save the new choice first.') }}</span></div>{% endif %}
 {% if group == 'Logs' %}<p><a class="btn" href="{{ url_for('logs') }}">{{ _('View and download logs') }} {{ icon('arrow-right', 14) }}</a></p>{% endif %}
- {% if group == 'Connection' %}<p class="small" id="test_abs"></p>{% elif group == 'Hardcover' %}<p class="small" id="test_hardcover"></p>{% endif %}
+ {% if group == 'Connection' %}<p class="small" id="test_abs"></p>{% elif group == 'Hardcover' %}<p class="small" id="test_hardcover"></p>{% elif group == 'Calendar' %}<p class="small" id="test_gcal"></p>{% if gcal_state.at %}<p class="small muted">{{ _('Last sync') }}: {{ gcal_state.at|dt }} · {% if gcal_state.ok %}{{ _('%(c)s new · %(u)s changed · %(d)s removed', c=gcal_state.counts.created, u=gcal_state.counts.updated, d=gcal_state.counts.deleted) }}{% else %}<span style="color:var(--err)">{{ gcal_state.error }}</span>{% endif %}</p>{% endif %}<p class="small muted">{{ _('Setup (once, about 10 minutes): see the README, section Release calendar.') }} <a href="https://github.com/xroguel1ke/abs_ratings#release-calendar-google" target="_blank" rel="noopener">README {{ icon('arrow-up-right', 14) }}</a></p>{% endif %}
 </div>{% endmacro %}
 {% macro save(sec) %}<p class="savebar"><input type="hidden" name="section" value="{{ sec }}"><button class="primary">{{ _('Save %(s)s', s=_(sec)) }}</button></p>{% endmacro %}
 
@@ -90,9 +90,10 @@
 })();
 function cronToggle(){ const c=document.getElementById('cronmode').checked; document.getElementById('cron').style.display=c?'':'none'; document.getElementById('simple').style.display=c?'none':''; }
 cronToggle();
-async function test(what){ const fd=new FormData(); const out=document.getElementById('test_'+what); out.textContent='…';
+async function test(what){ const fd=new FormData(); const out=document.getElementById('test_'+what.replace('_sync','')); out.textContent='…';
  if(what==='abs'){ fd.append('url', document.getElementById('ABS_URL').value); fd.append('token', document.getElementById('API_TOKEN').value); }
  if(what==='hardcover'){ fd.append('token', document.getElementById('HARDCOVER_TOKEN').value); }
+ if(what==='gcal'||what==='gcal_sync'){ fd.append('key', document.getElementById('GCAL_KEY').value); fd.append('cal', document.getElementById('GCAL_CALENDAR_ID').value); }
  if(what==='notify'){ fd.append('url', document.getElementById('apprise_url').value); }
  if(what==='cron'){ fd.append('cron', document.getElementById('cronexpr').value); }
  const r=await fetch('/api/test/'+what,{method:'POST',body:fd}); const j=await r.json();

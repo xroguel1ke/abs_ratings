@@ -482,4 +482,14 @@ add({  # page tour 2026-11-08
     "%(n)s not on Goodreads": "%(n)s nicht auf Goodreads", "%(n)s covers": "%(n)s Cover", "%(n)s series merged": "%(n)s Serien zusammengeführt",
     "next/previous": "weiter/zurück", "apply": "übernehmen", "discard": "verwerfen", "select": "auswählen",
     "%(n)s errors": "%(n)s Fehler", "%(n)s Goodreads lookups deferred": "%(n)s Goodreads-Abfragen verschoben", "nothing changed": "nichts geändert",
+    # release calendar (Google)
+    "Calendar": "Kalender", "Release calendar in Google Calendar": "Erscheinungskalender in Google Kalender",
+    "Announced volumes of your series with a release date become all-day events. Synced after every scan": "Angekündigte Bände deiner Serien mit Erscheinungsdatum werden ganztägige Termine. Abgleich nach jedem Scan",
+    "Calendar ID": "Kalender-ID", "Google Calendar → settings of the calendar → Integrate calendar → Calendar ID": "Google Kalender → Einstellungen des Kalenders → Kalender integrieren → Kalender-ID",
+    "Service account key (JSON)": "Dienstkonto-Schlüssel (JSON)",
+    "Paste the content of the downloaded key file. Only this one calendar is shared with it": "Inhalt der heruntergeladenen Schlüsseldatei einfügen. Nur dieser eine Kalender ist dafür freigegeben",
+    "Sync now": "Jetzt abgleichen", "Calendar: %(e)s": "Kalender: %(e)s", "Access OK.": "Zugriff OK.", "A sync would write:": "Ein Abgleich würde schreiben:", "Synced.": "Abgeglichen.",
+    "%(w)s announced volumes with a date · %(c)s new · %(u)s changed · %(d)s removed · %(k)s unchanged": "%(w)s angekündigte Bände mit Datum · %(c)s neu · %(u)s geändert · %(d)s entfernt · %(k)s unverändert",
+    "Last sync": "Letzter Abgleich", "%(c)s new · %(u)s changed · %(d)s removed": "%(c)s neu · %(u)s geändert · %(d)s entfernt",
+    "Setup (once, about 10 minutes): see the README, section Release calendar.": "Einrichtung (einmalig, etwa 10 Minuten): siehe README, Abschnitt Release calendar.",
 })
