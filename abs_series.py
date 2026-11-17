@@ -910,6 +910,7 @@ def series_genre_fill(ctx, records):
             for big, subs in (('fantasy', FANTASY_SUBGENRES), ('sciencefiction', SF_SUBGENRES)):
                 for r in grp:
                     if not isinstance(r.get('genres'), list) or r['tags'] & {'lock_genres', 'lock_all', 'lock_metadata'}: continue
+                    if key_(r) not in lads_all: continue  # 2026-11-17: Audible's ladders of this book unknown -> nothing removed (partial runs flipped books)
                     # only volumes Audible files under Fantasy or Science Fiction at all count (German Eragon: only the umbrella category)
                     oth = [lads_all[key_(o)] for o in grp if o is not r and key_(o) in lads_all
                            and (big_named(lads_all[key_(o)], 'fantasy') or big_named(lads_all[key_(o)], 'sciencefiction'))]
@@ -917,7 +918,21 @@ def series_genre_fill(ctx, records):
                     if len(oth) < 2 or sum(1 for l in oth if big_named(l, big)) / len(oth) > 1 / 3 or big_evidence(lads_all.get(key_(r)), big, lit_): continue
                     other_big = 'sciencefiction' if big == 'fantasy' else 'fantasy'
                     if other_big not in {genre_key(g) for g in r['genres'] if isinstance(g, str)} and big_named(lads_all.get(key_(r)), big):
-                        continue  # log check 2026-11-16: never the LAST of the two when Audible names it (Mitosis, Sword Art Online 9/10 had neither)
+                        # log check 2026-11-16: never the LAST of the two when Audible names it (Mitosis, Sword Art Online 9/10 had neither).
+                        # 2026-11-17: Audible names BOTH and the series says the other one ('The Toll' was left with Fantasy only in the
+                        # Science Fiction series Arc of a Scythe) -> swapped, not removed
+                        if big_named(lads_all.get(key_(r)), other_big):
+                            name_ = 'Science Fiction' if other_big == 'sciencefiction' else 'Fantasy'
+                            new_ = list(dict.fromkeys(name_ if (isinstance(g, str) and genre_key(g) == big) else g for g in r['genres']
+                                                      if not (isinstance(g, str) and genre_key(g) in subs)))
+                            drop_ = set(sdrops.get(key_(r)) or ()) | {big} | subs
+                            # only when the rebuild from Audible's ladders keeps the swapped genre (Sword Art Online: Audible's 'Science
+                            # Fiction' is only a LitRPG stand-in - the rebuild drops it again and the book would have neither)
+                            if other_big in {genre_key(g) for g in rebuild_genres(new_, lads_all[key_(r)], gmax, drop_, (ctx.get('genre_hc') or {}).get(key_(r)))
+                                             if isinstance(g, str)}:
+                                sdrops[key_(r)] = drop_
+                                if new_ != r['genres']: r['genres'] = new_; moved_ = True
+                        continue
                     sdrops.setdefault(key_(r), set()).update({big} | subs)
                     new_ = [g for g in r['genres'] if not (isinstance(g, str) and genre_key(g) in sdrops[key_(r)])]
                     if new_ and new_ != r['genres']: r['genres'] = new_; moved_ = True  # never leave a book without any genre
@@ -928,6 +943,7 @@ def series_genre_fill(ctx, records):
             if len(grp) < 3: continue
             for r in grp:
                 if not isinstance(r.get('genres'), list) or r['tags'] & {'lock_genres', 'lock_all', 'lock_metadata'}: continue
+                if key_(r) not in lads_all: continue  # 2026-11-17: unknown whether Audible names 'Classics' for it -> kept
                 oth = [o for o in grp if o is not r and isinstance(o.get('genres'), list)
                        and any(isinstance(x, str) and canonical_genre(x) == x for x in o['genres'])]  # volumes with real genres only
                 if len(oth) < 2: continue

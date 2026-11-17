@@ -70,6 +70,12 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   uses only the cover's FILE NAME (a renamed folder changed coverPath -> 'manual update'); stored legacy fingerprints still match.
   Series numbers: ABS #x is replaced by Audible's #y only when Hardcover's featured series names the same #y and no other library book
   of the series holds it (hc_agrees_number) - Fractal Noise stays 0.5 (Hardcover 0.5 = in-world order, Audible 2 = publication order).
+  GENRE PING-PONG (log check 2026-11-17): the series step checks ALL books but knew Audible's ladders only for the books of the
+  current run - every scheduled 25-book run removed Classics / Fantasy / SF that the last full run had set (16 books flipped). Now:
+  ladders persist in genre_ladders.json; without ladders a book loses nothing in the series check; when Audible names BOTH Fantasy and
+  SF and the series says the other one, the series check swaps (only if rebuild_genres keeps the swapped genre - SAO's 'SF' is a LitRPG
+  stand-in). Simulation full/partial/full/partial: 0 changes after the first full run (scratchpad genre_sim_runs.py).
+  FULL CAST (user 2026-11-17): 5+ narrators (3 or 4 are no full cast); folder names follow the same rule.
   HARDCOVER METADATA (user 2026-11-16): fewer than GENRE_MAX genres / 6 tags (rating + lock_* tags do not count) -> filled up from
   Hardcover's reader-voted genres (top genre >= 10 votes, genre >= 5 votes and >= 30 % of the top; cleaned like Audible's: GENRE_RULES, canonical names, no
   duplicates, themes -> tags, Epic rule; only names the script knows; at most ONE main genre and only if the book has none; no

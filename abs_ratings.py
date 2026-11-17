@@ -451,6 +451,10 @@ GENRE_DROPS = {}  # the series fill never adds them (else 'Cyberpunk' dropped by
 GENRE_SERIES_DROPS_FILE = os.path.join(SCRIPT_DIR, 'genre_series_drops.json')  # key -> big genre + sub-genres the series check removed
 GENRE_SERIES_DROPS = {}
 GENRE_LADDERS = {}
+# 2026-11-17 genre ping-pong: the series step checks ALL books but knew Audible's ladders only for the books of THIS run - a scheduled
+# 25-book run took 'Classics' / Fantasy / Science Fiction away again that the last full run had set (16 books flipped every run).
+# The ladders are kept between runs; a book's entry is replaced whenever it is processed.
+GENRE_LADDERS_FILE = os.path.join(SCRIPT_DIR, 'genre_ladders.json')
 GENRE_HC = {}  # key -> Hardcover readers' votes {'Fantasy': n, 'Science Fiction': m} (arbiter between the two, genre loop 2026-11-16)  # key -> Audible's category ladders of this run: the series task applies the same rules after its fill (one run)
 SEQ_TITLES = {}  # (lib, series name lower, number) -> normalized titles holding it (filled by build_queue)
 
@@ -6425,6 +6429,7 @@ def main():
     GENRE_DROPS.update(rw_json(GENRE_DROPS_FILE) or {})
     NEW_PENDING.update(rw_json(NEW_PENDING_FILE) or [])
     GENRE_SERIES_DROPS.update(rw_json(GENRE_SERIES_DROPS_FILE) or {})
+    GENRE_LADDERS.update(rw_json(GENRE_LADDERS_FILE) or {})
     if SERIES_ALIASES or SERIES_INDEX:
         logging.info(f"Series aliases: {sum(len(v) for v in SERIES_ALIASES.values())} | Known series: {sum(len(v) for v in SERIES_INDEX.values())}")
     RESULTS.update(rw_json(RESULTS_FILE)); OVERRIDES.update(rw_json(OVERRIDES_FILE))
@@ -6498,7 +6503,7 @@ def main():
             })
             stats['series_merged'] = series_result.get('merges', 0)
             if not DRY_RUN and AUD_GENRES: rw_json(AUD_GENRES_FILE, {'genres': sorted(AUD_GENRES)})
-            if not DRY_RUN: rw_json(GENRE_DROPS_FILE, GENRE_DROPS); rw_json(GENRE_SERIES_DROPS_FILE, GENRE_SERIES_DROPS)
+            if not DRY_RUN: rw_json(GENRE_DROPS_FILE, GENRE_DROPS); rw_json(GENRE_SERIES_DROPS_FILE, GENRE_SERIES_DROPS); rw_json(GENRE_LADDERS_FILE, GENRE_LADDERS)
             if lib_written:  # 2026-11-09: 188 genre writes made 193 'manual updates' (full lookups, 1800 Hardcover requests) next run
                 stamp = datetime.now(timezone.utc).isoformat(timespec='seconds')
                 for k_ in lib_written:

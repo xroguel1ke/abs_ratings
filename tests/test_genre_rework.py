@@ -149,3 +149,27 @@ def test_series_check_keeps_last_big_genre():
     rs = [rec(1, ['Fantasy', 'Young Adult'])] + [rec(i, ['Science Fiction', 'Dystopian']) for i in range(2, 5)]
     S.series_genre_fill(ctx, rs)
     assert {'fantasy', 'sciencefiction'} & {S.genre_key(g) for g in rs[0]['genres']}
+
+
+def test_series_check_swaps_when_audible_names_both():
+    # The Toll (Arc of a Scythe = Science Fiction) was left with Fantasy only: Audible names both -> swapped to Science Fiction
+    both = L('Teen & Young Adult > Science Fiction & Fantasy > Fantasy > Action & Adventure', 'Teen & Young Adult > Science Fiction & Fantasy > Science Fiction > Action & Adventure')
+    sf = L('Science Fiction & Fantasy > Science Fiction > Dystopian')
+    lads = {'L_1': both, 'L_2': sf, 'L_3': sf, 'L_4': sf}
+    ctx = {'abs_update': lambda *a, **k: True, 'dry_run': False, 'genre_max': 6, 'genre_ladders': lads, 'genre_series_drops': {}}
+    rec = lambda i, g: {'id': str(i), 'lib': 'L', 'title': f'b{i}', 'genres': g, 'tags': set(), 'series': [{'name': 'Arc of a Scythe'}]}
+    rs = [rec(1, ['Fantasy', 'Young Adult', 'Dystopian'])] + [rec(i, ['Science Fiction', 'Dystopian']) for i in range(2, 5)]
+    S.series_genre_fill(ctx, rs)
+    keys = {S.genre_key(g) for g in rs[0]['genres']}
+    assert 'sciencefiction' in keys and 'fantasy' not in keys
+
+
+def test_series_check_no_ladders_no_drop():
+    # 2026-11-17: a partial run knows Audible's ladders only for its own books - the others keep their genres
+    sf = L('Science Fiction & Fantasy > Science Fiction > Dystopian')
+    lads = {'L_2': sf, 'L_3': sf, 'L_4': sf}  # no ladders for book 1
+    ctx = {'abs_update': lambda *a, **k: True, 'dry_run': False, 'genre_max': 6, 'genre_ladders': lads, 'genre_series_drops': {}}
+    rec = lambda i, g: {'id': str(i), 'lib': 'L', 'title': f'b{i}', 'genres': g, 'tags': set(), 'series': [{'name': 'X'}]}
+    rs = [rec(1, ['Fantasy', 'Science Fiction', 'Classics'])] + [rec(i, ['Science Fiction', 'Dystopian']) for i in range(2, 5)]
+    S.series_genre_fill(ctx, rs)
+    assert {'Fantasy', 'Science Fiction', 'Classics'} <= set(rs[0]['genres'])  # nothing removed (the series fill may add)
