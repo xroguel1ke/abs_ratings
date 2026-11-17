@@ -122,6 +122,38 @@ def diff_value(v, other, field='', new=False):
 app.jinja_env.filters['hvd'] = diff_value
 app.jinja_env.globals['field_label'] = field_label
 
+# Scan result line as people read it. The stored summary ('Proc: 25 | New: 3 | ManUpd: 0 | ... | ⚠️ Goodreads blocked') stays as it is
+# (notifications use it); here zeros are left out, the short keys get words and warnings get their own line without emoji.
+SUMMARY_LABELS = {'Proc': '%(n)s checked', 'New': '%(n)s rated', 'ManUpd': '%(n)s changed by hand', 'MetaUpd': '%(n)s with new metadata',
+                  'ASIN+': '%(n)s ASINs found', 'Mig': '%(n)s ASINs replaced', 'ISBN+': '%(n)s ISBNs added', 'Fix': '%(n)s ISBNs fixed',
+                  'NoRatYet': '%(n)s without ratings yet', 'GR-': '%(n)s not on Goodreads', 'Cover+': '%(n)s covers',
+                  'Series merged': '%(n)s series merged', 'Err': '%(n)s errors', 'GR deferred': '%(n)s Goodreads lookups deferred'}
+_EMOJI_LEAD = re.compile(r'^[\s☀-➿\U0001F300-\U0001FAFF️]+')
+
+
+def run_summary(text):
+    from markupsafe import escape
+    parts = [p.strip() for p in (text or '').split(' | ') if p.strip()]
+    counts, notes, known = [], [], 0
+    for p in parts:
+        m = re.fullmatch(r'([A-Za-z][A-Za-z+\- ]*?): (\d+)', p)
+        if m and m.group(1) in SUMMARY_LABELS:
+            known += 1
+            n = int(m.group(2))
+            if n or m.group(1) == 'Proc':
+                s = escape(T(SUMMARY_LABELS[m.group(1)], n=n))
+                counts.append(Markup(f'<span class="err">{s}</span>') if m.group(1) == 'Err' else s)
+        elif p == 'DRY RUN': known += 1  # the 'Test run' tag next to the scan says it already
+        else: notes.append(_EMOJI_LEAD.sub('', p))
+    if not known: return escape(_EMOJI_LEAD.sub('', text or ''))  # not a scan summary (error text, apply, undo): as it is
+    if len(counts) == 1 and known > 1: counts.append(escape(T('nothing changed')))
+    out = Markup(' · ').join(counts)
+    for nt in notes: out += Markup('<span class="sumnote">') + escape(nt) + Markup('</span>')
+    return out
+
+
+app.jinja_env.filters['run_summary'] = run_summary
+
 
 def login_required(view):
     @functools.wraps(view)

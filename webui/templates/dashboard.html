@@ -5,13 +5,13 @@
 {% if running and current_run %}<a class="card livecard" href="{{ url_for('run_view', run_id=current_run.id) }}" id="livecard" data-run="{{ current_run.id }}">
  <div class="row" style="justify-content:space-between"><span><span class="badge running"><span class="live"></span>{{ _('running') }}</span> <b>{{ current_run.label }}</b></span>
   <span class="small muted" id="lv-eta"></span></div>
- <div class="pbar"><span id="lv-bar" style="width:0%"></span></div>
+ <div class="pbar"><span id="lv-bar" style="transform:scaleX(0)"></span></div>
  <div class="row small" style="justify-content:space-between;gap:12px"><span id="lv-pos" class="muted"></span><span id="lv-title" class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%"></span></div>
  <div class="row small" id="lv-cnt" style="gap:6px;margin-top:6px"></div></a>
 <script>(function(){ const c=document.getElementById('livecard'); if(!c) return; const L={audible_found:'{{ _('Audible') }}',hardcover:'Hardcover',new_asin:'{{ _('new ASIN') }}',series:'{{ _('series') }}',titles:'{{ _('titles') }}',covers:'{{ _('covers') }}',reviews:'{{ _('review list') }}',errors:'{{ _('errors') }}'};
  async function tick(){ try{ const j=await (await fetch('/api/run/'+c.dataset.run+'/progress')).json();
   if(j.status!=='running'){ location.reload(); return; }
-  document.getElementById('lv-bar').style.width=(j.pct||0)+'%';
+  document.getElementById('lv-bar').style.transform='scaleX('+Math.min(1,(j.pct||0)/100)+')';
   document.getElementById('lv-pos').textContent=j.total? j.n+' / '+j.total+' ('+Math.round(j.pct||0)+' %)' : '';
   document.getElementById('lv-title').textContent=({library:T('Library tasks (series, authors, report) …'),missing:T('Checking missing volumes …')}[j.phase])||j.title||'';
   document.getElementById('lv-eta').textContent=(j.finish? '{{ _('done around') }} '+j.finish : (j.eta||''))+(j.speed? ' · '+j.speed+' {{ _('books/min') }}':'');
@@ -49,9 +49,9 @@
 <h2>{{ _('Library') }}</h2>
 <div class="tiles">
  <div class="tile"><div class="v">{{ tiles.books }}</div><div class="l">{{ _('books checked') }}</div></div>
- <div class="tile"><div class="v" style="color:var(--ok)">{{ tiles.ok }}</div><div class="l">{{ _('with ratings') }}</div></div>
- <a class="tile" href="?status=not_found#problems"><div class="v" style="color:var(--err)">{{ tiles.not_found }}</div><div class="l">{{ _('not found') }}</div></a>
- <a class="tile" href="?status=other_edition#problems"><div class="v" style="color:var(--warn)">{{ tiles.other_edition }}</div><div class="l">{{ _('other edition') }}</div></a>
+ <div class="tile"><div class="v">{{ tiles.ok }}</div><div class="l">{{ _('with ratings') }}</div></div>
+ <a class="tile" href="?status=not_found#problems"><div class="v">{{ tiles.not_found }}</div><div class="l">{% if tiles.not_found %}<span class="dot warn"></span>{% endif %}{{ _('not found') }}</div></a>
+ <a class="tile" href="?status=other_edition#problems"><div class="v">{{ tiles.other_edition }}</div><div class="l">{% if tiles.other_edition %}<span class="dot warn"></span>{% endif %}{{ _('other edition') }}</div></a>
  <a class="tile" href="?status=no_ratings_yet#problems"><div class="v">{{ tiles.no_ratings_yet }}</div><div class="l">{{ _('no ratings yet') }}</div></a>
 </div>
 
@@ -68,7 +68,7 @@
 <h2 id="coverage">{{ _('Coverage') }}</h2>
 <div class="card tablewrap"><table><tr><th>{{ _('Field') }}</th><th>{{ _('present') }}</th><th>{{ _('Share') }}</th><th>{{ _('Trend') }}</th><th></th></tr>
 {% set full = [] %}{% for label, have, total, pct, titles in rows %}{% if pct is not none and pct >= 100 and not titles %}{% if full.append(_(label)) %}{% endif %}{% elif pct is none %}<tr><td>{{ _(label) }}</td><td colspan="4" class="muted small">{{ _('from the next scan on') }}</td></tr>{% else %}<tr><td>{{ _(label) }}</td><td class="num">{{ have }} / {{ total }}</td>
-<td class="covcell"><div class="bar {{ 'hi' if pct >= 95 else 'mid' if pct >= 80 else 'lo' }}"><i style="width:{{ pct }}%"></i></div><span class="small num">{{ pct }} %</span></td>
+<td class="covcell"><span class="covrow"><span class="bar {{ 'hi' if pct >= 95 else 'mid' if pct >= 80 else 'lo' }}"><i style="transform:scaleX({{ (pct / 100)|round(3) }})"></i></span><span class="small num">{{ pct }} %</span></span></td>
 <td class="small">{% if label in first %}{% set d = pct - first[label] %}<span class="{{ 'badge ok' if d > 0.05 else ('badge err' if d < -0.05 else 'muted') }}">{{ '%+.1f'|format(d) }} %</span>{% else %}<span class="muted">–</span>{% endif %}</td>
 <td class="small">{% if titles %}<details><summary>{{ _('%(n)s without', n=total - have) }}</summary>
  {% for t, k in titles %}{% if k %}<a href="{{ url_for('problem', key=k) }}">{{ t }}</a>{% else %}{{ t }}{% endif %}{{ ', ' if not loop.last }}{% endfor %}{% if total - have > titles|length %} …{% endif %}

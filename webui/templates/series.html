@@ -28,7 +28,7 @@
 {% macro attrs(s) %}data-name="{{ (s.name ~ ' ' ~ s.author)|lower }}" data-rel="{{ s.missing_rel }}" data-up="{{ s.missing_up }}" data-new="{{ s.missing_new }}"
  data-known="{{ 1 if s.known else 0 }}" data-hid="{{ 1 if s.hidden else 0 }}" data-prob="{{ 1 if s.dups or s.langs|length > 1 else 0 }}"{% endmacro %}
 
-<div id="tiles">
+<div id="tiles" class="serlist">
 {% for s in series %}
 <details class="card sercard" id="t-{{ s.name|urlencode }}" {{ attrs(s) }}>
  <summary class="row" style="justify-content:space-between;gap:8px">

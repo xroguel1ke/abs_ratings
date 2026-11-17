@@ -475,4 +475,11 @@ add({  # page tour 2026-11-08
     "The audio is %(m)s minutes longer than Audible's edition.": 'Das Audio ist %(m)s Minuten länger als Audibles Ausgabe.',
     'The content may be in the file twice, or it is a collection or another edition. Listen to the middle and the end of the file.': 'Vielleicht ist der Inhalt doppelt in der Datei, oder es ist eine Sammlung bzw. andere Ausgabe. Hör in die Mitte und das Ende der Datei.',
     'warning': 'Warnung', 'error': 'Fehler', 'stopped': 'abgebrochen', 'running': 'läuft', 'ok': 'ok',
+    # scan result line (run_summary)
+    "%(n)s checked": "%(n)s geprüft", "%(n)s rated": "%(n)s bewertet", "%(n)s changed by hand": "%(n)s von Hand geändert",
+    "%(n)s with new metadata": "%(n)s mit neuen Metadaten", "%(n)s ASINs found": "%(n)s ASINs gefunden", "%(n)s ASINs replaced": "%(n)s ASINs ersetzt",
+    "%(n)s ISBNs added": "%(n)s ISBNs ergänzt", "%(n)s ISBNs fixed": "%(n)s ISBNs korrigiert", "%(n)s without ratings yet": "%(n)s noch ohne Bewertungen",
+    "%(n)s not on Goodreads": "%(n)s nicht auf Goodreads", "%(n)s covers": "%(n)s Cover", "%(n)s series merged": "%(n)s Serien zusammengeführt",
+    "next/previous": "weiter/zurück", "apply": "übernehmen", "discard": "verwerfen", "select": "auswählen",
+    "%(n)s errors": "%(n)s Fehler", "%(n)s Goodreads lookups deferred": "%(n)s Goodreads-Abfragen verschoben", "nothing changed": "nichts geändert",
 })

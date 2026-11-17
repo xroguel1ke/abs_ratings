@@ -19,7 +19,7 @@
 {% endif %}{% endfor %}</div>{% endif %}</div>
 {% if secs.buecher.entries %}<div class="row small selbar"><label class="chk"><input type="checkbox" id="selall" onchange="document.querySelectorAll('.qsel').forEach(c=>c.checked=this.checked)"> {{ _('Select all') }}</label>
  <button type="button" onclick="qSelected('accept')">{{ _('Apply selected') }}</button><button type="button" onclick="qSelected('reject')">{{ _('Discard selected') }}</button>
- <span class="muted">{{ _('Keys: J/K next/previous · A apply · D discard · X select') }}</span></div>
+ <span class="muted keys"><kbd>J</kbd><kbd>K</kbd> {{ _('next/previous') }} · <kbd>A</kbd> {{ _('apply') }} · <kbd>D</kbd> {{ _('discard') }} · <kbd>X</kbd> {{ _('select') }}</span></div>
 <form id="qselform" method="post" style="display:none"><input type="hidden" name="ids" id="qselids"></form>{% endif %}
 {% for x in secs.buecher.entries %}{% set r = x.res %}{% set store = r.domain or 'www.audible.com' %}
 <div class="card mcard qentry" tabindex="-1">
