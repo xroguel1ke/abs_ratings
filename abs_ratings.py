@@ -3314,6 +3314,15 @@ def hc_result(book, source):
             'series': [(re.sub(r'\s*\([^)]*\)\s*$', '', ((book.get('featured_series') or book.get('cached_featured_series') or {}).get('series') or {}).get('name') or ''),
                         (book.get('featured_series') or book.get('cached_featured_series') or {}).get('position'))]}
 
+def hc_agrees_number(key, series_name, number):
+    """Hardcover's featured series of the book (bulk prefetch) is this series with this number."""
+    b = HC_PREFETCH.get((HC_CACHE.get(key) or {}).get('id'))
+    fs = (b or {}).get('featured_series') or (b or {}).get('cached_featured_series') or {}
+    name, pos = re.sub(r'\s*\([^)]*\)\s*$', '', ((fs.get('series') or {}).get('name') or '')), fs.get('position')
+    try: same_n = pos is not None and float(pos) == float(number)
+    except (TypeError, ValueError): same_n = False
+    return bool(name and same_n and title_similarity(name, series_name or '') >= 0.85)
+
 def hc_authors(book):
     """Hardcover's AUTHORS of a book (contributors with another role - illustrator, translator, 'Contributor' - are left out)."""
     cs = [c for c in (book.get('contributions') or []) if (c or {}).get('contribution') in (None, '', 'Author')]
@@ -4105,12 +4114,15 @@ def guard_moved_items(lib_id, items):
 
 META_FP_FILE = os.path.join(SCRIPT_DIR, 'meta_fingerprints.json')  # key -> metadata fingerprint seen at the last queue build
 
-def meta_fingerprint(item):
-    """What a person can change on a book (listing fields): a scan that only refreshes inode/path keeps it."""
+def meta_fingerprint(item, legacy=False):
+    """What a person can change on a book (listing fields): a scan that only refreshes inode/path keeps it.
+    2026-11-17 (2101 book folders renamed): only the cover's FILE NAME counts - a renamed folder changes the cover path, not the cover.
+    legacy=True: the old formula (full cover path) - stored fingerprints of it are taken over silently (see build_queue)."""
     media = item.get('media') or {}; md = media.get('metadata') or {}
     keys_ = ('title', 'subtitle', 'authorName', 'narratorName', 'seriesName', 'genres', 'publishedYear', 'publisher', 'description', 'isbn',
              'asin', 'language', 'explicit', 'abridged')
-    raw = json.dumps([md.get(k) for k in keys_] + [media.get('coverPath'), sorted(media.get('tags') or []), round(float(media.get('duration') or 0)),
+    cover = media.get('coverPath') if legacy or not media.get('coverPath') else 'cover:' + os.path.basename(str(media.get('coverPath')))
+    raw = json.dumps([md.get(k) for k in keys_] + [cover, sorted(media.get('tags') or []), round(float(media.get('duration') or 0)),
                       media.get('numAudioFiles') or media.get('numTracks')], ensure_ascii=False, sort_keys=True, default=str)
     import hashlib
     return hashlib.sha1(raw.encode('utf-8')).hexdigest()[:16]
@@ -4192,7 +4204,7 @@ def build_queue(lib_id, history, recheck):
                     is_manual_update = True
                     # ABS also stamps an item when a scan only refreshes its inode/path (mover, 2026-11-10: ~1900 'manual updates',
                     # 25 per run): a manual update needs a changed metadata fingerprint (unknown fingerprint: as before)
-                    if fp_store.get(key) and fp_store[key] == meta_fingerprint(item):
+                    if fp_store.get(key) and fp_store[key] in (meta_fingerprint(item), meta_fingerprint(item, legacy=True)):
                         is_manual_update = False; fp_skipped += 1
             except: 
                 pass
@@ -5467,6 +5479,13 @@ def process_queue(work_queue, history, failed, recheck):
                                                          and any(same(o['name'], n_) for n_ in aud_names) for o in new_list):
                                             # 'Fitz and the Fool' #16 = the book's 'Realm of the Elderlings' number, Audible (same recording): Fitz #3, Realm #16
                                             logging.info(f"        🔢 Series '{canon}': ABS #{existing['sequence']} is the number of another series of this book -> Audible #{s_seq}")
+                                            existing['sequence'] = s_seq
+                                        elif ver and hc_agrees_number(key, existing['name'], s_seq) \
+                                                and not {t_.split('|')[0] for t_ in SEQ_TITLES.get((lib_id, str(existing['name']).strip().lower(), str(s_seq).strip()), ())} - {normalize_title_text(title)}:
+                                            # user 2026-11-17 ('Fractal Noise' stayed #0.5 although Audible says #2): Audible AND Hardcover name the same
+                                            # number and no other library book of this series holds it -> the ABS number is no own numbering, it is wrong.
+                                            # Own reading orders stay: Dune 2-6 (Audible 13-17, Hardcover 2-6), First Law World 4-6 (Audible's 1-3 taken)
+                                            logging.info(f"        🔢 Series '{canon}': ABS #{existing['sequence']} -> #{s_seq} (Audible and Hardcover agree, the number is free in the library)")
                                             existing['sequence'] = s_seq
                                         else:
                                             logging.info(f"        ℹ️ Series '{canon}': ABS #{existing['sequence']} vs Audible #{s_seq} (ABS kept)")

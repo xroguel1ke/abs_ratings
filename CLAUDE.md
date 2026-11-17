@@ -65,6 +65,11 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   EVERY sentence matches PROMO_SENTENCES (Brought to you by X / NYT-WSJ bestseller / now an original series / over N million sold /
   inspiration for the Netflix series), <= 250 chars, >= DESC_MIN_LEN left. Dry run on the library: 58 of 2043 texts, all pure ads, 0 texts
   altered after the lead. Quotes, taglines and mixed sentences are never touched (tests/test_desc.py).
+  FOLDER RENAME (2026-11-17, user): 2101 book folders of Audiobooks + Non-Fiction renamed to 'NN - Title {Narrator, Narrator}' (> 3 narrators:
+  {Full Cast}; ABS number unless checked otherwise; Graphic Audio untouched). ABS kept every item id (same inode). meta_fingerprint now
+  uses only the cover's FILE NAME (a renamed folder changed coverPath -> 'manual update'); stored legacy fingerprints still match.
+  Series numbers: ABS #x is replaced by Audible's #y only when Hardcover's featured series names the same #y and no other library book
+  of the series holds it (hc_agrees_number) - Fractal Noise stays 0.5 (Hardcover 0.5 = in-world order, Audible 2 = publication order).
   HARDCOVER METADATA (user 2026-11-16): fewer than GENRE_MAX genres / 6 tags (rating + lock_* tags do not count) -> filled up from
   Hardcover's reader-voted genres (top genre >= 10 votes, genre >= 5 votes and >= 30 % of the top; cleaned like Audible's: GENRE_RULES, canonical names, no
   duplicates, themes -> tags, Epic rule; only names the script knows; at most ONE main genre and only if the book has none; no
