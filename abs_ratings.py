@@ -4561,12 +4561,14 @@ def source_canaries(only=None):
     hc_search = (lambda q: hc_query("query($q:String!){ search(query:$q, query_type:\"Book\", per_page:8, page:1){ results } }", {'q': q})) \
         if HARDCOVER_ENABLED and not HC_STATE['disabled'] else None
     down = SH.run_canaries(get_audible_api, hc_search, log=logging.warning, only=only)
-    for wait_ in ((15, 45) if 'hardcover' in down and not only else ()):
-        # log check 2026-11-16: ONE answer without data (throttled after many searches) switched Hardcover off for the whole run -
-        # asked again twice before that
-        logging.info(f"Hardcover check failed ({down['hardcover']}) - asking again in {wait_} s")
-        time.sleep(wait_)
-        if not SH.run_canaries(get_audible_api, hc_search, log=logging.warning, only='hardcover'): down.pop('hardcover'); break
+    # log check 2026-11-16: ONE answer without data (throttled after many searches) switched Hardcover off for the whole run;
+    # log check 2026-11-17: ONE connection error to api.audible.com (18:05 run) switched Audible off -> 0 books. Asked again twice first.
+    for src_ in ([x for x in ('audible', 'hardcover') if x in down] if not only else []):
+        for wait_ in (15, 45):
+            logging.info(f"{src_.capitalize()} check failed ({down[src_]}) - asking again in {wait_} s")
+            time.sleep(wait_)
+            if not SH.run_canaries(get_audible_api, hc_search if src_ == 'hardcover' else None, log=logging.warning, only=src_):
+                down.pop(src_); logging.info(f"{src_.capitalize()} check OK on the retry"); break
     if only: return down.get(only, '')
     for s_, why in down.items(): source_down(s_, why)
     logging.info(f"Source check: {'all OK' if not down else 'PROBLEM - ' + '; '.join(f'{k}: {v}' for k, v in down.items())}")
