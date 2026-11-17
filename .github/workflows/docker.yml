@@ -2,7 +2,7 @@ name: Build container image
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "refactor/**"]  # main -> :latest; refactor/<name> -> :<name> (trial images, never :latest)
   pull_request:
   workflow_dispatch:
 
