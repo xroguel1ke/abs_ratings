@@ -1,5 +1,5 @@
 """ABS Ratings web UI (Flask). Start: python -m webui.app (port 47823, data folder /config)."""
-import json, os, re, functools, difflib
+import json, os, re, functools, difflib, threading, time
 from markupsafe import Markup
 from collections import Counter
 from datetime import datetime
@@ -142,12 +142,43 @@ def inject():
 
 
 # ---------------------------------------------------------------- auth
+LOGIN_MAX_FAILS, LOGIN_LOCK_SECONDS = 5, 60  # after 5 wrong passwords in a row from one address: 60 s no login from there
+_LOGIN_FAILS = {}  # remote address -> (wrong passwords in a row, monotonic time of the last one)
+_LOGIN_LOCK = threading.Lock()
+
+
+def safe_next(target):
+    """Only a path of this app is a valid target after the login ('/books'); 'https://other.site' or '//other.site' is not."""
+    t = (target or '').strip()
+    if not t.startswith('/') or t.startswith('//') or t.startswith('/\\') or any(ord(c) < 32 for c in t): return url_for('dashboard')
+    return t
+
+
+def login_wait(addr):
+    """Seconds this address still has to wait before the next try (0 = may try)."""
+    with _LOGIN_LOCK:
+        n, last = _LOGIN_FAILS.get(addr, (0, 0.0))
+        if n < LOGIN_MAX_FAILS: return 0
+        left = LOGIN_LOCK_SECONDS - (time.monotonic() - last)
+        if left <= 0: _LOGIN_FAILS.pop(addr, None); return 0
+        return int(left) + 1
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
+        addr = request.remote_addr or '?'
+        wait = login_wait(addr)
+        if wait:
+            flash(T('Too many wrong passwords - please wait %(s)s seconds.', s=wait), 'error')
+            return render_template('login.html')
         if core.check_password(core.load_settings(), request.form.get('password')):
+            with _LOGIN_LOCK: _LOGIN_FAILS.pop(addr, None)
             session.clear(); session['auth'] = True; session.permanent = True
-            return redirect(request.args.get('next') or url_for('dashboard'))
+            return redirect(safe_next(request.args.get('next')))
+        with _LOGIN_LOCK:
+            if len(_LOGIN_FAILS) > 1000: _LOGIN_FAILS.clear()  # never grows without bound
+            _LOGIN_FAILS[addr] = (_LOGIN_FAILS.get(addr, (0, 0.0))[0] + 1, time.monotonic())
         flash(T('Wrong password.'), 'error')
     return render_template('login.html')
 
@@ -306,7 +337,7 @@ def run_apply(run_id):
         nums = sorted({int(x) for x in ids if x.isdigit()})
         if not nums: flash(T('Nothing selected.'), 'error'); return redirect(url_for('run_review', run_id=run_id))
         sel_path = os.path.join(core.REPORT_DIR, f'apply_select_{run_id}.json')
-        with open(sel_path, 'w', encoding='utf-8') as f: json.dump(nums, f)
+        core._save_json(sel_path, nums)
         args += ['--select', sel_path]
     n = f" ({len(ids)} selected)" if request.form.get('selection') == '1' else ''
     new_id, err = core.RUNNER.start('apply', undo_args=args, label=f"{'Apply test run' if really else 'Check test run'}{n}: {run.get('label')} ({run_id})")
@@ -365,7 +396,7 @@ def history_search():
         ids = [core.entry_id(e) for e in entries if not e.get('undone')]
         if not ids: flash(T('Nothing to undo.'), 'ok'); return redirect(url_for('history_search', **{k: v for k, v in a.items() if k in ('q', 'field', 'source', 'since', 'until')}))
         p = os.path.join(core.REPORT_DIR, f"undo_ids_{datetime.now():%Y%m%d-%H%M%S}.json")
-        os.makedirs(core.REPORT_DIR, exist_ok=True); json.dump(ids, open(p, 'w', encoding='utf-8'))
+        os.makedirs(core.REPORT_DIR, exist_ok=True); core._save_json(p, ids)
         run_id_u, err = core.RUNNER.start('undo', undo_args=['--ids-file', p, '--apply'], label=f"Undo: {len(ids)} changes (search)")
         if err: flash(T(err), 'error'); return redirect(url_for('history_search'))
         return redirect(url_for('run_view', run_id=run_id_u))

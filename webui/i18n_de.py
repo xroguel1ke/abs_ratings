@@ -80,7 +80,7 @@ add({
 
 # --- flash messages and API answers ---
 add({
-    'Wrong password.': 'Falsches Passwort.', 'Old password is wrong.': 'Altes Passwort ist falsch.',
+    'Wrong password.': 'Falsches Passwort.', 'Too many wrong passwords - please wait %(s)s seconds.': 'Zu viele falsche Passwörter – bitte %(s)s Sekunden warten.', 'Old password is wrong.': 'Altes Passwort ist falsch.',
     'At least 6 characters and not "admin".': 'Mindestens 6 Zeichen und nicht „admin“.', 'The passwords do not match.': 'Die Passwörter stimmen nicht überein.',
     'Password changed.': 'Passwort geändert.', 'Book is ignored.': 'Buch wird ignoriert.', 'No longer ignored.': 'Wird nicht mehr ignoriert.',
     'Please enter an ASIN or a link.': 'Bitte eine ASIN oder einen Link eingeben.', 'Nothing selected.': 'Nichts ausgewählt.',
