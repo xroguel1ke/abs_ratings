@@ -27,3 +27,7 @@ webui_runs.json
 .claude/settings.local.json
 tests/private/
 tests/fixtures/real/
+# Audible lookups written next to the script (atexit of every process that imports abs_ratings)
+audible_series.json
+audible_authors.json
+*.corrupt-*
