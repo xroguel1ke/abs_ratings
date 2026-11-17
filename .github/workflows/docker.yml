@@ -3,6 +3,7 @@ name: Build container image
 on:
   push:
     branches: ["main"]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -10,7 +11,34 @@ permissions:
   packages: write
 
 jobs:
+  test:
+    # every test that needs no private data (tests/private is git-ignored); the image is only built when they pass
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: pip install -r requirements.txt pytest
+      - name: Syntax
+        run: python -m compileall -q abs_ratings.py abs_series.py abs_undo.py abs_apply.py recorder.py source_state.py source_health.py missing_series.py webui tools
+      - name: Tests (one process per file - the web UI tests set their own config folder at import time)
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          fail=0
+          for f in tests/test_*.py; do
+            echo "::group::$f"
+            python -m pytest "$f" || { fail=1; echo "::error file=$f::tests failed"; }
+            echo "::endgroup::"
+          done
+          exit $fail
+
   build:
+    needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

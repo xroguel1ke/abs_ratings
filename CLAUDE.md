@@ -12,7 +12,6 @@ metadata clean (ASIN repair, titles, series, authors, genres, language, covers).
 | `abs_undo.py` | Undo from `changes.jsonl` (`--run`, `--item`, `--field`, `--merge-id`, `--apply`). |
 | `webui/` | Flask web UI (`python -m webui.app`, port 47823). `core.py` = settings, RunManager (starts the script as subprocess), scheduler, Apprise, file readers. |
 | `Dockerfile`, `.github/workflows/docker.yml`, `unraid/abs-ratings.xml` | Container: image `ghcr.io/xroguel1ke/abs_ratings:<tag>` (only `main` is built → `:latest`; since 2026-11-09 all work happens on main, the claude/* branches were merged and deleted). |
-| `userscript.sh` | Old way (Unraid User Scripts + temporary container). Still works. |
 
 Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf/abs_scripts` on the server):
 `rating_history.json`, `failed_history.json`, `recheck_history.json`, `goodreads_cache.json`, `hardcover_cache.json`, `series_aliases.json`,
@@ -332,13 +331,15 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
 - Single book: `ONLY_ITEMS=<libraryId>_<itemId>` (web UI: problem page → "Erst als Testlauf").
 - Full library dry run: `REFRESH_DAYS=0 BATCH_SIZE=2500 GOODREADS_ENABLED=false` (~3 h).
 - Before a real run: ABS backup (`ABS_BACKUP=true`, done automatically by the web UI setting).
-- Local unit-style tests used during development mocked `requests`/ABS; there is no test suite in the repo yet
- . Web UI was tested with a fake ABS (Flask) + Playwright.
+- Unit tests live in `tests/test_*.py` (pytest, mocked `requests`/ABS); the web UI is also tested end-to-end with a fake ABS (Flask) + Playwright.
+- CI (`.github/workflows/docker.yml`): the tests that need no private data run on every push / pull request; the image is only built when
+  they pass. `tests/test_global_state.py` fails when a new module-level dict/set/list appears in `abs_ratings.py` (thread safety, see
+  "Parallel books") - make it thread-local (`_TLDict`) or, if it really is run-wide, add it to the test's allowlist with a reason.
 
 ## Running
 - Container: `docker run -p 47823:47823 -v /mnt/user/appdata/audiobookshelf/abs_scripts:/config ghcr.io/xroguel1ke/abs_ratings:latest`
 - Web UI without Docker: `pip install -r requirements.txt && CONFIG_DIR=/path/to/data python -m webui.app`
-- Script without UI: env vars as in `userscript.sh` / README, `DATA_DIR=/path/to/data python abs_ratings.py`.
+- Script without UI: env vars (ABS_URL, API_TOKEN, LIBRARY_IDS, DRY_RUN ...), `DATA_DIR=/path/to/data python abs_ratings.py`.
 
 ## Open work
 All STATUS items are done. See docs/STATUS.md. Next: the user's first real
