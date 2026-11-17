@@ -1,12 +1,12 @@
 import os
-import re
 import time
 import requests
 from bs4 import BeautifulSoup
 import re, json, random, difflib, logging, urllib.parse, unicodedata
 import html as html_lib
 import recorder
-import source_state as SST; recorder.install()
+import source_state as SST
+recorder.install()  # record / replay of outside HTTP traffic (tests); a no-op without RECORD_DIR / REPLAY_DIR
 import source_health as SH
 import missing_series as MS
 import threading, queue as _queue_mod
@@ -1410,10 +1410,27 @@ def runtime_mismatch(abs_sec, aud_sec):
     diff = abs(float(abs_sec) - float(aud_sec))
     return diff > RUNTIME_TOLERANCE_MIN * 60 and diff > float(aud_sec) * RUNTIME_TOLERANCE_PCT / 100
 
+_CORRUPT_KEPT = set()  # paths whose unreadable content was already copied aside in this process
+
 def rw_json(path, data=None):
     try:
-        if data is None: 
-            return json.load(open(path, 'r', encoding='utf-8')) if os.path.exists(path) else {}
+        if data is None:
+            if not os.path.exists(path): return {}
+            try:
+                with open(path, 'r', encoding='utf-8') as f: return json.load(f)
+            except Exception as e:
+                # an unreadable state file counts as empty (as before), but it is no longer lost silently: the next write would
+                # replace it, so a copy is kept and the problem is logged (module logger: never configures logging before main())
+                kept = ''
+                with IO_LOCK:
+                    if path not in _CORRUPT_KEPT:
+                        _CORRUPT_KEPT.add(path)
+                        try:
+                            kept = f"{path}.corrupt-{datetime.now():%Y%m%d-%H%M%S}"
+                            import shutil; shutil.copy2(path, kept)
+                        except OSError: kept = ''
+                logging.getLogger('abs_ratings').warning(f"⚠️ {os.path.basename(path)} not readable ({type(e).__name__}: {e}) - used as empty" + (f", copy kept: {os.path.basename(kept)}" if kept else ''))
+                return {}
         else:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with IO_LOCK:  # parallel books: one writer at a time, and a dict changed by another thread is dumped again
@@ -1427,7 +1444,9 @@ def rw_json(path, data=None):
                     f.flush()
                     os.fsync(f.fileno())
                 os.replace(tmp_path, path)
-    except: return {} if data is None else None
+    except Exception as e:
+        if data is not None: logging.getLogger('abs_ratings').warning(f"⚠️ {os.path.basename(path)} not written ({type(e).__name__}: {e})")
+        return {} if data is None else None
 
 def update_report(src, key, title, author, ident, reason, success):
     if success: reports[src].pop(key, None)
@@ -1460,7 +1479,7 @@ def write_env_file(log_file, start_time, error=None):
     try:
         with open(ENV_OUTPUT_FILE, 'w', encoding='utf-8') as f:
             f.write(f"ABS_SUBJECT='{sub}'\nABS_ICON='{icon}'\nABS_HEADER='{head}'\nABS_DURATION='{dur}'\nABS_REPORT_BODY='{body}'\nABS_LOG_FILE='{os.path.basename(log_file)}'\n")
-    except: pass
+    except Exception: pass
 
 def safe_float(v): return float(str(v).replace(',', '.')) if v else 0.0
 
@@ -1468,7 +1487,7 @@ def is_valid_rating(v):
     try:
         val = safe_float(v)
         return 0.1 <= val <= 5.0
-    except: return False
+    except Exception: return False
 
 def clean_title(t): return RE_CLEAN_TITLE.sub('', t).split(':')[0].split(' - ')[0].strip() if t else ""
 
@@ -1775,7 +1794,7 @@ def scrape_search_result_fallback(domain, asin):
                         val = re.sub(r'[^\d]', '', m.group(0))
                         if val: ratings['count'] = int(val)
             if ratings.get('overall') and ratings.get('count'): return ratings
-    except: pass
+    except Exception: pass
     return None
 
 # ================= CORE LOGIC =================
@@ -2046,7 +2065,7 @@ def get_audible_data_web(asin, language):
                     href = link_de.get('href', '').strip()
                     if "www.audible.de/" in href and (m := re.search(r'([A-Z0-9]{10})', href)):
                         ratings['variant_asin_de'] = m.group(1)
-            except: pass
+            except Exception: pass
             
             try:
                 for json_script in soup.find_all('script', type='application/json'):
@@ -2057,8 +2076,8 @@ def get_audible_data_web(asin, language):
                             if isinstance(md, dict) and 'duration' in md:
                                 ratings['meta_raw'] = md
                                 break
-                        except: continue
-            except: pass
+                        except Exception: continue
+            except Exception: pass
 
             if h1 := soup.find('h1', slot='title'): ratings['title_raw'] = h1.get_text(strip=True)
             if h2 := soup.find('h2', slot='subtitle'): ratings['subtitle_raw'] = h2.get_text(strip=True)
@@ -2080,7 +2099,7 @@ def get_audible_data_web(asin, language):
                                 if is_valid_rating(val): ratings['overall'] = val
                                 c_val = i['aggregateRating'].get('ratingCount') or i['aggregateRating'].get('reviewCount')
                                 if c_val: ratings['count'] = int(c_val)
-                    except: pass
+                    except Exception: pass
 
             if not ratings.get('count') or not ratings.get('overall'):
                 for s in soup.find_all('script', type='application/json'):
@@ -2092,7 +2111,7 @@ def get_audible_data_web(asin, language):
                             if is_valid_rating(val): ratings['overall'] = val
                             if cnt: ratings['count'] = int(cnt)
                             if ratings.get('overall') and ratings.get('count'): break
-                    except: pass
+                    except Exception: pass
 
             if not ratings.get('count'):
                 if m := RE_RAW_STORY.search(raw_text):
@@ -2183,10 +2202,19 @@ def note_series(series_list):
     for s in series_list or []:
         if s.get('asin') and s.get('title'): SERIES_ASINS.setdefault(s['title'], set()).add(s['asin'])
 
+def _atomic_dump(path, obj):
+    """json.dump into a temp file + os.replace: a crash while writing never leaves a half-written file behind."""
+    tmp = f"{path}.tmp{os.getpid()}"
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f: json.dump(obj, f, ensure_ascii=False)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp): os.remove(tmp)
+
 def save_series_asins():
     try:
         os.makedirs(os.path.dirname(SERIES_ASIN_FILE) or '.', exist_ok=True)
-        with open(SERIES_ASIN_FILE, 'w', encoding='utf-8') as f: json.dump({t: sorted(a) for t, a in list(SERIES_ASINS.items())}, f, ensure_ascii=False)
+        _atomic_dump(SERIES_ASIN_FILE, {t: sorted(a) for t, a in list(SERIES_ASINS.items())})
     except OSError: pass
 atexit.register(save_series_asins)
 
@@ -2207,7 +2235,7 @@ def note_author_links(abs_authors, aud_data):
 
 def save_author_links():
     try:
-        with open(AUTHOR_LINKS_FILE, 'w', encoding='utf-8') as f: json.dump({n: sorted(a) for n, a in list(AUTHOR_LINKS.items())}, f, ensure_ascii=False)
+        _atomic_dump(AUTHOR_LINKS_FILE, {n: sorted(a) for n, a in list(AUTHOR_LINKS.items())})
     except OSError: pass
 atexit.register(save_author_links)
 
@@ -2844,7 +2872,7 @@ def scrape_gr_details(url, require_book_page=False):
                 if d.get('isbn'): res['isbn'] = d['isbn']
                 if d.get('name'): res['name'] = d['name']
                 if d.get('author'): res['author'] = ", ".join(a.get('name', '') for a in (d['author'] if isinstance(d['author'], list) else [d['author']]) if isinstance(a, dict))
-            except: pass
+            except Exception: pass
     if 'val' not in res:
         if m := re.search(r'(\d+[.,]\d+)\s+avg rating', soup.get_text()): res['val'] = m.group(1).replace(',', '.')
     if 'count' not in res:
@@ -4184,7 +4212,7 @@ def build_queue(lib_id, history, recheck):
             # Ensure last_run_dt is UTC-aware for comparison
             if last_run_dt.tzinfo is None:
                 last_run_dt = last_run_dt.replace(tzinfo=timezone.utc)
-        except: last_run_dt = datetime(2000, 1, 1, tzinfo=timezone.utc)
+        except Exception: last_run_dt = datetime(2000, 1, 1, tzinfo=timezone.utc)
 
         abs_updated = item.get('updatedAt')
         is_manual_update = False
@@ -4210,7 +4238,7 @@ def build_queue(lib_id, history, recheck):
                     # 25 per run): a manual update needs a changed metadata fingerprint (unknown fingerprint: as before)
                     if fp_store.get(key) and fp_store[key] in (meta_fingerprint(item), meta_fingerprint(item, legacy=True)):
                         is_manual_update = False; fp_skipped += 1
-            except: 
+            except Exception: 
                 pass
 
         recheck_due = False
@@ -6405,7 +6433,7 @@ def main():
     if _TOKEN_REMOVED or _URL_REMOVED:
         logging.warning(f"Removed {_TOKEN_REMOVED} invisible/invalid character(s) from API_TOKEN and {_URL_REMOVED} from ABS_URL (copy & paste artefacts).")
     if not ABS_URL or not API_TOKEN or not LIBRARY_IDS:
-        return fail_early(log_file, start_time, "ABS_URL, API_TOKEN or LIBRARY_IDS missing in the userscript.")
+        return fail_early(log_file, start_time, "ABS_URL, API_TOKEN or LIBRARY_IDS missing (web UI settings or environment).")
     try:
         logging.info("Checking API connection...")
         r = abs_session.get(f"{ABS_URL}/api/libraries")

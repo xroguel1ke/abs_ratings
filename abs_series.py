@@ -1781,7 +1781,7 @@ def write_series_index(ctx, records, merges):
         name, e = sorted(names.items(), key=lambda x: (-x[1]['count'], x[0]))[0]
         index[lib][k] = {'name': name, 'names': sorted(names), 'authors': sorted(set().union(*(v['authors'] for v in names.values())))}
     try:
-        with open(ctx['index_file'], 'w', encoding='utf-8') as f: json.dump(index, f, indent=1, ensure_ascii=False)
+        _write_atomic(ctx['index_file'], json.dumps(index, indent=1, ensure_ascii=False))
     except OSError as e: logging.error(f"   Could not write series index: {e}")
 
 
@@ -1852,10 +1852,8 @@ def build_report(ctx, records, merges, rejected, extra):
         },
     })
     os.makedirs(ctx['report_dir'], exist_ok=True)
-    with open(os.path.join(ctx['report_dir'], 'library_report.json'), 'w', encoding='utf-8') as f:
-        json.dump(rep, f, indent=2, ensure_ascii=False)
-    with open(os.path.join(ctx['report_dir'], 'library_report.html'), 'w', encoding='utf-8') as f:
-        f.write(render_html(rep))
+    _write_atomic(os.path.join(ctx['report_dir'], 'library_report.json'), json.dumps(rep, indent=2, ensure_ascii=False))
+    _write_atomic(os.path.join(ctx['report_dir'], 'library_report.html'), render_html(rep))
     return rep
 
 
@@ -1952,6 +1950,15 @@ def _load(path):
         with open(path, encoding='utf-8') as f: return json.load(f)
     except (OSError, ValueError, TypeError): return {}
 
+def _write_atomic(path, text):
+    """Write text into a temp file + os.replace: a crash while writing never leaves a half-written file. Raises OSError."""
+    tmp = f"{path}.tmp{os.getpid()}"
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f: f.write(text)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp): os.remove(tmp)
+
 def _save(path, data):
     if not path: return
     try:
@@ -1977,7 +1984,7 @@ def run(ctx):
             logging.info(f"   ⏭️ Not merged: '{r['series']}' / '{r['other']}': {r['reason']}")
         if not ctx['dry_run'] and ctx.get('aliases'):
             try:
-                with open(ctx['aliases_file'], 'w', encoding='utf-8') as f: json.dump(ctx['aliases'], f, indent=2, ensure_ascii=False)
+                _write_atomic(ctx['aliases_file'], json.dumps(ctx['aliases'], indent=2, ensure_ascii=False))
             except OSError as e: logging.error(f"   Could not write series aliases: {e}")
     write_series_index(ctx, records, merges if ctx['merge'] else [])
     fixes, author_review = {}, []

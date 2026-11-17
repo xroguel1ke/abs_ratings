@@ -377,7 +377,7 @@ def book_detail(key, domain=None):
                            'series': [{'name': x.get('title'), 'sequence': x.get('sequence') or None} for x in p.get('series') or [] if x.get('title')],
                            'language': LANG_NAMES.get(str(p.get('language') or '').lower(), p.get('language')), 'publisher': p.get('publisher_name'),
                            'publishedYear': (p.get('release_date') or '')[:4] or None, 'asin': md['asin'], 'description': p.get('publisher_summary'), 'store': dom}
-                    os.makedirs(os.path.dirname(cache), exist_ok=True); json.dump(aud, open(cache, 'w', encoding='utf-8'), ensure_ascii=False); break
+                    os.makedirs(os.path.dirname(cache), exist_ok=True); _save_json(cache, aud); break
     cur = {'title': md.get('title'), 'subtitle': md.get('subtitle'), 'authors': [a.get('name') for a in md.get('authors') or []], 'narrators': md.get('narrators') or [],
            'series': [{'name': x.get('name'), 'sequence': x.get('sequence')} for x in md.get('series') or []], 'language': md.get('language'), 'publisher': md.get('publisher'),
            'publishedYear': md.get('publishedYear'), 'genres': md.get('genres') or [], 'isbn': md.get('isbn'), 'asin': md.get('asin'), 'description': md.get('description')}
