@@ -29,7 +29,7 @@
   <label class="f"><span>{{ _('Refresh after (days)') }}</span><input type="number" min="0" name="REFRESH_DAYS" value="{{ f.REFRESH_DAYS }}" style="max-width:140px"><span class="h">{{ _('0 = all books are due') }}</span></label>
   <div class="f" style="padding:8px 0;border-bottom:1px dashed var(--line)"><b>{{ _('Sources') }}</b><div class="row" style="margin-top:8px">
    <label class="badge"><input type="checkbox" name="HARDCOVER_ENABLED" {{ 'checked' if f.HARDCOVER_ENABLED }}> Hardcover</label>
-   <label class="badge"><input type="checkbox" name="GOODREADS_ENABLED" {{ 'checked' if f.GOODREADS_ENABLED }}> Goodreads ({{ _('experimental') }})</label></div></div>
+   <span class="muted small">{{ _('Goodreads is not part of a scan: it runs in its own background mode.') }} <a href="{{ url_for('settings') }}#sources">{{ _('Settings') }}</a></span></div></div>
   <div class="f" style="padding:8px 0"><b>{{ _('Which books') }}</b> <span class="muted small">({{ _('for metadata & ratings') }})</span><div class="row" style="margin-top:8px">
    <label class="badge"><input type="radio" name="selection" value="all" {{ 'checked' if f.selection == 'all' }} onchange="lst()"> {{ _('all due') }}</label>
    <label class="badge"><input type="radio" name="selection" value="problems" {{ 'checked' if f.selection == 'problems' }} onchange="lst()"> {{ _('problems only') }}</label>

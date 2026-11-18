@@ -7,7 +7,7 @@ W=/tmp/claude-0/uishots; rm -rf $W; mkdir -p $W/cfg $W/out
 rsync -a --exclude logs --exclude cover_backup --exclude debug_logs --exclude '*.bak*' /mnt/user/appdata/audiobookshelf/abs_scripts/ $W/cfg/
 docker run --rm -v $DEV:/src:ro -v $W/cfg:/config -w /src -e CONFIG_DIR=/config --entrypoint python ghcr.io/xroguel1ke/abs_ratings:web-ui -c "
 import sys; sys.path.insert(0,'/src'); from webui import core
-s=core.load_settings(); s.update({'ABS_URL':'http://127.0.0.1:$FPORT','API_TOKEN':'fake','schedule_enabled':False,'QUICK_MODE_MINUTES':0,'DRY_RUN':True,'apprise_url':''})
+s=core.load_settings(); s.update({'ABS_URL':'http://127.0.0.1:$FPORT','API_TOKEN':'fake','schedule_enabled':False,'QUICK_MODE_MINUTES':0,'DRY_RUN':True,'apprise_url':'','GOODREADS_ENABLED':False,'GCAL_ENABLED':False})
 core.save_settings(s); core.set_password(core.load_settings(), 'test')"
 docker rm -f abs_ratings_test_uishot >/dev/null 2>&1
 docker run -d --rm --name abs_ratings_test_uishot --network host --cpuset-cpus=0-9,12-31 -e PYTHONDONTWRITEBYTECODE=1 -v $DEV:/src:ro -v $W/cfg:/config -w /src \

@@ -50,15 +50,14 @@ FIELDS = [
     ('HARDCOVER_PAID', 'Paid Hardcover plan', 'bool', False, 'Free plan: 5,000 requests a day, paid: 50,000. Both 60 per minute', 'Hardcover'),
     ('HARDCOVER_INTERVAL', 'Interval Hardcover (s)', 'float', 1.1, 'Hardcover allows 60 requests per minute', 'Hardcover'),
 
-    ('GOODREADS_ENABLED', 'Use Goodreads', 'bool', False, 'Experimental: Goodreads blocks bots quickly; then it is skipped for the rest of the scan', 'Goodreads'),
-    ('GOODREADS_MAX_PER_RUN', 'Goodreads searches per scan', 'int', 25, 'Searches per scan when no book page helps (about 25 a night are safe)', 'Goodreads'),
-    ('GOODREADS_PAGES_PER_RUN', 'Goodreads book pages per scan', 'int', 3, 'Book pages per scan; then only the search is used (bot check after 3-7 pages)', 'Goodreads'),
-    ('GR_IMPERSONATE', 'Goodreads: imitate a browser signature', 'bool', False, 'Looks like Chrome to Goodreads (no real browser). At your own risk', 'Goodreads'),
-    ('GOODREADS_INTERVAL', 'Interval Goodreads (s)', 'float', 10, '', 'Goodreads'),
-    ('GR_BLOCK_COOLDOWN', 'Pause after a Goodreads block (s)', 'int', 900, '', 'Goodreads'),
-    ('GR_MAX_COOLDOWNS', 'Pauses before Goodreads is skipped', 'int', 0, '0 = stop at the first block (recommended)', 'Goodreads'),
+    # Goodreads = its own background mode (user 2026-11-18), apart from the scans (Audible, Hardcover): see GoodreadsBackground
+    ('GOODREADS_ENABLED', 'Goodreads background mode', 'bool', False, 'Runs on its own, apart from the scans: one book every few minutes. Pauses while a scan runs', 'Goodreads'),
+    ('GR_MODE_MINUTES', 'Minutes between two books', 'float', 5, 'With a little jitter. Fewer minutes = faster, but Goodreads blocks sooner', 'Goodreads'),
+    ('GR_MODE_DAILY', 'Books per day at most', 'int', 300, '', 'Goodreads'),
+    ('GR_MODE_PAUSE_MIN', 'Pause after a block (minutes)', 'int', 15, 'Doubles with every block in a row, at most 6 hours', 'Goodreads'),
     ('GR_BOOK_PAGES', 'Goodreads book page first', 'bool', True, 'Off = read the rating from the search list only', 'Goodreads'),
-    ('GR_MISSING_RECHECK_DAYS', 'Re-check books without Goodreads (days)', 'int', 30, '', 'Goodreads'),
+    ('GR_IMPERSONATE', 'Goodreads: imitate a browser signature', 'bool', False, 'Looks like Chrome to Goodreads (no real browser). At your own risk', 'Goodreads'),
+    ('GOODREADS_INTERVAL', 'Seconds between two requests of one book', 'float', 10, '', 'Goodreads'),
 
     ('RATING_ORDER', 'Sources in the rating block', 'order:audible|goodreads|hardcover', 'audible,goodreads,hardcover', 'Ticked sources are shown, top to bottom (all enabled sources are still asked)', 'Metadata'),
     ('RATING_ICONS', 'Rating symbols', 'choice:moons|stars|circles|squares|diamonds|yellow_stars|hearts|traffic|green_squares|orange_circles', 'moons', 'For new ratings; "Change all rating symbols" updates existing ones', 'Metadata'),
@@ -95,8 +94,8 @@ CHOICE_LABELS = {'en': 'English', 'de': 'Deutsch', 'moons': '🌕🌕🌕🌗�
                  'INFO': 'Normal', 'DEBUG': 'Debug (detailed)'}
 # rarely changed: shown folded ("Advanced") inside their card
 ADVANCED = {'ABS_TIMEOUT', 'SLEEP_TIMER', 'NO_RATINGS_RECHECK_DAYS', 'USE_AUDIBLE_API', 'AUDIBLE_API_INTERVAL',
-            'AUDIBLE_WEB_INTERVAL', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'HARDCOVER_INTERVAL', 'GOODREADS_INTERVAL', 'GR_BLOCK_COOLDOWN',
-            'GR_MAX_COOLDOWNS', 'GR_MISSING_RECHECK_DAYS', 'GR_BOOK_PAGES', 'GOODREADS_PAGES_PER_RUN', 'SERIES_LOCK_AFTER_MERGE'}
+            'AUDIBLE_WEB_INTERVAL', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'HARDCOVER_INTERVAL', 'GOODREADS_INTERVAL', 'GR_BOOK_PAGES',
+            'GR_IMPERSONATE', 'GR_MODE_PAUSE_MIN', 'SERIES_LOCK_AFTER_MERGE'}
 # settings sections (left menu, one form + save button each) -> the field groups (cards) they contain
 SECTIONS = {'Connection': ['Connection'], 'Run': ['Run'], 'Sources': ['Audible', 'Hardcover', 'Goodreads'], 'Metadata': ['Metadata'],
             'Series & authors': ['Series & authors'], 'Logs': ['Logs'], 'Schedule': [], 'Notifications': [], 'Calendar': ['Calendar'],
@@ -105,7 +104,7 @@ def section_slug(name): return re.sub(r'[^a-z0-9]+', '-', name.lower().replace('
 # cards that belong to a data source: colour dot
 PROVIDERS = {'Audible': ('', '#c8833a', 'Main source: ASIN, ratings, metadata, cover'),
              'Hardcover': ('', '#6f7f5a', 'Ratings and print ISBN'),
-             'Goodreads': ('', '#8a6f52', 'Ratings – experimental')}
+             'Goodreads': ('', '#8a6f52', 'Ratings in their own background mode: one book every few minutes, apart from the scans')}
 SCRIPT_KEYS = [f[0] for f in FIELDS if f[0] not in ('LOG_RETENTION_DAYS', 'UI_LANGUAGE') and not f[0].startswith('GCAL_')]  # the calendar is the web UI's job
 DEFAULTS = {f[0]: f[3] for f in FIELDS}
 DEFAULTS.update({
@@ -138,7 +137,7 @@ def save_settings(s):
         os.replace(tmp, SETTINGS_FILE)
 
 
-SCAN_FORM_BOOL = ('task_meta', 'task_authors', 'task_series', 'task_roles', 'task_empty', 'dry', 'backup', 'HARDCOVER_ENABLED', 'GOODREADS_ENABLED')
+SCAN_FORM_BOOL = ('task_meta', 'task_authors', 'task_series', 'task_roles', 'task_empty', 'dry', 'backup', 'HARDCOVER_ENABLED')
 SCAN_FORM_INT = ('BATCH_SIZE', 'REFRESH_DAYS')
 
 
@@ -147,7 +146,7 @@ def scan_form(s):
     f = {'task_meta': True, 'task_authors': bool(s.get('AUTHOR_NORMALIZE')), 'task_series': bool(s.get('SERIES_MERGE')),
          'task_roles': bool(s.get('REMOVE_ROLE_CREDITS')), 'task_empty': bool(s.get('REMOVE_EMPTY_AUTHORS')), 'dry': True, 'backup': bool(s.get('ABS_BACKUP')),
          'BATCH_SIZE': s.get('BATCH_SIZE'), 'REFRESH_DAYS': s.get('REFRESH_DAYS'), 'HARDCOVER_ENABLED': bool(s.get('HARDCOVER_ENABLED')),
-         'GOODREADS_ENABLED': bool(s.get('GOODREADS_ENABLED')), 'selection': 'all', 'list': '', 'adv_open': False}
+         'selection': 'all', 'list': '', 'adv_open': False}
     f.update({k: v for k, v in (s.get('scan_form') or {}).items() if k in f})
     return f
 
@@ -274,6 +273,8 @@ def script_env(s, extra=None):
         v = s.get(k, DEFAULTS.get(k))
         env[k] = ('true' if v else 'false') if isinstance(v, bool) else str(v)
     env['DATA_DIR'] = CONFIG_DIR
+    # Goodreads is asked ONLY by the background mode (GoodreadsBackground); every other script start leaves it out
+    env['GOODREADS_ENABLED'] = 'true' if (extra or {}).get('GR_BACKGROUND') == '1' and s.get('GOODREADS_ENABLED') else 'false'
     env['PYTHONUNBUFFERED'] = '1'
     env.update({k: str(v) for k, v in (extra or {}).items()})
     return env
@@ -585,7 +586,7 @@ def parse_env_summary():
     return out
 
 
-RUN_OVERRIDABLE = {'BATCH_SIZE', 'REFRESH_DAYS', 'HARDCOVER_ENABLED', 'GOODREADS_ENABLED', 'SERIES_MERGE', 'AUTHOR_NORMALIZE', 'UPDATE_COVERS', 'REMOVE_ROLE_CREDITS', 'REMOVE_EMPTY_AUTHORS', 'ABS_BACKUP', 'REMOVE_RATINGS'}  # start dialog
+RUN_OVERRIDABLE = {'BATCH_SIZE', 'REFRESH_DAYS', 'HARDCOVER_ENABLED', 'SERIES_MERGE', 'AUTHOR_NORMALIZE', 'UPDATE_COVERS', 'REMOVE_ROLE_CREDITS', 'REMOVE_EMPTY_AUTHORS', 'ABS_BACKUP', 'REMOVE_RATINGS'}  # start dialog
 KIND_LABELS = {'full': 'Scan', 'series': 'Series & report only', 'item': 'Single book', 'undo': 'Undo', 'apply': 'Apply test run'}
 
 
@@ -612,6 +613,7 @@ class RunManager:
         """run_settings: values for THIS run only (start dialog), applied on top of the saved settings, never saved."""
         with self.lock:
             if self.running(): return None, 'A scan is already running.'
+            GR_BG.stop()  # Goodreads background mode: never at the same time as another script (same files, same books)
             s = load_settings()
             if run_settings: s = {**s, **{k: v for k, v in run_settings.items() if k in RUN_OVERRIDABLE}}
             if not s.get('ABS_URL') or not s.get('API_TOKEN'): return None, 'ABS URL and token are missing (settings).'
@@ -766,6 +768,7 @@ def cleanup_logs(s):
 
 def start_scheduler():
     threading.Thread(target=scheduler_loop, daemon=True).start()
+    threading.Thread(target=GR_BG.loop, daemon=True).start()
 
 
 # ---------------------------------------------------------------- data readers
@@ -1261,3 +1264,74 @@ def calendar_sync(s, dry=False, key=None, cal=None):
         if not res[0]:
             import logging; logging.getLogger('webui').warning(f"Release calendar: {res[2]}")
     return res
+
+
+# ---------------------------------------------------------------- Goodreads background mode
+GR_MODE_FILE = os.path.join(CONFIG_DIR, 'goodreads_mode.json')
+
+
+class GoodreadsBackground:
+    """User 2026-11-18: Goodreads in its own mode. While no other script runs, ONE long-lived abs_ratings.py process
+    (GR_BACKGROUND=1) asks one book every GR_MODE_MINUTES. RunManager.start() stops it first (SIGTERM: the current book
+    is finished), this loop starts it again when the scan is over. It is no 'run': no entry in the scan list."""
+
+    def __init__(self):
+        self.proc, self.out, self.lock = None, None, threading.Lock()
+
+    def running(self): return self.proc is not None and self.proc.poll() is None
+
+    def wanted(self, s):
+        return bool(s.get('GOODREADS_ENABLED') and s.get('ABS_URL') and s.get('API_TOKEN'))
+
+    def start(self, s):
+        with self.lock:
+            if self.running(): return
+            os.makedirs(LOG_DIR, exist_ok=True)
+            day = datetime.now().strftime('%Y%m%d')
+            env = script_env(s, {'RUN_ID': f'goodreads-{day}', 'GR_BACKGROUND': '1', 'DRY_RUN': 'true' if s.get('DRY_RUN') else 'false'})
+            self.out = open(os.path.join(LOG_DIR, f'console_goodreads-{day}.log'), 'a', encoding='utf-8')
+            self.proc = subprocess.Popen([sys.executable, '-u', os.path.join(APP_DIR, 'abs_ratings.py')], cwd=APP_DIR, env=env,
+                                         stdout=self.out, stderr=subprocess.STDOUT, start_new_session=True)
+
+    def stop(self, timeout=90):
+        """Ends the mode (the current book is finished first); returns when the process is gone."""
+        with self.lock:
+            if not self.running(): return
+            try: os.killpg(self.proc.pid, signal.SIGTERM)
+            except (ProcessLookupError, PermissionError): self.proc.terminate()
+            try: self.proc.wait(timeout)
+            except subprocess.TimeoutExpired:
+                try: os.killpg(self.proc.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError): self.proc.kill()
+                self.proc.wait()
+            if self.out: self.out.close()
+            self.proc = self.out = None
+
+    def loop(self):
+        time.sleep(30)  # let the web UI come up first
+        while True:
+            try:
+                s = load_settings()
+                if not self.wanted(s): self.stop()
+                elif not self.running():
+                    with RUNNER.lock:  # RunManager.start() holds this lock while it stops us and starts its script
+                        if not RUNNER.running(): self.start(s)
+            except Exception: pass
+            time.sleep(20)
+
+    def status(self):
+        st = _load_json(GR_MODE_FILE, {})
+        s = load_settings()
+        pu = st.get('pause_until') if (st.get('pause_until') or '') > datetime.now().isoformat(timespec='seconds') else None
+        nxt = None
+        if st.get('last_at') and not pu:
+            try: nxt = max(0, round((datetime.fromisoformat(st['last_at']) + timedelta(minutes=float(s.get('GR_MODE_MINUTES') or 5)) - datetime.now()).total_seconds() / 60))
+            except ValueError: nxt = None
+        return {'on': bool(s.get('GOODREADS_ENABLED')), 'running': self.running(), 'scan': RUNNER.running(),
+                'today': st.get('today', 0) if st.get('day') == datetime.now().date().isoformat() else 0, 'daily': s.get('GR_MODE_DAILY') or 300,
+                'pause_until': pu, 'blocks': st.get('blocks', 0), 'last_at': st.get('last_at'), 'next_min': nxt,
+                'found': sum(1 for v in _load_json(os.path.join(CONFIG_DIR, 'source_state.json'), {}).values()
+                             if isinstance(v, dict) and (v.get('goodreads') or {}).get('st') == 'found')}
+
+
+GR_BG = GoodreadsBackground()

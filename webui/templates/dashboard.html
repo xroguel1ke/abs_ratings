@@ -1,4 +1,5 @@
 {% extends 'base.html' %}{% block title %}{{ _('Overview') }}{% endblock %}{% block body %}
+{% macro grmode_line(g) %}{% if not g.on %}{{ _('off') }}{% elif g.scan %}{{ _('waits until the scan is over') }}{% elif g.pause_until %}{{ _('paused until %(t)s (Goodreads blocked)', t=g.pause_until[11:16]) }}{% elif not g.running %}{{ _('starting …') }}{% else %}{{ _('running') }}{% if g.next_min is not none %} · {{ _('next book in about %(n)s min', n=g.next_min) }}{% endif %}{% endif %}{% if g.on %} · {{ _('%(n)s of max. %(m)s books today', n=g.today, m=g.daily) }} · {{ _('%(n)s books with a Goodreads rating', n=g.found) }}{% endif %}{% endmacro %}
 <h1>{{ _('Overview') }}</h1>
 {% if not settings.ABS_URL or not settings.API_TOKEN %}<div class="flash error">{{ _('Not set up yet: please enter the ABS URL, token and libraries under') }} <a href="{{ url_for('settings') }}">{{ _('Settings') }}</a>.</div>{% endif %}
 
@@ -18,7 +19,7 @@
   document.getElementById('lv-cnt').innerHTML=Object.keys(L).filter(k=>j[k]).map(k=>'<span class="badge'+(k==='errors'?' err':'')+'">'+L[k]+' '+j[k]+'</span>').join('');
  }catch(e){} setTimeout(tick, 4000); } tick(); })();</script>{% endif %}
 
-{% if sources %}<div class="row small srcbar">{% for k, lab in (('audible', 'Audible'), ('hardcover', 'Hardcover'), ('goodreads', 'Goodreads')) %}{% set v = sources.get(k) or {} %}
+{% if sources %}<div class="row small srcbar">{% for k, lab in (('audible', 'Audible'), ('hardcover', 'Hardcover')) %}{% set v = sources.get(k) or {} %}
  <span class="badge src-{{ v.status or 'disabled' }}" title="{{ v.why or '' }}"><span class="dot"></span>{{ lab }}: {{ {'ok': _('OK'), 'off': _('switched off'), 'blocked': _('blocked'), 'disabled': _('not used')}.get(v.status, '–') }}{% if k == 'hardcover' and v.daily_left is not none and v.status == 'ok' %} · {{ _('%(n)s requests left today', n=v.daily_left) }}{% endif %}</span>{% endfor %}
  <span class="muted">{{ _('last scan') }} {{ sources.ts }}</span></div>{% endif %}
 <div class="card newsbar" id="newsbar" style="display:none"></div>
@@ -43,7 +44,12 @@
   {% else %}<div class="v" style="font-size:1.2em">–</div><div class="muted small">{{ _('no scan yet') }}</div>{% endif %}</div>
  <a class="card herocard" href="{{ url_for('runs') }}">
   <div class="muted small">{{ _('Next scan') }}</div><div class="v" style="font-size:1.2em">{{ next_run|dt if next_run else _('no schedule') }}</div>
-  <div class="small muted">Goodreads: {{ gr_note or (_('off') if not settings.GOODREADS_ENABLED else _('on')) }} · Hardcover: {% if api.hc_left is not none %}{{ api.hc_left }} {{ _('left') }}{% else %}–{% endif %}</div></a>
+
+  <div class="small muted">Hardcover: {% if api.hc_left is not none %}{{ api.hc_left }} {{ _('left') }}{% else %}–{% endif %}</div></a>
+ <a class="card herocard grmode" id="grmode" href="{{ url_for('settings') }}#sources">
+  <div class="muted small">{{ _('Goodreads background mode') }}</div>
+  <div class="v" style="font-size:1.2em"><span class="dot {{ 'ok' if grmode.on and grmode.running and not grmode.pause_until and not grmode.scan else 'warn' if grmode.on else '' }}"></span>{% if not grmode.on %}{{ _('off') }}{% elif grmode.scan %}{{ _('waits for the scan') }}{% elif grmode.pause_until %}{{ _('paused until %(t)s', t=grmode.pause_until[11:16]) }}{% elif not grmode.running %}{{ _('starting …') }}{% else %}{{ _('running') }}{% endif %}</div>
+  <div class="small muted">{% if grmode.on %}{% if grmode.next_min is not none and not grmode.pause_until and not grmode.scan %}{{ _('next book in about %(n)s min', n=grmode.next_min) }} · {% endif %}{{ _('%(n)s of max. %(m)s books today', n=grmode.today, m=grmode.daily) }}<br>{{ _('%(n)s books with a Goodreads rating', n=grmode.found) }}{% else %}{{ _('Scans check Audible and Hardcover; Goodreads runs on its own.') }}{% endif %}</div></a>
 </div>
 
 <h2>{{ _('Library') }}</h2>

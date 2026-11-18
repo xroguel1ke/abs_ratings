@@ -327,3 +327,5 @@ kbd{display:inline-block;min-width:20px;height:20px;padding:0 4px;margin-right:2
 /* dark theme: the tick takes the dark accent text colour (white on light amber was too faint) */
 :root[data-theme="dark"] input[type=checkbox]:checked{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='%231f1b16' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) input[type=checkbox]:checked{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='%231f1b16' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}}
+/* overview: Goodreads background mode card (its own mode, apart from the scans) */
+.grmode .v .dot{width:10px;height:10px;margin:0 8px 0 0;vertical-align:2px;background:var(--muted)}.grmode .dot.ok{background:var(--ok)}.grmode .dot.warn{background:var(--warn)}

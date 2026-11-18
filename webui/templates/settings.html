@@ -1,4 +1,5 @@
 {% extends 'base.html' %}{% block title %}{{ _('Settings') }}{% endblock %}{% block body %}
+{% macro grmode_line(g) %}{% if not g.on %}{{ _('off') }}{% elif g.scan %}{{ _('waits until the scan is over') }}{% elif g.pause_until %}{{ _('paused until %(t)s (Goodreads blocked)', t=g.pause_until[11:16]) }}{% elif not g.running %}{{ _('starting …') }}{% else %}{{ _('running') }}{% if g.next_min is not none %} · {{ _('next book in about %(n)s min', n=g.next_min) }}{% endif %}{% endif %}{% if g.on %} · {{ _('%(n)s of max. %(m)s books today', n=g.today, m=g.daily) }} · {{ _('%(n)s books with a Goodreads rating', n=g.found) }}{% endif %}{% endmacro %}
 {% macro field(key, label, ftype, default, help_) %}
  {% if ftype == 'libraries' %}
  <div class="f" style="padding:8px 0;border-bottom:1px dashed var(--line)"><b>{{ _(label) }}</b>
@@ -24,7 +25,8 @@
 {% endmacro %}
 {% macro group_card(group) %}{% set fields = groups.get(group, []) %}{% set pv = providers.get(group) %}
 <div class="card{{ ' provider' if pv }}" {% if pv %}style="--pc:{{ pv[1] }}"{% endif %}>
- <h2 style="margin-top:0">{{ _(group) }}{% if group == 'Goodreads' %} <span class="badge warn">{{ _('experimental') }}</span>{% endif %}</h2>
+ <h2 style="margin-top:0">{{ _(group) }}{% if group == 'Goodreads' %} – {{ _('background mode') }}{% endif %}</h2>
+ {% if group == 'Goodreads' %}<p class="small" style="margin-top:-8px"><span class="muted">{{ _('Two separate modes: scans check Audible and Hardcover; Goodreads runs on its own in the background, one book every few minutes, because Goodreads blocks quick bursts. It pauses while a scan runs.') }}</span><br><b>{{ _('Now') }}:</b> {{ grmode_line(grmode) }}</p>{% endif %}
  {% if pv %}<p class="muted small" style="margin-top:-8px">{{ _(pv[2]) }}</p>{% endif %}
  {% for key, label, ftype, default, help_, g in fields if key not in adv %}{{ field(key, label, ftype, default, help_) }}{% endfor %}
  {% set more = fields|selectattr(0, 'in', adv)|list %}

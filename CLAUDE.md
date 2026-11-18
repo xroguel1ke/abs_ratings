@@ -138,6 +138,16 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   title, Hardcover title = series name without number, 'Part N', alternative-title hit of another volume for English books). Hardcover counts
   every search FIELD of a request against its limits - never combine lookup steps in one request. Contributors with a role are learned as role names.
 - **ISBN:** registration group must fit the book language (978-0/1, 979-8 English; 978-3 German ...).
+- **Goodreads background mode** (user decision 2026-11-18, replaces the per-scan Goodreads settings below for the web UI): in Nov 2026
+  Goodreads blocked after 2-7 requests of a scan's burst. Scans started by the web UI ALWAYS run with GOODREADS_ENABLED=false
+  (core.script_env; existing Goodreads lines of a rating block stay). Goodreads is asked only by ONE long-running process
+  (webui core.GoodreadsBackground -> abs_ratings.py with GR_BACKGROUND=1 -> goodreads_background()): one due book (never asked
+  first, then the oldest) via rating_only_pass, then GR_MODE_MINUTES (+-20 %); at most GR_MODE_DAILY a day; a block pauses the
+  mode GR_MODE_PAUSE_MIN, doubling per block in a row up to 6 h (goodreads_mode.json, survives restarts). RunManager.start()
+  stops it (SIGTERM, the current book is finished) before ANY other script; it restarts when no script runs. Settings: Sources ->
+  Goodreads (on/off, minutes, per day, pause); overview card '#grmode'; onboarding step 'Two separate modes'.
+  In a scan, a block now pauses Goodreads for ALL workers (GR_STATE['cool_until']; log check 2026-11-18: the other workers kept
+  asking into the block).
 - **Goodreads** (user decision 2026-11-08): book page first (robots.txt allows /book/show, /book/isbn; disallows /search), max GOODREADS_PAGES_PER_RUN=3 pages
   (challenge after 3-7); a challenge on a book page only switches pages off for the run, the search list stays as FALLBACK (max 25 searches,
   block after ~100-150 in a row); series name + number + author confirm. AutoThrottle: jitter, slow answer widens the interval, Retry-After wins.

@@ -269,6 +269,13 @@ GR_ID_TRIES = int(os.getenv('GR_ID_TRIES', 2))  # max Goodreads pages tried per 
 # Max Goodreads searches per run (cached URLs don't count). Keeps the first full pass under Goodreads'
 # bot detection: the rest is deferred to the next run. 0 = unlimited.
 GOODREADS_MAX_PER_RUN = int(os.getenv('GOODREADS_MAX_PER_RUN', 25))  # measured 2026-11-05: ~100-150 searches in a row, then a bot block for hours
+# Goodreads background mode (user 2026-11-18: in Nov 2026 Goodreads blocked after 2-7 requests of a scan's burst): the web UI's
+# scans run with GOODREADS_ENABLED=false; one long-running process (started by the web UI while no scan runs) asks ONE book
+# every few minutes. Goodreads lines already in a rating block stay when a scan rewrites it.
+GR_BACKGROUND = os.getenv('GR_BACKGROUND', '') == '1'                    # this process IS the background mode
+GR_MODE_MINUTES = float(os.getenv('GR_MODE_MINUTES', 5) or 5)            # pause between two books (+-20 % jitter)
+GR_MODE_DAILY = int(os.getenv('GR_MODE_DAILY', 300) or 300)              # books per day at most
+GR_MODE_PAUSE_MIN = float(os.getenv('GR_MODE_PAUSE_MIN', 15) or 15)      # pause after a block; doubles with every block in a row, max 6 h
 
 # --- HEADERS & CONSTANTS ---
 FIXED_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
@@ -2902,20 +2909,30 @@ def get_goodreads_data(isbn, title, authors, prim_auth, cached_url=None, hc_ids=
         logging.info(f"      -> ⏭️ Goodreads: not this book's turn (every {GOODREADS_SAMPLE}. book); it is re-checked later")
         stats['gr_deferred'] += 1
         return None, 'deferred'
+    if GR_STATE.get('cool_until', 0) > time.monotonic():
+        # log check 2026-11-18: during one worker's cool-down the other workers kept asking (3 challenged requests in 23 s)
+        logging.info("      -> ⏭️ Goodreads skipped (cool-down after a block, another book waits for it); re-checked later")
+        stats['gr_deferred'] += 1
+        return None, 'deferred'
     logging.info("      -> Checking www.goodreads.com")
     while True:
         try:
             return _goodreads_lookup(isbn, title, authors, prim_auth, cached_url, hc_ids)
         except SourceBlockedException as e:
+            if GR_STATE.get('cool_until', 0) > time.monotonic():  # this request was already on its way when the block came
+                stats['gr_deferred'] += 1
+                return None, 'deferred'
             # selection runs ('only new', quick mode, single fixes) never wait: Goodreads is skipped and asked again in a later run
             # (a quick run waited 15 min for one book, 2026-11-15); the source state keeps it due
             max_cd = 0 if ONLY_ITEMS else GR_MAX_COOLDOWNS
             if GR_STATE['cooldowns'] < max_cd:
                 GR_STATE['cooldowns'] += 1
                 pause = max(GR_BLOCK_COOLDOWN, GR_STATE.pop('retry_after', 0) or 0)  # the server's Retry-After wins when longer
+                GR_STATE['cool_until'] = time.monotonic() + pause  # ONE cool-down for all workers: nobody asks Goodreads meanwhile
                 logging.warning(f"        ⏸️ Goodreads blocks requests: {e}. Cool-down {pause}s, then retrying ({GR_STATE['cooldowns']}/{max_cd})...")
                 log_pause(title, f"Goodreads blocks requests ({e}); retry {GR_STATE['cooldowns']}/{max_cd}", pause)
                 time.sleep(pause)
+                GR_STATE['cool_until'] = 0
                 logging.warning(f"▶️ Goodreads pause over, retrying (book: '{title}')", extra={'now': True})
                 continue
             GR_STATE['blocked'] = True
@@ -4666,6 +4683,82 @@ def rating_only_pass(item, key, idx, total):
     if not DRY_RUN:
         rw_json(SOURCE_STATE_FILE, SOURCE_STATE); rw_json(GR_CACHE_FILE, GR_CACHE); rw_json(HC_CACHE_FILE, HC_CACHE)
     return True
+
+GR_MODE_FILE = os.path.join(SCRIPT_DIR, 'goodreads_mode.json')  # background mode: today's count, pause after a block, last book
+_GR_STOP = threading.Event()
+
+
+def gr_next_due(skip=()):
+    """The next book whose Goodreads rating is due: never asked first, then the oldest check. Only books the tool already
+    knows (results.json) of the configured libraries; lock_all and other details are checked by rating_only_pass."""
+    libs = set(LIBRARY_IDS)
+    best = None
+    for key in RESULTS:
+        if key in skip or key.split('_', 1)[0] not in libs: continue
+        e = (SOURCE_STATE.get(key) or {}).get('goodreads')
+        if not SST.is_due(e, REFRESH_DAYS): continue
+        rank = (0 if not e else 1, (e or {}).get('ts') or '')
+        if best is None or rank < best[0]: best = (rank, key)
+    return best[1] if best else None
+
+
+def _gr_sleep(seconds):
+    """Sleeps, but wakes at once when the web UI stops the mode (a scan starts)."""
+    _GR_STOP.wait(max(0.0, seconds))
+
+
+def goodreads_background():
+    """User 2026-11-18: Goodreads in its own mode, apart from the scans. One book, then GR_MODE_MINUTES pause; a block pauses
+    the mode (GR_MODE_PAUSE_MIN, doubling up to 6 h; remembered in goodreads_mode.json, so a restart after a scan waits too).
+    SIGTERM (the web UI starts a scan) ends it after the current book."""
+    import signal
+    global GR_MAX_COOLDOWNS
+    GR_MAX_COOLDOWNS = 0  # a block ends the try at once; this loop does the waiting
+    signal.signal(signal.SIGTERM, lambda *a: _GR_STOP.set())
+    st = rw_json(GR_MODE_FILE) or {}
+    logging.info(f"📖 Goodreads background mode: one book about every {GR_MODE_MINUTES:g} min, at most {GR_MODE_DAILY} a day"
+                 + (" (DRY_RUN: nothing is written)" if DRY_RUN else ''))
+    bad, written = set(), 0
+    while not _GR_STOP.is_set():
+        now = datetime.now()
+        if st.get('day') != now.date().isoformat(): st.update(day=now.date().isoformat(), today=0)
+        pu = st.get('pause_until')
+        if pu and datetime.fromisoformat(pu) > now:
+            logging.info(f"⏸️ Goodreads background mode pauses until {pu[11:16]} (block)", extra={'now': True})
+            _gr_sleep((datetime.fromisoformat(pu) - now).total_seconds()); continue
+        if st['today'] >= GR_MODE_DAILY:
+            tomorrow = datetime.combine(now.date() + timedelta(days=1), datetime.min.time())
+            logging.info(f"⏸️ Goodreads background mode: {GR_MODE_DAILY} books today - next ones tomorrow", extra={'now': True})
+            _gr_sleep((tomorrow - now).total_seconds() + 60); continue
+        key = gr_next_due(bad)
+        if not key:
+            logging.info("📖 Goodreads background mode: no book due - checking again in an hour", extra={'now': True})
+            _gr_sleep(3600); continue
+        lib, iid = key.split('_', 1)
+        scan_gate()  # never write while ABS scans the library
+        GR_STATE.update(blocked=False, cooldowns=0, searches=0, pages=0, pages_blocked=False, cool_until=0)
+        before = len(OUR_WRITTEN)
+        try:
+            rating_only_pass({'id': iid, '_lib': lib, '_rating_only': ['goodreads']}, key, st['today'], GR_MODE_DAILY)
+        except Exception as e:  # e.g. the book is gone from ABS: not again in this process
+            logging.warning(f"   Goodreads background mode: {key} skipped ({type(e).__name__}: {e})", extra={'now': True})
+            bad.add(key)
+        if GR_STATE['blocked']:
+            n = int(st.get('blocks') or 0) + 1
+            wait = min(GR_MODE_PAUSE_MIN * 60 * 2 ** (n - 1), 6 * 3600)
+            st.update(blocks=n, pause_until=(datetime.now() + timedelta(seconds=wait)).isoformat(timespec='seconds'))
+            log_pause(None, f"Goodreads blocks requests - background mode pauses ({n}. block in a row)", wait)
+        else:
+            st.update(blocks=0, pause_until=None, today=st['today'] + 1, last=key, last_at=datetime.now().isoformat(timespec='seconds'))
+            if len(OUR_WRITTEN) > before:
+                written += 1
+                if written % 25 == 0: refresh_own_fingerprints()
+        rw_json(GR_MODE_FILE, st)
+        _gr_sleep(GR_MODE_MINUTES * 60 * random.uniform(0.8, 1.2))
+    if written: refresh_own_fingerprints()
+    rw_json(GR_MODE_FILE, st)
+    logging.info(f"📖 Goodreads background mode stopped ({written} rating block(s) written in this session)")
+
 
 def process_queue(work_queue, history, failed, recheck):
     total = len(work_queue)
@@ -6478,6 +6571,15 @@ def main():
             FILLED_NARR.update(json.loads(l)['key'] for l in f_ if '"field": "narrators"' in l and json.loads(l).get('source') == 'audible_meta')
     except (OSError, ValueError, KeyError): pass
     logging.getLogger().addHandler(ITEM_LOG)
+    if GR_BACKGROUND:  # the web UI's Goodreads background mode: no backup, no scan, no summary (last_run.env stays the last scan's)
+        if not GOODREADS_ENABLED:
+            logging.info("Goodreads is switched off (GOODREADS_ENABLED=false): background mode not started"); return
+        try: goodreads_background()
+        finally:
+            if not DRY_RUN:
+                rw_json(SOURCE_STATE_FILE, SOURCE_STATE); rw_json(GR_CACHE_FILE, GR_CACHE); rw_json(LAST_WRITTEN_FILE, LAST_WRITTEN)
+            rw_json(RESULTS_FILE, RESULTS)
+        return
     if ABS_BACKUP and not DRY_RUN and not create_abs_backup():
         return fail_early(log_file, start_time, "ABS backup failed - nothing was written. Check ABS: Settings -> Backups (backup path, disk space) or set ABS_BACKUP=false to run without a backup.")
     if REWRITE_RATING_SYMBOLS:

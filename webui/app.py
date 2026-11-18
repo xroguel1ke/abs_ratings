@@ -260,7 +260,6 @@ def dashboard():
     runs = core.RUNNER.runs()
     last = next((r for r in runs if r['kind'] in ('full', 'series') and r['status'] != 'running'), None)
     gr_note = ''
-    if last and 'Goodreads blocked' in (last.get('summary') or ''): gr_note = T('blocked (last scan)')
     tiles = {'books': len(res), 'ok': counts.get('ok', 0), 'problems': sum(counts.get(k, 0) for k in PROBLEM_STATUS),
              'other_edition': counts.get('other_edition', 0), 'not_found': counts.get('not_found', 0),
              'no_ratings_yet': counts.get('no_ratings_yet', 0), 'ignored': counts.get('ignored', 0),
@@ -269,7 +268,7 @@ def dashboard():
              'history': core.history_count()}
     sources = core._load_json(os.path.join(core.CONFIG_DIR, 'source_health.json'), {})
     return render_template('dashboard.html', sources=sources, tab=tab, tiles=tiles, problems=problems, merged=merged, review=rv, queue=queue,
-                           last=last, gr_note=gr_note, status_filter=status_filter, q=q, counts=counts,
+                           last=last, gr_note=gr_note, grmode=core.GR_BG.status(), status_filter=status_filter, q=q, counts=counts,
                            settings=core.load_settings(), **status_context())
 
 
@@ -761,7 +760,7 @@ def runs():
                 try: return max(0, int(request.form.get(k, s.get(k))))
                 except (TypeError, ValueError): return s.get(k)
             rs = dict(rs or {}, BATCH_SIZE=num('BATCH_SIZE'), REFRESH_DAYS=num('REFRESH_DAYS'))
-            for k in ('HARDCOVER_ENABLED', 'GOODREADS_ENABLED'): rs[k] = request.form.get(k) == 'on'
+            rs['HARDCOVER_ENABLED'] = request.form.get('HARDCOVER_ENABLED') == 'on'  # Goodreads: background mode only
             if a != 'start': rs['SERIES_MERGE'] = request.form.get('SERIES_MERGE') == 'on'
             mode = request.form.get('selection', 'all')
             items, note = core.select_items(s, mode, request.form.get('list', ''), limit=min(rs['BATCH_SIZE'] or 300, 1500))
@@ -1045,7 +1044,7 @@ def settings():
     libs = core.abs_libraries(s) if s.get('ABS_URL') and s.get('API_TOKEN') else []
     groups = {}
     for f in core.FIELDS: groups.setdefault(f[5], []).append(f)
-    return render_template('settings.html', notify_events=core.notify_events(s), gcal_state=core.calendar_state(), s=s, groups=groups, sections=core.SECTIONS, slug=core.section_slug, adv=core.ADVANCED, providers=core.PROVIDERS,
+    return render_template('settings.html', notify_events=core.notify_events(s), gcal_state=core.calendar_state(), grmode=core.GR_BG.status(), s=s, groups=groups, sections=core.SECTIONS, slug=core.section_slug, adv=core.ADVANCED, providers=core.PROVIDERS,
                            libs=libs, selected=set((s.get('LIBRARY_IDS') or '').split(',')), next_run=core.next_run_time(s))
 
 

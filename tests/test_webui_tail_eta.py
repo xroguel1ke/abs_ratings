@@ -18,7 +18,7 @@ def _run(tmp_path, monkeypatch, cur_lines, now, expired=0):
     monkeypatch.setattr(core, 'LOG_DIR', str(logs))
     monkeypatch.setattr(core.RUNNER, 'runs', lambda: [{'id': 'cur', 'kind': 'full', 'status': 'running', 'log': 'run_cur.log'},
                                                       {'id': 'prev', 'kind': 'full', 'status': 'ok', 'log': 'run_prev.log'}])
-    old = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=3)).isoformat()
+    old = (now.astimezone(dt.timezone.utc) - dt.timedelta(days=3)).isoformat()  # relative to the test's fixed 'now' (was: the real date - failed from 2026-11-18 on)
     monkeypatch.setattr(core, '_load_json', lambda p, d: {f'v2|h|{i}': {'ts': old} for i in range(expired)} if p.endswith('series_members.json') else d)
     monkeypatch.setattr(core, 'load_settings', lambda: {'SERIES_LIST_DAYS': 1})
     class F(dt.datetime):
