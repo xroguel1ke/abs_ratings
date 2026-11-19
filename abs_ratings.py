@@ -4627,7 +4627,7 @@ def backfill_release_dates(fetch=None):
             return {p.get('asin'): p.get('release_date') or p.get('issue_date') or '' for p in r.json().get('products') or []} if r.status_code == 200 else None
         except (requests.RequestException, ValueError): return None
     fetch = fetch or _fetch
-    n = sum(len(v) for v in need.values()); done = 0
+    n = sum(len(keys) for by_asin in need.values() for keys in by_asin.values()); done = 0  # books (some share an ASIN)
     logging.info(f"📅 Release dates for 'refresh new releases sooner': looking up {n} book(s) on Audible (once)")
     for host, by_asin in need.items():
         asins = list(by_asin)
