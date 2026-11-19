@@ -54,7 +54,7 @@ jobs:
           IMAGE=ghcr.io/$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
           if [ "${GITHUB_REF_NAME}" = "main" ]; then TAG=latest; else TAG=$(echo "${GITHUB_REF_NAME}" | sed 's#.*/##'); fi
           echo "tags=${IMAGE}:${TAG},${IMAGE}:${TAG}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           push: true
