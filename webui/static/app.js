@@ -33,24 +33,29 @@ function T(s) { return (window.I18N && window.I18N[s]) || s; }
 
   // ---- onboarding tour ----
   var STEPS = [
-    { page: 'dashboard', sel: null, t: T('Welcome to ABS Ratings'), p: T('ABS Ratings writes Audible and Hardcover ratings into your book descriptions and repairs metadata. This tour walks through every page and points at the important parts. You can restart it under Settings.') },
+    { page: 'dashboard', sel: null, t: T('Welcome to ABS Ratings'), p: T('ABS Ratings writes Audible, Hardcover and Goodreads ratings into your book descriptions and repairs metadata: ASIN, series, authors, titles, genres, chapters, covers. This tour walks through every page and points at the important parts. You can restart it under Settings.') },
     { page: 'dashboard', sel: '.hero', t: T('Overview: at a glance'), p: T('What waits for your decision, the last scan and the next scheduled one. A click on a card opens the page behind it.') },
-    { page: 'dashboard', sel: '#grmode', t: T('Two separate modes'), p: T('Scans check Audible and Hardcover - on your schedule or when you start one. Goodreads runs on its own in the background: one book every few minutes, because Goodreads blocks quick bursts. It pauses while a scan runs. Switch it on and set the pace under Settings → Sources → Goodreads.') },
+    { page: 'dashboard', sel: '#newsbar', t: T('Since your last visit'), p: T('Books that changed, new entries on the review list and newly released volumes of your series since you last opened the app. Each part is a link.') },
+    { page: 'dashboard', sel: '#grmode', t: T('Two separate modes'), p: T('Scans check Audible and Hardcover - on your schedule or when you start one. Goodreads runs on its own in a trickle: one book every few minutes (with a little jitter) up to a daily maximum, because Goodreads blocks quick bursts. It pauses while a scan runs and after a block (the pause doubles with every block in a row). This card shows the state, the next book and the books done today; switch it on and set the pace under Settings → Sources → Goodreads.') },
     { page: 'dashboard', sel: '#health', t: T('Library check'), p: T('After every scan the whole library is checked: books without ASIN, an ASIN on several books, series names in another language, folder and volume that disagree. Orange = something to look at; open a line to see the books.') },
     { page: 'dashboard', sel: '#coverage', t: T('Coverage'), p: T('How many books have each field (ASIN, series, narrators, cover …) and how that changed. "without" lists the books and can check them again in a test run.') },
     { page: 'runs', sel: '#startform', t: T('Start a scan'), p: T('Choose the tasks (metadata & ratings, authors, series …) and start. Keep "test run" ticked at first: nothing is written, you see every planned change and apply only what you want.') },
     { page: 'runs', sel: '.tabs', t: T('Scans and changes written'), p: T('The list of all scans with live progress (time left, expected end, changes so far). The second tab shows what was really written to ABS.') },
     { page: 'history', sel: '.card.tablewrap', t: T('Undo'), p: T('Every written change, per scan. Open a scan to undo one field, one book or the whole scan; replaced covers come back from the backup.') },
     { page: 'series', sel: '.serbar', t: T('Series'), p: T('Every series with its books and the volumes you are missing. Tiles show covers, List only the gaps. Hide what does not interest you.') },
+    { page: 'series', sel: null, t: T('Missing volumes and release calendar'), p: T('After every scan your series are compared with Audible. "New" shows volumes released since the last look, "Released only" hides announced ones. Announced volumes with a date can go into a Google calendar as all-day events: Settings → Calendar.') },
     { page: 'books', sel: 'form.card', t: T('Books'), p: T('Every checked book. Search, filter by status and sort by certainty - how sure the script is that the ASIN is exactly this book.') },
     { page: 'books', sel: '.card.tablewrap', t: T('Book page'), p: T('A click on a title shows ABS next to Audible and Hardcover, the reasoning of every decision, and lets you set an ASIN by hand or test this one book.') },
     { page: 'review', sel: '.snav', t: T('Review list'), p: T('Only what the script could not verify on its own, in sections: books, series, authors. Done entries disappear by themselves after the next scan.') },
     { page: 'review', sel: '.spanel', t: T('Deciding'), p: T('Each suggestion shows ABS next to the suggestion - green dots agree, orange ones differ. Apply or discard; "Apply all" / "Discard all" handles every entry of one kind at once.') },
-    { page: 'settings', sel: '.snav', t: T('Settings'), p: T('Sections on the left: connection, run and schedule, sources (Audible, Hardcover and the Goodreads background mode), metadata and rating block, series & authors, notifications, calendar, language. Each section has its own save button.') },
-    { page: 'settings', sel: null, t: T('Protect what you curated'), p: T('Lock tags in ABS keep the script away from a field: lock_series, lock_title, lock_asin, lock_authors … or lock_all for the whole book. Everything else the script may correct.') },
+    { page: 'settings', sel: '.snav', t: T('Settings'), p: T('Sections on the left: connection, run and schedule, sources (Audible, Hardcover and the Goodreads background mode), metadata and rating block, series & authors, notifications, calendar, language. Each section has its own save button; "Expert settings" at the top shows the fine tuning.') },
+    { page: 'settings', sel: null, t: T('Release calendar'), p: T('Settings → Calendar puts announced volumes of your series with a release date into one Google calendar of yours as all-day events. Set up once with a service account (README, about 10 minutes). It syncs after every scan: changed dates are moved, volumes that arrived in the library or that you hid are removed. Other entries in that calendar are never touched. "Test" shows what a sync would write, "Sync now" writes it.') },
+    { page: 'settings', sel: null, t: T('Fresh ratings'), p: T('Every book is checked again after the days set under Run → "Refresh after". New releases gain many ratings at first: switch on "Refresh new releases more often" and they are checked sooner. Quick mode looks for new books every few minutes and processes them at once.') },
+    { page: 'settings', sel: null, t: T('Tags to filter in ABS'), p: T('The script sets tags you can filter by in ABS: "Audible 4.5+", "4.7+", "4.9+" and "Hardcover 4.0+", "4.2+", "4.4+" (only the highest level, at least 50 ratings), "Full Cast" and themes like "Dragons". They follow the rating and go when it drops.') },
+    { page: 'settings', sel: null, t: T('Protect what you curated'), p: T('Lock tags in ABS keep the script away from a field: lock_series, lock_title, lock_asin, lock_authors, lock_chapters … or lock_all for the whole book. Everything else the script may correct.') },
     { page: 'settings', sel: '#theme-toggle', t: T('Design'), p: T('Light or dark. On the first visit the system setting is used, then the browser remembers your choice.') }
   ];
-  var i = 0, dim = null, box = null, hl = null;
+  var i = 0, dim = null, box = null, hl = null, back = false;
   function pageUrl(pg) {
     var a = document.querySelector('a[data-tour=' + (pg === 'history' ? 'runs' : pg) + ']'); if (!a) return null;
     var h = a.getAttribute('href'); return pg === 'history' ? h.replace(/runs\/?$/, 'history') : h;
@@ -66,7 +71,11 @@ function T(s) { return (window.I18N && window.I18N[s]) || s; }
   function show() {
     clear();
     var s = STEPS[i], el = s.sel ? document.querySelector(s.sel) : null;
-    if (s.sel && !el) { if (i < STEPS.length - 1) return go(i + 1); return end(); }
+    if (s.sel && (!el || !el.getClientRects().length)) {  // missing or hidden (e.g. no news since the last visit): skip in the direction we came from
+      var nx = i + (back ? -1 : 1); back = false;
+      if (nx >= 0 && nx < STEPS.length) return go(nx); return end();
+    }
+    back = false;
     if (el) { el.classList.add('tour-hl'); hl = el; el.scrollIntoView({block: 'center', behavior: 'smooth'}); }
     box.innerHTML = '<h3></h3><p></p><div class="row"><button type="button" data-a="skip">' + T('Skip') + '</button>' +
       '<span class="row">' + (i > 0 ? '<button type="button" data-a="back">' + T('Back') + '</button>' : '') +
@@ -88,7 +97,7 @@ function T(s) { return (window.I18N && window.I18N[s]) || s; }
     box.addEventListener('click', function (e) {
       var a = e.target.getAttribute('data-a');
       if (a === 'skip') end();
-      else if (a === 'back') go(Math.max(0, i - 1));
+      else if (a === 'back') { back = true; go(Math.max(0, i - 1)); }
       else if (a === 'next') { if (i === STEPS.length - 1) end(); else go(i + 1); }
     });
     dim.addEventListener('click', end);
