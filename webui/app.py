@@ -1138,8 +1138,17 @@ def fmt_size(n):
     return f"{n:.1f} TB"
 
 
+def on_sigterm(*_):
+    """docker stop sends SIGTERM to the web UI only: the Goodreads background mode (own process group) is asked to end after its
+    current book, within docker's 10 s grace period - before, docker killed it hard after those 10 s."""
+    try: core.GR_BG.stop(timeout=8)
+    finally: os._exit(0)
+
+
 def main():
     os.makedirs(core.CONFIG_DIR, exist_ok=True)
+    import signal
+    signal.signal(signal.SIGTERM, on_sigterm)
     core.start_scheduler()
     from waitress import serve
     serve(app, host='0.0.0.0', port=int(os.getenv('PORT', 47823)), threads=8)

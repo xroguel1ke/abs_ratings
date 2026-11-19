@@ -4762,13 +4762,15 @@ def goodreads_background():
     st = rw_json(GR_MODE_FILE) or {}
     logging.info(f"📖 Goodreads background mode: one book about every {GR_MODE_MINUTES:g} min, at most {GR_MODE_DAILY} a day"
                  + (" (DRY_RUN: nothing is written)" if DRY_RUN else ''))
-    bad, written, first = set(), 0, True
+    bad, written, first, announced = set(), 0, True, None
     while not _GR_STOP.is_set():
         now = datetime.now()
         if st.get('day') != now.date().isoformat(): st.update(day=now.date().isoformat(), today=0)
         pu = st.get('pause_until')
         if pu and datetime.fromisoformat(pu) > now:
-            logging.info(f"⏸️ Goodreads background mode pauses until {pu[11:16]} (block)", extra={'now': True})
+            if pu != announced:  # a pause just started is already in the log (log_pause below): only a restart into one says it
+                logging.info(f"⏸️ Goodreads background mode pauses until {pu[11:16]} (block)", extra={'now': True})
+            announced = pu
             _gr_sleep((datetime.fromisoformat(pu) - now).total_seconds()); continue
         if st['today'] >= GR_MODE_DAILY:
             tomorrow = datetime.combine(now.date() + timedelta(days=1), datetime.min.time())
@@ -4799,6 +4801,7 @@ def goodreads_background():
             wait = min(GR_MODE_PAUSE_MIN * 60 * 2 ** (n - 1), 6 * 3600)
             st.update(blocks=n, pause_until=(datetime.now() + timedelta(seconds=wait)).isoformat(timespec='seconds'))
             log_pause(None, f"Goodreads blocks requests - background mode pauses ({n}. block in a row)", wait)
+            announced = st['pause_until']
         else:
             st.update(blocks=0, pause_until=None, today=st['today'] + 1, last=key, last_at=datetime.now().isoformat(timespec='seconds'))
             if len(OUR_WRITTEN) > before:

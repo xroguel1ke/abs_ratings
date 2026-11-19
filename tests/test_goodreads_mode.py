@@ -134,3 +134,48 @@ def test_coverage_counts_cached_goodreads_pages(monkeypatch):
     rows, _ = core.coverage()
     gr = next(r for r in rows if r[0] == 'Goodreads ratings')
     assert gr[1:3] == (2, 3)
+
+
+def test_block_pause_logged_once(monkeypatch, tmp_path, caplog):
+    """A block is logged once (PAUSE ... until), not a second time when the loop then waits for that pause."""
+    import logging
+    monkeypatch.setattr(A, 'GR_MODE_FILE', str(tmp_path / 'goodreads_mode.json'))
+    monkeypatch.setattr(A, 'scan_gate', lambda: None)
+    monkeypatch.setattr(A, 'refresh_own_fingerprints', lambda: None)
+    monkeypatch.setattr(A, 'gr_next_due', lambda skip=(): 'L_book')
+    monkeypatch.setattr(A, 'rating_only_pass', lambda *a: A.GR_STATE.update(blocked=True))
+    sleeps = []
+    def fake_sleep(sec):
+        sleeps.append(sec)
+        if len(sleeps) >= 2: A._GR_STOP.set()  # 1: normal pace after the book, 2: rest of the pause
+    monkeypatch.setattr(A, '_gr_sleep', fake_sleep)
+    A._GR_STOP.clear()
+    with caplog.at_level(logging.INFO):
+        try: A.goodreads_background()
+        finally: A._GR_STOP.clear()
+    msgs = [r.getMessage() for r in caplog.records]
+    assert sum('PAUSE' in m for m in msgs) == 1 and not any('pauses until' in m for m in msgs)
+    assert len(sleeps) == 2  # the pause is still waited out
+
+
+def test_restart_into_a_pause_says_so(monkeypatch, tmp_path, caplog):
+    import logging
+    monkeypatch.setattr(A, 'GR_MODE_FILE', str(tmp_path / 'goodreads_mode.json'))
+    until = (dt.datetime.now() + dt.timedelta(minutes=10)).isoformat(timespec='seconds')
+    A.rw_json(A.GR_MODE_FILE, {'day': dt.date.today().isoformat(), 'today': 1, 'blocks': 1, 'pause_until': until})
+    monkeypatch.setattr(A, '_gr_sleep', lambda sec: A._GR_STOP.set())
+    A._GR_STOP.clear()
+    with caplog.at_level(logging.INFO):
+        try: A.goodreads_background()
+        finally: A._GR_STOP.clear()
+    assert any(f'pauses until {until[11:16]}' in r.getMessage() for r in caplog.records)
+
+
+def test_sigterm_stops_the_mode_first(monkeypatch):
+    """docker stop: the web UI ends the Goodreads process (after its book) before it exits itself."""
+    from webui import app as webapp
+    calls = []
+    monkeypatch.setattr(webapp.core.GR_BG, 'stop', lambda timeout=90: calls.append(('stop', timeout)))
+    monkeypatch.setattr(webapp.os, '_exit', lambda code: calls.append(('exit', code)))
+    webapp.on_sigterm()
+    assert calls == [('stop', 8), ('exit', 0)]
