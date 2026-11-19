@@ -170,6 +170,14 @@ PLANNED_FILE = os.path.join(REPORT_DIR, f"planned_changes_{RUN_ID}.jsonl")  # DR
 ENV_OUTPUT_FILE = os.path.join(SCRIPT_DIR, "last_run.env")
 
 REFRESH_DAYS = int(os.getenv('REFRESH_DAYS', 90))
+# user 2026-11-19: new releases (Audible release date within NEW_RELEASE_DAYS) are refreshed after NEW_RELEASE_REFRESH_DAYS instead
+NEW_RELEASE = ((int(os.getenv('NEW_RELEASE_DAYS', 90)), int(os.getenv('NEW_RELEASE_REFRESH_DAYS', 10)))
+               if os.getenv('NEW_RELEASE_REFRESH', 'false').lower() == 'true' else None)
+
+
+def refresh_for(key):
+    """REFRESH_DAYS, or the short interval for a new release (source_state.refresh_days_for)."""
+    return SST.refresh_days_for(SOURCE_STATE.get(key), REFRESH_DAYS, NEW_RELEASE)
 MAX_BATCH_SIZE = int(os.getenv('BATCH_SIZE', 150))
 MAX_FAIL_ATTEMPTS = 5
 MAX_CONSECUTIVE_RL = 3
@@ -4276,12 +4284,12 @@ def build_queue(lib_id, history, recheck):
         if is_manual_update:
             item['_manual_trigger'] = True
             work_queue.append(item); count_manual += 1
-        elif (now - last_run_dt.replace(tzinfo=None)).days >= REFRESH_DAYS:
+        elif (now - last_run_dt.replace(tzinfo=None)).days >= refresh_for(key):
             work_queue.append(item); count_due += 1
         elif recheck_due:
             item['_recheck'] = True
             work_queue.append(item); count_recheck += 1
-        elif due := [s_ for s_ in SST.due_sources(SOURCE_STATE, key, enabled_sources(), REFRESH_DAYS) if s_ != 'audible']:
+        elif due := [s_ for s_ in SST.due_sources(SOURCE_STATE, key, enabled_sources(), REFRESH_DAYS, new_release=NEW_RELEASE) if s_ != 'audible']:
             item['_rating_only'] = due  # Audible is fresh: only the missing rating sources are asked
             work_queue.append(item); count_rating += 1
 
@@ -4506,7 +4514,7 @@ def sst_record(key, source, status, hits=None, aud_facts=None):
         e = SST.record(SOURCE_STATE, key, source, outcome)
         if aud_facts: SOURCE_STATE[key]['aud'] = SST.audible_facts(aud_facts)
     if e and e.get('st') == 'paused' and status != 'found':
-        logging.info(f"        ⏸️ {source.capitalize()}: {e.get('why')} - paused for {REFRESH_DAYS} days")
+        logging.info(f"        ⏸️ {source.capitalize()}: {e.get('why')} - paused for {refresh_for(key)} days")
 
 SERIES_MEMBERS_FILE = os.path.join(SCRIPT_DIR, 'series_members.json')  # {host|series asin: {'ts', 'members'}}, 7 days
 
@@ -4599,6 +4607,42 @@ def source_down(source, why):
     if source == 'hardcover': HC_STATE['disabled'] = f"source check: {why}"
     elif source == 'goodreads': GR_STATE['blocked'] = True
 
+
+def backfill_release_dates(fetch=None):
+    """User 2026-11-19 (new releases refreshed sooner): books checked before the release date was remembered get it once, 50 per
+    Audible request (product_attrs). Only while the option is on; real runs only. Returns how many books got a date."""
+    if not NEW_RELEASE or DRY_RUN: return 0
+    need = {}
+    for key, book in SOURCE_STATE.items():
+        aud = (book or {}).get('aud') if isinstance(book, dict) else None
+        if aud and 'release' not in aud and aud.get('asin') and AUDIBLE_API_HOSTS.get(aud.get('domain') or 'www.audible.com'):
+            need.setdefault(AUDIBLE_API_HOSTS[aud.get('domain') or 'www.audible.com'], {}).setdefault(aud['asin'], []).append(key)
+    if not need: return 0
+
+    def _fetch(host, asins):
+        throttle('audible_api', host)
+        try:
+            r = requests.get(f"https://{host}/1.0/catalog/products", params={"asins": ",".join(asins), "response_groups": "product_attrs"},
+                             headers={"User-Agent": FIXED_USER_AGENT, "Accept": "application/json"}, timeout=30)
+            return {p.get('asin'): p.get('release_date') or p.get('issue_date') or '' for p in r.json().get('products') or []} if r.status_code == 200 else None
+        except (requests.RequestException, ValueError): return None
+    fetch = fetch or _fetch
+    n = sum(len(v) for v in need.values()); done = 0
+    logging.info(f"📅 Release dates for 'refresh new releases sooner': looking up {n} book(s) on Audible (once)")
+    for host, by_asin in need.items():
+        asins = list(by_asin)
+        for i in range(0, len(asins), 50):
+            got = fetch(host, asins[i:i + 50])
+            if got is None: continue  # no answer: asked again next run
+            with IO_LOCK:
+                for a in asins[i:i + 50]:
+                    for key in by_asin[a]:
+                        SOURCE_STATE[key]['aud']['release'] = str(got.get(a) or '')[:10]
+                        done += bool(got.get(a))
+    rw_json(SOURCE_STATE_FILE, SOURCE_STATE)
+    logging.info(f"📅 Release dates: {done} of {n} book(s) have one now")
+    return done
+
 def source_canaries(only=None):
     """One known book per source must come back with every field the rules need (source_health.py). Before the per-book part
     (only=None: failed sources are switched off) and when the breaker suspects a source (only=<source>: returns the problem or '')."""
@@ -4620,7 +4664,7 @@ def source_canaries(only=None):
 
 def source_note(key, source):
     e = (SOURCE_STATE.get(key) or {}).get(source) or {}
-    nxt = f"{SST.RETRY_HOURS} h" if e.get('st') == 'missing' else f"{REFRESH_DAYS} days"  # log check 2026-11-16: 'missing' waits RETRY_HOURS, not REFRESH_DAYS
+    nxt = f"{SST.RETRY_HOURS} h" if e.get('st') == 'missing' else f"{refresh_for(key)} days"  # log check 2026-11-16: 'missing' waits RETRY_HOURS, not REFRESH_DAYS
     return f"{'found' if e.get('st') == 'found' else e.get('why') or e.get('st')} on {str(e.get('ts', ''))[:10]}, next check after {nxt}"
 
 def rating_only_pass(item, key, idx, total):
@@ -4696,7 +4740,7 @@ def gr_next_due(skip=()):
     for key in RESULTS:
         if key in skip or key.split('_', 1)[0] not in libs: continue
         e = (SOURCE_STATE.get(key) or {}).get('goodreads')
-        if not SST.is_due(e, REFRESH_DAYS): continue
+        if not SST.is_due(e, refresh_for(key)): continue
         rank = (0 if not e else 1, (e or {}).get('ts') or '')
         if best is None or rank < best[0]: best = (rank, key)
     return best[1] if best else None
@@ -4858,7 +4902,7 @@ def process_queue(work_queue, history, failed, recheck):
                 abs_dur = (item_data.get('media') or {}).get('duration') or (item.get('media') or {}).get('duration')
                 if (tmp_dur := exclude_temp_tracks(iid, key, title, item_data)): abs_dur = tmp_dur
                 nested_book_folders(key, title, item_data)
-                src_due = set((SST.SOURCES if (item.get('_manual_trigger') or ONLY_ITEMS) else SST.due_sources(SOURCE_STATE, key, list(SST.SOURCES), REFRESH_DAYS)))
+                src_due = set((SST.SOURCES if (item.get('_manual_trigger') or ONLY_ITEMS) else SST.due_sources(SOURCE_STATE, key, list(SST.SOURCES), REFRESH_DAYS, new_release=NEW_RELEASE)))
 
                 asin_hint_note = None
                 if not asin and 'lock_asin' not in tags and isbn_bad_reason(meta.get('isbn')) == 'value is an ASIN, not an ISBN':
@@ -6583,7 +6627,10 @@ def main():
     if GR_BACKGROUND:  # the web UI's Goodreads background mode: no backup, no scan, no summary (last_run.env stays the last scan's)
         if not GOODREADS_ENABLED:
             logging.info("Goodreads is switched off (GOODREADS_ENABLED=false): background mode not started"); return
-        try: goodreads_background()
+        try:
+            try: backfill_release_dates()  # so the mode knows the new releases at once (no Goodreads request)
+            except Exception as e: logging.warning(f"Release dates not looked up ({type(e).__name__}: {e})")
+            goodreads_background()
         finally:
             if not DRY_RUN:
                 rw_json(SOURCE_STATE_FILE, SOURCE_STATE); rw_json(GR_CACHE_FILE, GR_CACHE); rw_json(LAST_WRITTEN_FILE, LAST_WRITTEN)
@@ -6603,6 +6650,9 @@ def main():
         global BREAKER
         BREAKER = SH.Breaker(SOURCE_STATE, SST.SOURCES)
         source_canaries()
+        if 'audible' not in SOURCE_DOWN:
+            try: backfill_release_dates()
+            except Exception as e: logging.warning(f"Release dates not looked up ({type(e).__name__}: {e})")
         if 'audible' in SOURCE_DOWN: logging.error("🚨 Per-book part skipped: the Audible check failed (see above). The library task still runs.")
         run_libraries(history, failed, recheck)
         group_confirm()

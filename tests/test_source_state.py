@@ -72,7 +72,7 @@ def test_seed_takes_over_old_files():
 
 def test_audible_facts_compact():
     f = S.audible_facts({'asin': 'B0X', 'title_raw': 'T', 'count': 5, 'summary': 'long', 'meta_raw': {'language': 'english', 'series': [{'title': 'S'}], 'big': 1}})
-    assert f == {'asin': 'B0X', 'title_raw': 'T', 'meta_raw': {'language': 'english', 'series': [{'title': 'S'}]}}
+    assert f == {'asin': 'B0X', 'title_raw': 'T', 'meta_raw': {'language': 'english', 'series': [{'title': 'S'}]}, 'release': ''}
 
 
 if __name__ == '__main__':

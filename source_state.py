@@ -33,9 +33,23 @@ def is_due(entry, refresh_days, now=None):
     return now - ts >= timedelta(days=refresh_days)  # found / paused
 
 
-def due_sources(state, key, enabled, refresh_days, now=None):
+def refresh_days_for(book, refresh_days, new_release=None, now=None):
+    """User 2026-11-19: new releases gain many ratings at first. new_release = (within days, short refresh days) or None (off):
+    a book whose Audible release date ('aud' -> 'release') lies within those days - or is still to come - is refreshed after the
+    short interval; that also applies to a source paused after 5 misses (it is often not listed there yet)."""
+    if not new_release or not refresh_days: return refresh_days
+    rel = ((book or {}).get('aud') or {}).get('release')
+    try: rel_d = datetime.strptime(str(rel)[:10], '%Y-%m-%d').date()
+    except (TypeError, ValueError): return refresh_days
+    within, short = new_release
+    if ((now or datetime.now(timezone.utc)).date() - rel_d).days <= within: return min(refresh_days, max(1, short))
+    return refresh_days
+
+
+def due_sources(state, key, enabled, refresh_days, now=None, new_release=None):
     book = state.get(key) or {}
-    return [s for s in enabled if is_due(book.get(s), refresh_days, now)]
+    days = refresh_days_for(book, refresh_days, new_release, now)
+    return [s for s in enabled if is_due(book.get(s), days, now)]
 
 
 def record(state, key, source, outcome, now=None, why=''):
@@ -83,4 +97,5 @@ def audible_facts(aud):
     out = {k: aud.get(k) for k in AUD_FIELDS if aud.get(k) is not None}
     mr = aud.get('meta_raw') or {}
     out['meta_raw'] = {'language': mr.get('language'), 'series': mr.get('series') or []}
+    out['release'] = str(mr.get('releaseDate') or '')[:10]  # '' = Audible has none (also: no need to look it up again)
     return out
