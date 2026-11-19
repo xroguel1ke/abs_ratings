@@ -798,6 +798,8 @@ def coverage():
         if k not in have_keys and k not in ('title', 'subtitle'): rows.append((FIELD_LABELS.get(k, k), None, total, None, []))
     # ratings per source from the last check of every book (results.json)
     res = results(); n = len(res)
+    for k_, page in _load_json(os.path.join(CONFIG_DIR, 'goodreads_cache.json'), {}).items():  # pages the Goodreads mode found
+        if k_ in res and page and not res[k_].get('goodreads'): res[k_]['goodreads'] = page  # (older scans dropped them here)
     if n:
         for label, pred in (('Audible ratings', lambda r: r.get('status') == 'ok'), ('Goodreads ratings', lambda r: bool(r.get('goodreads'))),
                             ('Hardcover', lambda r: bool(r.get('hardcover')))):
@@ -1276,16 +1278,20 @@ class GoodreadsBackground:
     is finished), this loop starts it again when the scan is over. It is no 'run': no entry in the scan list."""
 
     def __init__(self):
-        self.proc, self.out, self.lock = None, None, threading.Lock()
+        self.proc, self.out, self.lock, self.started_with = None, None, threading.Lock(), None
 
     def running(self): return self.proc is not None and self.proc.poll() is None
 
     def wanted(self, s):
         return bool(s.get('GOODREADS_ENABLED') and s.get('ABS_URL') and s.get('API_TOKEN'))
 
+    @staticmethod
+    def fingerprint(s): return json.dumps(s, sort_keys=True, default=str)
+
     def start(self, s):
         with self.lock:
             if self.running(): return
+            self.started_with = self.fingerprint(s)
             os.makedirs(LOG_DIR, exist_ok=True)
             day = datetime.now().strftime('%Y%m%d')
             env = script_env(s, {'RUN_ID': f'goodreads-{day}', 'GR_BACKGROUND': '1', 'DRY_RUN': 'true' if s.get('DRY_RUN') else 'false'})
@@ -1313,6 +1319,8 @@ class GoodreadsBackground:
             try:
                 s = load_settings()
                 if not self.wanted(s): self.stop()
+                elif self.running() and self.started_with != self.fingerprint(s):
+                    self.stop()  # settings changed (e.g. minutes per book): the next round starts it with the new ones
                 elif not self.running():
                     with RUNNER.lock:  # RunManager.start() holds this lock while it stops us and starts its script
                         if not RUNNER.running(): self.start(s)

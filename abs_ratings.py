@@ -4718,7 +4718,7 @@ def goodreads_background():
     st = rw_json(GR_MODE_FILE) or {}
     logging.info(f"📖 Goodreads background mode: one book about every {GR_MODE_MINUTES:g} min, at most {GR_MODE_DAILY} a day"
                  + (" (DRY_RUN: nothing is written)" if DRY_RUN else ''))
-    bad, written = set(), 0
+    bad, written, first = set(), 0, True
     while not _GR_STOP.is_set():
         now = datetime.now()
         if st.get('day') != now.date().isoformat(): st.update(day=now.date().isoformat(), today=0)
@@ -4730,6 +4730,13 @@ def goodreads_background():
             tomorrow = datetime.combine(now.date() + timedelta(days=1), datetime.min.time())
             logging.info(f"⏸️ Goodreads background mode: {GR_MODE_DAILY} books today - next ones tomorrow", extra={'now': True})
             _gr_sleep((tomorrow - now).total_seconds() + 60); continue
+        if first:  # restarted (after a scan or a settings change): keep the pace from the last book
+            first = False
+            due = None
+            try: due = datetime.fromisoformat(st['last_at']) + timedelta(minutes=GR_MODE_MINUTES) if st.get('last_at') else None
+            except ValueError: pass
+            if due and due > now:
+                _gr_sleep((due - now).total_seconds()); continue
         key = gr_next_due(bad)
         if not key:
             logging.info("📖 Goodreads background mode: no book due - checking again in an hour", extra={'now': True})
@@ -4737,7 +4744,7 @@ def goodreads_background():
         lib, iid = key.split('_', 1)
         scan_gate()  # never write while ABS scans the library
         GR_STATE.update(blocked=False, cooldowns=0, searches=0, pages=0, pages_blocked=False, cool_until=0)
-        before = len(OUR_WRITTEN)
+        before, url_before = len(OUR_WRITTEN), (RESULTS.get(key) or {}).get('goodreads')
         try:
             rating_only_pass({'id': iid, '_lib': lib, '_rating_only': ['goodreads']}, key, st['today'], GR_MODE_DAILY)
         except Exception as e:  # e.g. the book is gone from ABS: not again in this process
@@ -4753,6 +4760,8 @@ def goodreads_background():
             if len(OUR_WRITTEN) > before:
                 written += 1
                 if written % 25 == 0: refresh_own_fingerprints()
+        if (RESULTS.get(key) or {}).get('goodreads') != url_before:
+            rw_json(RESULTS_FILE, RESULTS)  # at once, not only at the end: a hard container stop would lose it (coverage page)
         rw_json(GR_MODE_FILE, st)
         _gr_sleep(GR_MODE_MINUTES * 60 * random.uniform(0.8, 1.2))
     if written: refresh_own_fingerprints()
@@ -6314,7 +6323,7 @@ def process_queue(work_queue, history, failed, recheck):
                                                    meta.get('series') or [], aud_data, hc_data, asin_from_search,
                                                    any(x.get('key') == key and x.get('status', 'open') == 'open' for x in (rw_json(REVIEW_FILE) or []) if isinstance(x, dict)))
                 set_result(key, lib_id, iid, title, authors, asin, status, reason,
-                           {'notes': notes, 'certainty': cert, 'certainty_parts': cert_parts, 'domain': (aud_data or {}).get('domain'), 'goodreads': (gr_data or {}).get('url') or (RESULTS.get(key) or {}).get('goodreads') if gr_status == 'fresh' else (gr_data or {}).get('url'),
+                           {'notes': notes, 'certainty': cert, 'certainty_parts': cert_parts, 'domain': (aud_data or {}).get('domain'), 'goodreads': (gr_data or {}).get('url') or (None if gr_status == 'not_found' else (RESULTS.get(key) or {}).get('goodreads') or GR_CACHE.get(key)),  # scans never ask Goodreads (background mode): keep the known page
                             'hardcover': ((hc_data or {}).get('url') or (RESULTS.get(key) or {}).get('hardcover')) if hc_status == 'fresh' else (hc_data or {}).get('url'), 'compare': compare_view(title, authors, meta, abs_dur, aud_data, hc_data),
                             'asin_source': 'manual' if ov.get('asin') else ('search' if asin_from_search else ('ABS (confirmed)' if asin else '')), 'hc_source': (hc_data or {}).get('source'),
                             'evidence': (LAST_MATCH.get('evidence') or []) if asin_from_search else [],

@@ -73,3 +73,64 @@ def test_block_pauses_the_mode(monkeypatch, tmp_path):
 def test_status_without_state():
     st = core.GR_BG.status()
     assert st['running'] is False and st['today'] == 0 and st['pause_until'] is None
+
+
+def test_restart_keeps_the_pace(monkeypatch, tmp_path):
+    """After a restart (scan over, settings changed) the first book waits for the rest of the pause since the last one."""
+    monkeypatch.setattr(A, 'GR_MODE_FILE', str(tmp_path / 'goodreads_mode.json'))
+    monkeypatch.setattr(A, 'GR_MODE_MINUTES', 7)
+    last = dt.datetime.now() - dt.timedelta(minutes=2)
+    A.rw_json(A.GR_MODE_FILE, {'day': dt.date.today().isoformat(), 'today': 3, 'blocks': 0, 'last_at': last.isoformat(timespec='seconds')})
+    seen, sleeps = [], []
+    monkeypatch.setattr(A, 'scan_gate', lambda: None)
+    monkeypatch.setattr(A, 'refresh_own_fingerprints', lambda: None)
+    monkeypatch.setattr(A, 'gr_next_due', lambda skip=(): 'L_book')
+    monkeypatch.setattr(A, 'rating_only_pass', lambda item, key, idx, total: seen.append((key, len(sleeps))))
+    def fake_sleep(sec):
+        sleeps.append(sec)
+        if len(sleeps) >= 2: A._GR_STOP.set()
+    monkeypatch.setattr(A, '_gr_sleep', fake_sleep)
+    A._GR_STOP.clear()
+    try: A.goodreads_background()
+    finally: A._GR_STOP.clear()
+    assert 4 * 60 < sleeps[0] <= 5 * 60 + 1  # ~5 of the 7 minutes were left
+    assert seen == [('L_book', 1)]  # the book is asked only after that wait
+    assert 0.8 * 7 * 60 <= sleeps[1] <= 1.2 * 7 * 60  # then the normal pace, jitter untouched
+
+
+def test_settings_change_restarts_the_mode(monkeypatch):
+    """A changed setting (e.g. minutes per book) stops the running process; the loop starts it again with the new values."""
+    bg = core.GoodreadsBackground()
+    s = {'GOODREADS_ENABLED': True, 'ABS_URL': 'http://abs', 'API_TOKEN': 't', 'GR_MODE_MINUTES': 7}
+    calls = []
+    monkeypatch.setattr(bg, 'running', lambda: True)
+    monkeypatch.setattr(bg, 'stop', lambda *a: calls.append('stop'))
+    bg.started_with = bg.fingerprint(s)
+    monkeypatch.setattr(core, 'load_settings', lambda: dict(s))
+    rounds = iter([0, 1])
+    def fake_sleep(sec):
+        try: next(rounds)
+        except StopIteration: raise KeyboardInterrupt
+        if sec == 20: s['GR_MODE_MINUTES'] = 6  # the user saves new settings
+    monkeypatch.setattr(core.time, 'sleep', fake_sleep)
+    try: bg.loop()
+    except KeyboardInterrupt: pass
+    assert calls == ['stop']  # unchanged settings: kept running; changed: stopped once
+
+
+def test_scan_keeps_known_goodreads_page():
+    """Scans never ask Goodreads: the result of a full check keeps the page the background mode found (coverage)."""
+    import inspect
+    src = inspect.getsource(A)
+    assert "(None if gr_status == 'not_found' else (RESULTS.get(key) or {}).get('goodreads') or GR_CACHE.get(key))" in src
+
+
+def test_coverage_counts_cached_goodreads_pages(monkeypatch):
+    res = {'L_a': {'title': 'A', 'status': 'ok'}, 'L_b': {'title': 'B', 'status': 'ok', 'goodreads': 'u2'}, 'L_c': {'title': 'C', 'status': 'ok'}}
+    real = core._load_json
+    monkeypatch.setattr(core, 'results', lambda: {k: dict(v) for k, v in res.items()})
+    monkeypatch.setattr(core, '_load_json', lambda p, d=None: {'L_a': 'u1', 'L_x': 'u9'} if p.endswith('goodreads_cache.json') else ({} if p.endswith('library_report.json') else real(p, d)))
+    monkeypatch.setattr(core, '_coverage_trend', lambda *a: None)
+    rows, _ = core.coverage()
+    gr = next(r for r in rows if r[0] == 'Goodreads ratings')
+    assert gr[1:3] == (2, 3)
