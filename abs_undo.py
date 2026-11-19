@@ -116,7 +116,11 @@ def main():
                 # a NEWER change (another run, you, an ABS rescan) is in the field: undoing this old one would overwrite it
                 print(f"     ⏭️ changed again since this change - skipped (newer value kept; undo the newer change first or use --force)"); skipped += 1; continue
         try:
-            if e['field'] == 'cover' and e.get('old') and os.path.isfile(str(e['old'])):  # replaced cover: upload the backup again
+            if e['field'] == 'cover' and e.get('cover_move'):
+                # the folder cover was copied to /metadata (spin-up fix 2026-11-19). ABS cannot point back to the folder file: PATCH .../cover
+                # with that path copies it into /metadata/items/<id>/ again (validateCoverPath). Same image, nothing to restore.
+                print("     ℹ️ cover only copied to ABS metadata (same image, folder file untouched) - cannot be undone, nothing to restore"); skipped += 1; continue
+            elif e['field'] == 'cover' and e.get('old') and os.path.isfile(str(e['old'])):  # replaced cover: upload the backup again
                 data = open(e['old'], 'rb').read()
                 ext = 'png' if data[:8] == b'\x89PNG\r\n\x1a\n' else 'webp' if data[:4] == b'RIFF' and data[8:12] == b'WEBP' else 'jpg'
                 # ABS accepts only png/jpg/jpeg/webp file names (older backups were saved as .img)

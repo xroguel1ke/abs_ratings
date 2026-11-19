@@ -69,6 +69,7 @@ FIELDS = [
     ('RATING_MIN_COUNT', 'Minimum number of ratings', 'int', 0, 'A source with fewer ratings is not shown (0 = all)', 'Metadata'),
     ('FILL_COVERS', 'Set missing covers', 'bool', True, 'Only for a verified ASIN', 'Metadata'),
     ('MATCH_CHAPTERS', 'Take Audible chapters', 'bool', True, "Audible's chapters for files without real chapters - only when they fit exactly. lock_chapters protects a book", 'Metadata'),
+    ('COVERS_TO_METADATA', 'Keep folder covers in ABS metadata', 'bool', True, 'A cover ABS took from the book folder is copied once into its metadata folder (cache), so apps no longer wake the disk. Same image, the folder file stays; also for locked covers', 'Metadata'),
     ('UPDATE_COVERS', 'Replace existing covers', 'bool', True, 'Only for a verified ASIN; the old cover is backed up', 'Metadata'),
     ('GENRE_LANGUAGE', 'Genre language', 'choice:en|keep', 'en', 'Audible.de genres are translated to English', 'Metadata'),
     ('GENRE_RULES', 'Genre rules', 'text', '', 'One per line: "Old => New" renames, "Old => -" blocks a genre', 'Metadata'),

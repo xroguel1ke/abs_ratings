@@ -74,7 +74,8 @@ def cover(iid):
     if f and not f.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):  # like the real ABS
         return ('Invalid image type (Supported: png,jpg,jpeg,webp)', 400)
     log_write('cover', iid, request.get_json(force=True, silent=True) or ({'file': f.filename, 'bytes': len(f.read())} if f else None))
-    return jsonify(success=True)
+    ext = f.filename.rsplit('.', 1)[-1].lower() if f else 'jpg'  # like the real ABS (storeCoverWithItem off): its own copy in /metadata
+    return jsonify(success=True, cover=f'/metadata/items/{iid}/cover.{ext}')
 
 @app.get('/api/items/<iid>/cover')
 def get_cover(iid):  # a small fake image, so the backup step of a cover replacement can be tested

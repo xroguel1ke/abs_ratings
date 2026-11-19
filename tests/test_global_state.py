@@ -13,7 +13,7 @@ CONTAINER_CALLS = {'dict', 'set', 'list', 'defaultdict', 'OrderedDict', 'Counter
 # State of 2026-11-17, taken over as it was (run-wide caches, owner maps, file state, report lists, constants); per-book values are _TLDict.
 KNOWN = {
     'ALL_MARKETS', 'ASIN_OWNERS', 'AUDIBLE_API_HOSTS', 'AUDIBLE_MARKETS', 'AUD_GENRES', 'AUD_PREFETCH',
-    'AUTHOR_LINKS', 'AUTHOR_NOTES', 'BOOKS_DONE', 'BOOK_LANGUAGES', 'CHAPTER_REGION', 'COVER_STATE',
+    'AUTHOR_LINKS', 'AUTHOR_NOTES', 'BOOKS_DONE', 'BOOK_LANGUAGES', 'CHAPTER_REGION', 'COVER_STATE', 'COVERS_SET',  # COVERS_SET: items with a URL cover this run (IO_LOCK, 2026-11-19)
     'DEBUG_ENV_KEYS', 'FILLED_NARR', 'GENRE_DROPS', 'GENRE_HC', 'GENRE_LADDERS', 'GENRE_MAP_DE',
     'GENRE_SERIES_DROPS', 'GERMAN_LANG_CODES', 'GR_CACHE', 'GR_STATE', 'HC_CACHE', 'HC_PREFETCH',
     'HC_STATE', 'HC_USAGE', 'HEADERS_ABS', 'HEADERS_BASE', 'IDENTITY_DESC', 'IDENTITY_META',

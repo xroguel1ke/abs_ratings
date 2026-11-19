@@ -1334,6 +1334,43 @@ def abs_set_cover(iid, key, title, url, source, replace=False, fallback=False):
             return False
     elif replace: old = '(existing cover, backed up on a real run)'
     journal_change(iid, key, title, 'cover', old, url, source)
+    with IO_LOCK: COVERS_SET.add(iid)
+    return True
+
+COVERS_SET = set()  # items that got a cover from a URL in this run (ABS keeps it in /metadata already)
+COVERS_TO_METADATA = os.getenv('COVERS_TO_METADATA', 'true').lower() == 'true'  # web UI switch (user 2026-11-19)
+COVER_EXTS = ('jpg', 'jpeg', 'png', 'webp')  # ABS accepts only these file names on upload
+
+def cover_to_metadata(iid, key, title, cover_path):
+    """Spin-up chat 2026-11-19: a cover ABS took from the book folder (coverPath /data/...) is read from that folder whenever an app asks for
+    a size not yet in /metadata/cache/covers - that wakes the array disk. The same bytes are uploaded as a file, so ABS keeps its own copy in
+    /metadata/items/<id>/ (storeCoverWithItem off) and points coverPath there. The original in the book folder is never touched.
+    Undo sets coverPath back to the folder file (journal 'old', cover_move)."""
+    if not cover_path or str(cover_path).startswith('/metadata/') or iid in COVERS_SET: return False
+    if DRY_RUN:
+        logging.info(f"        🖼️ Cover would be copied from the book folder to ABS metadata (DRY_RUN): {cover_path}")
+        journal_change(iid, key, title, 'cover', cover_path, f'/metadata/items/{iid}/', 'cover_to_metadata', {'cover_move': True})
+        return True
+    try:
+        rb = abs_session.get(f"{ABS_URL}/api/items/{iid}/cover", params={'raw': 1}, timeout=60)
+        if rb.status_code != 200 or not rb.content: raise OSError(f"HTTP {rb.status_code}")
+        ext = os.path.splitext(str(cover_path))[1].lower().lstrip('.')
+        if ext not in COVER_EXTS: ext = image_ext(rb.content)
+        mime = 'image/png' if ext == 'png' else 'image/webp' if ext == 'webp' else 'image/jpeg'
+        # the session sends Content-Type: application/json - None drops it, so requests writes the multipart header with its boundary
+        r = abs_session.post(f"{ABS_URL}/api/items/{iid}/cover", files={'cover': (f"cover.{ext}", rb.content, mime)}, headers={'Content-Type': None}, timeout=120)
+        res = r.json() if r.status_code == 200 else {}
+        new = str(res.get('cover') or '')
+        if not res.get('success') or not new.startswith('/metadata/items/'): raise OSError(f"HTTP {r.status_code}: {(r.text or '')[:150]}")
+    except (OSError, ValueError, requests.exceptions.RequestException) as e:
+        logging.warning(f"        ⚠️ Cover of '{title}' not copied to ABS metadata ({e}) - it stays in the book folder")
+        return False
+    try:  # optional check: ABS serves the same bytes now
+        same = abs_session.get(f"{ABS_URL}/api/items/{iid}/cover", params={'raw': 1}, timeout=60).content == rb.content
+    except requests.exceptions.RequestException: same = None
+    journal_change(iid, key, title, 'cover', cover_path, new, 'cover_to_metadata', {'cover_move': True})
+    logging.info(f"        🖼️ Cover copied from the book folder to ABS metadata: {new}{'' if same is not False else ' (bytes differ - check)'}")
+    with IO_LOCK: COVERS_SET.add(iid)
     return True
 
 MATCH_CHAPTERS = os.getenv('MATCH_CHAPTERS', 'true').lower() == 'true'  # take Audible's chapters for poorly chaptered files (user 2026-11-10)
@@ -4834,6 +4871,7 @@ def process_queue(work_queue, history, failed, recheck):
         needs_sleep = False  # Only pause after items that actually hit Audible/Goodreads
         ITEM_LOG.lines = []
         LOOKUP_HITS['audible'] = 0  # products returned by the Audible searches of THIS book (negative cache)
+        cover_job = None  # (iid, key, title, coverPath) once the book is read: its folder cover goes to /metadata after the book
 
         while True: 
             try:
@@ -4860,6 +4898,8 @@ def process_queue(work_queue, history, failed, recheck):
                 tags = expand_locks(item_tags(item_data))
                 meta = item_data['media']['metadata']
                 title = meta.get('title')
+                # also for lock_cover / lock_all (spin-up chat 2026-11-19): the image stays byte for byte the same, only where ABS keeps it changes
+                cover_job = (iid, key, title, (item_data.get('media') or {}).get('coverPath'))
 
                 if 'lock_all' in tags:
                     logging.info(f"({idx+1}/{total}) 🔒 Skipping '{title}' (lock_all tag found)")
@@ -6394,7 +6434,10 @@ def process_queue(work_queue, history, failed, recheck):
                 set_result(f"{lib_id}_{item['id']}", lib_id, item['id'], (item.get('media') or {}).get('metadata', {}).get('title') or item['id'],
                            [], None, 'error', f"{type(e).__name__}: {e}")
                 break
-        
+
+        if cover_job and COVERS_TO_METADATA:  # no cover from Audible set in this run and ABS still reads the book folder's image: copy it to /metadata
+            try: cover_to_metadata(*cover_job)
+            except Exception as e: logging.warning(f"        ⚠️ Cover copy to ABS metadata failed: {e}")
         if stats['aborted_ratelimit']: return
         if not needs_sleep: return
         # Requests are throttled per source (MIN_INTERVAL); this pause is only an optional extra.
