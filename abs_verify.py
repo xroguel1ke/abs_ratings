@@ -74,12 +74,17 @@ def verify(req):
             why.append(f"identical length to library book '{b['rel']}' (duplicate, wrong label)")
             return out
 
-    # 2) the Audible product of the requested book (abs_ratings search: title, author, runtime, narrator, volume)
+    # 2) the Audible product of the requested book.
+    #    a) the request names its ASIN (ReadMeABook): exactly that product, the file must be that recording
+    #    b) otherwise abs_ratings' search (title, author, runtime, narrator, volume)
     abs_series = [{"name": series, "sequence": num}] if series else None
     try:
-        asin = A.search_audible_api(title, [author], dur, lang, required_lang=lang, narrators=tag_narr or None, abs_series=abs_series)
-        if not asin and series:
-            asin = A.find_missing_asin_via_series(title, [author], dur, lang, required_lang=lang, narrators=tag_narr or None, abs_series=abs_series)
+        if exp.get("asin"):
+            asin = str(exp["asin"]).strip()
+        else:
+            asin = A.search_audible_api(title, [author], dur, lang, required_lang=lang, narrators=tag_narr or None, abs_series=abs_series)
+            if not asin and series:
+                asin = A.find_missing_asin_via_series(title, [author], dur, lang, required_lang=lang, narrators=tag_narr or None, abs_series=abs_series)
     except Exception as exc:  # rate limit / network: never guess
         why.append(f"Audible search failed: {type(exc).__name__}")
         return out
@@ -89,11 +94,27 @@ def verify(req):
     if not asin:
         why.append("no Audible edition of this book matches the file (runtime/author/volume)")
         return out
-    p = A.get_audible_data(asin, lang)
+    try:
+        p = A.get_audible_data(asin, lang)
+    except Exception as exc:
+        why.append(f"Audible product {asin} not loadable ({type(exc).__name__})")
+        return out
     if not isinstance(p, dict):
         why.append(f"Audible product {asin} not loadable")
         return out
     meta = p.get("meta_raw") or {}
+    if exp.get("asin"):
+        # the request gives no series data: take the product's own (its first series = the main one)
+        if not series and meta.get("series"):
+            series = meta["series"][0].get("name") or ""
+            num = str(meta["series"][0].get("part") or "")
+        if not exp.get("language") and A.map_language(meta.get("language")):
+            lang = A.map_language(meta.get("language"))
+    out["authors"] = p.get("authors_raw") or []
+    out["ladders"] = meta.get("ladders") or []
+    out["publisher"] = (meta.get("publisher") or {}).get("name")
+    out["language"] = A.map_language(meta.get("language"))
+    out["expect_series"], out["expect_num"] = series, num
     aud_series = [{"name": s.get("name"), "part": s.get("part")} for s in meta.get("series") or []]
     out.update(asin=asin, domain=p.get("domain"), title=p.get("title_raw"), series=aud_series,
                narrators=p.get("narrators_raw") or [], runtime=p.get("runtime_sec"))
