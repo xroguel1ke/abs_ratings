@@ -544,6 +544,18 @@ def search_series(lib, series):
 
 SOLO_AUTHORS = {}  # author_key -> number of library books that list ONLY this author (co-author evidence, author loop 2026-11-15)
 SERIES_FACTS = {}  # (lib, series name lower) -> {'n': books, 'authors': first authors, 'folders': series folders, 'name'} (from the listing)
+FOLDER_SERIES = {}  # (lib, parent folders of the book lower) -> [{series names lower} of every book in that folder] (from the listing)
+
+
+def folder_name_only(lib, item_data, folder_series, aud_names):
+    """user 2026-11-22: 'Camp Half-Blood Chronicles' (the folder) was kept next to Audible's 'Percy Jackson and the Olympians' on the new
+    volumes 3 and 4, while volumes 1, 2 and 5 in the same folder only carry Percy Jackson. A folder series is a real (sub-)series only
+    when the other volumes in that folder carry it too ('Disciples of the Horned One' in 'Soul Force Saga': all three have both).
+    True when another book in the same folder has one of Audible's series but not the folder series."""
+    parts = [p.strip().lower() for p in str((item_data or {}).get('relPath') or '').replace('\\', '/').split('/') if p.strip()][:-1]
+    fs, auds = str(folder_series or '').strip().lower(), {str(n).strip().lower() for n in aud_names if n}
+    others = FOLDER_SERIES.get((lib, '/'.join(parts))) or []
+    return any(s & auds and fs not in s for s in others)
 
 def series_cleanup(lib, item_data, series, aud_series, book_authors, book_variant, verified, book_lang=None):
     """Series that do not belong to the book (user findings 2026-11-08), decided with Audible's list for the SAME book.
@@ -4135,6 +4147,10 @@ def note_listing_item(lib_id, it):
     if i_ := normalize_isbn(md_.get('isbn')): ISBN_OWNERS.setdefault(i_, set()).add(key)
     if (an_ := [a.strip() for a in str(md_.get('authorName') or '').split(',') if a.strip()]) and len(an_) == 1:
         with IO_LOCK: SOLO_AUTHORS[re.sub(r'[^a-z]', '', fold_accents(an_[0]).lower())] = SOLO_AUTHORS.get(re.sub(r'[^a-z]', '', fold_accents(an_[0]).lower()), 0) + 1
+    fp_ = [p.strip().lower() for p in str(it.get('relPath') or '').replace('\\', '/').split('/') if p.strip()][:-1]
+    if len(fp_) >= 2:
+        with IO_LOCK: FOLDER_SERIES.setdefault((lib_id, '/'.join(fp_)), []).append(
+            {sn_.strip().lower() for sn_, _ in split_series_name(md_.get('seriesName'), LIB_SERIES_NAMES.get(lib_id)) if sn_})
     for sn_, q_ in split_series_name(md_.get('seriesName'), LIB_SERIES_NAMES.get(lib_id)):
         if sn_:
             SERIES_BOOKS.setdefault((lib_id, sn_.lower()), []).append({'num': q_, 'title': md_.get('title'), 'asin': md_.get('asin'),
@@ -5737,6 +5753,14 @@ def process_queue(work_queue, history, failed, recheck):
                                 else:
                                     ignored.append(f"{canon}" + (f" #{s_seq}" if s_seq else ""))
                             added = [x for x in new_list if not any(same(x['name'], b['name']) for b in base_list)]
+                            if bad_fd and not added and any(same(b['name'], n) for b in base_list for n in aud_names):
+                                # the book has Audible's series AND the folder series ('Camp Half-Blood Chronicles' next to 'Percy Jackson' on vol. 3 and 4):
+                                # the folder series goes when the other volumes in the folder only carry Audible's series (user 2026-11-22)
+                                drop_fd = [b for b in bad_fd if folder_name_only(lib_id, item_data, b['name'], aud_names)]
+                                if drop_fd:
+                                    logging.info(f"        🔁 Series {', '.join(repr(b['name']) for b in drop_fd)} removed (only the folder name; the other volumes "
+                                                 f"in this folder only carry {', '.join(repr(b['name']) for b in base_list if any(same(b['name'], n) for n in aud_names))})")
+                                    bad_fd = [b for b in bad_fd if b not in drop_fd]
                             if bad_fd and not any(series_in_library(lib_id, x['name']) for x in added):
                                 new_list = [x for x in new_list if x not in added] + [dict(x) for x in bad_fd]  # Audible's series is unknown here: folder name stays
                                 added, bad_fd = [], []
@@ -5759,7 +5783,8 @@ def process_queue(work_queue, history, failed, recheck):
                                 logging.info(f"        🔁 Series {', '.join(repr(b['name']) for b in bad)} -> {', '.join(repr(x['name']) for x in added)} "
                                              f"({'not English/German' if bad_nl else 'folder name, Audible series exists in the library'})")
                                 from abs_series import foreign_for_book as _ffb2
-                                keep_fd = [dict(b) for b in bad_fd if not (non_latin_name(b['name']) or _ffb2(b['name'], abs_updates.get('language') or lang))]
+                                keep_fd = [dict(b) for b in bad_fd if not (non_latin_name(b['name']) or _ffb2(b['name'], abs_updates.get('language') or lang))
+                                           and not folder_name_only(lib_id, item_data, b['name'], [x['name'] for x in added])]
                                 if keep_fd:  # an English folder series is a real (sub-)series ('Disciples of the Horned One' in 'Soul Force Saga'): it stays
                                     new_list += [b for b in keep_fd if b not in new_list]
                                     logging.info(f"        ℹ️ Series {', '.join(repr(b['name']) for b in keep_fd)} kept next to it (English/German folder series)")
@@ -6044,8 +6069,13 @@ def process_queue(work_queue, history, failed, recheck):
                     # (id_switch: confirmed other book - the old cover shows it; new book without narrator tag: runtime + author + title, 2026-11-15)
                     if aud_data.get('cover_url') and has_cover and UPDATE_COVERS and not cover_verified and new_book and COVER_STATE.get(iid) != cover_token(asin):
                         logging.info("        🖼️ Cover kept: the recording is not verified (runtime ±2 min + narrator, or author and title without a narrator)")
-                    if aud_data.get('cover_url') and not lang_conflict and cover_verified and ((FILL_COVERS and not has_cover) or  # user rule: covers only for a VERIFIED ASIN
-                                                                                               ((UPDATE_COVERS or id_switch) and has_cover and COVER_STATE.get(iid) != cover_token(asin))):
+                    # user 2026-11-22 ('Battle of the Labyrinth': runtime 6.6 min off, so no cover at all): a book WITHOUT a cover takes the cover of
+                    # every ASIN the match accepted (good enough for ratings and metadata) - nothing is overwritten. Replacing keeps the strict rule.
+                    fill_ok = bool(asin) and not aud_data.get('related_edition')
+                    if aud_data.get('cover_url') and not has_cover and FILL_COVERS and not lang_conflict and not fill_ok:
+                        logging.info(f"        🖼️ No cover set: {'only another edition matched' if aud_data.get('related_edition') else 'no accepted ASIN'}")
+                    if aud_data.get('cover_url') and not lang_conflict and ((FILL_COVERS and not has_cover and fill_ok) or
+                                                                            (cover_verified and (UPDATE_COVERS or id_switch) and has_cover and COVER_STATE.get(iid) != cover_token(asin))):
                         if 'lock_cover' in tags: logging.info("        🔒 Cover Update Skipped (Locked)")
                         elif cover_used := next((u for u in dict.fromkeys(filter(None, (aud_data['cover_url'], aud_data.get('cover_url_small'))))
                                                  if abs_set_cover(iid, key, title, u, 'audible_cover' if not has_cover else 'audible_cover_verified', replace=has_cover,

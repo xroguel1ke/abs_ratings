@@ -51,6 +51,7 @@ add({
     'Off = read the rating from the search list only': 'Aus = Bewertung nur aus der Suchliste lesen',
     'Order in the rating block': 'Reihenfolge im Bewertungsblock', 'Comma separated, e.g. audible,hardcover,goodreads': 'Kommagetrennt, z.B. audible,hardcover,goodreads',
     'Set missing covers': 'Fehlende Cover setzen', 'Only for a verified ASIN': 'Nur bei verifizierter ASIN',
+    'When ABS has no cover: for every ASIN the match accepted (as for ratings)': 'Wenn ABS kein Cover hat: bei jeder akzeptierten ASIN (wie bei den Bewertungen)',
     'Replace existing covers': 'Vorhandene Cover ersetzen',
     'Only for a verified ASIN (same recording); the old cover is backed up and can be restored': 'Nur bei verifizierter ASIN (gleiche Aufnahme); das alte Cover wird gesichert und kann wiederhergestellt werden',
     'Genre language': 'Genre-Sprache', 'en = translate German Audible genres, keep = unchanged': 'en = deutsche Audible-Genres übersetzen, keep = unverändert',
