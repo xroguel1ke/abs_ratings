@@ -10,6 +10,7 @@ metadata clean (ASIN repair, titles, series, authors, genres, language, covers).
 | `abs_ratings.py` | Main script (CLI, env-configured). Queue → per book: Audible API → metadata sync → Goodreads → rating block → journal. |
 | `abs_series.py` | ABS-only task at the end: series merge, author normalization, library report, merge history/review files. |
 | `abs_undo.py` | Undo from `changes.jsonl` (`--run`, `--item`, `--field`, `--merge-id`, `--apply`). |
+| `abs_verify.py` | Stand-alone verifier (2026-11-22): "is this downloaded file really book X?" for the Unraid Shelfmark auto import. Only CALLS the identification functions (search_audible_api, audible_chapters, match_chapters, volume_conflict); never writes, needs its own DATA_DIR. Changing those functions changes its verdicts: re-run the server test loop (/mnt/user/appdata/abs_verify/verify_loop.py, 0 FALSE_OK). |
 | `webui/` | Flask web UI (`python -m webui.app`, port 47823). `core.py` = settings, RunManager (starts the script as subprocess), scheduler, Apprise, file readers. |
 | `Dockerfile`, `.github/workflows/docker.yml`, `unraid/abs-ratings.xml` | Container: image `ghcr.io/xroguel1ke/abs_ratings:<tag>` (only `main` is built → `:latest`; since 2026-11-09 all work happens on main, the claude/* branches were merged and deleted). |
 
