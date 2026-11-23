@@ -34,6 +34,8 @@ import abs_ratings as A  # noqa: E402
 A.BOOK_LANGUAGES[:] = ["English", "German"]
 
 RUNTIME_OK_S = 120          # same recording: Audible runtime (whole minutes) within 2 min
+def rt_tol(rt):              # 2026-11-23: long books (King, 30 h) differ by 2-3 min between releases of the same recording;
+    return max(RUNTIME_OK_S, 0.0025 * (rt or 0))   # other narrations differ by whole percents
 DUP_S = 0.05                # identical file: duration equal to the millisecond
 AMBIG_S = 120               # a library book this close in length could be the same recording
 
@@ -191,7 +193,7 @@ def verify(req):
             if len(al) == len(aud_ch[0]) >= 3 and all(abs(a - b[1]) <= 3 for a, b in list(zip(al, aud_ch[0]))[1:-1]):
                 proof = "file chapter lengths equal Audible's"
     out["chapter_proof"] = proof
-    if abs(diff) > RUNTIME_OK_S:
+    if abs(diff) > rt_tol(rt):
         if dur > 1.6 * rt:
             out["verdict"] = "wrong"; why.append(f"{dur/3600:.1f} h vs {rt/3600:.1f} h on Audible (bundle)"); return out
         if dur < 0.5 * rt:
@@ -201,8 +203,10 @@ def verify(req):
     why.append(f"runtime {diff:+.0f} s ✓" + (f", {proof}" if proof else ""))
     if not proof:
         if aud_ch:
-            # the file HAS chapter marks and Audible has chapters, but they do not line up: another volume/edition?
-            why.append(f"{len(marks)} chapter marks do not line up with Audible's {len(aud_ch[0])} chapters"); return out
+            # the file HAS chapter marks but they do not line up with Audible's (2026-11-23: many releases set their own
+            # marks - per file or per CD). Not a proof either way: the same checks as for a file without chapters follow
+            # (same-length sibling of the series, narrator tag, same-length library book).
+            why.append(f"{len(marks)} chapter marks do not line up with Audible's {len(aud_ch[0])} chapters (no proof)")
         # no chapters to compare: the runtime is the only link to THIS volume - another product of the same
         # series with (nearly) the same length makes it ambiguous (Slow Life 2 vs 4: 0.8 s apart)
         try:
@@ -215,7 +219,7 @@ def verify(req):
             if c == asin:
                 continue
             q = A.get_audible_data(c, lang)
-            if isinstance(q, dict) and q.get("runtime_sec") and abs(q["runtime_sec"] - dur) <= RUNTIME_OK_S:
+            if isinstance(q, dict) and q.get("runtime_sec") and abs(q["runtime_sec"] - dur) <= rt_tol(dur):
                 qn = [x.get("part") for x in ((q.get("meta_raw") or {}).get("series") or []) if x.get("part")]
                 if not (num and any(num_eq(x, num) for x in qn)):
                     why.append(f"another product of the series has the same length: {q.get('title_raw')} {qn} [{c}] (no chapter proof)"); return out
