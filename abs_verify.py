@@ -125,7 +125,10 @@ def verify(req):
     p_lang = A.map_language(meta.get("language"))
     if p_lang and p_lang != lang:
         out["verdict"] = "wrong"; why.append(f"language {p_lang}, expected {lang}"); return out
-    if (meta.get("format") or "unabridged").lower() != "unabridged":
+    # Audible formats: 'unabridged', 'original_recording' (Audible Originals / full-cast productions = complete) and
+    # 'abridged'. Only a shortened edition is a reason for manual (2026-11-23: Exoplanet was 'original_recording').
+    fmt_ = (meta.get("format") or "unabridged").lower()
+    if "abridged" in fmt_ and "unabridged" not in fmt_:
         why.append(f"format {meta.get('format')}"); return out
     t_score = max(A.search_match_score(title, p.get("title_raw") or "", p.get("subtitle_raw")),
                   A.title_similarity(A.clean_title(title), A.clean_title(p.get("title_raw") or "")))
