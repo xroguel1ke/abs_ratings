@@ -82,6 +82,7 @@ def verify(req):
         if exp.get("asin"):
             asin = str(exp["asin"]).strip()
         else:
+            A.LOOKUP_HITS["audible"] = 0      # abs_ratings sets it to None when a search request failed (timeout, HTTP error)
             asin = A.search_audible_api(title, [author], dur, lang, required_lang=lang, narrators=tag_narr or None, abs_series=abs_series)
             if not asin and series:
                 asin = A.find_missing_asin_via_series(title, [author], dur, lang, required_lang=lang, narrators=tag_narr or None, abs_series=abs_series)
@@ -90,6 +91,10 @@ def verify(req):
         return out
     if asin is False:
         why.append("Audible API unavailable")
+        return out
+    if not asin and not exp.get("asin") and A.LOOKUP_HITS.get("audible") is None:
+        # part of the search did not answer: "nothing found" is not proven - temporary, the importer retries later
+        why.append("Audible search failed (incomplete answers, network) - try again later")
         return out
     if not asin:
         why.append("no Audible edition of this book matches the file (runtime/author/volume)")
@@ -121,7 +126,21 @@ def verify(req):
 
     # 3) the product must be the REQUESTED book
     if not A.match_author([author], ", ".join(p.get("authors_raw") or [])):
-        out["verdict"] = "wrong"; why.append(f"author on Audible: {p.get('authors_raw')}"); return out
+        raw = p.get("authors_raw") or []
+        if raw and not any(re.search(r"[A-Za-z]", a or "") for a in raw):
+            # author only in non-Latin script on Audible (2026-11-23: 理不尽な孫の手 = Rifujin na Magonote): names can't be
+            # compared -> never "wrong" on that alone; go on only if the requested series AND volume match exactly
+            from abs_series import series_key as _sk
+            same = series and num and any(
+                s.get("name") and _sk(s["name"]) == _sk(series) and str(s.get("part") or "").lstrip("0") == str(num).lstrip("0")
+                for s in aud_series)
+            # ... and the REQUESTED author must already own this series in the library (else a wrong author slips through)
+            owns = series and any(len(b["rel"].split("/")) >= 3 and _sk(b["rel"].split("/")[1]) == _sk(series) for b in same_author)
+            if not (same and owns):
+                why.append(f"author on Audible only in non-Latin script {raw}, series/volume/author not confirmed by the library"); return out
+            why.append(f"author on Audible in non-Latin script {raw} - series + volume match, series already under this author")
+        else:
+            out["verdict"] = "wrong"; why.append(f"author on Audible: {raw}"); return out
     p_lang = A.map_language(meta.get("language"))
     if p_lang and p_lang != lang:
         out["verdict"] = "wrong"; why.append(f"language {p_lang}, expected {lang}"); return out
