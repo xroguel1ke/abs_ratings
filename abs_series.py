@@ -1537,10 +1537,14 @@ def drop_duplicate_series(ctx, records):
     for r in records:  # the same name twice, only punctuation differs ('The Haunted Bookstore - Gateway...' / '..._ Gateway...'), same number
         if 'lock_series' in r['tags'] or 'lock_all' in r['tags'] or 'lock_metadata' in r['tags']: continue
         pos, new = {}, []
+        folders_ = {p.strip().lower() for p in str(r.get('path') or '').replace('\\', '/').split('/')[:-1] if p.strip()}
+        # user 2026-11-24 ('The Guild Codex_ Spellbound' won over Audible's 'The Guild Codex: Spellbound', 1:1): a folder name has ':' '?'
+        # replaced ('_', ' -'). A name with '_' always loses; on a tie the name that is NOT the book's folder wins (Audible's spelling).
+        rank = lambda n_: ('_' not in n_, raw_n.get((r['lib'], n_), 0), n_.strip().lower() not in folders_)
         for x in r['series']:
             k_ = (words(x['name']), num(x.get('sequence')))
-            if k_[1] is not None and k_ in pos:  # keep the spelling more books use
-                if raw_n.get((r['lib'], x['name']), 0) > raw_n.get((r['lib'], new[pos[k_]]['name']), 0): new[pos[k_]] = dict(x)
+            if k_[1] is not None and k_ in pos:  # keep the better spelling (no '_', more books, not the folder name)
+                if rank(x['name']) > rank(new[pos[k_]]['name']): new[pos[k_]] = dict(x)
                 continue
             pos[k_] = len(new); new.append(dict(x))
         if len(new) < len(r['series']) and abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'series': new}, {'series': r['series']}, 'duplicate_series'):

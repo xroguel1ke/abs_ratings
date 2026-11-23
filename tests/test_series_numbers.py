@@ -104,6 +104,25 @@ def test_same_name_twice_punctuation():
     assert S.drop_duplicate_series(c, recs) == 1 and [x['name'] for x in recs[1]['series']] == [n1]
 
 
+def test_folder_spelling_never_wins_a_tie():
+    # user 2026-11-24: the import made the folder 'The Guild Codex_ Spellbound' (':' is no folder character), ABS took it as series,
+    # abs_ratings added Audible's 'The Guild Codex: Spellbound' - 1:1, and the first one (the '_' folder name) was kept
+    for folder, audible in (('The Guild Codex_ Spellbound', 'The Guild Codex: Spellbound'),
+                            ('Space Marine Conquests_ Warhammer 40,000', 'Space Marine Conquests: Warhammer 40,000')):
+        r = rec(1, 'v1', '2020', [(folder, '1'), (audible, '1')], f'A/{folder}/01 - v1 {{N}}', author='A')
+        c, _ = ctx()
+        assert S.drop_duplicate_series(c, [r]) == 1 and [x['name'] for x in r['series']] == [audible]
+    # ' - ' folder spelling (no '_'), tie: the name that is not the folder wins
+    r = rec(1, 'v1', '2020', [('The Guild Codex - Spellbound', '1'), ('The Guild Codex: Spellbound', '1')], 'A/The Guild Codex - Spellbound/01 - v1', author='A')
+    c, _ = ctx()
+    assert S.drop_duplicate_series(c, [r]) == 1 and [x['name'] for x in r['series']] == ['The Guild Codex: Spellbound']
+    # '_' loses even when more books use it
+    recs = [rec(i, f'v{i}', '2020', [('X_ Y', str(i))], f'A/X_ Y/0{i} - v', author='A') for i in (1, 2)]
+    recs.append(rec(3, 'v3', '2020', [('X_ Y', '3'), ('X: Y', '3')], 'A/X_ Y/03 - v', author='A'))
+    c, _ = ctx()
+    assert S.drop_duplicate_series(c, recs) == 1 and [x['name'] for x in recs[2]['series']] == ['X: Y']
+
+
 def test_name_contained_in_the_other():
     t = 'Tales of Witness (Malazan Universe)'
     recs = [rec(1, 'Legacies of Betrayal', '2026', [(t, '3')], 'S/x/3 - a', author='E'),
