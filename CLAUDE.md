@@ -332,7 +332,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   - UI pass 2026-11-24 (user: shorter, tidier, settings less cluttered, dark theme calmer): settings in 6 sections (core.SECTIONS:
     Connection, Scans = Run + Schedule, Sources, Metadata = Metadata + Series & authors, Notifications = + Calendar, System = Logs +
     Interface + 'Account and data'; SECTION_ALIASES keep old posts, JS maps old #hashes), rows = name + help left / control right,
-    switches (input.sw), 'default' only when the value differs, SUBHEADS inside cards, DEPENDS hides rows while their switch is off.
+    switches (input.sw), reset icon only when the value differs (no dotted 'default' text), SUBHEADS inside cards, DEPENDS hides
+    rows while their switch is off; ADVANCED rows (set-once / fine tuning) only with the 'Advanced settings' switch (Sonarr-style).
     Overview: short library-check labels, checks without findings in one line, no duplicate Hardcover numbers. Run names shown in
     the UI language (app.run_label), singular counts, 'quick mode' trigger, journal times converted from UTC (filter dt), header
     'Next scan' chip (filter when), search right of the tabs; dark tokens: darker bg, quieter hairlines. Preview without internet:

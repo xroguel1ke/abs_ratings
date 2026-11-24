@@ -369,3 +369,18 @@ h3.subh{font-size:13px;font-weight:500;color:var(--muted);margin:20px 0 0;paddin
 }
 @media (max-width:860px){.snav-toggle{display:inline-flex;align-items:center;gap:6px;flex-direction:row}}
 @media (max-width:860px){button.iconbtn.snav-toggle{width:auto;height:32px;padding:0 12px;gap:6px;font-size:13px}}
+/* settings 2nd pass (user 2026-11-24): advanced rows only with the switch on top (like Sonarr), a small dot marks them;
+   'default' is a reset icon next to the control, only when the value differs */
+body:not(.show-adv) .adv-row{display:none!important}
+.show-adv .adv-row .fn::after{content:'';display:inline-block;width:6px;height:6px;border-radius:3px;background:var(--accent);opacity:.6;margin-left:8px;vertical-align:middle}
+.fc{flex-direction:row;align-items:center;justify-content:flex-end;gap:4px}
+.fc>input:not(.sw),.fc>select{flex:1;width:auto;min-width:0}
+.f.fx.wide .fc{flex-direction:column;align-items:stretch}
+.fc>button.iconbtn.resetbtn{order:-1;width:28px;height:28px;color:var(--muted)}.fc>button.iconbtn.resetbtn:hover{color:var(--fg)}
+.fc>button.resetbtn.done{color:var(--accent)}
+.advtoggle{display:inline-flex;align-items:center;gap:8px;cursor:pointer;color:var(--fg2)}
+@media (max-width:700px){.fc{justify-content:flex-start}.f.fx.bool .fc{justify-content:flex-end}}
+.f.fx.nob{border-bottom:none}
+.daypick label.badge{padding:4px 10px;color:var(--muted)}.daypick label.badge input{position:absolute;opacity:0;width:1px;height:1px}
+.daypick label.badge:has(input:checked){color:var(--fg)}.daypick label.badge:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.daypick label.badge:has(input:checked){background:var(--accent-soft);color:var(--accent-ink);box-shadow:inset 0 0 0 1px transparent}

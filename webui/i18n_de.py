@@ -9,8 +9,8 @@ add({
     'ABS API token': 'ABS-API-Token', 'ABS: Settings → Users → API token': 'ABS: Einstellungen → Benutzer → API-Token',
     'Libraries': 'Bibliotheken', 'Which ABS libraries are processed': 'Welche ABS-Bibliotheken bearbeitet werden',
     'ABS timeout (s)': 'ABS-Timeout (s)',
-    'Test run (DRY_RUN) for scheduled scans': 'Testlauf (DRY_RUN) für geplante Scans',
-    'On = nothing is written to ABS, changes are only planned and logged': 'An = nichts wird in ABS geschrieben, Änderungen werden nur geplant und protokolliert',
+    'Scheduled scans as test run only': 'Geplante Scans nur als Testlauf',
+    'On = nothing is written to ABS, changes are only planned': 'An = nichts wird in ABS geschrieben, Änderungen werden nur geplant',
     'Books per scan': 'Bücher pro Scan', 'Picked at random from all due books of all libraries': 'Zufällig aus allen fälligen Büchern aller Bibliotheken',
     'Refresh after (days)': 'Auffrischen nach (Tage)', '0 = every book is due (one complete pass, also in maintenance mode)': '0 = jedes Buch ist fällig (ein kompletter Durchlauf, auch im Wartungsmodus)',
     'Refresh new releases more often': 'Neue Releases öfter auffrischen',
@@ -447,7 +447,7 @@ add({  # page tour 2026-11-08
     'Missing volumes as of %(d)s': 'Fehlende Bände, Stand %(d)s', 'New': 'Neu', 'Tiles': 'Kacheln', 'List': 'Liste', 'Released only': 'Nur erschienene',
     'Nothing missing.': 'Nichts fehlt.',
     'Every series with its books and the volumes you are missing. Tiles show covers, List only the gaps. Hide what does not interest you.': 'Jede Reihe mit ihren Büchern und den Bänden, die dir fehlen. Kacheln zeigen Cover, Liste nur die Lücken. Blende aus, was dich nicht interessiert.',
-    "Audible's chapters for files without real chapters, when the runtime fits (no chapters at all: up to 60 s off). lock_chapters protects a book": 'Audible-Kapitel für Dateien ohne echte Kapitel, wenn die Laufzeit passt (ganz ohne Kapitel: bis 60 s Abweichung). lock_chapters schützt ein Buch',
+    "Audible's chapters for files without real chapters, when the runtime fits (no chapters at all: up to 60 s off)": 'Audible-Kapitel für Dateien ohne echte Kapitel, wenn die Laufzeit passt (ganz ohne Kapitel: bis 60 s Abweichung)',
     'Max. runtime difference for the ASIN to still count as this book. Lower = fewer matches': 'Max. Laufzeitabweichung, damit die ASIN noch als dieses Buch gilt. Niedriger = weniger Treffer',
     'Looks like Chrome to Goodreads (no real browser). At your own risk': 'Tritt bei Goodreads wie Chrome auf (kein echter Browser). Auf eigenes Risiko',
     'Book pages per scan; then only the search is used (bot check after 3-7 pages)': 'Buchseiten pro Scan; danach nur noch die Suche (Bot-Prüfung nach 3–7 Seiten)',
@@ -602,3 +602,4 @@ add({'%(n)s older changes': '%(n)s ältere Änderungen', 'Written to ABS unless 
 
 add({'Chapters': 'Kapitel'})
 add({'today %(t)s': 'heute %(t)s', 'tomorrow %(t)s': 'morgen %(t)s', 'Next scheduled scan': 'Nächster geplanter Scan'})
+add({'Advanced settings': 'Erweiterte Einstellungen', 'Back to the default: %(v)s (save to keep it)': 'Zurück zum Standard: %(v)s (zum Übernehmen speichern)'})

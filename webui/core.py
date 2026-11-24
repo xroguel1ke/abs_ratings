@@ -25,7 +25,7 @@ FIELDS = [
     ('LIBRARY_IDS', 'Libraries', 'libraries', '', 'Which ABS libraries are processed', 'Connection'),
     ('ABS_TIMEOUT', 'ABS timeout (s)', 'int', 30, '', 'Connection'),
 
-    ('DRY_RUN', 'Test run (DRY_RUN) for scheduled scans', 'bool', True, 'On = nothing is written to ABS, changes are only planned and logged', 'Run'),
+    ('DRY_RUN', 'Scheduled scans as test run only', 'bool', True, 'On = nothing is written to ABS, changes are only planned', 'Run'),
     ('BATCH_SIZE', 'Books per scan', 'int', 300, 'Picked at random from all due books of all libraries', 'Run'),
     ('REFRESH_DAYS', 'Refresh after (days)', 'int', 90, '0 = every book is due (one complete pass, also in maintenance mode)', 'Run'),
     ('NEW_RELEASE_REFRESH', 'Refresh new releases more often', 'bool', False, 'New releases gain many ratings at first: Audible, Hardcover and Goodreads are refreshed sooner (also after 5 misses)', 'Run'),
@@ -68,7 +68,7 @@ FIELDS = [
     ('RATING_POSITION', 'Rating block position', 'choice:top|bottom', 'top', '', 'Metadata'),
     ('RATING_MIN_COUNT', 'Minimum number of ratings', 'int', 0, 'A source with fewer ratings is not shown (0 = all)', 'Metadata'),
     ('FILL_COVERS', 'Set missing covers', 'bool', True, 'When ABS has no cover: for every ASIN the match accepted (as for ratings)', 'Metadata'),
-    ('MATCH_CHAPTERS', 'Take Audible chapters', 'bool', True, "Audible's chapters for files without real chapters, when the runtime fits (no chapters at all: up to 60 s off). lock_chapters protects a book", 'Metadata'),
+    ('MATCH_CHAPTERS', 'Take Audible chapters', 'bool', True, "Audible's chapters for files without real chapters, when the runtime fits (no chapters at all: up to 60 s off)", 'Metadata'),
     ('COVERS_TO_METADATA', 'Keep folder covers in ABS metadata', 'bool', True, 'A cover ABS took from the book folder is copied once into its metadata folder (cache), so apps no longer wake the disk. Same image, the folder file stays; also for locked covers', 'Metadata'),
     ('UPDATE_COVERS', 'Replace existing covers', 'bool', True, 'Only for a verified ASIN; the old cover is backed up', 'Metadata'),
     ('GENRE_LANGUAGE', 'Genre language', 'choice:en|keep', 'en', 'Audible.de genres are translated to English', 'Metadata'),
@@ -99,7 +99,11 @@ CHOICE_LABELS = {'en': 'English', 'de': 'Deutsch', 'moons': '🌕🌕🌕🌗�
 # rarely changed: shown folded ("Advanced") inside their card
 ADVANCED = {'ABS_TIMEOUT', 'SLEEP_TIMER', 'NO_RATINGS_RECHECK_DAYS', 'USE_AUDIBLE_API', 'AUDIBLE_API_INTERVAL',
             'AUDIBLE_WEB_INTERVAL', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'HARDCOVER_INTERVAL', 'GOODREADS_INTERVAL', 'GR_BOOK_PAGES',
-            'GR_IMPERSONATE', 'GR_MODE_PAUSE_MIN', 'SERIES_LOCK_AFTER_MERGE'}
+            'GR_IMPERSONATE', 'GR_MODE_PAUSE_MIN', 'SERIES_LOCK_AFTER_MERGE',
+            # user 2026-11-24 ('expert settings hinter einem schalter wie sonarr'): set once or fine tuning
+            'RUN_MODE', 'MAINTAIN_SAMPLE', 'NEW_RELEASE_DAYS', 'NEW_RELEASE_REFRESH_DAYS', 'AUDIBLE_MARKETPLACES', 'HARDCOVER_PAID',
+            'GR_MODE_MINUTES', 'GR_MODE_DAILY', 'RATING_MIN_COUNT', 'COVERS_TO_METADATA', 'GENRE_LANGUAGE', 'GENRE_RULES',
+            'SERIES_LIST_DAYS', 'MISSING_NOVELLAS', 'GENRE_CLEANUP', 'REMOVE_EMPTY_AUTHORS', 'LIBRARY_REPORT', 'LOG_LEVEL', 'LOG_RETENTION_DAYS'}
 # settings sections (left menu, one form + save button each) -> the field groups (cards) they contain
 # user 2026-11-24 ('alles dort ist sehr unübersichtlich'): 6 sections instead of 10. 'Schedule' and 'Notifications' are cards without FIELDS.
 SECTIONS = {'Connection': ['Connection'], 'Scans': ['Run', 'Schedule'], 'Sources': ['Audible', 'Hardcover', 'Goodreads'],
