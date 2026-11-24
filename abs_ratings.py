@@ -1445,7 +1445,15 @@ def match_chapters(abs_chs, dur, aud):
         if shift and abs(-diff - shift) <= 3:
             off = intro if why != 'outro' else 0.0
             return mk([0.0] + [c[0] - off for c in chs[1:]], titles), f"the file lacks Audible's {why} ({diff:+.1f} s)"
+    if len(abs_chs or []) <= 1 and abs(diff) <= CH_LOOSE_SECONDS:
+        # user 2026-11-24 (3 books by hand, ~30 s off): a file WITHOUT chapters of the same (verified) recording gets Audible's chapters
+        # as they are - what ABS's own 'Find chapters' gives; a mark off by a few seconds beats no chapters at all
+        starts = [c[0] for c in chs]
+        keep = [i for i, st in enumerate(starts) if st < dur - 1]
+        return mk([starts[i] for i in keep], [titles[i] for i in keep]), f"the file has no chapters, length within {CH_LOOSE_SECONDS:g} s of Audible ({diff:+.1f} s)"
     return None, f"length differs by {diff:+.0f} s and no reliable alignment"
+
+CH_LOOSE_SECONDS = 60
 
 def anchor_align(abs_chs, chs, dur, need=0.9):
     """The file's own chapter marks sit where Audible's chapters start, up to one constant offset (Audible's intro cut differently):
@@ -3449,6 +3457,14 @@ def author_key_s(n):
     from abs_series import author_key
     return author_key(n)
 
+def is_role_name(name):
+    """The name was credited with a role (illustrator, translator, editor, ...) on Audible or Hardcover (role_credits.json) - also when
+    a word is doubled or in another order ('Mitz Mitz Vah' on Slime = 'Mitz Vah - illustrator')."""
+    from abs_series import role_base
+    toks = lambda n: frozenset(re.findall(r'[a-z0-9]+', fold_accents(role_base(n or '')).lower()))
+    t = toks(name)
+    return bool(t) and any(toks(n) == t for n in tuple(ROLE_NAMES))
+
 def hc_prefetch(keys):
     """Refresh all cached books of this run in bulk (100 per request) instead of one request per book."""
     ids = sorted({HC_CACHE[k]['id'] for k in keys if HC_CACHE.get(k, {}).get('id')})
@@ -5257,6 +5273,8 @@ def process_queue(work_queue, history, failed, recheck):
                     skip_meta = True
                     logging.info(f"      -> ⏭️ Metadata sync skipped: runtime still differs (ABS {format_time(abs_dur)} vs Audible {format_time(aud_data['runtime_sec'])}). Only ratings are used.")
 
+                ch_done_ = False  # chapters written in this run (the review entry 'no chapters' is then obsolete)
+                co_late = None  # co-authors to add once Hardcover had its say on roles (see 'user 2026-11-24' below)
                 if aud_data and aud_data.get('meta_raw') and not skip_meta:
                     md_raw = aud_data['meta_raw']
                     abs_updates = {}
@@ -5963,11 +5981,14 @@ def process_queue(work_queue, history, failed, recheck):
                                     and an not in co_ and 2 <= len(an.split()) <= 4
                                     and not re.search(r'(?i)\d|\b(?:books|publishing|press|studios?|media|audio|entertainment|llc|inc)\b', an)]
                         if co_maybe and not co_ and 'lock_authors' not in tags and same_recording(abs_dur, meta.get('narrators'), aud_data):
-                            # loop 2026-11-15 (web UI decision): a co-author WITHOUT own books here may be a real co-author (Janci Patterson) or a
-                            # pen name of the same writer (Travis Deverell = Shirtaloon) - the review list asks once and remembers the answer
-                            sug_ = [a_ for a_ in aud_auth if a_ in co_maybe or match_author(authors, a_)]
-                            sug_ = [next((a_ for a_ in authors if match_author([a_], b_)), b_) for b_ in sug_] + [a_ for a_ in authors if not any(match_author([a_], b_) for b_ in sug_)]
-                            add_review(key, title, 'authors', ', '.join(dict.fromkeys(sug_)), f"Audible lists {', '.join(co_maybe)} as co-author of this recording (a real co-author, or a pen name of the same writer?)")
+                            # user 2026-11-24 ('extrem viele Bücher' on the review list, 90 of them): a co-author Audible lists for exactly this
+                            # recording is ADDED, also without own books here and also when it may be a pen name ('wenn sie wichtig genug sind
+                            # um auf dem cover zu stehen'). Never a translator / illustrator / editor: names credited with such a role (on
+                            # Audible or Hardcover) stay out; the write waits for this book's Hardcover check, which may name such a role.
+                            role_ = [an for an in co_maybe if is_role_name(an)]
+                            if role_: logging.info(f"        ℹ️ Not added as author: {', '.join(role_)} (credited as translator / illustrator / editor elsewhere)")
+                            if [an for an in co_maybe if an not in role_]:
+                                co_late = ([a_ for a_ in aud_auth if a_ in co_maybe or match_author(authors, a_)], [an for an in co_maybe if an not in role_])
                         if co_ and 'lock_authors' not in tags and not abs_updates.get('authors') and same_recording(abs_dur, meta.get('narrators'), aud_data) \
                                 and all(len(a_.split()) >= 2 for a_ in authors):
                             order_ = [a_ for a_ in aud_auth if a_ in co_ or match_author(authors, a_)]
@@ -6132,6 +6153,7 @@ def process_queue(work_queue, history, failed, recheck):
                                 new_chs, why_c = None, "Audible's chapters have no names either"  # 'Chapter 1' for 'Chapter 1': nothing gained
                             if new_chs and abs_set_chapters(iid, key, title, new_chs, abs_chs, 'audible_chapters'):
                                 stats['chapters'] += 1
+                                ch_done_ = True
                                 logging.info(f"        📑 Chapters {'would be ' if DRY_RUN else ''}taken from Audible: {len(new_chs)} ({poor} before; {why_c})")
                             elif not new_chs:
                                 logging.info(f"        ℹ️ Audible's chapters not taken: {why_c}")
@@ -6212,6 +6234,21 @@ def process_queue(work_queue, history, failed, recheck):
                         if key in HC_CACHE and not DRY_RUN: HC_CACHE[key]['gv'] = gv_  # for the genre step of the next run (it runs before Hardcover)
                 if HARDCOVER_ENABLED and hc_status != 'fresh': stats['hc_found' if hc_data else 'hc_missing'] += 1
                 sst_record(key, 'hardcover', 'found' if hc_data else hc_status, LOOKUP_HITS['hardcover'])
+                if co_late and 'lock_authors' not in tags:
+                    # user 2026-11-24: Audible's co-authors of this recording are added - unless this book's Hardcover entry (cross-checked
+                    # above) credits them with another role ('Illustrator', 'Translator', 'Editor', ...)
+                    hc_role_ = {author_key_s(((c or {}).get('author') or {}).get('name') or ''): (c or {}).get('contribution')
+                                for c in ((hc_data or {}).get('contributions') or []) if (c or {}).get('contribution') not in (None, '', 'Author')}
+                    add_ = [an for an in co_late[1] if not is_role_name(an) and author_key_s(an) not in hc_role_]
+                    for an in co_late[1]:
+                        if an not in add_: logging.info(f"        ℹ️ Not added as author: {an} ({hc_role_.get(author_key_s(an)) or 'translator / illustrator / editor'})")
+                    base_ = [x['name'] for x in (abs_updates.get('authors') or [])] or list(authors)
+                    if add_:
+                        order_ = [b_ for b_ in co_late[0] if b_ in add_ or match_author(base_, b_)]
+                        new_a = [next((a_ for a_ in base_ if match_author([a_], b_)), b_) for b_ in order_] + [a_ for a_ in base_ if not any(match_author([a_], b_) for b_ in order_)]
+                        new_a = list(dict.fromkeys(new_a))
+                        if new_a != base_ and abs_update(iid, key, title, {'authors': [{'name': n_} for n_ in new_a]}, {'authors': [{'name': n_} for n_ in base_]}, 'audible_meta'):
+                            logging.info(f"        👥 Authors: {base_} -> {new_a} (co-author on Audible for this recording){' (DRY_RUN, not saved)' if DRY_RUN else ''}")
                 if hc_data and (not aud_data or aud_data.get('related_edition')) and 'lock_asin' not in tags:
                     via = hc_audio_asin(hc_data, abs_dur, authors, hc_targets, meta.get('narrators') or [], lang)
                     if via and via[0] != asin:
@@ -6443,7 +6480,11 @@ def process_queue(work_queue, history, failed, recheck):
                 if GOODREADS_ENABLED and not has_gr and gr_status not in ('deferred', 'fresh'): notes.append(f"Goodreads {gr_status.replace('_', ' ')}")
                 if HARDCOVER_ENABLED and not hc_data and hc_status != 'fresh': notes.append(f"Hardcover {hc_status.replace('_', ' ')}")
                 if ov.get('ignore'): status = 'ignored'
-                review_sweep(key, {'asin', 'title', 'series'} | ({'hardcover'} if HARDCOVER_ENABLED and hc_status != 'fresh' else set()))
+                # user 2026-11-24: co-author entries are no longer raised (added automatically) and chapters set in ABS or by this run
+                # end a 'no chapters' entry - both go from the list when this run checked them
+                review_sweep(key, {'asin', 'title', 'series'} | ({'hardcover'} if HARDCOVER_ENABLED and hc_status != 'fresh' else set())
+                             | ({'authors'} if aud_data and aud_data.get('meta_raw') and not skip_meta else set())
+                             | ({'chapters'} if ch_done_ or len((item_data.get('media') or {}).get('chapters') or []) > 1 else set()))
                 cert, cert_parts = certainty_score(search_title, authors, meta.get('narrators') or [], abs_dur, meta.get('publisher'), meta.get('publishedYear'),
                                                    meta.get('series') or [], aud_data, hc_data, asin_from_search,
                                                    any(x.get('key') == key and x.get('status', 'open') == 'open' for x in (rw_json(REVIEW_FILE) or []) if isinstance(x, dict)))

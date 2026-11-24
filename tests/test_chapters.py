@@ -31,7 +31,7 @@ def test_intro_cut():
 
 
 def test_unexplained_difference_is_left_alone():
-    new, why = A.match_chapters([], 3260.0, AUD)
+    new, why = A.match_chapters([], 3290.0, AUD)  # 90 s more than Audible: not 'a little' any more
     assert new is None
     new, why = A.match_chapters([], 3500.0, AUD)
     assert new is None
@@ -54,3 +54,19 @@ def test_chapters_ending_early_are_poor():
     named = lambda end: [{'start': 0, 'end': 600, 'title': 'Prologue'}, {'start': 600, 'end': end, 'title': 'Chapter 1'}]
     assert A.chapters_poor(named(59820), 72300) == 'chapters end long before the file does'  # 997 of 1205 min
     assert A.chapters_poor(named(72000), 72300) is None  # 5 min short: rounding / credits
+
+
+def test_small_difference_without_chapters_takes_audibles():
+    # user 2026-11-24: 3 books by hand, ~30 s off - a file WITHOUT chapters takes Audible's as they are (like ABS's 'Find chapters')
+    for dur in (3230.0, 3170.0, 3150.0):
+        new, why = A.match_chapters([], dur, AUD)
+        assert new and [c['start'] for c in new] == [0.0, 40.0, 1040.0, 2240.0] and new[-1]['end'] == dur and new[1]['title'] == 'Chapter 1: Start', (dur, why)
+    one = [{'start': 0, 'end': 3230, 'title': 'Book'}]
+    assert A.match_chapters(one, 3230.0, AUD)[0], 'a single chapter counts as none'
+    own = [{'start': 0, 'end': 500, 'title': '1'}, {'start': 500, 'end': 1500, 'title': '2'}, {'start': 1500, 'end': 3230, 'title': '3'}]
+    assert A.match_chapters(own, 3230.0, AUD)[0] is None, "the file's own (different) marks are not overwritten loosely"
+    short = ([(0.0, 40.0, 'a'), (40.0, 3100.0, 'b'), (3140.0, 60.0, 'c')], 0, 0)
+    new, why = A.match_chapters([], 3150.0, short)  # -50 s: every start lies inside the file
+    assert new and [c['start'] for c in new] == [0.0, 40.0, 3140.0] and new[-1]['end'] == 3150.0, why
+    new, why = A.match_chapters([], 3141.0, short)  # -59 s: the last start (3140) lies past the end of the file and is dropped
+    assert new and len(new) == 2 and new[-1]["end"] == 3141.0, why

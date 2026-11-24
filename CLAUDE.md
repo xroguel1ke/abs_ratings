@@ -236,7 +236,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     language fits the group keeps it). Genres: glued lists split, 'Audiobook'/'General' removed.
   - Chapters (MATCH_CHAPTERS, lock_chapters): Audible's chapters (Audnexus) for poor chapters (none, one, only numbers on both sides is
     skipped, > 30 s past the end) when the file length matches to 5 s, the file's own marks match Audible's lengths, or Audible's intro/outro
-    explain up to 2 min. Journal keeps chapter start/end/title; undo/apply support it.
+    explain up to 2 min. User 2026-11-24: a file WITHOUT chapters (none or one) of a verified recording takes Audible's chapters as they
+    are when the length differs by <= CH_LOOSE_SECONDS (60 s; starts past the end dropped). Journal keeps chapter start/end/title; undo/apply support it.
   - tools/regress.sh runs at most 10 test containers at a time (REGRESS_JOBS); ~100 parallel containers disturbed the server.
   - ABS_BACKUP: at most one ABS backup per ABS_BACKUP_HOURS (24); 6 run backups a day had pushed every older one out of ABS's keep-limit.
   - Search fallbacks for messy file tags (2026-11-15): ABS title = Audible SUBTITLE ('The Half-Elf Demigod Part I' = Overlord 15);
@@ -311,7 +312,10 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     repeated every run). Role credits with an em dash ('— Translator', '— Other') count as roles.
   - Loop 2026-11-15 part 3: review kinds 'nested' (book folders inside a book folder) and 'too_long' (audio > 1.5x Audible, > 60 min);
     genre synonyms -> one name (_GENRE_SYN, Audible's names; 'adult'/'Amazon' go), also per book (no ping-pong); a series set in the
-    same run cleans the subtitle label at once; co-authors without own books -> review list (authors kind, decision remembered);
+    same run cleans the subtitle label at once; co-authors without own books -> review list (authors kind, decision remembered;
+    REPLACED 2026-11-24: they are added automatically, also pen names - only names with a role (is_role_name: role_credits.json,
+    or this book's Hardcover contribution role) stay out; the write waits for the Hardcover cross-check; review_sweep drops old
+    'authors' entries and 'chapters' entries once the book has chapters);
     run status 'warning' when every failed book was a network error (web UI badge + reason).
   - tools/run_round.sh RECORD_NO_LIVE is a HOST LIST, not a flag ('1' matched every URL with a 1, web pages went live and were
     recorded -> golden deviations). For library-wide comparisons use mode 'replay' (nothing recorded).
