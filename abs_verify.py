@@ -241,12 +241,18 @@ def verify(req):
             why.append(f"{len(marks)} chapter marks do not line up with Audible's {len(aud_ch[0])} chapters (no proof)")
         # no chapters to compare: the runtime is the only link to THIS volume - another product of the same
         # series with (nearly) the same length makes it ambiguous (Slow Life 2 vs 4: 0.8 s apart)
+        # 2026-11-24 (regression loop12): the listing only knows series it has seen before (SERIES_ASINS) and a failed
+        # request also yields [] - an EMPTY listing looked like "no sibling of the same length" (Shadows of the Apt 10
+        # accepted as 1). Feed the book's own series ASINs first; a usable listing must contain the book itself.
+        for s_ in ((p.get("meta_raw") or {}).get("series") or []):
+            if s_.get("name") and s_.get("asin"):
+                A.SERIES_ASINS.setdefault(s_["name"], set()).add(s_["asin"])
         try:
             sib = A.series_candidates([{"name": s_["name"]} for s_ in aud_series if s_.get("name")] or abs_series, [author], dur, p.get("domain"))
         except Exception:
             sib = None
-        if sib is None:
-            why.append("series listing not available (no chapter proof)"); return out
+        if sib is None or ((aud_series or abs_series) and asin not in sib):
+            why.append("series listing not available or incomplete (no chapter proof)"); return out
         for c in sib:
             if c == asin:
                 continue
