@@ -55,7 +55,7 @@ FIELDS = [
 
     # Goodreads = its own background mode (user 2026-11-18), apart from the scans (Audible, Hardcover): see GoodreadsBackground
     ('GOODREADS_ENABLED', 'Goodreads background mode', 'bool', False, 'Pauses while a scan runs', 'Goodreads'),
-    ('GR_MODE_MINUTES', 'Minutes between two books', 'float', 5, 'With a little jitter. Fewer minutes = faster, but Goodreads blocks sooner', 'Goodreads'),
+    ('GR_MODE_MINUTES', 'Minutes between two books', 'float', 7, 'With a little jitter. Fewer minutes = faster, but Goodreads blocks sooner', 'Goodreads'),
     ('GR_MODE_DAILY', 'Books per day at most', 'int', 300, '', 'Goodreads'),
     ('GR_MODE_PAUSE_MIN', 'Pause after a block (minutes)', 'int', 15, 'Doubles with every block in a row, at most 6 hours', 'Goodreads'),
     ('GR_BOOK_PAGES', 'Goodreads book page first', 'bool', True, 'Off = read the rating from the search list only', 'Goodreads'),

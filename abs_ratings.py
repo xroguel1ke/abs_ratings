@@ -283,7 +283,7 @@ GOODREADS_MAX_PER_RUN = int(os.getenv('GOODREADS_MAX_PER_RUN', 25))  # measured 
 # scans run with GOODREADS_ENABLED=false; one long-running process (started by the web UI while no scan runs) asks ONE book
 # every few minutes. Goodreads lines already in a rating block stay when a scan rewrites it.
 GR_BACKGROUND = os.getenv('GR_BACKGROUND', '') == '1'                    # this process IS the background mode
-GR_MODE_MINUTES = float(os.getenv('GR_MODE_MINUTES', 5) or 5)            # pause between two books (+-20 % jitter)
+GR_MODE_MINUTES = float(os.getenv('GR_MODE_MINUTES', 7) or 7)            # pause between two books (+-20 % jitter); 7 = the value the library runs with (2026-11-24)
 GR_MODE_DAILY = int(os.getenv('GR_MODE_DAILY', 300) or 300)              # books per day at most
 GR_MODE_PAUSE_MIN = float(os.getenv('GR_MODE_PAUSE_MIN', 15) or 15)      # pause after a block; doubles with every block in a row, max 6 h
 
