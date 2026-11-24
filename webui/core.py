@@ -594,6 +594,21 @@ RUN_OVERRIDABLE = {'BATCH_SIZE', 'REFRESH_DAYS', 'HARDCOVER_ENABLED', 'SERIES_ME
 KIND_LABELS = {'full': 'Scan', 'series': 'Series & report only', 'item': 'Single book', 'undo': 'Undo', 'apply': 'Apply test run'}
 
 
+def other_script_pids(own=None):
+    """PIDs of script processes (scan, apply, undo) in this container - not the Goodreads background mode, not 'own'."""
+    out = []
+    for d in glob.glob('/proc/[0-9]*'):
+        try:
+            pid = int(os.path.basename(d))
+            if pid in (own, os.getpid()): continue
+            cmd = open(f'{d}/cmdline', 'rb').read().split(b'\0')
+            if not any(os.path.basename(x.decode(errors='replace')) in ('abs_ratings.py', 'abs_apply.py', 'abs_undo.py') for x in cmd[1:3]): continue
+            if b'GR_BACKGROUND=1' in open(f'{d}/environ', 'rb').read().split(b'\0'): continue
+            out.append(pid)
+        except (OSError, ValueError): continue
+    return out
+
+
 class RunManager:
     """Starts at most one script process at a time and keeps a small run history (webui_runs.json)."""
 
@@ -601,11 +616,35 @@ class RunManager:
         self.proc, self.current = None, None
         self.lock = threading.Lock()
 
-    def runs(self): return _load_json(RUNS_FILE, [])
+    def runs(self):
+        runs = _load_json(RUNS_FILE, [])
+        if any(r.get('status') == 'running' for r in runs[:20]): runs = self._reconcile(runs)
+        return runs
 
     def get(self, run_id): return next((r for r in self.runs() if r['id'] == run_id), None)
 
-    def running(self): return self.proc is not None and self.proc.poll() is None
+    def running(self):
+        # 2026-11-24: a run started from ANOTHER process (docker exec, the CLI) is invisible to self.proc - a quick run of the
+        # scheduler then ran at the same time as it (same result files). Any live script process counts.
+        return (self.proc is not None and self.proc.poll() is None) or bool(other_script_pids(self.proc.pid if self.proc else None))
+
+    def _reconcile(self, runs):
+        """A 'running' entry whose process is gone (started by another process that ended before the script did): finished,
+        with the end time and error count of its log - never 'running' for ever."""
+        live = bool(other_script_pids(None))
+        changed = False
+        for r in runs[:20]:
+            if r.get('status') != 'running' or (self.current and r.get('id') == self.current.get('id')) or live: continue
+            lp = os.path.join(LOG_DIR, r.get('log') or '')
+            try: txt, end = open(lp, encoding='utf-8', errors='replace').read()[-20000:], datetime.fromtimestamp(os.path.getmtime(lp))
+            except OSError: txt, end = '', datetime.now()
+            m = re.search(r'Errors: (\d+)', txt)
+            r.update(end=end.isoformat(timespec='seconds'), status='ok' if m and m.group(1) == '0' else ('error' if m else 'stopped'),
+                     status_reason='' if m else 'process ended without a summary')
+            changed = True
+        if changed:
+            with _lock: _save_json(RUNS_FILE, runs[:300])
+        return runs
 
     def _save_run(self, run):
         with _lock:
