@@ -338,6 +338,11 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     the UI language (app.run_label), singular counts, 'quick mode' trigger, journal times converted from UTC (filter dt), header
     'Next scan' chip (filter when), search right of the tabs; dark tokens: darker bg, quieter hairlines. Preview without internet:
     copy of the config + internal docker network + headless chromium (zenika/alpine-chrome).
+  - Speed 2026-11-24 (quick runs 2.5-5.5 min, books only 15-30 s): library tasks load the full items 500 at a time
+    (abs_series.load_full_items, POST /api/items/batch/get; single GETs only as fallback; fake_abs has the endpoint) - 60 s -> ~3 s;
+    missing volumes ask the series ASIN that answered before first (76 dead alternate ASINs were asked in every run, an answer
+    without a list is not cached) - every series still checked every run; a passed source check is reused CANARY_REUSE_MIN (60) min
+    (source_check.json, never in record/replay, removed on a failed check; the breaker's own checks always ask).
     run status 'warning' when every failed book was a network error (web UI badge + reason).
   - tools/run_round.sh RECORD_NO_LIVE is a HOST LIST, not a flag ('1' matched every URL with a 1, web pages went live and were
     recorded -> golden deviations). For library-wide comparisons use mode 'replay' (nothing recorded).

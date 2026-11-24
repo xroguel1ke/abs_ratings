@@ -4598,6 +4598,7 @@ def sst_record(key, source, status, hits=None, aud_facts=None):
     if e and e.get('st') == 'paused' and status != 'found':
         logging.info(f"        ⏸️ {source.capitalize()}: {e.get('why')} - paused for {refresh_for(key)} days")
 
+CANARY_REUSE_MIN = float(os.getenv('CANARY_REUSE_MIN', 60) or 0)  # a passed source check is reused this long (0 = check every run)
 SERIES_MEMBERS_FILE = os.path.join(SCRIPT_DIR, 'series_members.json')  # {host|series asin: {'ts', 'members'}}, 7 days
 
 def series_members_full(host, sasin, cache):
@@ -4661,11 +4662,14 @@ def missing_in_series_task():
         sasins = by_key.get(_k(name)) or set()
         if not sasins or lang not in hosts or (BOOK_LANGUAGES and lang not in BOOK_LANGUAGES): continue
         members = None
-        for h in hosts[lang]:
-            for sa in sorted(sasins):
-                m = series_members_full(h, sa, cache); asked += 1
-                if m: members, store = m, h.replace('api.', 'www.'); break
-            if members: break
+        # user 2026-11-24 (library tasks slow): a series often has several ASINs and some are dead on Audible (an answer without a
+        # series list - not cached, so asked again in EVERY run: 76 lookups, 1-3.5 min per quick run). The one that answered before is
+        # asked first; the others only when it fails. Every series is still checked in every run, lists stay as fresh as before.
+        cands = [(h, sa) for h in hosts[lang] for sa in sorted(sasins)]
+        cands.sort(key=lambda c: not (cache.get(f"v2|{c[0]}|{c[1]}") or {}).get('members'))  # stable: the old order otherwise
+        for h, sa in cands:
+            m = series_members_full(h, sa, cache); asked += 1
+            if m: members, store = m, h.replace('api.', 'www.'); break
         if not members: continue
         checked.append(name)  # Audible knows this series: the series page can show 'complete'
         miss = MS.compare(books, members, _v(name), lang, MISSING_NOVELLAS)
@@ -4729,6 +4733,16 @@ def source_canaries(only=None):
     """One known book per source must come back with every field the rules need (source_health.py). Before the per-book part
     (only=None: failed sources are switched off) and when the breaker suspects a source (only=<source>: returns the problem or '')."""
     if not SOURCE_CANARY or not USE_AUDIBLE_API: return '' if only else None
+    # user 2026-11-24 (start of every quick run ~15 s): a check that PASSED less than CANARY_REUSE_MIN ago is reused before the
+    # per-book part; a source that breaks during a run is still caught by the breaker (only=<source> always asks)
+    ck_file, hc_on = os.path.join(SCRIPT_DIR, 'source_check.json'), bool(HARDCOVER_ENABLED and not HC_STATE['disabled'])
+    if not only and CANARY_REUSE_MIN > 0 and not (recorder.RECORD_DIR or recorder.REPLAY_DIR):
+        last = rw_json(ck_file) or {}
+        try: age = (datetime.now(timezone.utc) - datetime.fromisoformat(last.get('ok_at'))).total_seconds() / 60
+        except (TypeError, ValueError): age = None
+        if age is not None and 0 <= age < CANARY_REUSE_MIN and last.get('hardcover') == hc_on:
+            logging.info(f"Source check: all OK ({round(age)} min ago, reused for {CANARY_REUSE_MIN:g} min)")
+            return None
     hc_search = (lambda q: hc_query("query($q:String!){ search(query:$q, query_type:\"Book\", per_page:8, page:1){ results } }", {'q': q})) \
         if HARDCOVER_ENABLED and not HC_STATE['disabled'] else None
     down = SH.run_canaries(get_audible_api, hc_search, log=logging.warning, only=only)
@@ -4741,6 +4755,11 @@ def source_canaries(only=None):
             if not SH.run_canaries(get_audible_api, hc_search if src_ == 'hardcover' else None, log=logging.warning, only=src_):
                 down.pop(src_); logging.info(f"{src_.capitalize()} check OK on the retry"); break
     if only: return down.get(only, '')
+    try:
+        if not down and CANARY_REUSE_MIN > 0 and not (recorder.RECORD_DIR or recorder.REPLAY_DIR):
+            rw_json(ck_file, {'ok_at': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'hardcover': hc_on})
+        elif down and os.path.exists(ck_file): os.remove(ck_file)
+    except OSError: pass
     for s_, why in down.items(): source_down(s_, why)
     logging.info(f"Source check: {'all OK' if not down else 'PROBLEM - ' + '; '.join(f'{k}: {v}' for k, v in down.items())}")
 

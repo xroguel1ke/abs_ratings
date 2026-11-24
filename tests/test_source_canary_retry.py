@@ -14,6 +14,7 @@ def test_audible_check_retried_before_switch_off(monkeypatch):
     monkeypatch.setattr(A, 'source_down', lambda s, why: downed.append(s))
     monkeypatch.setattr(A, 'SOURCE_CANARY', True)
     monkeypatch.setattr(A, 'USE_AUDIBLE_API', True)
+    monkeypatch.setattr(A, 'CANARY_REUSE_MIN', 0)  # every call checks (a passed check is otherwise reused for an hour)
     A.source_canaries()
     assert downed == [] and calls == [None, 'audible']
 
@@ -25,5 +26,6 @@ def test_audible_check_switches_off_when_it_stays_down(monkeypatch):
     monkeypatch.setattr(A, 'source_down', lambda s, why: downed.append(s))
     monkeypatch.setattr(A, 'SOURCE_CANARY', True)
     monkeypatch.setattr(A, 'USE_AUDIBLE_API', True)
+    monkeypatch.setattr(A, 'CANARY_REUSE_MIN', 0)  # every call checks (a passed check is otherwise reused for an hour)
     A.source_canaries()
     assert downed == ['audible']

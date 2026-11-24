@@ -310,6 +310,31 @@ def merge_check(group, cand, decisions=None):
     return (False, rel, lock_msg) if locked else (True, rel, 'ok')
 
 
+def load_full_items(sess, url, items, workers=3):
+    """[(listing item, full item or None, error)] in listing order. user 2026-11-24 (library tasks slow): ABS hands out 500 full items
+    per request (POST /api/items/batch/get, what its own web client uses) - 2,435 books in ~3 s instead of ~60 s one by one. Items a
+    batch does not return (or a failed batch) are fetched one by one as before."""
+    full = {}
+    for i in range(0, len(items), 500):
+        chunk = [it['id'] for it in items[i:i + 500]]
+        try:
+            r = sess.post(f"{url}/api/items/batch/get", json={'libraryItemIds': chunk}, timeout=120)
+            got = r.json().get('libraryItems') if r.status_code == 200 else None
+        except Exception: got = None
+        for d in got or []:
+            if isinstance(d, dict) and d.get('id'): full[d['id']] = d
+    rest = [it for it in items if it['id'] not in full]
+    if rest:
+        from concurrent.futures import ThreadPoolExecutor
+        def _get(it):
+            try: return it['id'], sess.get(f"{url}/api/items/{it['id']}").json(), None
+            except Exception as e: return it['id'], None, e
+        with ThreadPoolExecutor(max_workers=workers) as ex_:
+            single = {i: (d, e) for i, d, e in ex_.map(_get, rest)}
+    else: single = {}
+    return [(it, full[it['id']], None) if it['id'] in full else (it, *single.get(it['id'], (None, 'not loaded'))) for it in items]
+
+
 def collect_records(ctx):
     """Load every book of the configured libraries with full metadata (ABS only)."""
     sess, url = ctx['session'], ctx['abs_url']
@@ -319,13 +344,7 @@ def collect_records(ctx):
         except Exception as e:
             logging.error(f"Series task: cannot load library {lib}: {e}"); continue
         logging.info(f"   Loading {len(items)} items of library {lib} ...")
-        # speed 2026-11-15: the full items are fetched in parallel (one at a time took ~1 min for 2000 books); order kept
-        from concurrent.futures import ThreadPoolExecutor
-        def _get(it):
-            try: return it, sess.get(f"{url}/api/items/{it['id']}").json(), None
-            except Exception as e: return it, None, e
-        with ThreadPoolExecutor(max_workers=int(ctx.get('load_workers') or 3)) as ex_:
-            loaded = list(ex_.map(_get, items))
+        loaded = load_full_items(sess, url, items, int(ctx.get('load_workers') or 3))
         for it, d, err in loaded:
             if err is not None or not isinstance(d, dict):
                 logging.warning(f"   Could not load item {it.get('id')}: {err}"); continue

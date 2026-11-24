@@ -41,6 +41,12 @@ def item(iid):
     it = SNAP['items'].get(iid)
     return (jsonify(it), 200) if it else (jsonify(error='not found'), 404)
 
+@app.post('/api/items/batch/get')
+def items_batch():  # like ABS: the full items of the given ids (unknown ids are left out)
+    from flask import request
+    ids = (request.get_json(silent=True) or {}).get('libraryItemIds') or []
+    return jsonify(libraryItems=[SNAP['items'][i] for i in ids if i in SNAP['items']])
+
 @app.patch('/api/items/<iid>/media')
 def patch_media(iid):
     it, body = SNAP['items'].get(iid), request.get_json(force=True, silent=True) or {}
