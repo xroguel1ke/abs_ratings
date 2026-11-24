@@ -27,9 +27,9 @@
  q.addEventListener('keydown',e=>{ if(e.key==='Escape') box.hidden=true; });
 })();</script>
 </div>
-<span class="right">{% if running %}<a class="runpill" href="{{ url_for('run_view', run_id=current_run.id) }}" title="{{ current_run.label }}"><span class="badge running"><span class="live"></span>{{ _('Scan running') }}<span id="runpct"></span></span></a>
+<span class="right">{% if running %}<a class="runpill" href="{{ url_for('run_view', run_id=current_run.id) }}" title="{{ current_run.label|run_label }}"><span class="badge running"><span class="live"></span>{{ _('Scan running') }}<span id="runpct"></span></span></a>
 <script>(function(){ const el=document.getElementById('runpct'); async function tick(){ try{ const j=await (await fetch("{{ url_for('api_run_progress', run_id=current_run.id) }}")).json();
- if(j.status!=='running'){ el.textContent=''; return; } el.textContent=j.total? ' · '+Math.round(j.pct||0)+' %' : ''; }catch(e){} setTimeout(tick, 5000); } tick(); })();</script>{% elif next_run %}{{ _('next scan') }}: {{ next_run|dt }}{% endif %}
+ if(j.status!=='running'){ el.textContent=''; return; } el.textContent=j.total? ' · '+Math.round(j.pct||0)+' %' : ''; }catch(e){} setTimeout(tick, 5000); } tick(); })();</script>{% elif next_run %}<a class="nextpill" href="{{ url_for('runs') }}" title="{{ _('Next scheduled scan') }}: {{ next_run|dt }}"><span class="muted">{{ _('Next scan') }}</span> {{ next_run|when }}</a>{% endif %}
 <button type="button" class="iconbtn" id="theme-toggle" title="{{ _('Light / dark') }}">{{ icon('moon') }}</button>
 <a class="iconbtn" href="{{ url_for('logout') }}" title="{{ _('Log out') }}" aria-label="{{ _('Log out') }}">{{ icon('log-out') }}</a></span></div></header>{% endif %}
 <main>{% with msgs = get_flashed_messages(with_categories=true) %}{% for c, m in msgs %}<div class="flash {{ c }}">{{ m }}</div>{% endfor %}{% endwith %}

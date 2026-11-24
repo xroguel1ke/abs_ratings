@@ -31,7 +31,6 @@ add({
     'Only decides whether the ASIN still names the same BOOK (another recording can be 12-16 % longer). Lower values lose correct matches. Narrator, publisher, year and cover need the runtime within 10 min anyway': 'Entscheidet nur, ob die ASIN noch dasselbe BUCH meint (eine andere Aufnahme kann 12-16 % länger sein). Kleinere Werte verlieren richtige Treffer. Sprecher, Verlag, Jahr und Cover brauchen ohnehin eine Laufzeit auf 10 min genau',
     'Same-book runtime tolerance (min)': 'Laufzeit-Toleranz gleiches Buch (min)', 'Both limits must be exceeded': 'Beide Grenzen müssen überschritten sein',
     'Use Hardcover': 'Hardcover verwenden',
-    'Ratings and the print ISBN. The scan stops shortly before the daily limit': 'Bewertungen und die Print-ISBN. Der Scan stoppt kurz vor dem Tageslimit',
     'Paid Hardcover plan': 'Bezahltes Hardcover-Abo',
     'Off = free plan: at most 5000 requests per day. On = 50000 per day. Both 60 per minute': 'Aus = Free-Plan: höchstens 5000 Anfragen pro Tag. An = 50000 pro Tag. Beide 60 pro Minute',
     'Hardcover API token': 'Hardcover-API-Token', 'hardcover.app → Settings → API': 'hardcover.app → Settings → API',
@@ -296,9 +295,9 @@ add({  # overview with status + library check, scans with history tab (2026-11-0
     'Replaced only with a verified ISBN; the next scan tries again.': 'Wird nur durch eine geprüfte ISBN ersetzt; der nächste Scan versucht es erneut.',
     'Trend since %(t)s': 'Trend seit %(t)s', 'Written to ABS. Each change can be undone - per field, book or scan.': 'In ABS geschrieben. Jede Änderung lässt sich rückgängig machen – pro Feld, Buch oder Scan.',
     'from the next scan on': 'ab dem nächsten Scan', 'left': 'übrig', 'own budget %(n)s / %(m)s today': 'eigenes Budget %(n)s / %(m)s heute', 'show': 'anzeigen',
-    'Without ASIN': 'Ohne ASIN', 'ASIN on several books': 'ASIN bei mehreren Büchern', 'ASIN not from the preferred store': 'ASIN nicht aus dem bevorzugten Shop',
-    'Series name not English/German': 'Reihenname nicht Englisch/Deutsch', 'Series number on 3+ different books': 'Reihennummer bei 3+ verschiedenen Büchern',
-    'Book folder names another volume': 'Buchordner nennt einen anderen Band', 'Series spelled in several ways': 'Reihe in mehreren Schreibweisen',
+    'Without ASIN': 'Ohne ASIN', 'Duplicate ASIN': 'ASIN doppelt', 'ASIN from another store': 'ASIN aus anderem Shop',
+    'Foreign series name': 'Fremdsprachiger Reihenname', 'Series number used 3+ times': 'Reihennummer mehrfach vergeben',
+    'Folder names another volume': 'Ordner nennt anderen Band', 'Series spelled differently': 'Reihe uneinheitlich geschrieben',
 })
 add({  # shorter help texts (2026-11-08)
     'Removes the chosen lines from the rating block. Can be undone; the source stays paused for these books until the refresh time.': 'Entfernt die gewählten Zeilen aus dem Bewertungsblock. Rückgängig machbar; die Quelle bleibt für diese Bücher bis zur Auffrischung pausiert.',
@@ -448,7 +447,7 @@ add({  # page tour 2026-11-08
     'Missing volumes as of %(d)s': 'Fehlende Bände, Stand %(d)s', 'New': 'Neu', 'Tiles': 'Kacheln', 'List': 'Liste', 'Released only': 'Nur erschienene',
     'Nothing missing.': 'Nichts fehlt.',
     'Every series with its books and the volumes you are missing. Tiles show covers, List only the gaps. Hide what does not interest you.': 'Jede Reihe mit ihren Büchern und den Bänden, die dir fehlen. Kacheln zeigen Cover, Liste nur die Lücken. Blende aus, was dich nicht interessiert.',
-    "Audible's chapters for files without real chapters - only when they fit exactly. lock_chapters protects a book": 'Audible-Kapitel für Dateien ohne echte Kapitel – nur wenn sie genau passen. lock_chapters schützt ein Buch',
+    "Audible's chapters for files without real chapters, when the runtime fits (no chapters at all: up to 60 s off). lock_chapters protects a book": 'Audible-Kapitel für Dateien ohne echte Kapitel, wenn die Laufzeit passt (ganz ohne Kapitel: bis 60 s Abweichung). lock_chapters schützt ein Buch',
     'Max. runtime difference for the ASIN to still count as this book. Lower = fewer matches': 'Max. Laufzeitabweichung, damit die ASIN noch als dieses Buch gilt. Niedriger = weniger Treffer',
     'Looks like Chrome to Goodreads (no real browser). At your own risk': 'Tritt bei Goodreads wie Chrome auf (kein echter Browser). Auf eigenes Risiko',
     'Book pages per scan; then only the search is used (bot check after 3-7 pages)': 'Buchseiten pro Scan; danach nur noch die Suche (Bot-Prüfung nach 3–7 Seiten)',
@@ -484,7 +483,7 @@ add({  # page tour 2026-11-08
     "%(n)s checked": "%(n)s geprüft", "%(n)s rated": "%(n)s bewertet", "%(n)s changed by hand": "%(n)s von Hand geändert",
     "%(n)s with new metadata": "%(n)s mit neuen Metadaten", "%(n)s ASINs found": "%(n)s ASINs gefunden", "%(n)s ASINs replaced": "%(n)s ASINs ersetzt",
     "%(n)s ISBNs added": "%(n)s ISBNs ergänzt", "%(n)s ISBNs fixed": "%(n)s ISBNs korrigiert", "%(n)s without ratings yet": "%(n)s noch ohne Bewertungen",
-    "%(n)s not on Goodreads": "%(n)s nicht auf Goodreads", "%(n)s covers": "%(n)s Cover", "%(n)s series merged": "%(n)s Serien zusammengeführt",
+    "%(n)s not on Goodreads": "%(n)s nicht auf Goodreads", "%(n)s covers": "%(n)s Cover", "%(n)s series merged": "%(n)s Reihen zusammengeführt",
     "next/previous": "weiter/zurück", "apply": "übernehmen", "discard": "verwerfen", "select": "auswählen",
     "%(n)s errors": "%(n)s Fehler", "%(n)s Goodreads lookups deferred": "%(n)s Goodreads-Abfragen verschoben", "nothing changed": "nichts geändert",
     # release calendar (Google)
@@ -499,7 +498,6 @@ add({  # page tour 2026-11-08
     "Setup (once, about 10 minutes): see the README, section Release calendar.": "Einrichtung (einmalig, etwa 10 Minuten): siehe README, Abschnitt Release calendar.",
     # Goodreads background mode (2026-11-18)
     'Goodreads background mode': 'Goodreads-Hintergrundmodus',
-    'Runs on its own, apart from the scans: one book every few minutes. Pauses while a scan runs': 'Läuft eigenständig, getrennt von den Scans: ein Buch alle paar Minuten. Pausiert, während ein Scan läuft',
     'Minutes between two books': 'Minuten zwischen zwei Büchern',
     'With a little jitter. Fewer minutes = faster, but Goodreads blocks sooner': 'Mit etwas Zufallsabweichung. Weniger Minuten = schneller, aber Goodreads sperrt eher',
     'Books per day at most': 'Bücher pro Tag höchstens',
@@ -574,3 +572,33 @@ add({'Mark all: apply': 'Alle markieren: übernehmen',
      'Hidden. It comes back only when the group changes.': 'Ausgeblendet. Es erscheint nur wieder, wenn sich die Gruppe ändert.',
      'A scan is running right now - nothing was changed. Your marks are kept; process them when it is done.':
          'Gerade läuft ein Scan – es wurde nichts geändert. Deine Markierungen bleiben erhalten; arbeite sie ab, sobald er fertig ist.'})
+
+# overview, shorter (user 2026-11-24: 'das muss deutlich kürzer gehen')
+add({'checked': 'geprüft', 'books': 'Bücher', 'series/authors': 'Reihen/Autoren', 'other': 'Sonstiges', 'Nothing open': 'Nichts offen',
+     'New books every %(n)s min': 'Neue Bücher alle %(n)s Min.', 'Scans and history': 'Scans und Verlauf',
+     '%(n)s / %(m)s today': '%(n)s / %(m)s heute', 'next in %(n)s min': 'nächstes in %(n)s Min.', 'Background mode is off': 'Hintergrundmodus aus',
+     '%(n)s more checks without findings': '%(n)s weitere Prüfungen ohne Befund', 'All %(n)s checks without findings': 'Alle %(n)s Prüfungen ohne Befund',
+     'Present': 'Vorhanden'})
+
+# settings, 6 sections + sub-headings (user 2026-11-24)
+add({'Scans': 'Scans', 'System': 'System', 'Scope': 'Umfang', 'Refresh': 'Aktualisierung', 'Extras': 'Extras', 'Rating block': 'Bewertungsblock',
+     'Covers and chapters': 'Cover und Kapitel', 'Selection': 'Auswahl', 'Genres': 'Genres', 'up': 'nach oben', 'down': 'nach unten'})
+
+add({'The scan stops shortly before the daily limit': 'Der Scan stoppt kurz vor dem Tageslimit', 'Pauses while a scan runs': 'Pausiert, während ein Scan läuft'})
+
+add({'Account and data': 'Konto und Daten', 'Tour': 'Einführung'})
+
+# run names and scan results in the UI language (user 2026-11-24)
+add({'Quick mode: %(n)s new books': 'Schnellmodus: %(n)s neue Bücher', 'Quick mode: 1 new book': 'Schnellmodus: 1 neues Buch', 'quick mode': 'Schnellmodus',
+     '%(n)s books from the review list': '%(n)s Bücher aus der Prüfliste', '%(n)s × %(k)s from the review list': '%(n)s × %(k)s aus der Prüfliste',
+     '%(n)s × from the review list': '%(n)s × aus der Prüfliste', 'Series removed (review list): %(t)s': 'Reihe entfernt (Prüfliste): %(t)s',
+     '%(k)s from the review list: %(t)s': '%(k)s aus der Prüfliste: %(t)s', '%(k)s: %(t)s': '%(k)s: %(t)s', 'Series renamed: %(t)s': 'Reihe umbenannt: %(t)s',
+     'Change all rating symbols (%(t)s)': 'Alle Bewertungssymbole ändern (%(t)s)', 'Authors': 'Autoren', 'Title': 'Titel', 'Language': 'Sprache',
+     '%(n)s ASIN found': '%(n)s ASIN gefunden', '%(n)s ASIN replaced': '%(n)s ASIN ersetzt', '%(n)s ISBN added': '%(n)s ISBN ergänzt',
+     '%(n)s ISBN fixed': '%(n)s ISBN korrigiert', '%(n)s series merged (one)': '%(n)s Reihe zusammengeführt', '%(n)s error': '%(n)s Fehler',
+     '%(n)s Goodreads lookup deferred': '%(n)s Goodreads-Abfrage verschoben', 'process ended without a summary': 'Prozess ohne Zusammenfassung beendet'})
+
+add({'%(n)s older changes': '%(n)s ältere Änderungen', 'Written to ABS unless marked otherwise.': 'In ABS geschrieben, sofern nicht anders markiert.'})
+
+add({'Chapters': 'Kapitel'})
+add({'today %(t)s': 'heute %(t)s', 'tomorrow %(t)s': 'morgen %(t)s', 'Next scheduled scan': 'Nächster geplanter Scan'})

@@ -47,12 +47,14 @@
 <tr><td class="muted">{{ CK.get(f, f) }}</td><td>{{ v[0] or '–' }}</td><td>{{ v[1] or '–' }}</td><td>{% if v[0] and v[1] %}<span class="badge {{ 'ok' if same else 'warn' }}">{{ '=' if same else '≠' }}</span>{% elif v[1] %}<span class="badge">{{ _('Audible only') }}</span>{% endif %}</td><td class="muted">{{ (v[2] if v|length > 2 else '') or '–' }}</td></tr>{% endfor %}
 </table><p class="muted small">{{ _('"≠" is not an error: ABS values are only filled when empty.') }}</p></div>{% endif %}
 
-<div class="card tablewrap"><h2 style="margin-top:0">{{ _('Changes to this book') }}</h2>
-{% if changes %}<table class="diff"><tr><th>{{ _('Time') }}</th><th>{{ _('Field') }}</th><th>{{ _('Old') }}</th><th>{{ _('New') }}</th><th>{{ _('Status') }}</th></tr>
-{% for e in changes %}<tr><td class="small">{{ e.ts|dt }}</td><td>{{ FL.get(e.field, e.field) }}</td>
+{% macro chrow(e) %}<tr><td class="small nowrap">{{ e.ts|dt }}</td><td>{{ FL.get(e.field, e.field) }}{% if e.dry_run %} <span class="badge">{{ _('planned (test run)') }}</span>{% elif e.undone %} <span class="badge warn">{{ _('undone') }}</span>{% endif %}</td>
 <td class="small">{{ V.show(e.field, e.old, False, e.new) }}</td>
-<td class="small">{{ V.show(e.field, e.new, True, e.old) }}</td>
-<td>{% if e.dry_run %}<span class="badge">{{ _('planned (test run)') }}</span>{% elif e.undone %}<span class="badge warn">{{ _('undone') }}</span>{% else %}<span class="badge ok">{{ _('written') }}</span>{% endif %}</td></tr>{% endfor %}</table>
+<td class="small">{{ V.show(e.field, e.new, True, e.old) }}</td></tr>{% endmacro %}
+<div class="card tablewrap"><h2 style="margin-top:0">{{ _('Changes to this book') }}{% if changes %} <span class="muted small">({{ changes|length }})</span>{% endif %}</h2>
+{% if changes %}<table class="diff"><tr><th>{{ _('Time') }}</th><th>{{ _('Field') }}</th><th>{{ _('Old') }}</th><th>{{ _('New') }}</th></tr>
+{% for e in changes[:8] %}{{ chrow(e) }}{% endfor %}</table>
+{% if changes|length > 8 %}<details><summary class="small">{{ _('%(n)s older changes', n=changes|length - 8) }}</summary><table class="diff">{% for e in changes[8:] %}{{ chrow(e) }}{% endfor %}</table></details>{% endif %}
+<p class="muted small" style="margin-bottom:0">{{ _('Written to ABS unless marked otherwise.') }}</p>
 {% else %}<p class="muted">{{ _('No changes recorded.') }}</p>{% endif %}</div>
 
 <div class="card"><h2 style="margin-top:0">{{ _('Repair manually') }}</h2>

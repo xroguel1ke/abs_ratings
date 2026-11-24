@@ -329,6 +329,14 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     'Other': same-ASIN groups and duplicates get 'Hide' (other_hidden.json, id = ASIN + its books / titles + runtime:
     a changed group shows again; ?hidden=1 lists them with 'Show again'). Web UI runner counts script processes started
     elsewhere (other_script_pids) and finishes stale 'running' entries from their log.
+  - UI pass 2026-11-24 (user: shorter, tidier, settings less cluttered, dark theme calmer): settings in 6 sections (core.SECTIONS:
+    Connection, Scans = Run + Schedule, Sources, Metadata = Metadata + Series & authors, Notifications = + Calendar, System = Logs +
+    Interface + 'Account and data'; SECTION_ALIASES keep old posts, JS maps old #hashes), rows = name + help left / control right,
+    switches (input.sw), 'default' only when the value differs, SUBHEADS inside cards, DEPENDS hides rows while their switch is off.
+    Overview: short library-check labels, checks without findings in one line, no duplicate Hardcover numbers. Run names shown in
+    the UI language (app.run_label), singular counts, 'quick mode' trigger, journal times converted from UTC (filter dt), header
+    'Next scan' chip (filter when), search right of the tabs; dark tokens: darker bg, quieter hairlines. Preview without internet:
+    copy of the config + internal docker network + headless chromium (zenika/alpine-chrome).
     run status 'warning' when every failed book was a network error (web UI badge + reason).
   - tools/run_round.sh RECORD_NO_LIVE is a HOST LIST, not a flag ('1' matched every URL with a 1, web pages went live and were
     recorded -> golden deviations). For library-wide comparisons use mode 'replay' (nothing recorded).

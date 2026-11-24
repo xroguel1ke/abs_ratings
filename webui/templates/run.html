@@ -1,6 +1,6 @@
 {% extends 'base.html' %}{% import '_values.html' as V %}{% block body %}
 <p>{% if back %}<a href="{{ url_for('problem', key=back) }}">{{ icon('arrow-left', 14) }} {{ _('back to the book') }}</a>{% else %}<a href="{{ url_for('runs') }}">{{ icon('arrow-left', 14) }} {{ _('Scans') }}</a>{% endif %}</p>
-<h1>{{ run.label }} {% if run.dry_run %}<span class="badge">{{ _('Test run') }}</span>{% endif %}</h1>
+<h1>{{ run.label|run_label }} {% if run.dry_run %}<span class="badge">{{ _('Test run') }}</span>{% endif %}</h1>
 <div class="card row" style="gap:20px"><span>{{ _('Status') }}: <span id="st" class="badge {{ {'ok': 'ok', 'running': 'running', 'warning': 'warn'}.get(run.status, 'err') }}"{% if run.status_reason %} title="{{ run.status_reason }}"{% endif %}>{{ {'ok': _('ok'), 'warning': _('warning'), 'error': _('error'), 'stopped': _('stopped'), 'running': _('running')}.get(run.status, run.status) }}</span></span>
 <span>{{ _('Start') }}: {{ run.start|dt }}</span><span>{{ _('End') }}: {{ run.end|dt }}</span>
 {% if run.status=='running' %}<form method="post" action="{{ url_for('runs') }}"><button class="danger" name="action" value="stop">{{ icon('square') }} {{ _('Cancel') }}</button></form>{% endif %}

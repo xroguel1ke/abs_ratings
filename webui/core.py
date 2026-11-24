@@ -48,13 +48,13 @@ FIELDS = [
     ('RUNTIME_TOLERANCE_PCT', 'Same-book runtime tolerance (%)', 'float', 15, 'Max. runtime difference for the ASIN to still count as this book. Lower = fewer matches', 'Audible'),
     ('RUNTIME_TOLERANCE_MIN', 'Same-book runtime tolerance (min)', 'float', 20, 'Both limits must be exceeded', 'Audible'),
 
-    ('HARDCOVER_ENABLED', 'Use Hardcover', 'bool', True, 'Ratings and the print ISBN. The scan stops shortly before the daily limit', 'Hardcover'),
+    ('HARDCOVER_ENABLED', 'Use Hardcover', 'bool', True, 'The scan stops shortly before the daily limit', 'Hardcover'),
     ('HARDCOVER_TOKEN', 'Hardcover API token', 'secret', '', 'hardcover.app → Settings → API', 'Hardcover'),
     ('HARDCOVER_PAID', 'Paid Hardcover plan', 'bool', False, 'Free plan: 5,000 requests a day, paid: 50,000. Both 60 per minute', 'Hardcover'),
     ('HARDCOVER_INTERVAL', 'Interval Hardcover (s)', 'float', 1.1, 'Hardcover allows 60 requests per minute', 'Hardcover'),
 
     # Goodreads = its own background mode (user 2026-11-18), apart from the scans (Audible, Hardcover): see GoodreadsBackground
-    ('GOODREADS_ENABLED', 'Goodreads background mode', 'bool', False, 'Runs on its own, apart from the scans: one book every few minutes. Pauses while a scan runs', 'Goodreads'),
+    ('GOODREADS_ENABLED', 'Goodreads background mode', 'bool', False, 'Pauses while a scan runs', 'Goodreads'),
     ('GR_MODE_MINUTES', 'Minutes between two books', 'float', 5, 'With a little jitter. Fewer minutes = faster, but Goodreads blocks sooner', 'Goodreads'),
     ('GR_MODE_DAILY', 'Books per day at most', 'int', 300, '', 'Goodreads'),
     ('GR_MODE_PAUSE_MIN', 'Pause after a block (minutes)', 'int', 15, 'Doubles with every block in a row, at most 6 hours', 'Goodreads'),
@@ -68,7 +68,7 @@ FIELDS = [
     ('RATING_POSITION', 'Rating block position', 'choice:top|bottom', 'top', '', 'Metadata'),
     ('RATING_MIN_COUNT', 'Minimum number of ratings', 'int', 0, 'A source with fewer ratings is not shown (0 = all)', 'Metadata'),
     ('FILL_COVERS', 'Set missing covers', 'bool', True, 'When ABS has no cover: for every ASIN the match accepted (as for ratings)', 'Metadata'),
-    ('MATCH_CHAPTERS', 'Take Audible chapters', 'bool', True, "Audible's chapters for files without real chapters - only when they fit exactly. lock_chapters protects a book", 'Metadata'),
+    ('MATCH_CHAPTERS', 'Take Audible chapters', 'bool', True, "Audible's chapters for files without real chapters, when the runtime fits (no chapters at all: up to 60 s off). lock_chapters protects a book", 'Metadata'),
     ('COVERS_TO_METADATA', 'Keep folder covers in ABS metadata', 'bool', True, 'A cover ABS took from the book folder is copied once into its metadata folder (cache), so apps no longer wake the disk. Same image, the folder file stays; also for locked covers', 'Metadata'),
     ('UPDATE_COVERS', 'Replace existing covers', 'bool', True, 'Only for a verified ASIN; the old cover is backed up', 'Metadata'),
     ('GENRE_LANGUAGE', 'Genre language', 'choice:en|keep', 'en', 'Audible.de genres are translated to English', 'Metadata'),
@@ -101,9 +101,21 @@ ADVANCED = {'ABS_TIMEOUT', 'SLEEP_TIMER', 'NO_RATINGS_RECHECK_DAYS', 'USE_AUDIBL
             'AUDIBLE_WEB_INTERVAL', 'RUNTIME_TOLERANCE_PCT', 'RUNTIME_TOLERANCE_MIN', 'HARDCOVER_INTERVAL', 'GOODREADS_INTERVAL', 'GR_BOOK_PAGES',
             'GR_IMPERSONATE', 'GR_MODE_PAUSE_MIN', 'SERIES_LOCK_AFTER_MERGE'}
 # settings sections (left menu, one form + save button each) -> the field groups (cards) they contain
-SECTIONS = {'Connection': ['Connection'], 'Run': ['Run'], 'Sources': ['Audible', 'Hardcover', 'Goodreads'], 'Metadata': ['Metadata'],
-            'Series & authors': ['Series & authors'], 'Logs': ['Logs'], 'Schedule': [], 'Notifications': [], 'Calendar': ['Calendar'],
-            'Interface': ['Interface']}
+# user 2026-11-24 ('alles dort ist sehr unübersichtlich'): 6 sections instead of 10. 'Schedule' and 'Notifications' are cards without FIELDS.
+SECTIONS = {'Connection': ['Connection'], 'Scans': ['Run', 'Schedule'], 'Sources': ['Audible', 'Hardcover', 'Goodreads'],
+            'Metadata': ['Metadata', 'Series & authors'], 'Notifications': ['Notifications', 'Calendar'], 'System': ['Logs', 'Interface']}
+# older forms / links: the section name they posted -> its cards
+SECTION_ALIASES = {'Run': ['Run'], 'Schedule': ['Schedule'], 'Series & authors': ['Series & authors'], 'Calendar': ['Calendar'],
+                   'Logs': ['Logs'], 'Interface': ['Interface']}
+# a sub-heading before this field inside its card
+SUBHEADS = {'DRY_RUN': 'Scope', 'REFRESH_DAYS': 'Refresh', 'RUN_MODE': 'Selection', 'QUICK_MODE_MINUTES': 'Extras',
+            'RATING_ORDER': 'Rating block', 'FILL_COVERS': 'Covers and chapters', 'GENRE_LANGUAGE': 'Genres'}
+# shown only while this switch is on
+DEPENDS = {'NEW_RELEASE_DAYS': 'NEW_RELEASE_REFRESH', 'NEW_RELEASE_REFRESH_DAYS': 'NEW_RELEASE_REFRESH',
+           'HARDCOVER_TOKEN': 'HARDCOVER_ENABLED', 'HARDCOVER_PAID': 'HARDCOVER_ENABLED',
+           'GR_MODE_MINUTES': 'GOODREADS_ENABLED', 'GR_MODE_DAILY': 'GOODREADS_ENABLED',
+           'SERIES_LIST_DAYS': 'MISSING_SERIES', 'MISSING_NOVELLAS': 'MISSING_SERIES',
+           'GCAL_CALENDAR_ID': 'GCAL_ENABLED', 'GCAL_KEY': 'GCAL_ENABLED'}
 def section_slug(name): return re.sub(r'[^a-z0-9]+', '-', name.lower().replace('&', 'and')).strip('-')
 # cards that belong to a data source: colour dot
 PROVIDERS = {'Audible': ('', '#c8833a', 'Main source: ASIN, ratings, metadata, cover'),
@@ -891,9 +903,9 @@ def _coverage_trend(rows, stamp):
         hist[-1] = snap; _save_json(path, hist[-120:])
 
 
-HEALTH_LABELS = {'no_asin': 'Without ASIN', 'shared_asin': 'ASIN on several books', 'wrong_store': 'ASIN not from the preferred store',
-                 'non_latin_series': 'Series name not English/German', 'junk_number': 'Series number on 3+ different books',
-                 'folder_conflict': 'Book folder names another volume', 'case_variants': 'Series spelled in several ways'}
+HEALTH_LABELS = {'no_asin': 'Without ASIN', 'shared_asin': 'Duplicate ASIN', 'wrong_store': 'ASIN from another store',
+                 'non_latin_series': 'Foreign series name', 'junk_number': 'Series number used 3+ times',
+                 'folder_conflict': 'Folder names another volume', 'case_variants': 'Series spelled differently'}
 
 def health():
     """Library checks of the last report (abs_series.library_health): [(key, label, entries)], worst first."""

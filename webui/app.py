@@ -53,7 +53,7 @@ app.jinja_env.filters['de'] = de
 
 FIELD_NAMES = {'asin': 'ASIN', 'title': 'Title', 'subtitle': 'Subtitle', 'description': 'Description', 'genres': 'Genres', 'cover': 'Cover',
                'language': 'Language', 'publisher': 'Publisher', 'publishedYear': 'Year', 'narrators': 'Narrators', 'authors': 'Authors',
-               'series': 'Series', 'isbn': 'ISBN', 'explicit': 'Explicit', 'abridged': 'Abridged', 'tags': 'Tags', 'author': 'Empty author'}
+               'series': 'Series', 'isbn': 'ISBN', 'explicit': 'Explicit', 'abridged': 'Abridged', 'tags': 'Tags', 'author': 'Empty author', 'chapters': 'Chapters'}
 
 
 def field_label(f): return T(FIELD_NAMES.get(f, f))
@@ -128,6 +128,8 @@ SUMMARY_LABELS = {'Proc': '%(n)s checked', 'New': '%(n)s rated', 'ManUpd': '%(n)
                   'ASIN+': '%(n)s ASINs found', 'Mig': '%(n)s ASINs replaced', 'ISBN+': '%(n)s ISBNs added', 'Fix': '%(n)s ISBNs fixed',
                   'NoRatYet': '%(n)s without ratings yet', 'GR-': '%(n)s not on Goodreads', 'Cover+': '%(n)s covers',
                   'Series merged': '%(n)s series merged', 'Err': '%(n)s errors', 'GR deferred': '%(n)s Goodreads lookups deferred'}
+SUMMARY_ONE = {'ASIN+': '%(n)s ASIN found', 'Mig': '%(n)s ASIN replaced', 'ISBN+': '%(n)s ISBN added', 'Fix': '%(n)s ISBN fixed',
+               'Series merged': '%(n)s series merged (one)', 'Err': '%(n)s error', 'GR deferred': '%(n)s Goodreads lookup deferred'}  # n == 1
 _EMOJI_LEAD = re.compile(r'^[\s☀-➿\U0001F300-\U0001FAFF️]+')
 
 
@@ -140,8 +142,9 @@ def run_summary(text):
         if m and m.group(1) in SUMMARY_LABELS:
             known += 1
             n = int(m.group(2))
+            if m.group(1) == 'Mig' and n and re.search(rf'(?:^| \| )ASIN\+: {n}(?: \||$)', text or ''): continue  # 'found' = 'replaced': once
             if n or m.group(1) == 'Proc':
-                s = escape(T(SUMMARY_LABELS[m.group(1)], n=n))
+                s = escape(T(SUMMARY_ONE.get(m.group(1)) if n == 1 and m.group(1) in SUMMARY_ONE else SUMMARY_LABELS[m.group(1)], n=n))
                 counts.append(Markup(f'<span class="err">{s}</span>') if m.group(1) == 'Err' else s)
         elif p == 'DRY RUN': known += 1  # the 'Test run' tag next to the scan says it already
         else: notes.append(_EMOJI_LEAD.sub('', p))
@@ -153,6 +156,30 @@ def run_summary(text):
 
 
 app.jinja_env.filters['run_summary'] = run_summary
+
+# Run names are stored in English when the run starts ('Quick mode: 3 new book(s)'); shown in the UI language (user 2026-11-24)
+RUN_LABELS = [(r'Quick mode: (?P<n>\d+) new book\(s\)', 'Quick mode: %(n)s new books', 'Quick mode: 1 new book'),
+              (r'(?P<n>\d+) books from the review list(?: \(.*\))?', '%(n)s books from the review list', None),
+              (r'(?P<n>\d+) × (?P<k>.+) from the review list', '%(n)s × %(k)s from the review list', None),
+              (r'(?P<n>\d+) × from the review list', '%(n)s × from the review list', None),
+              (r'Series removed from the review list: (?P<t>.+)', 'Series removed (review list): %(t)s', None),
+              (r'(?P<k>Authors|Title|Isbn|ASIN|Hardcover|Language) from the review list: (?P<t>.+)', '%(k)s from the review list: %(t)s', None),
+              (r'(?P<k>Test run|Scan|Single book|Undo): (?P<t>.+)', '%(k)s: %(t)s', None),
+              (r'Series renamed: (?P<t>.+)', 'Series renamed: %(t)s', None),
+              (r'Change all rating symbols \((?P<t>.+)\)', 'Change all rating symbols (%(t)s)', None)]
+
+
+def run_label(lab):
+    lab = str(lab or '')
+    for rx, many, one in RUN_LABELS:
+        m = re.fullmatch(rx, lab)
+        if m:
+            g = {k: (T({'Isbn': 'ISBN'}.get(v, v)) if k == 'k' else v) for k, v in m.groupdict().items()}
+            return T(one if one and g.get('n') == '1' else many, **g)
+    return T(lab)
+
+
+app.jinja_env.filters['run_label'] = run_label
 
 
 def login_required(view):
@@ -1058,7 +1085,7 @@ def settings():
     if request.method == 'POST':
         # one section per form: only the fields of THIS section are read (an unticked box elsewhere must not become "off")
         sec = request.form.get('section', '')
-        groups_in = set(core.SECTIONS.get(sec, ()))
+        groups_in = set(core.SECTIONS.get(sec) or core.SECTION_ALIASES.get(sec) or ())
         for key, label, ftype, default, help_, group in core.FIELDS:
             if group not in groups_in: continue
             if ftype == 'secret':
@@ -1072,7 +1099,7 @@ def settings():
             else:
                 try: s[key] = core.coerce(ftype, request.form.get(key, default))
                 except ValueError: flash(T('%(l)s: invalid value', l=T(label)), 'error')
-        if sec == 'Schedule':
+        if 'Schedule' in groups_in:
             s['schedule_enabled'] = request.form.get('schedule_enabled') == 'on'
             s['schedule_mode'] = 'cron' if request.form.get('schedule_mode') == 'on' else 'simple'
             s['schedule_days'] = [int(d) for d in request.form.getlist('schedule_days')]
@@ -1082,17 +1109,17 @@ def settings():
                 # 2026-11-15: '0 */6* * *' (a missing space) was saved and silently stopped every scheduled scan for a day
                 flash(T('Schedule: invalid cron expression "%(c)s" - not saved. It needs 5 fields separated by spaces: minute hour day month weekday, e.g. 0 */6 * * *', c=s['schedule_cron']), 'error')
                 return redirect(url_for('settings') + '#' + core.section_slug(sec))
-        if sec == 'Notifications':
+        if 'Notifications' in groups_in:
             s['apprise_url'] = (request.form.get('apprise_url') or '').strip()
             s['notify_events'] = [e for e in core.NOTIFY_EVENTS if request.form.get('ev_' + e) == 'on']
-        if sec not in core.SECTIONS: flash(T('Unknown section.'), 'error'); return redirect(url_for('settings'))
+        if not groups_in: flash(T('Unknown section.'), 'error'); return redirect(url_for('settings'))
         core.save_settings(s)
         flash(T('%(s)s: saved.', s=T(sec)), 'ok')
         return redirect(url_for('settings') + '#' + core.section_slug(sec))
     libs = core.abs_libraries(s) if s.get('ABS_URL') and s.get('API_TOKEN') else []
     groups = {}
     for f in core.FIELDS: groups.setdefault(f[5], []).append(f)
-    return render_template('settings.html', notify_events=core.notify_events(s), gcal_state=core.calendar_state(), grmode=core.GR_BG.status(), s=s, groups=groups, sections=core.SECTIONS, slug=core.section_slug, adv=core.ADVANCED, providers=core.PROVIDERS,
+    return render_template('settings.html', notify_events=core.notify_events(s), gcal_state=core.calendar_state(), grmode=core.GR_BG.status(), s=s, groups=groups, sections=core.SECTIONS, slug=core.section_slug, adv=core.ADVANCED, subheads=core.SUBHEADS, depends=core.DEPENDS, providers=core.PROVIDERS,
                            libs=libs, selected=set((s.get('LIBRARY_IDS') or '').split(',')), next_run=core.next_run_time(s))
 
 
@@ -1123,9 +1150,9 @@ def settings_export():
 def settings_import():
     f = request.files.get('file')
     try: n = core.settings_import(json.load(f))
-    except Exception: flash(T('This is no settings file.'), 'error'); return redirect(url_for('settings') + '#interface')
+    except Exception: flash(T('This is no settings file.'), 'error'); return redirect(url_for('settings') + '#system')
     flash(T('%(n)s settings imported (tokens and password are never part of an export).', n=n), 'ok')
-    return redirect(url_for('settings') + '#interface')
+    return redirect(url_for('settings') + '#system')
 
 
 @app.route('/api/test/<what>', methods=['POST'])
@@ -1169,12 +1196,29 @@ def health():
     return (jsonify(status='ok' if ok else 'abs unreachable'), 200 if ok else 503)
 
 
+@app.template_filter('when')
+def fmt_when(v):
+    """Short and human for the header: 'today 02:30', 'tomorrow 02:30', 'Wed 02:30', else the date (user 2026-11-24)."""
+    if not v: return '–'
+    if isinstance(v, str):
+        try: v = datetime.fromisoformat(v)
+        except ValueError: return v
+    if v.tzinfo: v = v.astimezone().replace(tzinfo=None)
+    days = (v.date() - datetime.now().date()).days
+    hm = v.strftime('%H:%M')
+    if days == 0: return T('today %(t)s', t=hm)
+    if days == 1: return T('tomorrow %(t)s', t=hm)
+    if 1 < days < 7: return T(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][v.weekday()]) + ' ' + hm
+    return v.strftime('%d.%m. %H:%M')
+
+
 @app.template_filter('dt')
 def fmt_dt(v):
     if not v: return '–'
     if isinstance(v, str):
         try: v = datetime.fromisoformat(v)
         except ValueError: return v
+    if v.tzinfo: v = v.astimezone()  # journal times are UTC ('...+00:00'): shown in local time (they were 1 h early, 2026-11-24)
     return v.strftime('%d.%m.%Y %H:%M')
 
 

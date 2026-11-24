@@ -56,8 +56,8 @@ dryToggle(); lst();
 })();
 </script>
 <div class="card tablewrap"><table><tr><th>{{ _('Start') }}</th><th>{{ _('Kind') }}</th><th>{{ _('Status') }}</th><th>{{ _('Result') }}</th><th></th></tr>
-{% for r in runs %}<tr><td>{{ r.start|dt }}<div class="muted small">{{ _('scheduled') if r.trigger=='schedule' else _('manual') }}</div></td>
-<td>{{ r.label }}{% if r.dry_run %} <span class="badge">{{ _('Test run') }}</span>{% endif %}</td>
+{% for r in runs %}<tr><td>{{ r.start|dt }}<div class="muted small">{{ {'schedule': _('scheduled'), 'quick': _('quick mode')}.get(r.trigger, _('manual')) }}</div></td>
+<td>{{ r.label|run_label }}{% if r.dry_run %} <span class="badge">{{ _('Test run') }}</span>{% endif %}</td>
 <td><span class="badge {{ {'ok': 'ok', 'running': 'running', 'warning': 'warn'}.get(r.status, 'err') }}"{% if r.status_reason %} title="{{ r.status_reason }}"{% endif %}>{{ {'ok': _('ok'), 'warning': _('warning'), 'error': _('error'), 'stopped': _('stopped'), 'running': _('running')}.get(r.status, r.status) }}</span>{% if r.status_reason %}<div class="muted small">{{ r.status_reason }}</div>{% endif %}</td>
 <td class="small runsum">{{ r.summary|run_summary }}</td><td><a href="{{ url_for('run_view', run_id=r.id) }}">{{ _('Details') }}</a></td></tr>
 {% else %}<tr><td colspan="5" class="muted">{{ _('No scans yet.') }}</td></tr>{% endfor %}</table></div>
