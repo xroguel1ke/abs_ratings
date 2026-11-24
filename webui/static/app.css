@@ -278,6 +278,11 @@ table.mtable td.rel{width:150px;text-align:right;white-space:nowrap;font-variant
 .sercard{margin:0 0 8px}.sercard[open]{padding-bottom:16px}
 
 .selbar{gap:8px;margin:0 0 8px;flex-wrap:wrap}.qentry{outline:none}.qentry.kfocus{box-shadow:0 0 0 2px var(--accent)}
+.qc{display:inline-flex;align-items:center;gap:4px}
+.qc[data-c=accept][aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.qc[data-c=reject][aria-pressed=true]{background:var(--err);border-color:var(--err);color:#fff}
+.qentry.m-accept{box-shadow:inset 3px 0 0 var(--accent)}.qentry.m-reject{box-shadow:inset 3px 0 0 var(--err)}.qentry.m-reject>*:not(.row){opacity:.55}
+.qentry.kfocus.m-accept,.qentry.kfocus.m-reject{box-shadow:0 0 0 2px var(--accent)}
 
 table.mtable td.hidecol{width:64px;text-align:right}.linkbtn{background:none;border:0;padding:0;color:var(--muted);cursor:pointer;font:inherit;text-decoration:underline dotted}
 .linkbtn:hover{color:var(--accent)}

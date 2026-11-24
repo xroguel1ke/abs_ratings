@@ -323,6 +323,12 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     = Audible's cast of >= 3 narrators when the runtime matches (+-2 min); Hardcover ASIN/ISBN link to another book -> title search;
     a mismatch with title < 0.5 and the same author is another book (no review entry, no rating); a description entry only when
     no text replaced it; review_sweep also clears 'description' entries.
+  - Review list UI 2026-11-24 (user idea): every book entry has Apply / Discard toggles (marks kept per browser, keys A/D/U),
+    'Process marked entries' sends both lists as JSON to /queue-decide (_queue_process: discards, overrides + ONE item scan,
+    title/ISBN/authors via abs_apply - RunManager.start(after=[...]) chains the jobs; nothing changes while a scan runs).
+    'Other': same-ASIN groups and duplicates get 'Intended' (other_hidden.json, id = ASIN + its books / titles + runtime:
+    a changed group shows again; ?hidden=1 lists them with 'Show again'). Web UI runner counts script processes started
+    elsewhere (other_script_pids) and finishes stale 'running' entries from their log.
     run status 'warning' when every failed book was a network error (web UI badge + reason).
   - tools/run_round.sh RECORD_NO_LIVE is a HOST LIST, not a flag ('1' matched every URL with a 1, web pages went live and were
     recorded -> golden deviations). For library-wide comparisons use mode 'replay' (nothing recorded).

@@ -1,4 +1,6 @@
 {% extends 'base.html' %}{% block title %}{{ _('Review list') }}{% endblock %}{% block body %}
+{% macro hidebtn(gid, label) %}<form method="post" action="{{ url_for('other_hide') }}" style="float:right;margin-left:8px"><input type="hidden" name="gid" value="{{ gid }}"><input type="hidden" name="label" value="{{ label }}">
+ {% if secs.sonstiges.show_hidden %}<input type="hidden" name="show" value="1"><input type="hidden" name="back_hidden" value="1"><button class="small">{{ _('Show again') }}</button>{% else %}<button class="small" title="{{ _('Hide for good: it is intended') }}">{{ icon('check', 14) }} {{ _('Intended') }}</button>{% endif %}</form>{% endmacro %}
 {% macro titles(list) %}{% if list %}<ul class="tlist">{% for t in list[:8] %}<li>{{ t }}</li>{% endfor %}{% if list|length > 8 %}<li class="muted">… {{ _('%(n)s more', n=list|length - 8) }}</li>{% endif %}</ul>{% endif %}{% endmacro %}
 {% macro side(name, books, tl, authors, label) %}<div class="mside"><div class="muted small">{{ label }}</div><b>{{ name }}</b>
  <div class="small">{% if books %}{{ _('Volumes') }} {{ books }}{% endif %}{% if authors %} · {{ authors|join(', ') }}{% endif %}</div>{{ titles(tl) }}</div>{% endmacro %}
@@ -14,19 +16,19 @@
 {% set kinds = secs.buecher.entries|map(attribute='kind')|list %}{% if kinds %}<div class="row small" style="gap:8px">
 {% for k in ['asin', 'hardcover', 'title', 'isbn', 'series'] %}{% set n = kinds|select('equalto', k)|list|length %}{% if n > 1 %}
  <span class="badge">{{ {'asin': 'ASIN', 'isbn': 'ISBN', 'title': _('Title'), 'hardcover': 'Hardcover', 'series': _('Series')}[k] }} {{ n }}</span>
- {% if k in ('asin', 'hardcover') %}<form method="post" action="{{ url_for('queue_bulk', kind=k, action='accept') }}" data-confirm="{{ _('Apply all %(n)s?', n=n) }}"><button>{{ _('Apply all') }}</button></form>{% endif %}
- <form method="post" action="{{ url_for('queue_bulk', kind=k, action='reject') }}" data-confirm="{{ _('Discard all %(n)s?', n=n) }}"><button>{{ _('Discard all') }}</button></form>
+ {% if k in ('asin', 'hardcover', 'title', 'isbn') %}<button type="button" onclick="qMarkAll('accept', '{{ k }}')">{{ _('Mark all: apply') }}</button>{% endif %}
+ <button type="button" onclick="qMarkAll('reject', '{{ k }}')">{{ _('Mark all: discard') }}</button>
 {% endif %}{% endfor %}</div>{% endif %}</div>
-{% if secs.buecher.entries %}<div class="row small selbar"><label class="chk"><input type="checkbox" id="selall" onchange="document.querySelectorAll('.qsel').forEach(c=>c.checked=this.checked)"> {{ _('Select all') }}</label>
- <button type="button" onclick="qSelected('accept')">{{ _('Apply selected') }}</button><button type="button" onclick="qSelected('reject')">{{ _('Discard selected') }}</button>
- <span class="muted keys"><kbd>J</kbd><kbd>K</kbd> {{ _('next/previous') }} · <kbd>A</kbd> {{ _('apply') }} · <kbd>D</kbd> {{ _('discard') }} · <kbd>X</kbd> {{ _('select') }}</span></div>
-<form id="qselform" method="post" style="display:none"><input type="hidden" name="ids" id="qselids"></form>{% endif %}
+{% if secs.buecher.entries %}<div class="row small selbar"><span class="muted">{{ _('Mark every entry, then process them all at once.') }}</span>
+ <button type="button" onclick="qMarkAll('accept')">{{ _('Mark all: apply') }}</button><button type="button" onclick="qMarkAll('reject')">{{ _('Mark all: discard') }}</button><button type="button" onclick="qMarkAll('')">{{ _('Clear marks') }}</button>
+ <span class="muted keys"><kbd>J</kbd><kbd>K</kbd> {{ _('next/previous') }} · <kbd>A</kbd> {{ _('apply') }} · <kbd>D</kbd> {{ _('discard') }} · <kbd>U</kbd> {{ _('unmark') }}</span></div>
+<form id="qdecform" method="post" action="{{ url_for('queue_decide') }}" style="display:none"><input type="hidden" name="accept" id="qdacc"><input type="hidden" name="reject" id="qdrej"></form>{% endif %}
 {% for x in secs.buecher.entries %}{% set r = x.res %}{% set store = r.domain or 'www.audible.com' %}
-<div class="card mcard qentry" tabindex="-1">
- <div class="row" style="justify-content:space-between"><div><input type="checkbox" class="qsel" value="{{ x.id }}" aria-label="{{ _('Select') }}"> <span class="badge warn">{{ {'asin': 'ASIN', 'isbn': 'ISBN', 'title': _('Title'), 'hardcover': 'Hardcover', 'series': _('Series')}.get(x.kind, x.kind) }}</span>
+<div class="card mcard qentry" tabindex="-1" data-id="{{ x.id }}" data-kind="{{ x.kind }}">
+ <div class="row" style="justify-content:space-between"><div><span class="badge warn">{{ {'asin': 'ASIN', 'isbn': 'ISBN', 'title': _('Title'), 'hardcover': 'Hardcover', 'series': _('Series')}.get(x.kind, x.kind) }}</span>
   <a href="{{ url_for('problem', key=x.key) }}"><b>{{ x.title }}</b></a></div>
-  <div class="row" style="flex-wrap:nowrap"><form method="post" action="{{ url_for('queue_action', qid=x.id, action='accept') }}" class="qacc"><button class="primary">{{ _('Apply') }}</button></form>
-  <form method="post" action="{{ url_for('queue_action', qid=x.id, action='reject') }}" class="qrej"><button>{{ _('Discard') }}</button></form></div></div>
+  <div class="row qchoice" style="flex-wrap:nowrap"><button type="button" class="qc" data-c="accept" aria-pressed="false">{{ icon('check', 14) }} {{ _('Apply') }}</button>
+  <button type="button" class="qc" data-c="reject" aria-pressed="false">{{ icon('x', 14) }} {{ _('Discard') }}</button></div></div>
  {% set rid = r.id or x.key.split('_', 1)[-1] %}
  {% set newk, newid = ('audible', x.candidate) if x.kind == 'asin' and x.candidate else ('abs', rid) %}
  <div class="covers"><figure><a href="{{ url_for('cover', kind='abs', ident=rid, full=1) }}" target="_blank" title="{{ _('Open cover') }}"><img src="{{ url_for('cover', kind='abs', ident=rid) }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></a><figcaption>{{ _('now') }}</figcaption></figure>
@@ -49,6 +51,8 @@
   {% if r.goodreads %}<a href="{{ r.goodreads }}" target="_blank">Goodreads {{ icon('arrow-up-right', 14) }}</a>{% endif %}{% if r.hardcover %}<a href="{{ r.hardcover }}" target="_blank">Hardcover {{ icon('arrow-up-right', 14) }}</a>{% endif %}
   {% if abs_base %}<a href="{{ abs_base }}/item/{{ rid }}" target="_blank"><b>{{ _('Open in ABS') }}</b> {{ icon('arrow-up-right', 14) }}</a>{% endif %}</div>
 </div>{% else %}<div class="card muted">{{ _('No open books.') }}</div>{% endfor %}
+{% if secs.buecher.entries %}<div class="savebar" id="qdecbar" hidden><span id="qdecsum"></span><button type="button" class="primary" onclick="qProcess()">{{ _('Process marked entries') }}</button>
+ <button type="button" onclick="qMarkAll('')">{{ _('Clear marks') }}</button></div>{% endif %}
 </div>
 
 {% for k in ('reihen', 'autoren') %}{% set s = secs[k] %}
@@ -67,7 +71,9 @@
 </div>{% endfor %}
 
 <div class="sec" data-sec="sonstiges">
-<div class="card"><h2 style="margin-top:0">{{ _('Other') }}</h2><p class="muted small" style="margin-top:-8px">{{ _('The same recording twice (author, narrator and runtime equal). Clean up in ABS itself.') }}</p></div>
+<div class="card"><h2 style="margin-top:0">{{ _('Other') }}</h2><p class="muted small" style="margin-top:-8px">{{ _('The same recording twice (author, narrator and runtime equal). Clean up in ABS itself.') }}</p>
+ {% if secs.sonstiges.show_hidden %}<p class="small"><b>{{ _('Hidden as intended') }}</b> · <a href="{{ url_for('review_page') }}#sonstiges">{{ _('Back to the open entries') }}</a></p>
+ {% elif secs.sonstiges.hidden_n %}<p class="small muted"><a href="{{ url_for('review_page', hidden=1) }}#sonstiges">{{ _('%(n)s hidden as intended - show', n=secs.sonstiges.hidden_n) }}</a></p>{% endif %}</div>
 <div class="card"><h3 style="margin-top:0">{{ _('Wrong language') }} ({{ secs.sonstiges.languages|length }})</h3>
 <p class="muted small" style="margin-top:-8px">{{ _('Language unknown or not one of your book languages. A button sets it right away.') }}</p>
 {% for x in secs.sonstiges.languages[:200] %}<div class="small"><a href="{{ url_for('problem', key=x.key) }}"><b>{{ x.title }}</b></a> – {{ x.authors|join(', ') }}{% if x.narrators %} · {{ _('read by') }} {{ x.narrators|join(', ') }}{% endif %} ·
@@ -84,31 +90,50 @@
 {% else %}<div class="card muted">{{ _('None.') }}</div>{% endfor %}
 <div class="card"><h3 style="margin-top:0">{{ _('Same ASIN twice') }} ({{ secs.sonstiges.same_asin|length }})</h3>
 <p class="muted small" style="margin-top:-8px">{{ _('Books sharing one ASIN. Folder and runtime show why.') }}</p>
-{% for a, books, verdict in secs.sonstiges.same_asin[:200] %}<div class="mcard" style="margin-top:8px"><div class="small"><code>{{ a }}</code> –
+{% for a, books, verdict, gid in secs.sonstiges.same_asin[:200] %}<div class="mcard" style="margin-top:8px"><div class="small">{{ hidebtn(gid, a ~ ': ' ~ books|map(attribute='title')|join(' / ')) }}<code>{{ a }}</code> –
  <b>{{ {'same_folder': _('ABS lists the same folder twice (a scan duplicate): remove one entry in ABS, the files are there only once.'),
         'copy': _('The audiobook is stored twice (two folders, same runtime): delete one copy.'),
         'editions': _('Two different recordings (runtimes differ) share one ASIN: one of them has the wrong ASIN.')}.get(verdict, _('Could not check ABS - compare the books.')) }}</b></div>
  <table class="cmp small">{% for b in books %}<tr><td><a href="{{ url_for('problem', key=b.key) }}">{{ b.title }}</a></td><td class="muted">{{ b.path or '–' }}</td><td>{{ (b.minutes ~ ' min') if b.minutes else '–' }}</td><td class="muted">{{ (b.size_mb ~ ' MB') if b.size_mb else '' }}</td></tr>{% endfor %}</table></div>
 {% else %}<div class="muted small">{{ _('None.') }}</div>{% endfor %}</div>
-{% for d in secs.sonstiges.dups %}<div class="card mcard small"><b>{{ d.titles|join(' · ') }}</b><div class="muted">{{ (d.seconds // 60) }} min · ASIN {{ d.asins|join(' / ') }}</div></div>
+{% for d in secs.sonstiges.dups %}<div class="card mcard small">{{ hidebtn(d.gid, d.titles|join(' / ')) }}<b>{{ d.titles|join(' · ') }}</b><div class="muted">{{ (d.seconds // 60) }} min · ASIN {{ d.asins|join(' / ') }}</div></div>
 {% else %}<div class="card muted">{{ _('No duplicates found.') }}</div>{% endfor %}
 </div>
 
 </div></div>
 <script>
-function qSelected(action){
-  const ids=[...document.querySelectorAll('.qsel:checked')].map(c=>c.value); if(!ids.length) return;
-  if(!confirm(ids.length+' × '+(action==='accept'?'{{ _('Apply') }}':'{{ _('Discard') }}')+'?')) return;
-  const f=document.getElementById('qselform'); f.action='{{ url_for('queue_selected', action='ACTION') }}'.replace('ACTION', action);
-  document.getElementById('qselids').value=ids.join(','); f.submit();
+const QK='abs_review_marks', SUM='{{ _('%(a)s to apply · %(d)s to discard', a='§A', d='§D') }}';
+let marks={}; try{ marks=JSON.parse(localStorage.getItem(QK)||'{}')||{}; }catch(e){ marks={}; }
+function qSave(){ try{ localStorage.setItem(QK, JSON.stringify(marks)); }catch(e){} }
+function qCounts(){ const v=Object.values(marks); return [v.filter(x=>x==='accept').length, v.filter(x=>x==='reject').length]; }
+function qRender(){
+  const ids=new Set();
+  document.querySelectorAll('.qentry').forEach(e=>{ const id=e.dataset.id, m=marks[id]||''; ids.add(id);
+    e.classList.toggle('m-accept', m==='accept'); e.classList.toggle('m-reject', m==='reject');
+    e.querySelectorAll('.qc').forEach(b=>b.setAttribute('aria-pressed', b.dataset.c===m?'true':'false')); });
+  Object.keys(marks).forEach(k=>{ if(!ids.has(k)) delete marks[k]; }); qSave();  // done entries are gone from the list
+  const [a,d]=qCounts(), bar=document.getElementById('qdecbar');
+  if(bar){ bar.hidden=!(a||d); document.getElementById('qdecsum').textContent=SUM.replace('§A',a).replace('§D',d); }
 }
+function qMark(id,c){ if(!c||marks[id]===c) delete marks[id]; else marks[id]=c; qRender(); }
+function qMarkAll(c,kind){ document.querySelectorAll('.qentry').forEach(e=>{ if(kind&&e.dataset.kind!==kind) return; if(c) marks[e.dataset.id]=c; else delete marks[e.dataset.id]; }); qRender(); }
+function qProcess(){
+  const acc=[], rej=[]; for(const [k,v] of Object.entries(marks)) (v==='accept'?acc:rej).push(k);
+  if(!acc.length&&!rej.length) return;
+  if(!confirm(SUM.replace('§A',acc.length).replace('§D',rej.length)+'?')) return;
+  document.getElementById('qdacc').value=JSON.stringify(acc); document.getElementById('qdrej').value=JSON.stringify(rej);
+  document.getElementById('qdecform').submit();
+}
+document.addEventListener('click', e=>{ const b=e.target.closest('.qc'); if(b) qMark(b.closest('.qentry').dataset.id, b.dataset.c); });
+qRender();
 (function(){ let cur=-1; const ent=()=>[...document.querySelectorAll('.qentry')].filter(e=>e.offsetParent);
+  const go=(L,i)=>{ cur=Math.max(0,Math.min(L.length-1,i)); L.forEach(x=>x.classList.remove('kfocus')); L[cur].classList.add('kfocus'); L[cur].focus(); L[cur].scrollIntoView({block:'center'}); };
   document.addEventListener('keydown', e=>{
     if(e.target.matches('input,textarea,select')||e.ctrlKey||e.metaKey||e.altKey) return;
     const L=ent(); if(!L.length) return; const k=e.key.toLowerCase();
-    if(k==='j'||k==='k'){ cur=Math.max(0,Math.min(L.length-1,cur+(k==='j'?1:-1))); L.forEach(x=>x.classList.remove('kfocus')); L[cur].classList.add('kfocus'); L[cur].focus(); L[cur].scrollIntoView({block:'center'}); e.preventDefault(); }
-    else if(cur>=0&&L[cur]&&(k==='a'||k==='d')){ L[cur].querySelector(k==='a'?'.qacc':'.qrej').submit(); }
-    else if(cur>=0&&L[cur]&&k==='x'){ const c=L[cur].querySelector('.qsel'); c.checked=!c.checked; }
+    if(k==='j'||k==='k'){ go(L, cur+(k==='j'?1:-1)); e.preventDefault(); }
+    else if(cur>=0&&L[cur]&&(k==='a'||k==='d'||k==='u')){ const id=L[cur].dataset.id;
+      if(k==='u') delete marks[id]; else marks[id]=(k==='a'?'accept':'reject'); qRender(); if(k!=='u'&&cur<L.length-1) go(L, cur+1); }
   });
 })();
 (function(){ const secs=[...document.querySelectorAll('.spanel > .sec')], links=[...document.querySelectorAll('.snav a')], nav=document.querySelector('.snav');

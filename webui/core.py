@@ -242,6 +242,29 @@ def same_asin_groups(s=None):
     return sorted(out, key=lambda x: x[1][0]['title'] or '')
 
 
+OTHER_HIDDEN_FILE = os.path.join(CONFIG_DIR, 'other_hidden.json')
+
+
+def other_group_id(kind, *g):
+    """Stable id of a group in 'Other': the ASIN + its books, or the titles + runtime of a duplicate pair."""
+    if kind == 'asin':
+        a, books = g
+        return 'asin|' + str(a) + '|' + '+'.join(sorted(str(b.get('key')) for b in books))
+    d = g[0]
+    return 'dup|' + '|'.join(sorted(str(t) for t in d.get('titles') or [])) + '|' + str(d.get('seconds'))
+
+
+def other_hidden(): return _load_json(OTHER_HIDDEN_FILE, {})
+
+
+def set_other_hidden(gid, label='', hide=True):
+    with _lock:
+        d = other_hidden()
+        if hide: d[gid] = {'label': label[:300], 'ts': datetime.now().isoformat(timespec='seconds')}
+        else: d.pop(gid, None)
+        _save_json(OTHER_HIDDEN_FILE, d)
+
+
 def isbn_valid(v):
     """ISBN-10 / ISBN-13 checksum (an ASIN is never an ISBN)."""
     v = re.sub(r'[\s-]', '', str(v or '')).upper()
@@ -652,8 +675,9 @@ class RunManager:
             runs.insert(0, run)
             _save_json(RUNS_FILE, runs[:300])
 
-    def start(self, kind='full', dry_run=None, only_items=None, trigger='manual', label=None, undo_args=None, run_settings=None):
-        """run_settings: values for THIS run only (start dialog), applied on top of the saved settings, never saved."""
+    def start(self, kind='full', dry_run=None, only_items=None, trigger='manual', label=None, undo_args=None, run_settings=None, after=None):
+        """run_settings: values for THIS run only (start dialog), applied on top of the saved settings, never saved.
+        after: [(kind, kwargs), ...] started one after the other when this run ends (review list: writes, then a scan)."""
         with self.lock:
             if self.running(): return None, 'A scan is already running.'
             GR_BG.stop()  # Goodreads background mode: never at the same time as another script (same files, same books)
@@ -693,10 +717,10 @@ class RunManager:
                    'console': f"console_{run_id}.log", 'summary': ''}
             self.current = run
             self._save_run(run)
-            threading.Thread(target=self._wait, args=(run, out, s), daemon=True).start()
+            threading.Thread(target=self._wait, args=(run, out, s, list(after or [])), daemon=True).start()
             return run_id, None
 
-    def _wait(self, run, out, s):
+    def _wait(self, run, out, s, after=()):
         rc = self.proc.wait()
         out.close()
         # last_run.env is written by abs_ratings.py only: an apply / undo run, or a scan that died before writing it, must not show
@@ -717,6 +741,9 @@ class RunManager:
         if run['kind'] in ('full', 'series'):
             notify_run(s, run)
             if s.get('GCAL_ENABLED'): calendar_sync(load_settings())  # never raises: a calendar problem must not touch the run
+        if after and run['status'] != 'stopped':
+            k_, kw_ = after[0]
+            self.start(k_, after=after[1:], **kw_)
 
     def stop(self):
         if self.running():

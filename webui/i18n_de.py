@@ -555,3 +555,22 @@ add({'copy in ABS metadata': 'Kopie in ABS-Metadaten', 'image in the book folder
 add({'Keep folder covers in ABS metadata': 'Ordner-Cover in den ABS-Metadaten ablegen',
      'A cover ABS took from the book folder is copied once into its metadata folder (cache), so apps no longer wake the disk. Same image, the folder file stays; also for locked covers':
          'Ein Cover, das ABS aus dem Buchordner übernommen hat, wird einmal in seinen Metadaten-Ordner (Cache) kopiert, damit Apps die Platte nicht mehr wecken. Gleiches Bild, die Datei im Ordner bleibt; auch für gesperrte Cover'})
+
+# review list: mark every entry, process all at once; 'Other' groups hidden as intended (user 2026-11-24)
+add({'Mark all: apply': 'Alle markieren: übernehmen',
+     'Mark all: discard': 'Alle markieren: verwerfen',
+     'Clear marks': 'Markierungen löschen',
+     'Mark every entry, then process them all at once.': 'Jeden Eintrag markieren, dann alle auf einmal abarbeiten.',
+     'unmark': 'Markierung entfernen',
+     'Process marked entries': 'Markierte abarbeiten',
+     '%(a)s to apply · %(d)s to discard': '%(a)s übernehmen · %(d)s verwerfen',
+     'Hidden as intended': 'Als gewollt ausgeblendet',
+     'Back to the open entries': 'Zurück zu den offenen Einträgen',
+     '%(n)s hidden as intended - show': '%(n)s als gewollt ausgeblendet – anzeigen',
+     'Show again': 'Wieder anzeigen',
+     'Hide for good: it is intended': 'Dauerhaft ausblenden: ist so gewollt',
+     'Intended': 'Ist so gewollt',
+     'Shown again.': 'Wird wieder angezeigt.',
+     'Hidden: it is intended. It comes back only when the group changes.': 'Ausgeblendet: ist so gewollt. Es erscheint nur wieder, wenn sich die Gruppe ändert.',
+     'A scan is running right now - nothing was changed. Your marks are kept; process them when it is done.':
+         'Gerade läuft ein Scan – es wurde nichts geändert. Deine Markierungen bleiben erhalten; arbeite sie ab, sobald er fertig ist.'})

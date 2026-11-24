@@ -100,3 +100,65 @@ if __name__ == '__main__':
     for n, f in sorted(globals().items()):
         if n.startswith('test_'): f(); print('ok', n)
     print('webui queue tests passed')
+
+
+def test_mark_all_then_process_at_once(monkeypatch):
+    # user 2026-11-24: mark every entry (apply / discard), then process the whole list in one go; ids may contain commas
+    json.dump([{'key': 'lib_1', 'title': 'Test Book One', 'kind': 'asin', 'candidate': 'B0TEST0001', 'reason': 'weak', 'evidence': [], 'status': 'open'},
+               {'key': 'lib_2', 'title': 'Test Book Two', 'kind': 'series', 'candidate': 'Saga, Part 2', 'reason': 'x', 'evidence': [], 'status': 'open'},
+               {'key': 'lib_3', 'title': 'Test Book Three', 'kind': 'chapters', 'candidate': 'no chapters', 'reason': 'x', 'evidence': [], 'status': 'open'}],
+              open(os.path.join(cfg, 'review_queue.json'), 'w'))
+    started = []
+    monkeypatch.setattr(core.RUNNER, 'running', lambda: False)
+    monkeypatch.setattr(core.RUNNER, 'start', lambda kind, after=None, **kw: (started.append((kind, kw, after)), ('run-x', None))[1])
+    c = client()
+    html = c.get('/review').get_data(as_text=True)
+    assert 'Process marked entries' in html and 'class="qc" data-c="accept"' in html and 'data-kind="asin"' in html
+    ids = {x['key']: x['id'] for x in core.open_queue()}
+    r = c.post('/queue-decide', data={'accept': json.dumps([ids['lib_1']]), 'reject': json.dumps([ids['lib_2'], ids['lib_3']])})
+    assert r.status_code in (302, 303) and '/run/run-x' in r.headers['Location'], r.headers.get('Location')
+    d = json.load(open(os.path.join(cfg, 'review_decisions.json')))
+    assert d[ids['lib_1']]['action'] == 'accept' and d[ids['lib_2']]['action'] == 'reject' and d[ids['lib_3']]['action'] == 'reject'
+    assert core.overrides()['lib_1']['asin'] == 'B0TEST0001'
+    assert started == [('item', {'dry_run': False, 'only_items': ['lib_1'], 'label': '1 × ASIN/Hardcover from the review list', 'run_settings': {'ABS_BACKUP': False}}, [])]
+    assert core.open_queue() == []
+
+
+def test_nothing_changes_while_a_scan_runs(monkeypatch):
+    json.dump([{'key': 'lib_1', 'title': 'Test Book One', 'kind': 'asin', 'candidate': 'B0TEST0001', 'reason': 'weak', 'evidence': [], 'status': 'open'}],
+              open(os.path.join(cfg, 'review_queue.json'), 'w'))
+    monkeypatch.setattr(core.RUNNER, 'running', lambda: True)
+    c = client(); qid = core.open_queue()[0]['id']
+    c.post('/queue-decide', data={'accept': json.dumps([qid]), 'reject': '[]'})
+    assert core.open_queue() and 'lib_1' not in core.overrides()
+
+
+def test_other_group_hidden_as_intended(monkeypatch):
+    # user 2026-11-24: The Wandering Inn + Rewrite share one ASIN on purpose - hide it for good; a new book with that ASIN shows it again
+    g = [['1774240327', [{'key': 'k1', 'title': 'The Wandering Inn'}, {'key': 'k2', 'title': 'The Wandering Inn (Rewrite)'}], 'editions']]
+    monkeypatch.setattr(core, 'same_asin_groups', lambda s=None: [list(x) for x in g])
+    p = os.path.join(cfg, 'other_hidden.json')
+    if os.path.exists(p): os.remove(p)
+    c = client()
+    html = c.get('/review').get_data(as_text=True)
+    assert 'The Wandering Inn (Rewrite)' in html and 'Intended' in html
+    gid = core.other_group_id('asin', g[0][0], g[0][1])
+    c.post('/other-hide', data={'gid': gid, 'label': 'Wandering Inn'})
+    html = c.get('/review').get_data(as_text=True)
+    assert 'The Wandering Inn (Rewrite)' not in html and '1 hidden as intended' in html
+    assert 'The Wandering Inn (Rewrite)' in c.get('/review?hidden=1').get_data(as_text=True)
+    g[0][1].append({'key': 'k3', 'title': 'The Wandering Inn (Copy)'})  # the group changed: shown again
+    assert 'The Wandering Inn (Copy)' in c.get('/review').get_data(as_text=True)
+    c.post('/other-hide', data={'gid': gid, 'show': '1'}); assert gid not in core.other_hidden()
+
+
+def test_follow_up_job_starts_after_the_run():
+    r = core.RunManager(); calls = []
+    r.start = lambda kind, after=None, **kw: calls.append((kind, kw, after))
+    class P:
+        pid = 1
+        def wait(self): return 0
+    r.proc = P(); open(os.path.join(cfg, 'c.log'), 'w').close()
+    r._wait({'id': 'x', 'kind': 'apply', 'start': '2026-01-01T00:00:00', 'log': 'nolog.log', 'console': 'c.log'}, open(os.path.join(cfg, 'c.log'), 'a'), {},
+            [('item', {'only_items': ['k']}), ('item', {'only_items': ['z']})])
+    assert calls == [('item', {'only_items': ['k']}, [('item', {'only_items': ['z']})])]

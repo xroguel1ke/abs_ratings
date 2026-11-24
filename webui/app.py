@@ -472,12 +472,19 @@ def review_page():
     res_all = core.results()
     for x in queue: x['res'] = res_all.get(x['key']) or {}; x['explain'] = explain_entry(x, res_all)
     rep = core._load_json(os.path.join(core.REPORT_DIR, 'library_report.json'), {})
+    # user 2026-11-24: groups marked 'intended' in 'Other' stay hidden (?hidden=1 shows them, to show them again)
+    hid, show_hidden = core.other_hidden(), bool(request.args.get('hidden'))
+    same_ = [[a, v, verdict, core.other_group_id('asin', a, v)] for a, v, verdict in core.same_asin_groups(core.load_settings())]
+    dups_ = [dict(d, gid=core.other_group_id('dup', d)) for d in rep.get('duplicate_recordings') or []]
+    n_hidden = sum(1 for g in same_ if g[3] in hid) + sum(1 for d in dups_ if d['gid'] in hid)
+    same_ = [g for g in same_ if (g[3] in hid) == show_hidden]
+    dups_ = [d for d in dups_ if (d['gid'] in hid) == show_hidden]
     # user 2026-11-09: automatic merges are safe by rule and are in the History (with undo) - not shown here again
     secs = {
         'buecher': {'label': T('Books'), 'entries': queue},
         'reihen': {'label': T('Series'), 'review': rv.get('series') or []},
         'autoren': {'label': T('Authors'), 'review': rv.get('authors') or []},
-        'sonstiges': {'label': T('Other'), 'dups': rep.get('duplicate_recordings') or [], 'same_asin': core.same_asin_groups(core.load_settings()), 'foreign': rv.get('other') or [],
+        'sonstiges': {'label': T('Other'), 'dups': dups_, 'same_asin': same_, 'foreign': rv.get('other') or [], 'hidden_n': n_hidden, 'show_hidden': show_hidden,
                       'languages': rv.get('languages') or [],
                       'lang_choices': [x.strip() for x in str(core.load_settings().get('BOOK_LANGUAGES') or 'English, German').split(',') if x.strip()]},
     }
@@ -578,43 +585,84 @@ def queue_bulk(kind, action):
     return redirect(url_for('review_page') + '#buecher')
 
 
-@app.route('/queue-selected/<action>', methods=['POST'])
-@login_required
-def queue_selected(action):
-    """Review list: the same decision for the selected entries. Accept: ASIN/Hardcover overrides are saved and ONE real scan of these
-    books writes them; title/ISBN/authors entries go through the single-entry path one by one is not possible in one request, so
-    they are written by that scan too (title/isbn/authors: planned changes applied together)."""
-    if action not in ('accept', 'reject'): abort(400)
-    ids = set((request.form.get('ids') or '').split(','))
-    items = [x for x in core.open_queue() if x['id'] in ids]
-    planned, keys = [], []
-    for x in items:
-        if action == 'accept' and x.get('candidate'):
+def _queue_process(accept, reject):
+    """Accept and discard review entries in ONE go (user 2026-11-24: mark the whole list, then process it). Discard: the book stays as
+    it is. Accept: ASIN/Hardcover overrides are saved and ONE real scan of these books writes them; title/ISBN/authors are written by
+    abs_apply.py (value check against ABS, journal, undo) - both jobs one after the other. Nothing is changed while a scan runs."""
+    if accept and core.RUNNER.running():
+        flash(T('A scan is running right now - nothing was changed. Your marks are kept; process them when it is done.'), 'error')
+        return redirect(url_for('review_page') + '#buecher')
+    planned, keys, bad = [], [], []
+    for x in reject: core.set_queue_decision(x['id'], 'reject')
+    for x in accept:
+        if x.get('candidate'):
             if x.get('kind') in ('asin', 'hardcover'):
                 ov_ = {x['kind']: x['candidate']}
                 if x['kind'] == 'asin' and (str(x.get('reason') or '').startswith('runtime (to the minute) and narrator match') or 'author differs' in str(x.get('reason') or '')):
                     ov_['identity'] = True
                 core.save_override(x['key'], ov_); keys.append(x['key'])
-            elif x.get('kind') in ('title', 'authors'):
+            elif x.get('kind') in ('title', 'authors', 'isbn'):
+                if x['kind'] == 'isbn' and not core.isbn_valid(x['candidate']): bad.append(x['candidate']); continue
                 iid = x['key'].split('_', 1)[1]
                 try: old = ((core.abs_get(core.load_settings(), f'/api/items/{iid}').json().get('media') or {}).get('metadata') or {}).get(x['kind'])
                 except Exception: old = None
+                if x['kind'] == 'title': old = x.get('title')
                 new = [{'name': n.strip()} for n in x['candidate'].split(',') if n.strip()] if x['kind'] == 'authors' else x['candidate']
                 planned.append({'item': iid, 'key': x['key'], 'title': x.get('title'), 'field': x['kind'], 'old': old, 'new': new})
-        core.set_queue_decision(x['id'], action)
-    if action == 'accept' and planned:
+        core.set_queue_decision(x['id'], 'accept')
+    if bad: flash(T('%(c)s is no valid ISBN - nothing written.', c=', '.join(bad)), 'error')
+    jobs = []
+    if planned:
         rid = 'review-' + datetime.now().strftime('%Y%m%d-%H%M%S')
         os.makedirs(core.REPORT_DIR, exist_ok=True)
         with open(os.path.join(core.REPORT_DIR, f'planned_changes_{rid}.jsonl'), 'w', encoding='utf-8') as f:
             for p in planned: f.write(json.dumps(dict(p, run=rid, ts=datetime.now().isoformat(timespec='seconds'), source='review_list', dry_run=True), ensure_ascii=False) + '\n')
-        new_id, err = core.RUNNER.start('apply', undo_args=['--run', rid, '--apply'], label=f"{len(planned)} × from the review list", run_settings={'ABS_BACKUP': False})
-        if not err and not keys: return redirect(url_for('run_view', run_id=new_id))
-    if action == 'accept' and keys:
-        new_id, err = core.RUNNER.start('item', dry_run=False, only_items=keys, label=f"{len(keys)} × ASIN/Hardcover from the review list", run_settings={'ABS_BACKUP': False})
+        jobs.append(('apply', {'undo_args': ['--run', rid, '--apply'], 'label': f"{len(planned)} × from the review list", 'run_settings': {'ABS_BACKUP': False}}))
+    if keys:
+        jobs.append(('item', {'dry_run': False, 'only_items': keys, 'label': f"{len(keys)} × ASIN/Hardcover from the review list", 'run_settings': {'ABS_BACKUP': False}}))
+    if jobs:
+        new_id, err = core.RUNNER.start(jobs[0][0], after=jobs[1:], **jobs[0][1])
         if not err: return redirect(url_for('run_view', run_id=new_id))
-        flash(T('Saved. A scan is running right now: it is written for this book with the next scan.'), 'ok')
-    else: flash(T('%(n)s entries done.', n=len(items)), 'ok')
+        flash(T(err), 'error')
+    else: flash(T('%(n)s entries done.', n=len(accept) + len(reject)), 'ok')
     return redirect(url_for('review_page') + '#buecher')
+
+
+def _ids(field):
+    try: v = json.loads(request.form.get(field) or '[]')
+    except ValueError: abort(400)
+    return {str(x) for x in v} if isinstance(v, list) else set()
+
+
+@app.route('/queue-decide', methods=['POST'])
+@login_required
+def queue_decide():
+    """Review list: process all marked entries at once (JSON lists of ids - an id may contain commas: 'authors|key|A, B')."""
+    acc, rej = _ids('accept'), _ids('reject')
+    q = core.open_queue()
+    return _queue_process([x for x in q if x['id'] in acc], [x for x in q if x['id'] in rej - acc])
+
+
+@app.route('/queue-selected/<action>', methods=['POST'])
+@login_required
+def queue_selected(action):
+    """Older form: one decision for several entries (comma separated ids)."""
+    if action not in ('accept', 'reject'): abort(400)
+    ids = set((request.form.get('ids') or '').split(','))
+    items = [x for x in core.open_queue() if x['id'] in ids]
+    return _queue_process(items, []) if action == 'accept' else _queue_process([], items)
+
+
+@app.route('/other-hide', methods=['POST'])
+@login_required
+def other_hide():
+    """'Other' section (user 2026-11-24, The Wandering Inn + Rewrite share one ASIN on purpose): hide a group for good. The id holds
+    the books of the group - a new book with that ASIN shows it again. 'show' undoes it."""
+    gid = request.form.get('gid') or ''
+    if not re.fullmatch(r'(asin|dup)\|.{1,4000}', gid, re.S): abort(400)
+    core.set_other_hidden(gid, request.form.get('label') or '', request.form.get('show') != '1')
+    flash(T('Shown again.') if request.form.get('show') == '1' else T('Hidden: it is intended. It comes back only when the group changes.'), 'ok')
+    return redirect(url_for('review_page', hidden=request.form.get('back_hidden') or None) + '#sonstiges')
 
 
 @app.route('/queue/<path:qid>/<action>', methods=['POST'])
