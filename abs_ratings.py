@@ -890,6 +890,10 @@ def asin_plausibility(abs_title, abs_authors, aud_title, aud_sub, aud_authors, a
         if narr_hit and abs_dur and aud_dur and abs(abs_dur - aud_dur) <= 120:  # same recording: the ASIN is right, ABS title/author are what is off
             return "asin_ok_metadata_differs", reasons + ["narrator ✓", "runtime ±2 min"]
         return "wrong", reasons
+    if t < 0.45 and auth is True and abs_dur and aud_dur and abs(abs_dur - aud_dur) > 300 and len(normalize_title_text(abs_title or '')) >= 6:
+        # user 2026-11-24 ('Phantom Deadfall' with the ASIN of 'Black Labyrinth', same author and narrator, 25 min off): another book
+        # of the same author - its ratings stood in the description. The same recording (runtime +-5 min) keeps its ASIN.
+        return "wrong", reasons + [f"runtime {abs(abs_dur - aud_dur) // 60:.0f} min off"]
     if (t < 0.5 and auth is not True) or (auth is False and t < 0.85): return "suspicious", reasons
     return "ok", reasons
 
@@ -921,6 +925,9 @@ def same_recording(abs_dur, abs_narrators, aud):
     ('Book 8' in ABS vs 'Book 7' on Audible), not a wrong ASIN."""
     if not (abs_dur and aud and aud.get('runtime_sec') and abs(abs_dur - aud['runtime_sec']) <= 120): return False
     n = lambda xs: {re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in (xs or []) if x}
+    if n(abs_narrators) and n(abs_narrators) <= {'fullcast', 'variousnarrators', 'various', 'multiplenarrators', 'variousreaders'} \
+            and len(aud.get('narrators_raw') or []) >= 3:
+        return True  # user 2026-11-24 ('I Know A Place' {Full Cast}): ABS names no person, Audible lists the cast - runtime decides
     return bool(n(abs_narrators) & n(aud.get('narrators_raw')))
 
 TMP_AUDIO_RE = re.compile(r'(?i)\.(?:tmp|temp|part|partial|crdownload)(?:\.[a-z0-9]{2,4})?$|\.tmp\.')
@@ -1693,7 +1700,7 @@ def parse_messy_title(t, abs_series_names=None):
             return {'title': rest_, 'sequence': str(int(m.group(1))), 'kind': 'number_prefix'}
     return None
 
-RE_FILE_JUNK = re.compile(r'(?i)[\[(]\s*(?:audiobook|h(?:ö|oe)rbuch|mp3|m4b|m4a|(?:un)?abridged|ungek(?:ü|ue)rzt|(?:19|20)\d\d|\d{2,3}\s?k(?:bps|b/s)?)\s*[\])]|\{[^}]*\}'
+RE_FILE_JUNK = re.compile(r'(?i)\[(?=[a-z]*\d)(?=\d*[a-z])[a-z0-9]{6,12}\]|[\[(]\s*(?:audiobook|h(?:ö|oe)rbuch|mp3|m4b|m4a|(?:un)?abridged|ungek(?:ü|ue)rzt|(?:19|20)\d\d|\d{2,3}\s?k(?:bps|b/s)?)\s*[\])]|\{[^}]*\}'
                           r'|\b\d{2,3}\s?k(?:bps|b/s)\b|\b(?:mp3|m4b|m4a)\b')
 
 def strip_title_junk(title, people=(), keep_format=False):
@@ -5242,7 +5249,9 @@ def process_queue(work_queue, history, failed, recheck):
                                 folder_fix['same'] = True  # the folder title found THIS ASIN again (runtime ±2 min): title/number from it below
                     elif search_only: logging.info(f"        ℹ️ No exact match on {pref_store if pref_miss else search_only}. Keeping {asin} from {aud_data.get('domain') if aud_data else '?'}.")
                     else: logging.info(f"        ℹ️ No replacement found. Keeping fallback data.")
-                    if plaus == "wrong" and not (found and found != asin):  # nothing taken from a product that is another book
+                    # nothing taken from a product that is another book. NOT 'found != asin': asin is already the found one here - a
+                    # replaced ASIN lost its Audible data, got a strike and a wrong review entry ('Secrets of the Deep', 2026-11-24)
+                    if plaus == "wrong" and not asin_from_search:
                         add_review(key, title, "asin", asin, "ASIN belongs to another book and no safe replacement was found", plaus_why)
                         aud_data, skip_meta = None, True
                     rel = LAST_SEARCH.get('related')
@@ -6181,9 +6190,25 @@ def process_queue(work_queue, history, failed, recheck):
                                                                 lang=lang, abs_title=search_title)
                         if hc_data and hc_data.get('id') and not DRY_RUN: HC_CACHE[key] = {'id': hc_data['id'], 'slug': hc_data.get('slug')}
                         cc_ok, cc_why = hc_audible_crosscheck(hc_data, aud_data) if hc_data else (True, '')
+                    if hc_data and not cc_ok and hc_data.get('source') in ('ASIN', 'ISBN') and not ov.get('hardcover'):
+                        # user 2026-11-24 (Gryphon Chronicles 2 and 3: Hardcover maps their ASINs to book 1 'The Lost Heir'): Hardcover's
+                        # identifier link is wrong - the book is searched by title and author instead
+                        logging.info(f"        ♻️ Hardcover links this {hc_data['source']} to '{hc_data.get('title')}', not Audible '{aud_data.get('title_raw')}' ({cc_why}): searching by title")
+                        HC_CACHE.pop(key, None)
+                        hc_data, hc_status = get_hardcover_data(key, hc_targets, list(dict.fromkeys([*authors, *((aud_data or {}).get('authors_raw') or [])])), None, None,
+                                                                None, use_cache=False, abs_series=[(x.get('name'), x.get('sequence')) for x in (meta.get('series') or [])],
+                                                                lang=lang, abs_title=search_title)
+                        if hc_data and hc_data.get('id') and not DRY_RUN: HC_CACHE[key] = {'id': hc_data['id'], 'slug': hc_data.get('slug')}
+                        cc_ok, cc_why = hc_audible_crosscheck(hc_data, aud_data) if hc_data else (True, '')
                     if hc_data and not cc_ok:
-                        logging.info(f"        ⚠️ Hardcover '{hc_data.get('title')}' does not look like Audible '{aud_data.get('title_raw')}' ({cc_why}): Hardcover ratings are NOT used (review list)")
-                        add_review(key, title, 'hardcover', hc_data.get('url'), f"Hardcover book differs from the Audible product ({cc_why})")
+                        m_cc = re.search(r'title ([\d.]+), author (\S+)', cc_why)
+                        other_ = bool(m_cc and float(m_cc.group(1)) < 0.5 and m_cc.group(2) == '✓')
+                        # user 2026-11-24: a hit with a clearly different title by the same author is ANOTHER book of the author ('The Lost Heir'
+                        # for book 2, 'The Blood Mirror' for 'Düsterer Ruhm' - you rejected it): no question, simply no Hardcover rating
+                        logging.info(f"        ⚠️ Hardcover '{hc_data.get('title')}' does not look like Audible '{aud_data.get('title_raw')}' ({cc_why}): Hardcover ratings are NOT used"
+                                     f"{' (another book of the author)' if other_ else ' (review list)'}")
+                        if not other_: add_review(key, title, 'hardcover', hc_data.get('url'), f"Hardcover book differs from the Audible product ({cc_why})")
+                        if HC_CACHE.get(key, {}).get('id') == hc_data.get('id'): HC_CACHE.pop(key, None)
                         hc_data = None; LOOKUP_HITS['hardcover'] = None
                     elif hc_data:
                         logging.info(f"        ✓ Hardcover cross-check against Audible: {cc_why}")
@@ -6408,7 +6433,7 @@ def process_queue(work_queue, history, failed, recheck):
                         # 2026-11-16: French text on the English 'Malice' (recording not on Audible): nothing to replace it with -> review list
                         logging.info(f"        ⚠️ The description is in {l_own}, the book in {map_language(meta.get('language') or lang)} - no Audible text for this recording: review list")
                         add_review(key, title, 'description', l_own, f"description is in {l_own} - please replace it in ABS (no {map_language(meta.get('language') or lang)} text on Audible for this recording)")
-                    if not summary and (other_d := description_of_other_book(strip_rating_block(cur_desc), asin, title)):
+                    if not summary and base_desc == cur_desc and (other_d := description_of_other_book(strip_rating_block(cur_desc), asin, title)):  # a text set above replaced it
                         logging.info(f"        ⚠️ The description is the one of '{other_d}' and Audible has no summary for this book: review list")
                         add_review(key, title, 'description', other_d, f"description belongs to '{other_d}' - Audible has no text for this book, please replace it in ABS")
                     final_desc = build_description(base_desc, {'Audible': aud_data, 'Goodreads': gr_data, 'Hardcover': hc_data}, old_blocks)
@@ -6484,7 +6509,8 @@ def process_queue(work_queue, history, failed, recheck):
                 # end a 'no chapters' entry - both go from the list when this run checked them
                 review_sweep(key, {'asin', 'title', 'series'} | ({'hardcover'} if HARDCOVER_ENABLED and hc_status != 'fresh' else set())
                              | ({'authors'} if aud_data and aud_data.get('meta_raw') and not skip_meta else set())
-                             | ({'chapters'} if ch_done_ or len((item_data.get('media') or {}).get('chapters') or []) > 1 else set()))
+                             | ({'chapters'} if ch_done_ or len((item_data.get('media') or {}).get('chapters') or []) > 1 else set())
+                             | ({'description'} if 'lock_description' not in tags else set()))  # the description step runs for every unlocked book
                 cert, cert_parts = certainty_score(search_title, authors, meta.get('narrators') or [], abs_dur, meta.get('publisher'), meta.get('publishedYear'),
                                                    meta.get('series') or [], aud_data, hc_data, asin_from_search,
                                                    any(x.get('key') == key and x.get('status', 'open') == 'open' for x in (rw_json(REVIEW_FILE) or []) if isinstance(x, dict)))

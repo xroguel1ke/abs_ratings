@@ -316,6 +316,13 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     REPLACED 2026-11-24: they are added automatically, also pen names - only names with a role (is_role_name: role_credits.json,
     or this book's Hardcover contribution role) stay out; the write waits for the Hardcover cross-check; review_sweep drops old
     'authors' entries and 'chapters' entries once the book has chapters);
+  - Review list leftovers 2026-11-24 (user: solve them without manual work): a replaced wrong ASIN kept its new data (the check
+    'found != asin' ran after asin = found: data dropped, strike, false 'asin' entry - 'Secrets of the Deep'); asin_plausibility:
+    same author + title < 0.45 + runtime > 5 min off = 'wrong' (another book of the author: 'Phantom Deadfall' had 'Black Labyrinth');
+    RE_FILE_JUNK drops bracketed release ids ('[66vbrM4]': letters AND digits, 6-12); same_recording: ABS 'Full Cast' / 'Various'
+    = Audible's cast of >= 3 narrators when the runtime matches (+-2 min); Hardcover ASIN/ISBN link to another book -> title search;
+    a mismatch with title < 0.5 and the same author is another book (no review entry, no rating); a description entry only when
+    no text replaced it; review_sweep also clears 'description' entries.
     run status 'warning' when every failed book was a network error (web UI badge + reason).
   - tools/run_round.sh RECORD_NO_LIVE is a HOST LIST, not a flag ('1' matched every URL with a 1, web pages went live and were
     recorded -> golden deviations). For library-wide comparisons use mode 'replay' (nothing recorded).
