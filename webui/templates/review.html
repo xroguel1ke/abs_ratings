@@ -1,6 +1,6 @@
 {% extends 'base.html' %}{% block title %}{{ _('Review list') }}{% endblock %}{% block body %}
 {% macro hidebtn(gid, label) %}<form method="post" action="{{ url_for('other_hide') }}" style="float:right;margin-left:8px"><input type="hidden" name="gid" value="{{ gid }}"><input type="hidden" name="label" value="{{ label }}">
- {% if secs.sonstiges.show_hidden %}<input type="hidden" name="show" value="1"><input type="hidden" name="back_hidden" value="1"><button class="small">{{ _('Show again') }}</button>{% else %}<button class="small" title="{{ _('Hide for good: it is intended') }}">{{ icon('check', 14) }} {{ _('Intended') }}</button>{% endif %}</form>{% endmacro %}
+ {% if secs.sonstiges.show_hidden %}<input type="hidden" name="show" value="1"><input type="hidden" name="back_hidden" value="1"><button class="small">{{ _('Show again') }}</button>{% else %}<button class="small" title="{{ _('Hide for good') }}">{{ icon('check', 14) }} {{ _('Hide') }}</button>{% endif %}</form>{% endmacro %}
 {% macro titles(list) %}{% if list %}<ul class="tlist">{% for t in list[:8] %}<li>{{ t }}</li>{% endfor %}{% if list|length > 8 %}<li class="muted">… {{ _('%(n)s more', n=list|length - 8) }}</li>{% endif %}</ul>{% endif %}{% endmacro %}
 {% macro side(name, books, tl, authors, label) %}<div class="mside"><div class="muted small">{{ label }}</div><b>{{ name }}</b>
  <div class="small">{% if books %}{{ _('Volumes') }} {{ books }}{% endif %}{% if authors %} · {{ authors|join(', ') }}{% endif %}</div>{{ titles(tl) }}</div>{% endmacro %}
@@ -72,8 +72,8 @@
 
 <div class="sec" data-sec="sonstiges">
 <div class="card"><h2 style="margin-top:0">{{ _('Other') }}</h2><p class="muted small" style="margin-top:-8px">{{ _('The same recording twice (author, narrator and runtime equal). Clean up in ABS itself.') }}</p>
- {% if secs.sonstiges.show_hidden %}<p class="small"><b>{{ _('Hidden as intended') }}</b> · <a href="{{ url_for('review_page') }}#sonstiges">{{ _('Back to the open entries') }}</a></p>
- {% elif secs.sonstiges.hidden_n %}<p class="small muted"><a href="{{ url_for('review_page', hidden=1) }}#sonstiges">{{ _('%(n)s hidden as intended - show', n=secs.sonstiges.hidden_n) }}</a></p>{% endif %}</div>
+ {% if secs.sonstiges.show_hidden %}<p class="small"><b>{{ _('Hidden') }}</b> · <a href="{{ url_for('review_page') }}#sonstiges">{{ _('Back to the open entries') }}</a></p>
+ {% elif secs.sonstiges.hidden_n %}<p class="small muted"><a href="{{ url_for('review_page', hidden=1) }}#sonstiges">{{ _('%(n)s hidden - show', n=secs.sonstiges.hidden_n) }}</a></p>{% endif %}</div>
 <div class="card"><h3 style="margin-top:0">{{ _('Wrong language') }} ({{ secs.sonstiges.languages|length }})</h3>
 <p class="muted small" style="margin-top:-8px">{{ _('Language unknown or not one of your book languages. A button sets it right away.') }}</p>
 {% for x in secs.sonstiges.languages[:200] %}<div class="small"><a href="{{ url_for('problem', key=x.key) }}"><b>{{ x.title }}</b></a> – {{ x.authors|join(', ') }}{% if x.narrators %} · {{ _('read by') }} {{ x.narrators|join(', ') }}{% endif %} ·

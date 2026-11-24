@@ -141,11 +141,11 @@ def test_other_group_hidden_as_intended(monkeypatch):
     if os.path.exists(p): os.remove(p)
     c = client()
     html = c.get('/review').get_data(as_text=True)
-    assert 'The Wandering Inn (Rewrite)' in html and 'Intended' in html
+    assert 'The Wandering Inn (Rewrite)' in html and '>Hide<' in html.replace(' Hide<', '>Hide<')
     gid = core.other_group_id('asin', g[0][0], g[0][1])
     c.post('/other-hide', data={'gid': gid, 'label': 'Wandering Inn'})
     html = c.get('/review').get_data(as_text=True)
-    assert 'The Wandering Inn (Rewrite)' not in html and '1 hidden as intended' in html
+    assert 'The Wandering Inn (Rewrite)' not in html and '1 hidden - show' in html
     assert 'The Wandering Inn (Rewrite)' in c.get('/review?hidden=1').get_data(as_text=True)
     g[0][1].append({'key': 'k3', 'title': 'The Wandering Inn (Copy)'})  # the group changed: shown again
     assert 'The Wandering Inn (Copy)' in c.get('/review').get_data(as_text=True)

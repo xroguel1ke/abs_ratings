@@ -661,7 +661,7 @@ def other_hide():
     gid = request.form.get('gid') or ''
     if not re.fullmatch(r'(asin|dup)\|.{1,4000}', gid, re.S): abort(400)
     core.set_other_hidden(gid, request.form.get('label') or '', request.form.get('show') != '1')
-    flash(T('Shown again.') if request.form.get('show') == '1' else T('Hidden: it is intended. It comes back only when the group changes.'), 'ok')
+    flash(T('Shown again.') if request.form.get('show') == '1' else T('Hidden. It comes back only when the group changes.'), 'ok')
     return redirect(url_for('review_page', hidden=request.form.get('back_hidden') or None) + '#sonstiges')
 
 

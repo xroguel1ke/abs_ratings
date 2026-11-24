@@ -326,7 +326,7 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   - Review list UI 2026-11-24 (user idea): every book entry has Apply / Discard toggles (marks kept per browser, keys A/D/U),
     'Process marked entries' sends both lists as JSON to /queue-decide (_queue_process: discards, overrides + ONE item scan,
     title/ISBN/authors via abs_apply - RunManager.start(after=[...]) chains the jobs; nothing changes while a scan runs).
-    'Other': same-ASIN groups and duplicates get 'Intended' (other_hidden.json, id = ASIN + its books / titles + runtime:
+    'Other': same-ASIN groups and duplicates get 'Hide' (other_hidden.json, id = ASIN + its books / titles + runtime:
     a changed group shows again; ?hidden=1 lists them with 'Show again'). Web UI runner counts script processes started
     elsewhere (other_script_pids) and finishes stale 'running' entries from their log.
     run status 'warning' when every failed book was a network error (web UI badge + reason).
