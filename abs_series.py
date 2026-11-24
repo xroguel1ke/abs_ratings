@@ -1153,6 +1153,9 @@ def normalize_genres(ctx, records):
     changed = 0
     gmax = int(ctx.get('genre_max') or 0)
     cnt_all = Counter(genre_key(x) for r in records for g in r['genres'] if isinstance(g, str) for x in split_(g))  # books per genre
+    known_ = {genre_key(x) for x in ctx.get('audible_genres') or ()} | set(_GENRE_CANON) | set(_THEME_KEYS) | set(_GENRE_SYN_KEYS) \
+        | {genre_key(x) for x in UMBRELLA_NODES}  # genre names known without the library (Audible's categories, synonyms, themes)
+    known_.discard('')
     props = []
     for r in records:
         if not r['genres'] or 'lock_genres' in r['tags'] or 'lock_all' in r['tags']: continue
@@ -1166,8 +1169,11 @@ def normalize_genres(ctx, records):
             # genre loop 2026-11-15: 'Action & Adventure, Dark Fantasy, Fantasy' (one entry) - comma lists of capitalized genres split too
             for x in ps_:
                 cs_ = [y.strip() for y in x.split(', ')] if isinstance(x, str) else [x]
-                # only when every part is a genre of its own in the library ('Movie, TV & Video Game Tie-Ins' is ONE genre)
-                parts_ += cs_ if len(cs_) > 1 and all(y and cnt.get(y, 0) >= 1 for y in cs_) else [x]
+                # only when every part is a genre of its own in the library ('Movie, TV & Video Game Tie-Ins' is ONE genre) - or a KNOWN
+                # genre / category / theme (user 2026-11-24, 'Syl': 'Dragons & Mythical Creatures, Action & Adventure' from the file tag;
+                # both parts never stay in the library as such - a theme and a synonym - so the glued entry stayed). Never a known whole
+                # name ('Mystery, Thriller & Suspense').
+                parts_ += cs_ if len(cs_) > 1 and genre_key(x) not in known_ and all(y and (cnt.get(y, 0) >= 1 or genre_key(y) in known_) for y in cs_) else [x]
         en_ = str(r.get('language') or '').strip().lower() in ('english', 'eng', 'en')
         r['_themes'] = {t for t in (theme_tag(g) for g in parts_ if isinstance(g, str)) if t}  # -> tags (manage_tags)
         for g in parts_:

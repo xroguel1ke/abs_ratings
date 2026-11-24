@@ -7,6 +7,8 @@ import html as html_lib
 import recorder
 import source_state as SST
 recorder.install()  # record / replay of outside HTTP traffic (tests); a no-op without RECORD_DIR / REPLAY_DIR
+import net_guard
+net_guard.install(os.getenv('ABS_URL', ''))  # network outages: wait for the host instead of 'not found' + strike (user 2026-11-24)
 import source_health as SH
 import missing_series as MS
 import threading, queue as _queue_mod
@@ -4009,11 +4011,15 @@ def compare_view(title, authors, meta, abs_dur, aud, hc=None):
 
 
 def set_result(key, lib_id, iid, title, authors, asin, status, reason, extra=None):
+    if status != 'ok' and (why_ := net_guard.book_failed()):  # network outage: the old result stays (user 2026-11-24)
+        logging.warning(f"      -> 🌐 Network outage during this book ({why_}): result not changed"); return
     RESULTS[key] = {'lib': lib_id, 'id': iid, 'title': title, 'author': ', '.join(authors or []), 'asin': asin,
                     'status': status, 'reason': reason, 'run': RUN_ID, 'dry_run': DRY_RUN,
                     'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'log': list(ITEM_LOG.lines), **(extra or {})}
 
 def record_attempt(key, history, failed, recheck, complete=False, recheck_days=None):
+    if not complete and (why_ := net_guard.book_failed()):  # network outage: no strike, the book is tried again next run
+        logging.warning(f"      -> 🌐 No strike: network outage ({why_}) - tried again next run"); return
     with IO_LOCK: return _record_attempt(key, history, failed, recheck, complete, recheck_days)
 
 def _record_attempt(key, history, failed, recheck, complete=False, recheck_days=None):
@@ -4841,6 +4847,7 @@ def goodreads_background():
             logging.info("📖 Goodreads background mode: no book due - checking again in an hour", extra={'now': True})
             _gr_sleep(3600); continue
         lib, iid = key.split('_', 1)
+        net_guard.book_start()
         scan_gate()  # never write while ABS scans the library
         GR_STATE.update(blocked=False, cooldowns=0, searches=0, pages=0, pages_blocked=False, cool_until=0)
         before, url_before = len(OUR_WRITTEN), (RESULTS.get(key) or {}).get('goodreads')
@@ -4878,7 +4885,8 @@ def process_queue(work_queue, history, failed, recheck):
 
     def one(idx, item):
         nonlocal consecutive_rl
-        if stats['aborted_ratelimit'] or 'audible' in SOURCE_DOWN: return
+        if stats['aborted_ratelimit'] or 'audible' in SOURCE_DOWN or net_guard.any_down(): return
+        net_guard.book_start()
         lib_id = item['_lib']
         
         eta_str = eta_text(idx, total) if not LOG_ROUTER or WORKERS <= 1 else '…'  # parallel: the log router writes the real ETA when the book is finished
@@ -6731,6 +6739,7 @@ def main():
             except Exception as e: logging.warning(f"Release dates not looked up ({type(e).__name__}: {e})")
         if 'audible' in SOURCE_DOWN: logging.error("🚨 Per-book part skipped: the Audible check failed (see above). The library task still runs.")
         run_libraries(history, failed, recheck)
+        if net_guard.GAVE_UP: logging.error(f"🌐 Run stopped early - network outage: {', '.join(f'{h} ({w})' for h, (w, _t) in net_guard.GAVE_UP.items())}. Untouched books are done next run, no strikes.")
         group_confirm()
         if not DRY_RUN: rw_json(HISTORY_FILE, history); rw_json(FAILED_FILE, failed); rw_json(RECHECK_FILE, recheck); rw_json(HC_CACHE_FILE, HC_CACHE); rw_json(NEW_PENDING_FILE, sorted(NEW_PENDING))
         save_reports()

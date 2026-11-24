@@ -133,6 +133,24 @@ def test_genre_cleanup():  # audit 2026-11-09: spelling variants, duplicates in 
     assert S.genre_key('Post-Apocalyptic') == S.genre_key('PostApocalyptic')
 
 
+def test_glued_known_genres_are_split():
+    # user 2026-11-24 ('Syl', 'Of Slicing Men'): the file tag 'A, B' is ONE genre in ABS; the parts never exist alone in the library
+    # (a theme and an umbrella category are cleaned away), so the library-only check never split them
+    def g(i, genres):
+        return {'id': i, 'lib': 'l', 'title': f't{i}', 'genres': genres, 'language': 'English', 'tags': set()}
+    recs = [g(1, ['Dragons & Mythical Creatures, Action & Adventure']), g(2, ['Fantasy', 'Science Fiction & Fantasy, Fantasy', 'Epic Fantasy']),
+            g(3, ['Movie, TV & Video Game Tie-Ins']), g(4, ['Mystery, Thriller & Suspense'])]
+    writes = {}
+    ctx = {'dry_run': True, 'audible_genres': {'Action & Adventure'}, 'abs_update': lambda iid, key, title, upd, old, src: writes.__setitem__(iid, upd['genres']) or True}
+    S.normalize_genres(ctx, recs)
+    assert writes.get(1) == [S.canonical_genre('Action & Adventure')], writes  # theme -> tag, 'Action & Adventure' -> its canonical name
+    assert 'Dragons' in recs[0]['_themes']
+    assert writes.get(2) == ['Fantasy', 'Epic Fantasy'], writes  # umbrella 'Science Fiction & Fantasy' goes, 'Fantasy' once
+    assert not any(', ' in x and x not in ('Movie, TV & Video Game Tie-Ins', 'Mystery, Thriller & Suspense') for v in writes.values() for x in v), writes
+    for i, whole in ((3, 'Movie, TV & Video Game Tie-Ins'), (4, 'Mystery, Thriller & Suspense')):
+        assert i not in writes or len(writes[i]) == 1, writes  # a known whole name is never split
+
+
 if __name__ == '__main__':
     n = 0
     for name, fn in sorted(globals().items()):
