@@ -35,13 +35,39 @@ A.BOOK_LANGUAGES[:] = ["English", "German"]
 
 RUNTIME_OK_S = 120          # same recording: Audible runtime (whole minutes) within 2 min
 def rt_tol(rt):              # 2026-11-23: long books (King, 30 h) differ by 2-3 min between releases of the same recording;
-    return max(RUNTIME_OK_S, 0.0025 * (rt or 0))   # other narrations differ by whole percents
+    return max(RUNTIME_OK_S, 0.01 * (rt or 0))     # 2026-11-24: 1 % (0.25 % was too tight: credits/foreword); other narrations differ by whole percents
 DUP_S = 0.05                # identical file: duration equal to the millisecond
 AMBIG_S = 120               # a library book this close in length could be the same recording
 
 
 def nk(names):
     return {re.sub(r"[^a-z]", "", A.fold_accents(str(n)).lower()) for n in (names or []) if n}
+
+
+NARR_PREFIX = re.compile(r"^\W*(?:book\s+)?(?:narrat(?:ed|or|ion)|read|performed|voiced?)(?:\s+by)?\W*", re.I)
+
+
+def clean_narrators(raw, author):
+    """File narrator tags -> plain names (2026-11-24): 'Book Narrator - John Lee', 'Narrator.....Stephen King',
+    'Narrated by Julia Motyka', 'Read by Craig Wasson', 'Jessica Hecht {FerraBit}'; the author tagged as narrator
+    ('Kunsken, Derek') is not a narrator."""
+    out = []
+    for n in raw:
+        n = str(n or "").strip()
+        if not n:
+            continue
+        if "," in n and len(n.split(",")) == 2 and A.same_person_name(" ".join(x.strip() for x in reversed(n.split(","))), author):
+            continue                                   # 'Kunsken, Derek' = the author
+        for x in re.split(r"\s*(?:;|,|/|&| and )\s*", n):
+            x = re.sub(r"\{[^}]*\}|\([^)]*\)", " ", x)
+            x = NARR_PREFIX.sub("", x)
+            x = re.sub(r"^[\s.\-:]+|[\s.\-:]+$", "", re.sub(r"\s+", " ", x))
+            if not x or A.same_person_name(x, author):
+                continue
+            if " " not in x and x.lower() in str(author).lower().split():
+                continue                               # a single word of the author's name
+            out.append(x)
+    return list(dict.fromkeys(out))
 
 
 def num_eq(a, b):
@@ -58,8 +84,7 @@ def verify(req):
     lang = A.map_language(exp.get("language") or "English") or "English"
     dur = float(probe.get("duration") or 0)
     chs = probe.get("chapters") or []
-    tag_narr = [x.strip() for n in (probe.get("narrators") or []) for x in re.split(r"\s*(?:;|,|/|&| and )\s*", str(n or "")) if x.strip()]
-    tag_narr = [n for n in dict.fromkeys(tag_narr) if not A.same_person_name(n, author)]
+    tag_narr = clean_narrators(probe.get("narrators") or [], author)
     out = {"verdict": "unsure", "reasons": []}
     why = out["reasons"]
 
@@ -198,9 +223,16 @@ def verify(req):
             out["verdict"] = "wrong"; why.append(f"{dur/3600:.1f} h vs {rt/3600:.1f} h on Audible (bundle)"); return out
         if dur < 0.5 * rt:
             out["verdict"] = "wrong"; why.append(f"{dur/3600:.1f} h vs {rt/3600:.1f} h on Audible (incomplete)"); return out
-        if not proof:
+        # 2026-11-24 (user): same reading with extra material (foreword, interview, credits, other release of the recording)
+        # is common - accepted up to 3 % ONLY when the file's narrator tag names Audible's narrator (positive evidence);
+        # the same safety checks as without chapter proof follow (same-length sibling, same-length library book)
+        narr_ok = bool(tag_narr) and bool(nk(tag_narr) & nk(p.get("narrators_raw")))
+        if not proof and not (narr_ok and abs(diff) <= 0.03 * rt):
             why.append(f"runtime {diff:+.0f} s from Audible"); return out
-    why.append(f"runtime {diff:+.0f} s ✓" + (f", {proof}" if proof else ""))
+        if not proof:
+            why.append(f"runtime {diff:+.0f} s from Audible ({abs(diff) / rt * 100:.1f} %), narrator matches the file tags")
+    if abs(diff) <= rt_tol(rt) or proof:
+        why.append(f"runtime {diff:+.0f} s ✓" + (f", {proof}" if proof else ""))
     if not proof:
         if aud_ch:
             # the file HAS chapter marks but they do not line up with Audible's (2026-11-23: many releases set their own
