@@ -6,7 +6,7 @@ the file's own pauses (chapter_audio.py). Only the audio is READ; chapters are w
 Fast path: a book whose chapters already sit at Audible's chapter starts (abs_ratings.anchor_align) is done without touching the
 audio. Audible's lists are cached for 30 days, the pauses per file for good (until the file changes).
 
-Environment like abs_ratings.py (ABS_URL, API_TOKEN, LIBRARY_IDS, DRY_RUN, RUN_ID, ONLY_ITEMS); CHAPTER_WORKERS (2) = audio analyses at
+Environment like abs_ratings.py (ABS_URL, API_TOKEN, LIBRARY_IDS, DRY_RUN, RUN_ID, ONLY_ITEMS); CHAPTER_WORKERS (3) = audio analyses at
 the same time."""
 import json, logging, os, re, sys, time
 from concurrent.futures import ThreadPoolExecutor
@@ -18,7 +18,7 @@ from abs_series import load_full_items, expand_locks
 
 AUD_CACHE_FILE = os.path.join(A.SCRIPT_DIR, 'cache', 'audible_chapters.json')
 AUD_CACHE_DAYS = 30
-WORKERS = max(1, int(os.getenv('CHAPTER_WORKERS', 2) or 2))
+WORKERS = max(1, int(os.getenv('CHAPTER_WORKERS', 3) or 3))
 
 
 def tags_of(d):

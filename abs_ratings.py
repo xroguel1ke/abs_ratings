@@ -6246,7 +6246,12 @@ def process_queue(work_queue, history, failed, recheck):
                                 new_chs, why_c = None, 'recording not verified and the chapter marks do not prove it'
                             if new_chs and poor == 'only numbered chapters without names' and all(RE_GENERIC_CH.match(c['title'] or '') for c in new_chs):
                                 new_chs, why_c = None, "Audible's chapters have no names either"  # 'Chapter 1' for 'Chapter 1': nothing gained
-                            if new_chs and abs_set_chapters(iid, key, title, new_chs, abs_chs, 'audible_chapters'):
+                            if new_chs and why_c.startswith('the file has no chapters, length within') and 'lock_chapters' not in tags \
+                                    and audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch)[0]:
+                                # 2026-11-26: Audible's list as it is can be up to a minute off; on the file's pauses it is exact
+                                stats['chapters'] += 1
+                                ch_done_ = True
+                            elif new_chs and abs_set_chapters(iid, key, title, new_chs, abs_chs, 'audible_chapters'):
                                 stats['chapters'] += 1
                                 ch_done_ = True
                                 logging.info(f"        📑 Chapters {'would be ' if DRY_RUN else ''}taken from Audible: {len(new_chs)} ({poor} before; {why_c})")
