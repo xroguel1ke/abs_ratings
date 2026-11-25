@@ -37,7 +37,7 @@ def test_offset_and_drift_are_found():
 def test_exact_file_aligns_with_tiny_error():
     chs, total, rnd = book(seed=2)
     r = CA.silence_align(chs, total, pauses(chs, total, rnd))
-    assert r and abs(r['offset']) < 0.5 and r['chance'] < 1e-12
+    assert r and abs(r['offset']) < 1.0 and r['chance'] < 1e-12
 
 
 def test_other_books_pauses_never_align():

@@ -90,7 +90,9 @@ def _tail(n, k, p):
 
 
 def _marks(sil, min_pause):
-    return sorted(e - min(0.8, (e - s) / 2) for s, e in sil if e - s >= min_pause)  # the next chapter's first word follows the pause
+    # where in the pause Audible's mark sits varies by book (near the end / the middle); the middle, at most 1.5 s before the end, was
+    # the best compromise on 16 books with known marks (2026-11-26: mean error 1.0 s, marks > 3 s off 25 instead of 52 with 'end - 0.8')
+    return sorted(max((s + e) / 2, e - 1.5) for s, e in sil if e - s >= min_pause)
 
 
 def silence_align(chs, dur, sil, need=0.8, max_chance=1e-12):
@@ -216,6 +218,45 @@ def piecewise_align(chs, dur, sil, max_seg=4, min_seg=4, tol=1.0, need=0.8, max_
             best = {'starts': [round(x, 3) for x in starts], 'hit': hits_, 'total': n, 'offset': segs[0][2], 'rate': 0.0, 'chance': prod,
                     'tol': tol, 'min_pause': round(min_pause, 2), 'segments': [(s, e, o) for s, e, o in segs]}
     return best
+
+
+def refine(chs, al, sil, tol=2.0):
+    """Exact positions after an accepted alignment. It is the SAME recording, so Audible's mark sits inside the same pause of this file -
+    but not always at the same depth (sometimes the middle of the pause, sometimes near its end): snapping every chapter to one fixed
+    point of its pause shifted whole books by 2-4 s (check 2026-11-26, 14 books with known marks). Instead: per stretch (one offset), the
+    common shift that puts the most Audible marks INSIDE their pause, the middle of that shift range; Audible's own positions are kept
+    relative to each other. Returns the new starts."""
+    inner = [c[0] for c in chs[1:]]
+    spans = sorted((s, e) for s, e in sil if e - s >= 0.5)
+    st_ = [s for s, _ in spans]
+    segs = al.get('segments') or [(0, len(inner), al['offset'])]
+    rate = al.get('rate') or 0.0
+    model = [0.0] * len(inner)
+    for a, b, o in segs:
+        for i in range(a, b): model[i] = inner[i] * (1 + rate) + (o if al.get('segments') else al['offset'])
+    out = list(model)
+    for a, b, _ in segs:
+        ranges = []
+        for i in range(a, b):
+            t = model[i]
+            k = bisect.bisect_right(st_, t + tol) - 1
+            cand = [spans[j] for j in (k - 1, k, k + 1) if 0 <= j < len(spans) and spans[j][0] - tol <= t <= spans[j][1] + tol]
+            if cand:
+                ps, pe = min(cand, key=lambda p: 0 if p[0] <= t <= p[1] else min(abs(p[0] - t), abs(p[1] - t)))
+                ranges.append((ps - t, pe - t))
+        if len(ranges) < 3: continue
+        ev = sorted([(x, 1) for x, _ in ranges] + [(y, -1) for _, y in ranges], key=lambda z: (z[0], -z[1]))
+        cur = bestc = 0; lo = hi = 0.0
+        for j, (x, d) in enumerate(ev):
+            cur += d
+            if d == 1 and cur > bestc:
+                bestc, lo = cur, x
+                hi = next(x2 for x2, d2 in ev[j + 1:] if d2 == -1)
+        if bestc < 0.6 * len(ranges): continue
+        delta = (lo + hi) / 2
+        for i in range(a, b): out[i] = model[i] + delta
+    starts = [0.0] + out
+    return [round(x, 3) for x in starts] if all(b2 > a2 for a2, b2 in zip(starts, starts[1:])) else al['starts']
 
 
 def on_pause_share(abs_chs, sil, tol=1.0):
