@@ -64,7 +64,9 @@ def main():
     logging.info(f"{len(books)} books loaded")
     st = {'checked': 0, 'no_asin': 0, 'locked': 0, 'no_audible': 0, 'ok': 0, 'written': 0, 'kept': 0, 'not_aligned': 0, 'unreadable': 0}
     todo = []
-    for lib, d in books:
+    for n_, (lib, d) in enumerate(books, 1):
+        if n_ % 250 == 0:
+            logging.info(f"   {n_}/{len(books)} books compared with Audible's chapter list"); A.rw_json(AUD_CACHE_FILE, cache)  # progress + cache kept
         key, md, media = f"{lib}_{d['id']}", (d.get('media') or {}).get('metadata') or {}, d.get('media') or {}
         asin, dur, chs0 = md.get('asin'), float(media.get('duration') or 0), media.get('chapters') or []
         title = md.get('title') or '?'

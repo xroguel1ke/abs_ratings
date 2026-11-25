@@ -387,7 +387,7 @@ def book_field(key, field, action):
 def run_apply(run_id):
     """Apply the planned changes of a dry run: 'check' only compares with ABS, 'apply' writes (abs_apply.py)."""
     run = core.RUNNER.get(run_id) or abort(404)
-    if not run.get('dry_run') or run.get('kind') not in ('full', 'item') or not re.fullmatch(r'[\w-]+', run_id): abort(400)
+    if not run.get('dry_run') or run.get('kind') not in ('full', 'item', 'chapters') or not re.fullmatch(r'[\w-]+', run_id): abort(400)
     really = request.form.get('mode') == 'apply'
     args = ['--run', run_id] + (['--apply'] if really else [])
     ids = request.form.getlist('sel')
