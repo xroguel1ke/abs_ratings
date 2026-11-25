@@ -804,7 +804,7 @@ def runs():
         rs, items = None, None
         if a == 'start':  # scan page: tasks as checkboxes (metadata & ratings / authors / series) + test-run switch
             core.save_scan_form(request.form)  # remembered for the next visit (never changes the settings)
-            meta, authors, series, roles, empty = (request.form.get(k) == 'on' for k in ('task_meta', 'task_authors', 'task_series', 'task_roles', 'task_empty'))
+            meta, authors, series, roles, empty, chap = (request.form.get(k) == 'on' for k in ('task_meta', 'task_authors', 'task_series', 'task_roles', 'task_empty', 'task_chapters'))
             rm = [src for src in ('audible', 'goodreads', 'hardcover') if request.form.get(f'rm_{src}') == 'on']
             if rm:  # remove-ratings task: runs alone (no searches, no metadata)
                 dry = request.form.get('dry') == 'on'
@@ -817,8 +817,17 @@ def runs():
                                                 run_settings={'REMOVE_RATINGS': ','.join(rm), 'ABS_BACKUP': request.form.get('backup') == 'on'})
                 if err: flash(T(err), 'error'); return redirect(url_for('runs'))
                 return redirect(url_for('run_view', run_id=run_id))
-            if not (meta or authors or series or roles or empty): flash(T('Please choose at least one task.'), 'error'); return redirect(url_for('runs'))
+            if not (meta or authors or series or roles or empty or chap): flash(T('Please choose at least one task.'), 'error'); return redirect(url_for('runs'))
             dry = request.form.get('dry') == 'on'
+            if chap and not (meta or authors or series or roles or empty):  # chapters alone: the chapter check of the whole library / selection
+                s_ = core.load_settings(); items, note = None, T('all books')
+                if request.form.get('custom') == '1' and request.form.get('selection', 'all') != 'all':
+                    items, note = core.select_items(s_, request.form.get('selection'), request.form.get('list', ''), limit=5000)
+                    if not items: flash(T('No books for this selection (%(n)s).', n=note), 'error'); return redirect(url_for('runs'))
+                run_id, err = core.RUNNER.start('chapters', dry_run=dry, only_items=items, label=f"{'Test run' if dry else 'Scan (real)'}: chapters – {note}",
+                                                run_settings={'ABS_BACKUP': False})
+                if err: flash(T(err), 'error'); return redirect(url_for('runs'))
+                return redirect(url_for('run_view', run_id=run_id))
             kind = 'full' if meta else 'series'  # without metadata only the series/author task runs (whole library)
             tasks = [t for t, on in (('metadata', meta), ('authors', authors), ('series', series), ('only real authors', roles), ('empty authors', empty)) if on]
             label = f"{'Test run' if dry else 'Scan (real)'}: {', '.join(tasks)}"
@@ -842,7 +851,9 @@ def runs():
             if mode != 'all' and not items: flash(T('No books for this selection (%(n)s).', n=note), 'error'); return redirect(url_for('runs'))
             if items is None: note = f"up to {rs['BATCH_SIZE']} of all due books"  # 'all' picks from all due books, the batch size still limits it
             label += f" – {note}"
-        run_id, err = core.RUNNER.start(kind, dry_run=dry, label=label, only_items=items, run_settings=rs)
+        after_ = [('chapters', {'dry_run': dry, 'only_items': items, 'label': f"{'Test run' if dry else 'Scan (real)'}: chapters", 'run_settings': {'ABS_BACKUP': False}})] \
+            if a == 'start' and request.form.get('task_chapters') == 'on' else None  # chapters after the other tasks (one script at a time)
+        run_id, err = core.RUNNER.start(kind, dry_run=dry, label=label, only_items=items, run_settings=rs, after=after_)
         if err: flash(T(err), 'error'); return redirect(url_for('runs'))
         return redirect(url_for('run_view', run_id=run_id))
     s = core.load_settings()

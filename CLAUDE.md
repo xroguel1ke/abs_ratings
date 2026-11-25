@@ -368,6 +368,17 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     even with a close runtime (existing books keep the old > 10 min condition). Checked on the live data: number rule 2 hits in 3010
     results (both wrong), narrator rule 6 hits in 966 new books (all wrong editions). Also: '[03] - Necropolis' = number_prefix;
     author 'By: X' / 'Written by: X' / 'Von: X' -> 'X' (abs_series.CREDIT_PREFIX_RE, library-wide author fix). tests/test_import_guard.py.
+  - Chapters on the file's pauses (chapter_audio.py, 2026-11-25, user: as few books as possible with hand-set chapters): ffmpeg
+    silencedetect (8 kHz, -40 dB, >= 0.6 s; ~20-30 s per 10 h book, nice 15, cached per file in cache/silences/) + Audible's list.
+    A chapter break = a long pause (2-5 s), the first word ~0.8 s after its end. silence_align(): model file_t = s*(1+r)+o, pause classes
+    {0.5, 1.0, p95, p98, p99} x tol {0.5, 1, 2}; accepted only with >= 80 % hits, binomial chance < 1e-12 and no rival offset > 10 s away
+    (3-7 s rivals = the pauses before/after a spoken chapter title). decide(): no/one chapter -> Audible's on the pauses; own marks
+    < 60 % at a pause (download split points) -> replaced; own marks at pauses -> kept (names only if they are just numbered). Needs the
+    read-only mount /mnt/user/data/media/books -> /data/media/books (same paths as ABS) and ffmpeg in the image; without them it is off.
+    abs_ratings: automatic for books without usable chapters when match_chapters() fails, also for an unverified recording (the pauses are
+    the proof). chapter_check.py = web UI scan task 'Chapters' (kind 'chapters'): whole library / selection, Audible lists cached 30 days,
+    books whose marks already sit at Audible's starts skip the audio. Real data: 5/9 review-list books aligned, 4 books with good own
+    chapters kept, truth files max error 0.3 s, 0 false alignments in 156 cross pairs. tests/test_chapter_audio.py.
 
 - Web UI: keep texts short (help texts <= ~100 chars, user 2026-11-15: human readability first). Series and missing volumes are ONE page (series.html, two views). Screenshots: tools/ui_shots.sh <snapshot> <port> name=/path ... (FULL=0 = viewport only); never commit them (private data).
 

@@ -9,6 +9,7 @@
   <label class="badge" title="{{ _('Merge series') }}"><input type="checkbox" name="task_series" {{ 'checked' if f.task_series }}> {{ _('Series') }}</label>
   <label class="badge" title="{{ _('Remove illustrators, translators etc. from the author field (if a real author remains)') }}"><input type="checkbox" name="task_roles" {{ 'checked' if f.task_roles }}> {{ _('Real authors') }}</label>
   <label class="badge" title="{{ _('Delete ABS authors without a single book') }}"><input type="checkbox" name="task_empty" {{ 'checked' if f.task_empty }}> {{ _('Empty authors') }}</label>
+  <label class="badge" title="{{ _('Compare every book with Audible and set missing or wrong chapters on the pauses of the audio file') }}"><input type="checkbox" name="task_chapters" {{ 'checked' if f.task_chapters }}> {{ _('Chapters') }}</label>
   <span class="sep"></span>
   <label class="badge" id="backupopt" title="{{ _('Ask ABS for a backup before anything is written (takes a few minutes for big libraries)') }}"><input type="checkbox" name="backup" {{ 'checked' if f.backup }}> {{ _('ABS backup') }}</label>
   <label class="badge" title="{{ _('Test run (write nothing)') }}"><input type="checkbox" name="dry" id="dry" {{ 'checked' if f.dry }} onchange="dryToggle()"> {{ _('Test run') }}</label>

@@ -6,9 +6,9 @@ ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
- && apt-get update && apt-get install -y --no-install-recommends tzdata curl && rm -rf /var/lib/apt/lists/*
+ && apt-get update && apt-get install -y --no-install-recommends tzdata curl ffmpeg && rm -rf /var/lib/apt/lists/*
 
-COPY abs_ratings.py abs_series.py abs_undo.py abs_apply.py recorder.py source_state.py source_health.py missing_series.py abs_verify.py net_guard.py ./
+COPY abs_ratings.py abs_series.py abs_undo.py abs_apply.py recorder.py source_state.py source_health.py missing_series.py abs_verify.py net_guard.py chapter_audio.py chapter_check.py ./
 COPY webui ./webui
 
 ARG VERSION=dev

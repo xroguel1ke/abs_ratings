@@ -1475,6 +1475,22 @@ def match_chapters(abs_chs, dur, aud):
     return None, f"length differs by {diff:+.0f} s and no reliable alignment"
 
 CH_LOOSE_SECONDS = 60
+CHAPTER_AUDIO = os.getenv('CHAPTER_AUDIO', 'true').lower() == 'true'  # Audible's chapters on the file's own pauses (chapter_audio.py, 2026-11-25)
+SILENCE_CACHE_DIR = os.path.join(SCRIPT_DIR, 'cache', 'silences')
+
+def audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch, source='audible_chapters_audio'):
+    """Audible's chapters aligned on the pauses of the audio file (the file is only read). Returns (written, reason)."""
+    import chapter_audio as CA
+    if not (CHAPTER_AUDIO and MATCH_CHAPTERS): return False, 'pause analysis off'
+    if not CA.available(): return False, 'ffmpeg missing'
+    sil = CA.book_silences(item_data, SILENCE_CACHE_DIR)
+    if sil is None: return False, 'the audio file cannot be read here'
+    new, why = CA.decide(abs_chs, abs_dur, aud_ch, sil)
+    if not new: return False, why
+    if abs_set_chapters(iid, key, title, new, abs_chs, source):
+        logging.info(f"        📑 Chapters {'would be ' if DRY_RUN else ''}taken from Audible, aligned on the file's pauses: {len(new)} ({why})")
+        return True, why
+    return False, 'write failed'
 
 def anchor_align(abs_chs, chs, dur, need=0.9):
     """The file's own chapter marks sit where Audible's chapters start, up to one constant offset (Audible's intro cut differently):
@@ -6169,9 +6185,16 @@ def process_queue(work_queue, history, failed, recheck):
                     # Chapters (user 2026-11-10): Audible's chapters for poorly chaptered files of the SAME recording, only when they fit reliably
                     chs0_ = (item_data.get('media') or {}).get('chapters') or []
                     if MATCH_CHAPTERS and len(chs0_) <= 1 and 'lock_chapters' not in tags and not (cover_verified and not lang_conflict and asin and not aud_data.get('related_edition')):
-                        # a book WITHOUT chapters whose recording is not verified: nothing can be matched safely -> review list (user 2026-11-10)
-                        add_review(key, title, 'chapters', 'no chapters' if not chs0_ else 'a single chapter',
-                                   "the book has no chapters and Audible's could not be matched (recording not verified) - add them in ABS (Edit > Chapters)")
+                        # a book WITHOUT chapters whose recording is not verified: only the file's pauses can prove that Audible's chapter
+                        # structure belongs to it (2026-11-25); otherwise -> review list (user 2026-11-10)
+                        a_ok_ = False
+                        if asin and not lang_conflict and not aud_data.get('related_edition') and abs_dur and (ach_ := audible_chapters(asin, aud_data.get('domain'))):
+                            a_ok_, a_why_ = audio_chapters(iid, key, title, item_data, chs0_, abs_dur, ach_)
+                            if a_ok_: stats['chapters'] += 1; ch_done_ = True
+                            else: logging.info(f"        ℹ️ Audible's chapters not taken: recording not verified; pauses: {a_why_}")
+                        if not a_ok_:
+                            add_review(key, title, 'chapters', 'no chapters' if not chs0_ else 'a single chapter',
+                                       "the book has no chapters and Audible's could not be matched (recording not verified) - add them in ABS (Edit > Chapters)")
                     if MATCH_CHAPTERS and not lang_conflict and asin and not aud_data.get('related_edition') and (cover_verified or len((item_data.get('media') or {}).get('chapters') or []) >= 8):
                         abs_chs = (item_data.get('media') or {}).get('chapters') or []
                         rt_ = (aud_data or {}).get('runtime_sec')
@@ -6208,8 +6231,11 @@ def process_queue(work_queue, history, failed, recheck):
                                 stats['chapters'] += 1
                                 ch_done_ = True
                                 logging.info(f"        📑 Chapters {'would be ' if DRY_RUN else ''}taken from Audible: {len(new_chs)} ({poor} before; {why_c})")
+                            elif not new_chs and 'lock_chapters' not in tags and (au_ := audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch))[0]:
+                                stats['chapters'] += 1
+                                ch_done_ = True
                             elif not new_chs:
-                                logging.info(f"        ℹ️ Audible's chapters not taken: {why_c}")
+                                logging.info(f"        ℹ️ Audible's chapters not taken: {why_c}" + (f"; pauses: {au_[1]}" if 'lock_chapters' not in tags else ''))
                                 if poor in ('no chapters', 'a single chapter'):  # user 2026-11-10: books WITHOUT chapters that cannot be matched go on the list
                                     add_review(key, title, 'chapters', poor, f"the book has no chapters and Audible's do not fit reliably ({why_c}) - add them in ABS (Edit > Chapters)")
 
