@@ -359,6 +359,15 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     is held back (not processed), goes on the review list ('moved') and a library scan restores the other folder's entry. Released when it
     fits its folder, the review is decided, or an 'identity' override exists. A confirmed other-book ASIN (identity) now also replaces
     publisher, year, genres, ISBN and the cover.
+  - Outside ABS matches (import check 2026-11-25): ReadMeABook's 'RecentlyAdded' job (every 5 min) lets ABS fuzzy-match every new book
+    without an ASIN - 478 matches in 1.5 days, 10 wrong (other volume with the same runtime, German/French edition, other narrator).
+    The ASIN then looks like 'ABS (confirmed)'. Guards: `title_number_conflict()` = both TITLES are the same series title with another
+    number AND ABS's own series number is the one in the ABS title ('Death: Genesis 7' vs 'Death: Genesis 3', 'Vol. 14' vs 'Vol. 1') ->
+    search, same_recording() does NOT excuse it; no product of that volume found -> nothing taken, review 'asin'. NEW books: folder
+    narrators ({...}, written by the import chain) that share no name with the product's narrators -> strict search for this recording
+    even with a close runtime (existing books keep the old > 10 min condition). Checked on the live data: number rule 2 hits in 3010
+    results (both wrong), narrator rule 6 hits in 966 new books (all wrong editions). Also: '[03] - Necropolis' = number_prefix;
+    author 'By: X' / 'Written by: X' / 'Von: X' -> 'X' (abs_series.CREDIT_PREFIX_RE, library-wide author fix). tests/test_import_guard.py.
 
 - Web UI: keep texts short (help texts <= ~100 chars, user 2026-11-15: human readability first). Series and missing volumes are ONE page (series.html, two views). Screenshots: tools/ui_shots.sh <snapshot> <port> name=/path ... (FULL=0 = viewport only); never commit them (private data).
 
