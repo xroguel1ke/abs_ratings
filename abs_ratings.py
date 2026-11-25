@@ -2509,6 +2509,19 @@ def review_sweep(key, kinds):
             rw_json(REVIEW_FILE, q)
             logging.info(f"      -> 🧹 {n} review entr{'y' if n == 1 else 'ies'} of this book no longer apply (removed from the review list)")
 
+def review_drop_missing(keys, why='the book is no longer in ABS'):
+    """Open review entries of books deleted in ABS are obsolete (2026-11-25: Sapiens / Homo Deus stayed on the list for days)."""
+    keys = set(keys)
+    if DRY_RUN or not keys: return 0
+    with IO_LOCK:
+        q = rw_json(REVIEW_FILE) or []
+        n = 0
+        for x in q if isinstance(q, list) else []:
+            if x.get('key') in keys and x.get('status', 'open') == 'open':
+                x['status'], x['obsolete_run'], x['obsolete_reason'] = 'obsolete', RUN_ID, why; n += 1
+        if n: rw_json(REVIEW_FILE, q)
+    return n
+
 def group_confirm():
     """Several ABS books with the SAME title (>= 3) whose candidates each match runtime (to the minute) and narrator and are DIFFERENT volumes
     of ONE Audible series (distinct numbers; where ABS names the same series its number agrees) confirm each other: the shared ABS title is a
@@ -4305,6 +4318,7 @@ def build_queue(lib_id, history, recheck):
         r = abs_session.get(f"{ABS_URL}/api/libraries/{lib_id}/items")
         items = r.json()['results']
     except Exception as e: logging.error(f"Lib Error: {e}"); return []
+    raw_keys_ = {f"{lib_id}_{it.get('id')}" for it in items}  # before the moved-item guard: a held-back book still exists
     items = guard_moved_items(lib_id, items)
     fp_store = rw_json(META_FP_FILE) or {}
     fp_skipped = 0
@@ -4323,6 +4337,10 @@ def build_queue(lib_id, history, recheck):
             gone = [k for k in RESULTS if k.startswith(lib_id + '_') and k not in alive]
             for k in gone: RESULTS.pop(k, None)
         if gone: logging.info(f"Results of {len(gone)} book(s) no longer in ABS removed from the result list")
+        q_ = rw_json(REVIEW_FILE) or []
+        if (n_ := review_drop_missing({x.get('key') for x in q_ if isinstance(x, dict) and str(x.get('key') or '').startswith(lib_id + '_')
+                                       and x.get('key') not in raw_keys_ and x.get('status', 'open') == 'open'})):
+            logging.info(f"{n_} review entr{'y' if n_ == 1 else 'ies'} of books no longer in ABS removed from the review list")
 
     for item in items:
         key = f"{lib_id}_{item['id']}"
@@ -4981,6 +4999,7 @@ def process_queue(work_queue, history, failed, recheck):
                 if r_item.status_code == 404:  # deleted in ABS (single-book mode / a stale web UI entry): no error, it leaves the result list
                     logging.info(f"      -> 🗑️ Book is no longer in ABS - skipped")
                     with IO_LOCK: RESULTS.pop(key, None)
+                    review_drop_missing([key])
                     break
                 item_data = r_item.json()
                 # NEW book (title/author/cover rules for messy file tags): never processed AND added to ABS in the last NEW_BOOK_DAYS -

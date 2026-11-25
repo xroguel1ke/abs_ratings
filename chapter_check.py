@@ -8,7 +8,7 @@ audio. Audible's lists are cached for 30 days, the pauses per file for good (unt
 
 Environment like abs_ratings.py (ABS_URL, API_TOKEN, LIBRARY_IDS, DRY_RUN, RUN_ID, ONLY_ITEMS); CHAPTER_WORKERS (2) = audio analyses at
 the same time."""
-import json, logging, os, sys, time
+import json, logging, os, re, sys, time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
@@ -83,6 +83,10 @@ def main():
         todo.append((key, d, title, chs0, dur, aud, why))
     A.rw_json(AUD_CACHE_FILE, cache)
     logging.info(f"{st['ok']} books already have Audible's chapters; {len(todo)} are checked against their audio ({WORKERS} at a time)")
+    if os.getenv('CHAPTER_CHECK_PLAN_ONLY', '').lower() == 'true':  # count only (no audio is read)
+        from collections import Counter
+        for why, n_ in Counter(re.sub(r'\d+', 'N', w) for *_, w in todo).most_common(): logging.info(f"   {n_:5} {why}")
+        return 0
 
     def work(job):
         key, d, title, chs0, dur, aud, why0 = job

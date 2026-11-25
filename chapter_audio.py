@@ -160,6 +160,64 @@ def silence_align(chs, dur, sil, need=0.8, max_chance=1e-12):
     return best
 
 
+def piecewise_align(chs, dur, sil, max_seg=4, min_seg=4, tol=1.0, need=0.8, max_chance=1e-12):
+    """Like silence_align, but the offset may JUMP a few times: a release that lacks or adds a minute somewhere in the middle (The White
+    Song 2026-11-25: offset 0 for 13 chapters, -112 s for 12, -100 s for 15). Dynamic programming over the chapters, one offset per
+    stretch, a jump costs 4 hits. Every stretch (>= min_seg chapters) must on its own be far beyond chance - counted with the number of
+    offsets it could have picked from - and all of them together < max_chance. Returns the silence_align dict (+ 'segments') or None."""
+    inner = [c[0] for c in chs[1:]]
+    n = len(inner)
+    if n < 2 * min_seg or not sil or not dur: return None
+    total = chs[-1][0] + chs[-1][1]
+    lens = sorted(e - s for s, e in sil)
+    q = lambda f: lens[min(len(lens) - 1, int(len(lens) * f))]
+    window = abs(dur - total) + 150
+    best = None
+    for min_pause in sorted({1.0, q(0.98), q(0.99)}):
+        marks = _marks(sil, min_pause)
+        if len(marks) < n * need: continue
+        density = len(marks) / dur
+        p_rand = min(1.0, density * 2 * tol)
+        offs = sorted({round(round((m - s) * 2) / 2, 1) for s in inner
+                       for m in marks[bisect.bisect_left(marks, s - window):bisect.bisect_right(marks, s + window)]})
+        if not offs: continue
+        def near(t):
+            i = bisect.bisect_left(marks, t)
+            d, j = min(((abs(marks[j] - t), j) for j in (i - 1, i) if 0 <= j < len(marks)), default=(1e9, -1))
+            return marks[j] if d <= tol else None
+        hit = [[near(s + o) is not None for o in offs] for s in inner]
+        PEN = 4
+        dp = [[0] * len(offs) for _ in inner]; back = [[0] * len(offs) for _ in inner]
+        for b in range(len(offs)): dp[0][b] = int(hit[0][b])
+        for i in range(1, n):
+            pb = max(range(len(offs)), key=lambda b: dp[i - 1][b])
+            for b in range(len(offs)):
+                stay, jump = dp[i - 1][b], dp[i - 1][pb] - PEN
+                dp[i][b], back[i][b] = (stay, b) if stay >= jump else (jump, pb)
+                dp[i][b] += int(hit[i][b])
+        b = max(range(len(offs)), key=lambda x: dp[n - 1][x]); path = [0] * n
+        for i in range(n - 1, -1, -1): path[i] = b; b = back[i][b]
+        segs, st_ = [], 0
+        for i in range(1, n + 1):
+            if i == n or path[i] != path[st_]: segs.append((st_, i, offs[path[st_]])); st_ = i
+        if len(segs) < 2 or len(segs) > max_seg or any(e - s < min_seg for s, e, _ in segs): continue
+        if any(abs(o2 - o1) > abs(dur - total) + 60 for (_, _, o1), (_, _, o2) in zip(segs, segs[1:])): continue
+        hits_ = sum(sum(hit[i][path[i]] for i in range(s, e)) for s, e, _ in segs)
+        if hits_ < need * n: continue
+        chances = [len(offs) * _tail(e - s, sum(hit[i][path[i]] for i in range(s, e)), p_rand) for s, e, _ in segs]
+        prod = math.prod(min(1.0, c) for c in chances)
+        if max(chances) > 1e-6 or prod > max_chance: continue
+        starts = [0.0]
+        for i, s in enumerate(inner):
+            m = near(s + offs[path[i]])
+            starts.append(m if m is not None and m > starts[-1] + 0.5 else s + offs[path[i]])
+        if any(b2 <= a2 for a2, b2 in zip(starts, starts[1:])): continue
+        if best is None or prod < best['chance']:
+            best = {'starts': [round(x, 3) for x in starts], 'hit': hits_, 'total': n, 'offset': segs[0][2], 'rate': 0.0, 'chance': prod,
+                    'tol': tol, 'min_pause': round(min_pause, 2), 'segments': [(s, e, o) for s, e, o in segs]}
+    return best
+
+
 def on_pause_share(abs_chs, sil, tol=1.0):
     """Share of the file's own inner chapter marks that sit at a pause (>= 1 s): real chapter marks do, split points of a
     download (every 30 min, per file) mostly do not."""
@@ -190,10 +248,11 @@ def decide(abs_chs, dur, aud, sil):
     then Audible's (aligned) chapters are better."""
     chs = aud[0] if aud else None
     if not chs or len(chs) < 4: return None, "Audible lists too few chapters"
-    al = silence_align(chs, dur, sil)
+    al = silence_align(chs, dur, sil) or piecewise_align(chs, dur, sil)
     if not al: return None, "Audible's chapters do not line up with the pauses of the file"
     new = build(chs, al['starts'], dur)
-    why = f"{al['hit']}/{al['total']} chapter starts on the file's pauses (offset {al['offset']:+.1f} s, chance {al['chance']:.0e})"
+    seg = (', offsets ' + ' / '.join(f"{o:+.0f} s" for _, _, o in al['segments'])) if al.get('segments') else f", offset {al['offset']:+.1f} s"
+    why = f"{al['hit']}/{al['total']} chapter starts on the file's pauses ({seg[2:]}, chance {al['chance']:.0e})"
     if len(abs_chs or []) <= 1: return new, why
     share = on_pause_share(abs_chs, sil)
     generic = all(RE_GENERIC.match(str(c.get('title') or '')) for c in abs_chs)

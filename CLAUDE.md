@@ -379,6 +379,10 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     the proof). chapter_check.py = web UI scan task 'Chapters' (kind 'chapters'): whole library / selection, Audible lists cached 30 days,
     books whose marks already sit at Audible's starts skip the audio. Real data: 5/9 review-list books aligned, 4 books with good own
     chapters kept, truth files max error 0.3 s, 0 false alignments in 156 cross pairs. tests/test_chapter_audio.py.
+    piecewise_align(): fallback when one offset cannot explain it - up to 4 stretches of >= 4 chapters, each far beyond chance on its own
+    (counted with the number of offsets it could pick), jumps <= length difference + 60 s (The White Song: 0 / -112 / -100 s, 40/40).
+    chapter_check.py with CHAPTER_CHECK_PLAN_ONLY=true only counts (no audio read). Review entries of books deleted in ABS are dropped
+    (review_drop_missing, listing before the moved-item guard). tests/test_review_missing.py.
 
 - Web UI: keep texts short (help texts <= ~100 chars, user 2026-11-15: human readability first). Series and missing volumes are ONE page (series.html, two views). Screenshots: tools/ui_shots.sh <snapshot> <port> name=/path ... (FULL=0 = viewport only); never commit them (private data).
 

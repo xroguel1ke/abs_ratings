@@ -71,6 +71,24 @@ def test_decide_keeps_own_marks_at_pauses_and_replaces_split_points():
     assert new3 is None and 'kept' in why3, why3
 
 
+def test_offset_jump_mid_book_is_found():
+    # The White Song 2026-11-25: the release lacks ~112 s after chapter 13 and has 12 s more after chapter 25
+    chs, total, rnd = book(n=40, seed=7)
+    sil = []
+    t = 5.0
+    while t < total:
+        d = rnd.uniform(0.6, 1.6); sil.append((t, t + d)); t += d + rnd.uniform(3, 12)
+    off = lambda i: 0.0 if i < 14 else (-112.0 if i < 26 else -100.0)
+    for i, (s, _, _) in enumerate(chs[1:], start=1): x = s + off(i); sil.append((x - 3.4 + 0.8, x + 0.8))
+    sil.sort()
+    assert CA.silence_align(chs, total - 100, sil) is None  # one offset cannot explain it
+    new, why = CA.decide([], total - 100, (chs, 0, 0), sil)
+    assert new and '-112' in why and abs(new[20]['start'] - (chs[20][0] - 112)) < 1, why
+    # the same jumps on ANOTHER book's pauses: never
+    chs2, total2, rnd2 = book(n=40, seed=8)
+    assert CA.decide([], total2, (chs2, 0, 0), sil)[0] is None
+
+
 def test_parse_silences():
     lines = ['[silencedetect @ 0x1] silence_start: 12.5', '[silencedetect @ 0x1] silence_end: 15.9 | silence_duration: 3.4', 'junk']
     assert CA.parse_silences(lines) == [(12.5, 15.9)]
