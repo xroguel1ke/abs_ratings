@@ -920,6 +920,20 @@ def volume_conflict(abs_title, aud_title, aud_sub):
     b = volume_of(aud_title, aud_sub)
     return bool(a and b and not a & b)
 
+def title_number_conflict(abs_title, abs_series, aud_title):
+    """The two TITLES are the same series title with another number: 'Death: Genesis 7: An Isekai LitRPG' vs Audible 'Death: Genesis 3:
+    An Isekai LitRPG', 'Tanya the Evil, Vol. 14' vs 'Vol. 1' (2026-11-25: an outside ABS match gave both new books the ASIN of the earlier
+    volume - same narrator, runtime within 2 min, so same_recording() treated it as a numbering difference). Only when the number sits in
+    BOTH main titles, the titles are equal without their numbers and ABS's own series number is the one in the ABS title. A numbering
+    difference in the SUBTITLE / series field ('Book 8' vs 'Book 7', Murderbot) stays allowed."""
+    nums = lambda t: {strip_lead0(x) for x in re.findall(r'(?<![\d.])(\d{1,4})(?![\d.])', re.sub(r'(?i)\((?:un)?abridged\)|\b(?:19|20)\d\d\b', ' ', t or ''))}
+    a, b = nums(abs_title), nums(aud_title)
+    if not a or not b or a & b: return False
+    skel = lambda t: re.sub(r'\s+', ' ', re.sub(r'\d+', ' ', normalize_title_text(t or ''))).strip()
+    if not skel(abs_title) or skel(abs_title) != skel(aud_title): return False
+    own = {strip_lead0(str(x.get('sequence')).strip()) for x in (abs_series or []) if x.get('sequence') not in (None, '')}
+    return bool(own & a)
+
 def same_recording(abs_dur, abs_narrators, aud):
     """Same recording: runtime within 2 min AND a shared narrator. Then a differing volume NUMBER is a numbering scheme difference
     ('Book 8' in ABS vs 'Book 7' on Audible), not a wrong ASIN."""
@@ -1694,6 +1708,8 @@ def parse_messy_title(t, abs_series_names=None):
             return {'title': rest, 'series': series, 'sequence': None if '-' in seq else str(float(seq)).rstrip('0').rstrip('.'), 'kind': 'series_prefix'}  # '01-3' = a range (omnibus): no single volume number
     if m := re.match(r'^\s*((?:19|20)\d\d)\s+-\s+(\S.{2,})$', t):  # '2019 - This Is How You Lose the Time War' (year from the file name)
         if len(m.group(2).strip()) >= 3: return {'title': m.group(2).strip(), 'kind': 'year_prefix'}  # 'Atlantic' or '1873' alone too (the search hit must still confirm)
+    if m := re.match(r'^\s*\[(\d{1,3}(?:\.\d)?)\]\s*[-–.:]?\s*(\S.{2,})$', t):  # '[03] - Necropolis' (file-name number in brackets, 2026-11-25)
+        return {'title': m.group(2).strip(), 'sequence': str(float(m.group(1))).rstrip('0').rstrip('.'), 'kind': 'number_prefix'}
     if m := RE_LEADING_NUM.match(t):
         rest_ = m.group(2).strip()
         if len(rest_.split()) >= 2 or (re.fullmatch(r'0[1-9]', m.group(1)) and len(rest_) >= 3):  # '03 Blutmale', '06 Rick' yes ('0N' = file-name prefix; the match still needs the full evidence), '007 Skyfall' no
@@ -5006,6 +5022,7 @@ def process_queue(work_queue, history, failed, recheck):
                     search_title = meta['series'][0].get('name') or search_title
                 asin_from_search = False
                 folder_fix = None  # set by folder_volume_conflict() below
+                num_conflict = False  # set below: ABS and Audible title = the same series title with another number
                 narr_override = None  # narrators from the book folder when ABS narrator + ASIN belong to another recording
                 skip_meta = False
                 abs_dur = (item_data.get('media') or {}).get('duration') or (item.get('media') or {}).get('duration')
@@ -5111,11 +5128,15 @@ def process_queue(work_queue, history, failed, recheck):
                 elif aud_data.get('title_raw') and volume_conflict(title, aud_data.get('title_raw'), aud_data.get('subtitle_raw')) and not same_recording(abs_dur, meta.get('narrators'), aud_data):
                     logging.info(f"      -> ⚠️ Volume mismatch: ABS '{title}' vs Audible '{aud_data.get('title_raw')}'. ASIN probably belongs to another volume, searching...")
                     should_search = True
+                elif aud_data.get('title_raw') and (num_conflict := title_number_conflict(title, meta.get('series'), aud_data.get('title_raw'))):
+                    logging.info(f"      -> ⚠️ Volume mismatch: ABS '{title}' (#{', '.join(sorted({str(x.get('sequence')) for x in meta.get('series') or [] if x.get('sequence')}))}) "
+                                 f"vs Audible '{aud_data.get('title_raw')}' - same title with another number: the ASIN belongs to another volume, searching...")
+                    should_search = True
                 elif runtime_mismatch(abs_dur, aud_data.get('runtime_sec')):
                     logging.info(f"      -> ⚠️ Runtime mismatch: ABS {format_time(abs_dur)} vs Audible {format_time(aud_data['runtime_sec'])}. ASIN probably points to another edition, searching...")
                     should_search = True
                 elif (((fnarr_ := folder_narrators(item_data)) or meta.get('narrators')) and aud_data.get('narrators_raw') and abs_dur and aud_data.get('runtime_sec')
-                      and abs(abs_dur - aud_data['runtime_sec']) > 600 and not ({re.sub(r'[^a-z]', '', fold_accents(n).lower()) for n in (fnarr_ or meta['narrators']) if n}
+                      and (abs(abs_dur - aud_data['runtime_sec']) > 600 or (fnarr_ and new_book)) and not ({re.sub(r'[^a-z]', '', fold_accents(n).lower()) for n in (fnarr_ or meta['narrators']) if n}
                                                                               & {re.sub(r'[^a-z]', '', fold_accents(n).lower()) for n in aud_data['narrators_raw'] if n})
                       and not any(same_person_name(n, a) for n in (fnarr_ or meta.get('narrators') or []) for a in authors)):
                     # the ASIN is ANOTHER RECORDING (Fool's Errand: James Langton 1518 min on .com, the file is Nick Taylor 1389 min = .co.uk):
@@ -5272,6 +5293,10 @@ def process_queue(work_queue, history, failed, recheck):
                     # replaced ASIN lost its Audible data, got a strike and a wrong review entry ('Secrets of the Deep', 2026-11-24)
                     if plaus == "wrong" and not asin_from_search:
                         add_review(key, title, "asin", asin, "ASIN belongs to another book and no safe replacement was found", plaus_why)
+                        aud_data, skip_meta = None, True
+                    if num_conflict and not asin_from_search and aud_data and title_number_conflict(title, meta.get('series'), aud_data.get('title_raw')):
+                        logging.info(f"      -> ⏭️ No product of this volume found: nothing is taken from '{aud_data.get('title_raw')}' (another volume), ASIN stays for a manual look")
+                        add_review(key, title, "asin", asin, f"ASIN belongs to another volume ('{aud_data.get('title_raw')}') and no safe replacement was found")
                         aud_data, skip_meta = None, True
                     rel = LAST_SEARCH.get('related')
                     if rel and not (max(title_similarity(search_title, rel.get('title_raw') or ''), title_similarity(title, rel.get('title_raw') or ''),

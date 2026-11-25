@@ -91,6 +91,8 @@ ROLE_CREDIT_RE = re.compile(r'\s+[-–—]\s+(?:\S.*?\s+[-–—]\s+)?(other|ill
                             r'übersetz\w*|übertragen\w*|herausgeb\w*|hrsg\.?|zeichn\w*|illustriert\w*|vorwort|nachwort|bearbeit\w*)\s*$', re.I)
 
 
+CREDIT_PREFIX_RE = re.compile(r'^\s*(?:(?:written|read|narrated)\s+)?by\s*:\s*|^\s*(?:von|author|autor(?:in)?)\s*:\s*', re.I)
+
 def is_role_credit(name): return bool(name and ROLE_CREDIT_RE.search(name))
 
 
@@ -532,12 +534,18 @@ def find_author_fixes(records, decisions=None, links=None, role_names=()):
     for r in records:
         for a in r['authors']: count[author_key(a)][a] += 1
     fixes = {}
+    # a credit word glued to the name ('By: Anthony J. Melchiorri', 2026-11-25 from an outside ABS match): the name without it
+    for key, spellings in count.items():
+        for sp in spellings:
+            bare = CREDIT_PREFIX_RE.sub('', sp).strip()
+            if bare != sp and len(bare.split()) >= 2 and decisions.get(merge_id('author', '', sp, bare), {}).get('action') not in ('keep', 'undone'):
+                fixes[sp] = bare
     for key, spellings in count.items():
         if len(spellings) < 2: continue
         # the spelling WITH accents wins over the accent-less one ('Gablé' over 'Gable': the accent is information), then the most used one
         canon = sorted(spellings.items(), key=lambda x: (0 if fold_accents(x[0]) != x[0] else 1, -x[1], x[0]))[0][0]
         for sp in spellings:
-            if sp != canon and decisions.get(merge_id('author', '', sp, canon), {}).get('action') not in ('keep', 'undone'):
+            if sp != canon and sp not in fixes and decisions.get(merge_id('author', '', sp, canon), {}).get('action') not in ('keep', 'undone'):
                 fixes[sp] = canon
     # Proof 1: the same Audible author record (author ASIN) was seen behind both spellings (single-author books only, see abs_ratings.note_author_links).
     by_asin = defaultdict(set)
