@@ -5319,7 +5319,7 @@ def process_queue(work_queue, history, failed, recheck):
                     skip_meta = True
                     logging.info(f"      -> ⏭️ Metadata sync skipped: no {lang_target} edition found, ASIN stays as it is. Only ratings are used.")
                 elif aud_data and aud_data.get('title_raw') and volume_conflict(title, aud_data.get('title_raw'), aud_data.get('subtitle_raw')) and not same_recording(abs_dur, meta.get('narrators'), aud_data) \
-                        and not asin_from_search:
+                        and not asin_from_search and not (ov.get('identity') and ov.get('asin') == asin):  # identity: the user confirmed this ASIN for the file (ABS title = the other volume's)
                     skip_meta = True
                     logging.info(f"      -> ⏭️ Metadata sync skipped: volume number still differs from Audible ('{aud_data.get('title_raw')}'). Only ratings are used.")
                 elif aud_data and runtime_mismatch(abs_dur, aud_data.get('runtime_sec')):
@@ -6118,12 +6118,12 @@ def process_queue(work_queue, history, failed, recheck):
                             if lk in tags: logging.info(f"        🔒 {fld} not replaced (locked)"); continue
                             abs_updates[fld] = val
                             log_updates.append(f"{fld}: {meta.get(fld)!r} -> {val!r} (ASIN confirmed by you: another book)")
-                    if 'series' in abs_updates and not ({'lock_subtitle', 'lock_title'} & set(tags)):
+                    if ('series' in abs_updates or (id_switch and 'subtitle' in abs_updates)) and not ({'lock_subtitle', 'lock_title'} & set(tags)):
                         # loop 2026-11-15: a series added in THIS run makes the subtitle a label of the book's own series ('Forgotten Realms:
                         # Transitions, Book 3' once 'Forgotten Realms: Transitions' #3 is set) - cleaned now, not one run later
                         from abs_series import clean_series_label_subtitle as _csl2
                         s_cur = abs_updates.get('subtitle', meta.get('subtitle')) or ''
-                        s_new = _csl2(s_cur, abs_updates['series'], meta.get('language') or lang) if s_cur else s_cur
+                        s_new = _csl2(s_cur, abs_updates.get('series') or meta.get('series') or [], meta.get('language') or lang) if s_cur else s_cur
                         if s_new != s_cur:
                             abs_updates['subtitle'] = s_new
                             log_updates.append(f"Subtitle: '{s_cur}' -> '{s_new}' (only the series name and number)")
