@@ -461,3 +461,5 @@ full run (test run first, apply selectively), done: merged into main 2026-11-09.
   onto the new file (CA.realign_own: as strict as Audible's list; CA.realign_on_marks: the new file's own marks follow the old chapters with
   a locally steady offset, 'Snow Crash' +22 s) or go to the review list. Kept marks whose last chapter only ends after a complete file
   (Audible +-5 min): the end is cut ('Stardust'), no redownload.
+  chapter_check.settled(): chapters that fit the file (again) drop the 'replaced_file' review entry ('Forever Peace': the chain restored the
+  old file); a chapter TEST run adds no review entry (2026-11-26: a dry run's Snow Crash entry reached the chain via review.json).

@@ -72,6 +72,17 @@ def test_complete_file_drops_incomplete_review_entry():
     assert q == {('lib_i1', 'incomplete'): 'obsolete', ('lib_i1', 'asin'): 'open', ('lib_i2', 'incomplete'): 'open'}, q
 
 
+def test_fitting_chapters_drop_only_the_replaced_file_entry():
+    tmp = tempfile.mkdtemp(); _fresh(tmp)
+    A.REVIEW_FILE = os.path.join(tmp, 'review_queue.json')
+    A.rw_json(A.REVIEW_FILE, [{'key': 'lib_i1', 'kind': 'chapters', 'candidate': 'replaced_file', 'status': 'open'},
+                              {'key': 'lib_i1', 'kind': 'chapters', 'candidate': 'no chapters', 'status': 'open'},
+                              {'key': 'lib_i2', 'kind': 'chapters', 'candidate': 'replaced_file', 'status': 'open'}])
+    CC.settled('lib_i1')  # 'Forever Peace': the chain put the old file back, its chapters fit again
+    q = [(x['key'], x['candidate'], x['status']) for x in A.rw_json(A.REVIEW_FILE)]
+    assert q == [('lib_i1', 'replaced_file', 'obsolete'), ('lib_i1', 'no chapters', 'open'), ('lib_i2', 'replaced_file', 'open')], q
+
+
 if __name__ == '__main__':
     n = 0
     for name, fn in list(globals().items()):

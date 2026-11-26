@@ -54,6 +54,19 @@ def complete(key, dur, aud):
     if aud and aud[0] and dur and sum(float(c[1]) for c in aud[0]) - dur <= 300: A.review_sweep(key, {'incomplete'})
 
 
+def settled(key):
+    """The chapters fit the file (again): an open 'replaced_file' review entry is obsolete (2026-11-26 'Forever Peace': the chain put the old
+    file back - the entry stayed). Only that entry: other chapter entries are abs_ratings' own."""
+    if A.DRY_RUN: return
+    with A.IO_LOCK:
+        q = A.rw_json(A.REVIEW_FILE) or []
+        hit = [x for x in q if isinstance(x, dict) and x.get('key') == key and x.get('kind') == 'chapters' and x.get('candidate') == 'replaced_file'
+               and x.get('status', 'open') == 'open']
+        for x in hit: x['status'], x['obsolete_run'] = 'obsolete', A.RUN_ID
+        if hit:
+            A.rw_json(A.REVIEW_FILE, q); logging.info("      -> 🧹 the chapters fit the file again (removed from the review list)")
+
+
 def loose(d, chs0, dur, aud, sil, key):
     """CA.loose_chapters for a recording verified like abs_ratings verifies a cover (narrator + runtime +-2 min, abs_ratings.same_recording);
     the Audible product is only asked when the length already fits (a handful of books). (new, why) or None."""
@@ -122,7 +135,7 @@ def main():
         if what == 'ok' and changed: what, why = 'audio', f"{CHANGED} ({why})"
         if changed: replaced.add(key)
         if what == 'ok':  # (a file without Audible's bonus excerpt / end credits is no redownload: Witch King, Holly ... 2026-11-26)
-            st['ok'] += 1; A.redownload_clear(key); complete(key, dur, aud); continue
+            st['ok'] += 1; A.redownload_clear(key); complete(key, dur, aud); settled(key); continue
         todo.append((key, d, title, chs0, dur, aud, why))
     A.rw_json(AUD_CACHE_FILE, cache)
     logging.info(f"{st['ok']} books already have Audible's chapters; {len(todo)} are checked against their audio ({WORKERS} at a time)")
@@ -164,7 +177,7 @@ def main():
                         moved, mwhy = CA.realign_on_marks(chs0, fch, dur)
                     if moved and A.abs_set_chapters(d['id'], key, title, moved, chs0, 'chapter_check'):
                         st['written'] += 1; st['kept' if 'kept' in why or 'no names either' in why else 'not_aligned'] -= 1
-                        A.redownload_clear(key); complete(key, dur, aud)
+                        A.redownload_clear(key); complete(key, dur, aud); settled(key)
                         logging.info(f"{pre}: 📑 {'would move' if A.DRY_RUN else 'moved'} the {len(moved)} chapters onto the new file ({mwhy})"); continue
                 if poor == 'chapters run past the end of the file' and ('kept' in why or sh >= 0.6) and abs(tot - dur) <= 300:
                     # the own marks sit at the file's pauses, only the last one ends after the (complete) file: its end is cut to the file's
@@ -172,7 +185,7 @@ def main():
                     cut = [dict(c, end=min(float(c.get('end') or 0), dur)) for c in chs0 if float(c.get('start') or 0) < dur - 1]
                     if A.abs_set_chapters(d['id'], key, title, cut, chs0, 'chapter_check'):
                         st['written'] += 1; st['kept' if 'kept' in why or 'no names either' in why else 'not_aligned'] -= 1
-                        A.redownload_clear(key); complete(key, dur, aud)
+                        A.redownload_clear(key); complete(key, dur, aud); settled(key)
                         logging.info(f"{pre}: 📑 {'would cut' if A.DRY_RUN else 'cut'} the last chapter at the file's end ({len(cut)} chapters kept, they sit at its pauses)")
                     continue
                 if poor and poor != 'only numbered chapters without names' and 'too few chapters' not in why:  # ('Guns': one chapter is all there is)
@@ -184,10 +197,11 @@ def main():
                     else: flag(key, d, 'chapters', f"{poor}; {why}", pre)
                     st['redownload'] += 1
                 else: A.redownload_clear(key, {'chapters'}); complete(key, dur, aud)
+                if 'kept' in why or sh >= 0.6: settled(key)  # the own marks sit at the file's pauses
                 if key in replaced and 'kept' not in why and sh < 0.6:
                     # the old chapter times do not fit the new file and Audible's list cannot be laid on it: the user is told
                     logging.info(f"{pre}: ⚠️ the old chapters sit at only {sh:.0%} of the new file's pauses - review list")
-                    A.add_review(key, title, 'chapters', 'replaced_file', f"the audio file was replaced and its {len(chs0)} chapters sit at only {sh:.0%} of "
+                    if not A.DRY_RUN: A.add_review(key, title, 'chapters', 'replaced_file', f"the audio file was replaced and its {len(chs0)} chapters sit at only {sh:.0%} of "
                                  f"its pauses (shifted?) - Audible's chapter list does not fit the new file either; check them in ABS (Edit > Chapters)")
                 continue
             if A.abs_set_chapters(d['id'], key, title, new, chs0, 'chapter_check'):
@@ -199,7 +213,7 @@ def main():
                 if gone > 0 and miss >= 5:  # Audible's last chapters are not in the file: it lacks its end
                     flag(key, d, 'incomplete', f"Audible's last {gone} chapter(s) are not in the file, about {miss} min shorter than Audible's edition", pre, missing_min=miss)
                     st['redownload'] += 1
-                else: A.redownload_clear(key); complete(key, dur, aud)
+                else: A.redownload_clear(key); complete(key, dur, aud); settled(key)
     if not A.DRY_RUN and seen:
         cur = A.rw_json(FILES_FILE) or {}; cur.update(seen); A.rw_json(FILES_FILE, cur)
     logging.info('-' * 60)
