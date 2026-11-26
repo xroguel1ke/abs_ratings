@@ -29,6 +29,16 @@ def numbered_parts(chs):
     return len(stripped) == 1 and '#' in next(iter(stripped)) and bool(re.sub(r'[#\W]', '', next(iter(stripped))))
 
 
+def file_print(item):
+    """Fingerprint of a book's audio (size of its audio files + length) from an ABS item, listing or full: another value = the file was
+    replaced since its chapters were checked (2026-11-26: the chain's in-place swaps left the OLD chapter times in ABS, up to 6 min off
+    the new file). None while ABS has not scanned the file yet."""
+    m = (item or {}).get('media') or {}
+    try: size, dur = int(m.get('size') or 0), float(m.get('duration') or 0)
+    except (TypeError, ValueError): return None
+    return f"{size}|{round(dur)}" if size and dur else None
+
+
 def available():
     return bool(FFMPEG)
 
@@ -366,6 +376,42 @@ def build(chs, starts, dur):
     starts = [starts[i] for i in keep]; titles = [chs[i][2] for i in keep]
     return [{'id': i, 'start': round(max(0.0, st), 3), 'end': round(starts[i + 1] if i + 1 < len(starts) else dur, 3), 'title': t or f"Chapter {i + 1}"}
             for i, (st, t) in enumerate(zip(starts, titles))]
+
+
+def realign_own(abs_chs, dur, sil):
+    """(new list or None, reason): the book's OWN chapter list (names + lengths, set for the file it had before) laid on the pauses of a
+    replaced file, as strictly as Audible's list (2026-11-26 'Snow Crash': the chain's better file starts 23 s later, the old 73 chapters
+    sat at 12 % of its pauses; Audible's list fits neither)."""
+    ref = [(float(c.get('start') or 0), max(0.0, float(c.get('end') or 0) - float(c.get('start') or 0)), c.get('title')) for c in abs_chs or []]
+    if len(ref) < 4: return None, 'too few own chapters'
+    al = silence_align(ref, dur, sil) or piecewise_align(ref, dur, sil) or prop_align(ref, dur, sil)
+    if not al: return None, "the old chapters do not line up with the new file's pauses either"
+    return build(ref, al['starts'], dur), f"the old chapters moved onto the new file's pauses ({al['hit']}/{al['total']}, chance {al['chance']:.0e})"
+
+
+def realign_on_marks(abs_chs, file_chs, dur, spread=5.0, max_off=120.0, need=0.9):
+    """(new list or None, reason): the book's OWN chapter list moved onto a replaced file by the NEW file's embedded marks - when nearly
+    every one of them (>= 90 %, >= 8) sits at an old chapter start with the offset of its neighbours (+-5 s around the median of the 7
+    marks around it - it may drift or jump; |offset| <= 2 min). For a
+    file whose chapter breaks are hard cuts without a pause (2026-11-26 'Snow Crash': 71 file parts, 23-27 s after the old chapters).
+    Every old chapter moves by the offset of its nearest matched mark (by position in the list)."""
+    old = [float(c.get('start') or 0) for c in abs_chs or []]
+    marks = [float(c.get('start') or 0) for c in (file_chs or [])[1:]]
+    if len(old) < 4 or len(marks) < 8: return None, 'too few marks'
+    pairs = [(min(range(len(old)), key=lambda k: abs(old[k] - m)), m) for m in marks]
+    offs = [m - old[j] for j, m in pairs]
+    def local(i): w = sorted(offs[max(0, i - 3):i + 4]); return w[len(w) // 2]  # the offset may drift / jump between releases
+    good = {}
+    for i, (j, m) in enumerate(pairs):
+        if abs(offs[i] - local(i)) <= spread and abs(offs[i]) <= max_off and j not in good: good[j] = offs[i]
+    if len(good) < need * len(marks) or len(good) < 8: return None, f"the new file's marks do not follow the old chapters ({len(good)}/{len(marks)})"
+    med = sorted(good.values())[len(good) // 2]
+    idx = sorted(good)
+    def off(i): return good[min(idx, key=lambda j: abs(j - i))]
+    starts = [0.0] + [old[i] + off(i) for i in range(1, len(old))]
+    if any(b <= a for a, b in zip(starts, starts[1:])): return None, 'the moved chapters would overlap'
+    ref = [(old[i], 0, c.get('title')) for i, c in enumerate(abs_chs)]
+    return build(ref, starts, dur), f"the old chapters moved by the new file's own marks ({len(good)}/{len(marks)} at a steady offset, median {med:+.0f} s)"
 
 
 LOOSE_SECONDS = 60.0  # = abs_ratings.CH_LOOSE_SECONDS (user rule 2026-11-10: a file within 60 s of Audible's list takes it as it is)

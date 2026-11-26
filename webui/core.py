@@ -816,7 +816,15 @@ def scheduler_loop():
         time.sleep(20)
 
 
-_quick = {'t': 0}
+_quick = {'t': 0, 'tried': {}}
+
+def file_print(item):
+    """= chapter_audio.file_print (the web UI does not import the script modules; tests/test_chapter_files.py keeps both equal)."""
+    m = (item or {}).get('media') or {}
+    try: size, dur = int(m.get('size') or 0), float(m.get('duration') or 0)
+    except (TypeError, ValueError): return None
+    return f"{size}|{round(dur)}" if size and dur else None
+CHAPTER_FILES = os.path.join(CONFIG_DIR, 'cache', 'chapter_files.json')  # written by chapter_check.py (FILES_FILE)
 def quick_poll(s):
     """Quick mode: every QUICK_MODE_MINUTES look for books that were never checked and process them at once (1 ABS listing request)."""
     every = int(s.get('QUICK_MODE_MINUTES') or 0)
@@ -824,14 +832,29 @@ def quick_poll(s):
     _quick['t'] = time.time()
     hist = _load_json(os.path.join(CONFIG_DIR, 'rating_history.json'), {})
     failed = _load_json(os.path.join(CONFIG_DIR, 'failed_history.json'), {})
-    new = []
+    prints = _load_json(CHAPTER_FILES, {})
+    new, changed, add = [], [], {}
     for lib in [l.strip() for l in (s.get('LIBRARY_IDS') or '').replace(';', ',').split(',') if l.strip()]:
         try:
             for it in abs_get(s, f'/api/libraries/{lib}/items', timeout=60).json().get('results') or []:
                 k = f"{lib}_{it['id']}"
                 if k not in hist and k not in failed: new.append(k)
+                fp = file_print(it)
+                if not fp: continue
+                if k not in prints: add[k] = fp  # first sight: the file the book has now
+                elif prints[k] != fp and _quick['tried'].get(k) != fp: changed.append((k, fp))
         except (requests.RequestException, ValueError): return
+    if add:
+        prints.update(add)
+        try: os.makedirs(os.path.dirname(CHAPTER_FILES), exist_ok=True); _save_json(CHAPTER_FILES, prints)
+        except OSError: pass  # (never in the way of the new books)
     if new: RUNNER.start('full', trigger='quick', only_items=new[:int(s.get('BATCH_SIZE') or 300)], label=f'Quick mode: {len(new)} new book(s)')
+    elif changed and s.get('MATCH_CHAPTERS') and not s.get('DRY_RUN'):
+        # 2026-11-26: the audiobook chain replaces audio files in place (better quality / complete file) - ABS keeps the OLD chapter times;
+        # the chapter check lays them on the new file's pauses (once per new file: also when that run finds nothing to change)
+        changed = changed[:int(s.get('BATCH_SIZE') or 300)]
+        _quick['tried'].update(changed)
+        RUNNER.start('chapters', trigger='quick', only_items=[k for k, _ in changed], label=f'Quick mode: chapters of {len(changed)} replaced audio file(s)')
 
 
 _last_cleanup = {'t': 0}

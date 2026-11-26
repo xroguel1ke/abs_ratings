@@ -454,3 +454,10 @@ full run (test run first, apply selectively), done: merged into main 2026-11-09.
   title_is_series_name: 'The Remaining' + Audible 'The Remaining: Trust' (#7) = the real title (taglines 'A ... Novel' etc. still not).
   chapter_check.complete(): a file at most 5 min shorter than Audible's edition drops its open 'incomplete' review entry (chain-replaced
   books stayed on the list and in review.json: The Companions, Emily Wilde, Threshold).
+  Replaced audio files (2026-11-26: the chain swaps files in place for quality / completeness; ABS keeps the OLD chapter times, up to 6 min
+  off): cache/chapter_files.json = audio fingerprint (CA.file_print: size|length) per book at its last real chapter check. web UI quick_poll
+  stores it on first sight and starts a 'chapters' run for books whose fingerprint changed (once per new file, not with DRY_RUN).
+  chapter_check: changed file (or CHAPTER_RECHECK=true) -> no fast path, the pauses decide; old chapters at < 60 % of the pauses are moved
+  onto the new file (CA.realign_own: as strict as Audible's list; CA.realign_on_marks: the new file's own marks follow the old chapters with
+  a locally steady offset, 'Snow Crash' +22 s) or go to the review list. Kept marks whose last chapter only ends after a complete file
+  (Audible +-5 min): the end is cut ('Stardust'), no redownload.

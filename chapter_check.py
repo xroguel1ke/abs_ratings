@@ -22,6 +22,10 @@ AUD_CACHE_DAYS = 30
 RE_EXTRA = re.compile(r"(?i)credits|bonus|excerpt|preview|sneak peek|story continues|bloopers|teaser|about the author|acknowledg|"
                       r"also by|coming soon|an interview|conversation (?:with|between)")
 WORKERS = max(1, int(os.getenv('CHAPTER_WORKERS', 3) or 3))
+# audio fingerprint per book at its last chapter check (CA.file_print): a replaced file is checked against its own pauses again, also when its
+# (old) chapters still match Audible's list; CHAPTER_RECHECK=true does that for every book of the run
+FILES_FILE = os.path.join(A.SCRIPT_DIR, 'cache', 'chapter_files.json')
+CHANGED = 'the audio file was replaced since its chapters were checked'
 
 
 def tags_of(d):
@@ -92,12 +96,18 @@ def main():
 
     st = {'redownload': 0, 'checked': 0, 'no_asin': 0, 'locked': 0, 'no_audible': 0, 'ok': 0, 'written': 0, 'kept': 0, 'not_aligned': 0, 'unreadable': 0}
     todo = []
+    prints, seen = A.rw_json(FILES_FILE) or {}, {}
+    replaced = set()  # keys of this run whose audio file changed
+    force = os.getenv('CHAPTER_RECHECK', '').lower() == 'true'
     for n_, (lib, d) in enumerate(books, 1):
         if n_ % 250 == 0:
             logging.info(f"   {n_}/{len(books)} books compared with Audible's chapter list"); A.rw_json(AUD_CACHE_FILE, cache)  # progress + cache kept
         key, md, media = f"{lib}_{d['id']}", (d.get('media') or {}).get('metadata') or {}, d.get('media') or {}
         asin, dur, chs0 = md.get('asin'), float(media.get('duration') or 0), media.get('chapters') or []
         title = md.get('title') or '?'
+        fp = CA.file_print(d)
+        changed = force or bool(fp and prints.get(key) and prints[key] != fp)
+        if fp: seen[key] = fp  # (stored at the end of a real run: a replaced file is looked at once, not in every check)
         if not asin or not dur: st['no_asin'] += 1; continue
         if 'lock_chapters' in tags_of(d): st['locked'] += 1; continue
         st['checked'] += 1
@@ -109,6 +119,8 @@ def main():
         aud = c.get('aud')
         if not aud or not aud[0]: st['no_audible'] += 1; continue
         what, why = classify(chs0, dur, aud)
+        if what == 'ok' and changed: what, why = 'audio', f"{CHANGED} ({why})"
+        if changed: replaced.add(key)
         if what == 'ok':  # (a file without Audible's bonus excerpt / end credits is no redownload: Witch King, Holly ... 2026-11-26)
             st['ok'] += 1; A.redownload_clear(key); complete(key, dur, aud); continue
         todo.append((key, d, title, chs0, dur, aud, why))
@@ -143,6 +155,26 @@ def main():
                 st['kept' if 'kept' in why or 'no names either' in why else 'not_aligned'] += 1
                 logging.info(f"{pre}: ℹ️ {why}")
                 poor = A.chapters_poor(chs0, dur)
+                tot, sh = sum(float(c[1]) for c in aud[0]), CA.on_pause_share(chs0, sil)
+                if key in replaced and 'kept' not in why and sh < 0.6:
+                    moved, mwhy = CA.realign_own(chs0, dur, sil)  # the old chapters are good, only at the old file's times
+                    if not moved:
+                        fch = [c for f in sorted((d.get('media') or {}).get('audioFiles') or [], key=lambda f: f.get('index') or 0)[:1]
+                               for c in f.get('chapters') or []] if len((d.get('media') or {}).get('audioFiles') or []) == 1 else []
+                        moved, mwhy = CA.realign_on_marks(chs0, fch, dur)
+                    if moved and A.abs_set_chapters(d['id'], key, title, moved, chs0, 'chapter_check'):
+                        st['written'] += 1; st['kept' if 'kept' in why or 'no names either' in why else 'not_aligned'] -= 1
+                        A.redownload_clear(key); complete(key, dur, aud)
+                        logging.info(f"{pre}: 📑 {'would move' if A.DRY_RUN else 'moved'} the {len(moved)} chapters onto the new file ({mwhy})"); continue
+                if poor == 'chapters run past the end of the file' and ('kept' in why or sh >= 0.6) and abs(tot - dur) <= 300:
+                    # the own marks sit at the file's pauses, only the last one ends after the (complete) file: its end is cut to the file's
+                    # end (2026-11-26 'Stardust': the chain's better file is 1.6 min shorter than the old one - no redownload for that)
+                    cut = [dict(c, end=min(float(c.get('end') or 0), dur)) for c in chs0 if float(c.get('start') or 0) < dur - 1]
+                    if A.abs_set_chapters(d['id'], key, title, cut, chs0, 'chapter_check'):
+                        st['written'] += 1; st['kept' if 'kept' in why or 'no names either' in why else 'not_aligned'] -= 1
+                        A.redownload_clear(key); complete(key, dur, aud)
+                        logging.info(f"{pre}: 📑 {'would cut' if A.DRY_RUN else 'cut'} the last chapter at the file's end ({len(cut)} chapters kept, they sit at its pauses)")
+                    continue
                 if poor and poor != 'only numbered chapters without names' and 'too few chapters' not in why:  # ('Guns': one chapter is all there is)
                     # user 2026-11-26: unusable chapters that no Audible list fits - the FILE is the problem: handed to the chain
                     miss = round((sum(float(c[1]) for c in aud[0]) - dur) / 60)
@@ -152,6 +184,11 @@ def main():
                     else: flag(key, d, 'chapters', f"{poor}; {why}", pre)
                     st['redownload'] += 1
                 else: A.redownload_clear(key, {'chapters'}); complete(key, dur, aud)
+                if key in replaced and 'kept' not in why and sh < 0.6:
+                    # the old chapter times do not fit the new file and Audible's list cannot be laid on it: the user is told
+                    logging.info(f"{pre}: ⚠️ the old chapters sit at only {sh:.0%} of the new file's pauses - review list")
+                    A.add_review(key, title, 'chapters', 'replaced_file', f"the audio file was replaced and its {len(chs0)} chapters sit at only {sh:.0%} of "
+                                 f"its pauses (shifted?) - Audible's chapter list does not fit the new file either; check them in ABS (Edit > Chapters)")
                 continue
             if A.abs_set_chapters(d['id'], key, title, new, chs0, 'chapter_check'):
                 st['written'] += 1
@@ -163,6 +200,8 @@ def main():
                     flag(key, d, 'incomplete', f"Audible's last {gone} chapter(s) are not in the file, about {miss} min shorter than Audible's edition", pre, missing_min=miss)
                     st['redownload'] += 1
                 else: A.redownload_clear(key); complete(key, dur, aud)
+    if not A.DRY_RUN and seen:
+        cur = A.rw_json(FILES_FILE) or {}; cur.update(seen); A.rw_json(FILES_FILE, cur)
     logging.info('-' * 60)
     logging.info(f"Checked {st['checked']} books: {st['ok']} already fine, {st['written']} chapters {'planned' if A.DRY_RUN else 'written'}, "
                  f"{st['kept']} own chapters kept, {st['not_aligned']} not safely alignable, {st['unreadable']} audio not readable, "
