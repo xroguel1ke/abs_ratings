@@ -6273,6 +6273,14 @@ def process_queue(work_queue, history, failed, recheck):
                         if not a_ok_:
                             add_review(key, title, 'chapters', 'no chapters' if not chs0_ else 'a single chapter',
                                        "the book has no chapters and Audible's could not be matched (recording not verified) - add them in ABS (Edit > Chapters)")
+                    elif MATCH_CHAPTERS and 1 < len(chs0_) < 8 and 'lock_chapters' not in tags and not cover_verified and asin and not lang_conflict \
+                            and not aud_data.get('related_edition') and abs_dur and (p_ := chapters_poor(chs0_, abs_dur)) \
+                            and (ach_ := audible_chapters(asin, aud_data.get('domain'))):
+                        # 2026-11-26 ('Xenocide' {Full Cast}: 3 file parts in 20 h, narrators filled from Audible = not verified): a few poor
+                        # marks of an unverified recording - only the file's pauses can prove Audible's chapters (nothing on the list otherwise)
+                        a_ok_, a_why_ = audio_chapters(iid, key, title, item_data, chs0_, abs_dur, ach_)
+                        if a_ok_: stats['chapters'] += 1; ch_done_ = True
+                        else: logging.info(f"        ℹ️ Audible's chapters not taken ({p_}): recording not verified; pauses: {a_why_}")
                     if MATCH_CHAPTERS and not lang_conflict and asin and not aud_data.get('related_edition') and (cover_verified or len((item_data.get('media') or {}).get('chapters') or []) >= 8):
                         abs_chs = (item_data.get('media') or {}).get('chapters') or []
                         rt_ = (aud_data or {}).get('runtime_sec')
