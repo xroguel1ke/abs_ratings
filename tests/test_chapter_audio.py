@@ -89,6 +89,53 @@ def test_offset_jump_mid_book_is_found():
     assert CA.decide([], total2, (chs2, 0, 0), sil)[0] is None
 
 
+def speed_book(seed, factor=0.92, jitter=0.02, cut=1200.0):
+    """Another speed (x factor) with +-jitter tempo per chapter and the last `cut` seconds missing; chapter breaks = the longest pauses."""
+    chs, total, rnd = book(n=30, seed=seed)
+    starts, t = [0.0], 0.0
+    for s, l, _ in chs[:-1]: t += l * factor * rnd.uniform(1 - jitter, 1 + jitter); starts.append(t)
+    dur = (chs[-1][0] + chs[-1][1]) * factor - cut
+    sil, x = [], 5.0
+    while x < dur:
+        d = rnd.uniform(0.6, 1.6); sil.append((x, x + d)); x += d + rnd.uniform(3, 12)
+    sil += [(st - 3.4 + 0.8, st + 0.8) for st in starts[1:] if st < dur]
+    return chs, dur, sorted(sil), starts
+
+
+def test_other_speed_and_missing_end_is_found_chapter_by_chapter():
+    # 2026-11-26: Charon's Claw runs at 0.908 x Audible's times, Archmage lacks 28 min at the end - one offset (+-0.2 % drift) cannot fit
+    chs, dur, sil, truth = speed_book(seed=21)
+    assert CA.silence_align(chs, dur, sil) is None
+    r = CA.prop_align(chs, dur, sil)
+    assert r and r['hit'] >= 0.9 * r['total'], r
+    assert max(abs(a - b) for a, b in zip(r['starts'], truth) if b < dur) < 1.0
+    new, why = CA.decide([], dur, (chs, 0, 0), sil)
+    assert new and 'chapter by chapter' in why and len(new) == sum(1 for b in truth if b < dur - 1), why
+
+
+def test_chapter_by_chapter_never_fits_another_book():
+    chs, _, _, _ = speed_book(seed=22)
+    for seed in range(23, 33):
+        _, dur2, sil2, _ = speed_book(seed=seed)
+        assert CA.prop_align(chs, dur2, sil2) is None, seed
+
+
+def test_own_marks_past_the_end_are_replaced():
+    chs, dur, sil, truth = speed_book(seed=24)
+    own = [{'start': c[0], 'end': c[0] + c[1], 'title': c[2]} for c in chs]  # Audible's list of the longer edition, copied as is
+    new, why = CA.decide(own, dur, (chs, 0, 0), sil)
+    assert new and 'after its end' in why, why
+
+
+def test_file_parts_hours_apart_are_replaced():
+    # 2026-11-26: The Reality Dysfunction (41 h) came with two marks 'pt.1' / 'pt.2' - the download's file parts
+    chs, total, rnd = book(n=40, seed=31, dur_ch=3600.0)
+    sil = pauses(chs, total, rnd)
+    own = [{'start': 0.0, 'end': total / 2, 'title': 'Book_pt.1'}, {'start': total / 2, 'end': total, 'title': 'Book_pt.2'}]
+    new, why = CA.decide(own, total, (chs, 0, 0), sil)
+    assert new and 'file parts' in why and len(new) == 40, why
+
+
 def test_non_utf8_ffmpeg_output_does_not_raise():
     # 2026-11-26: a tag in Latin-1 made ffmpeg's stderr undecodable and stopped the whole library check
     class P: stderr = b'title: caf\xe9\n[silencedetect @ 0x1] silence_start: 1.0\n[silencedetect @ 0x1] silence_end: 3.5 | silence_duration: 2.5\n'

@@ -99,7 +99,9 @@ def _marks(sil, min_pause):
 def silence_align(chs, dur, sil, need=0.8, max_chance=1e-12):
     """Audible's chapter starts moved onto the file's pauses. chs = [(start, length, title)], dur = file length, sil = [(start, end)].
     Model: file time = s * (1 + r) + o (o = intro cut differently, r = a slow drift). Tried for several pause classes (all pauses /
-    only the long ones) and tolerances. Returns {'starts', 'hit', 'total', 'offset', 'rate', 'chance', 'tol', 'min_pause'} or None."""
+    only the long ones) and tolerances. A second pass starts from the rate that the length difference implies (2026-11-26: The Wisdom of
+    Crowds, Assassin's Apprentice, The Strength of the Few run 0.04-0.12 % faster than Audible's list - 15-60 s by the end, too much for
+    one offset). Returns {'starts', 'hit', 'total', 'offset', 'rate', 'chance', 'tol', 'min_pause'} or None."""
     inner = [c[0] for c in chs[1:]]
     n = len(inner)
     if n < 3 or not sil or not dur: return None
@@ -122,23 +124,24 @@ def silence_align(chs, dur, sil, need=0.8, max_chance=1e-12):
                 else: pos.append(None)
             return hit, pos, pairs
 
-        window = abs(dur - total) + 90
-        for tol in (0.5, 1.0, 2.0):
+        f0 = dur / total - 1 if total else 0.0
+        for r0, tol in [(r0, tol) for r0 in ([0.0] + ([f0] if 0.0002 < abs(f0) <= 0.005 else [])) for tol in (0.5, 1.0, 2.0)]:
+            window = abs(dur - total * (1 + r0)) + 90
             cands = set()
             for jj in sorted(set(list(range(min(4, n))) + [n // 2, n - 1])):
-                x = inner[jj]
+                x = inner[jj] * (1 + r0)
                 lo, hi = bisect.bisect_left(marks, x - window), bisect.bisect_right(marks, x + window)
                 for m in marks[lo:hi]: cands.add(round(m - x, 1))
             scored = []
             for o in cands:
-                hit, pos, pairs = score(o, 0.0, tol)
-                r = 0.0
+                hit, pos, pairs = score(o, r0, tol)
+                r = r0
                 if len(pairs) >= 3:  # slow drift: least-squares line through the matched pairs, then count again
                     mx = sum(a for a, _ in pairs) / len(pairs); my = sum(b for _, b in pairs) / len(pairs)
                     vx = sum((a - mx) ** 2 for a, _ in pairs)
                     if vx > 0:
                         sl = sum((a - mx) * (b - my) for a, b in pairs) / vx
-                        if abs(sl - 1) <= 0.002:
+                        if abs(sl - 1 - r0) <= 0.002:
                             r2, o2 = sl - 1, my - sl * mx
                             h2, p2, _ = score(o2, r2, tol)
                             if h2 > hit: hit, pos, o, r = h2, p2, o2, r2
@@ -221,6 +224,78 @@ def piecewise_align(chs, dur, sil, max_seg=4, min_seg=4, tol=1.0, need=0.8, max_
     return best
 
 
+def _pb_tail(ps, k):
+    """P(X >= k) for X = a sum of independent Bernoulli(ps): k hits by chance when every chapter has its own window."""
+    dp = [1.0] + [0.0] * len(ps)
+    for p in ps:
+        for j in range(len(dp) - 1, 0, -1): dp[j] = dp[j] * (1 - p) + dp[j - 1] * p
+        dp[0] *= (1 - p)
+    return min(1.0, sum(dp[k:]))
+
+
+def prop_align(chs, dur, sil, tolf=0.06, need=0.85, max_chance=1e-12, min_win=20.0, dev_f=0.04, dev_min=15.0):
+    """Audible's chapters on the file's LONGEST pauses, chapter by chapter (2026-11-26 library check: 290 books without a fit). For a
+    file that runs at another speed (Charon's Claw: 0.908 x Audible's times throughout), lacks the end (Archmage: 28 min shorter, the
+    chapters identical) or drifts a little in every chapter (Thud!: 3.1 s scene pauses, 0.2-0.3 % off). The chapter breaks are the
+    file's longest pauses (top n..3n): each next chapter is looked for around the previous hit + Audible's chapter length x
+    (file length / Audible length), +-6 % of that stretch (>= 20 s). A hit far off the line between its neighbouring hits is dropped
+    again. Accepted only with >= 85 % hits and a chance (every window on its own) < 1e-12; misses go on the line between their hits.
+    Returns the silence_align dict ('rate' = the overall length ratio - 1) or None."""
+    inner = [c[0] for c in chs[1:]]
+    n = len(inner)
+    if n < 6 or not sil or not dur: return None
+    total = chs[-1][0] + chs[-1][1]
+    if not total: return None
+    f = dur / total
+    bylen = sorted(sil, key=lambda p: p[0] - p[1])
+    best = None
+    for kf in (1.0, 1.5, 2.0, 3.0):
+        k = min(len(bylen), int(n * kf) + 2)
+        top = sorted(max((a + b) / 2, b - 1.5) for a, b in bylen[:k])
+        density = len(top) / dur
+        ps, pick, il, la, last = [], [None] * n, None, 0.0, 0.0
+        for i, s in enumerate(inner):
+            pred = (pick[il] if il is not None else 0.0) + (s - la) * f
+            w = max(min_win, tolf * (s - la) * f)
+            lo, hi = bisect.bisect_left(top, pred - w), bisect.bisect_right(top, pred + w)
+            ps.append(min(1.0, density * 2 * w))
+            c = [x for x in top[lo:hi] if x > last + 0.5]
+            if c:
+                m = min(c, key=lambda x: abs(x - pred))
+                pick[i], last, la, il = m, m, s, i
+        while True:  # leave-one-out: the worst hit off the line through its neighbours goes, until none is off
+            hs = [i for i in range(n) if pick[i] is not None]
+            worst, wi = 1.0, None
+            for j, b in enumerate(hs):
+                if j + 1 < len(hs): pa, pc = ((0.0, 0.0) if j == 0 else (inner[hs[j - 1]], pick[hs[j - 1]])), (inner[hs[j + 1]], pick[hs[j + 1]])
+                elif j >= 2: pa, pc = (inner[hs[j - 2]], pick[hs[j - 2]]), (inner[hs[j - 1]], pick[hs[j - 1]])  # the last hit (the file may lack the end)
+                else: continue
+                if pc[0] <= pa[0]: continue
+                pr = pa[1] + (inner[b] - pa[0]) * (pc[1] - pa[1]) / (pc[0] - pa[0])
+                lim = max(dev_min, dev_f * min(abs(inner[b] - pa[0]), abs(pc[0] - inner[b])) * f)
+                if abs(pick[b] - pr) / lim > worst: worst, wi = abs(pick[b] - pr) / lim, b
+            if wi is None: break
+            pick[wi] = None
+        hs = [i for i in range(n) if pick[i] is not None]
+        hit = len(hs)
+        if hit < need * n: continue
+        chance = min(1.0, _pb_tail(ps, hit) * 4)  # 4 pause classes tried
+        if chance > max_chance: continue
+        starts = [0.0]
+        for i, s in enumerate(inner):
+            if pick[i] is not None: starts.append(pick[i]); continue
+            before, after = [h for h in hs if h < i], [h for h in hs if h > i]
+            if after: pa, pc = ((inner[before[-1]], pick[before[-1]]) if before else (0.0, 0.0)), (inner[after[0]], pick[after[0]])
+            elif len(before) >= 2: pa, pc = (inner[before[-2]], pick[before[-2]]), (inner[before[-1]], pick[before[-1]])
+            else: pa, pc = (0.0, 0.0), (total, dur)
+            starts.append(pa[1] + (s - pa[0]) * (pc[1] - pa[1]) / (pc[0] - pa[0]))
+        if any(b <= a for a, b in zip(starts, starts[1:])): continue
+        if best is None or chance < best['chance']:
+            best = {'starts': [round(x, 3) for x in starts], 'hit': hit, 'total': n, 'offset': 0.0, 'rate': round(f - 1, 6), 'chance': chance,
+                    'tol': None, 'min_pause': None, 'proportional': True}
+    return best
+
+
 def refine(chs, al, sil, tol=2.0):
     """Exact positions after an accepted alignment. It is the SAME recording, so Audible's mark sits inside the same pause of this file -
     but not always at the same depth (sometimes the middle of the pause, sometimes near its end): snapping every chapter to one fixed
@@ -290,12 +365,18 @@ def decide(abs_chs, dur, aud, sil):
     then Audible's (aligned) chapters are better."""
     chs = aud[0] if aud else None
     if not chs or len(chs) < 4: return None, "Audible lists too few chapters"
-    al = silence_align(chs, dur, sil) or piecewise_align(chs, dur, sil)
+    al = silence_align(chs, dur, sil) or piecewise_align(chs, dur, sil) or prop_align(chs, dur, sil)
     if not al: return None, "Audible's chapters do not line up with the pauses of the file"
     new = build(chs, al['starts'], dur)
-    seg = (', offsets ' + ' / '.join(f"{o:+.0f} s" for _, _, o in al['segments'])) if al.get('segments') else f", offset {al['offset']:+.1f} s"
+    seg = (', offsets ' + ' / '.join(f"{o:+.0f} s" for _, _, o in al['segments'])) if al.get('segments') else \
+        (f", chapter by chapter on the longest pauses, file {1 + al['rate']:.3f} x Audible's length" if al.get('proportional') else f", offset {al['offset']:+.1f} s")
     why = f"{al['hit']}/{al['total']} chapter starts on the file's pauses ({seg[2:]}, chance {al['chance']:.0e})"
     if len(abs_chs or []) <= 1: return new, why
+    past = sum(float(c.get('start') or 0) >= dur - 1 for c in abs_chs)
+    if past:  # own marks past the end of the file: a list for a longer edition, wrong long before the end (2026-11-26: 64 books)
+        return new, why + f"; {past} of the file's own marks start after its end"
+    if dur / len(abs_chs) > 3 * 3600 and len(new) >= 3 * len(abs_chs):  # file parts hours apart, not chapters (Reality Dysfunction 2 marks in 41 h)
+        return new, why + f"; the file's own {len(abs_chs)} marks are file parts, {dur / len(abs_chs) / 3600:.0f} h apart"
     share = on_pause_share(abs_chs, sil)
     generic = all(RE_GENERIC.match(str(c.get('title') or '')) for c in abs_chs)
     if share < 0.6:  # the own marks are split points, not chapters: Audible's chapters on the pauses are better

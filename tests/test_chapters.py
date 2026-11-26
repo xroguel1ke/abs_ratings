@@ -51,7 +51,9 @@ def test_anchor_needs_matching_marks():
 
 
 def test_chapters_ending_early_are_poor():
-    named = lambda end: [{'start': 0, 'end': 600, 'title': 'Prologue'}, {'start': 600, 'end': end, 'title': 'Chapter 1'}]
+    # a chapter every hour (2 marks in 20 h are file parts - another rule, 2026-11-26)
+    named = lambda end: [{'start': 0, 'end': 600, 'title': 'Prologue'}] + [{'start': 600 + i * 3600, 'end': min(end, 600 + (i + 1) * 3600), 'title': f'Chapter {i + 1}'}
+                                                                          for i in range(int((end - 600) // 3600) + 1) if 600 + i * 3600 < end]
     assert A.chapters_poor(named(59820), 72300) == 'chapters end long before the file does'  # 997 of 1205 min
     assert A.chapters_poor(named(72000), 72300) is None  # 5 min short: rounding / credits
 

@@ -383,6 +383,14 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     (counted with the number of offsets it could pick), jumps <= length difference + 60 s (The White Song: 0 / -112 / -100 s, 40/40).
     chapter_check.py with CHAPTER_CHECK_PLAN_ONLY=true only counts (no audio read). Review entries of books deleted in ABS are dropped
     (review_drop_missing, listing before the moved-item guard). tests/test_review_missing.py.
+    2026-11-26 after the first library test run (3035 books: 2090 fine, 125 planned, 521 kept, 296 not alignable): silence_align
+    also starts from the rate the length difference implies (|dur/total - 1| <= 0.5 %); prop_align() = last fallback, chapter by
+    chapter on the file's LONGEST pauses (top n..3n), next chapter around previous hit + Audible length x (file/Audible length),
+    +-6 % (>= 20 s), leave-one-out drop of hits off the line through their neighbours (the last hit: through the two before it - the
+    file may lack its end), >= 85 % hits, Poisson-binomial chance < 1e-12. Finds other speed (Charon's Claw 0.908x), missing end
+    (Archmage -28 min), drift (Thud!): 116 of 290 failed books, 0 false in ~10500 cross pairs; truth files worst ~4-9 s (Audible's
+    mark after the spoken title, the longest pause before it). decide(): own marks starting after the file end -> replaced; own marks
+    > 3 h apart (file parts 'pt.1/pt.2') -> replaced; chapters_poor() also flags marks > 3 h apart (Reality Dysfunction 2 in 41 h).
   - Title = only the series name (2026-11-26, 'Ends of Magic' #4 = 'Anarchist', file tags; runtime 8 min off = no same_recording):
     title_is_series_name() - the ABS title equals its own series name, Audible files the product under the same series AND number,
     Audible's title does NOT start with the series name ('Beware of Chicken: A Xianxia ...' = marketing, kept) -> Audible's title
