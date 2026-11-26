@@ -4281,6 +4281,38 @@ NARR_SPELL = {}  # folded narrator key -> Counter of the spellings in the librar
 
 def narr_fold(n): return re.sub(r'[^a-z]', '', fold_accents(n or '').lower())
 
+def _edits(x, y):
+    """Edit distance (Levenshtein) of two short words."""
+    prev = list(range(len(y) + 1))
+    for i, cx in enumerate(x, 1):
+        cur = [i]
+        for j, cy in enumerate(y, 1): cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (cx != cy)))
+        prev = cur
+    return prev[-1]
+
+def narr_variant(a, b):
+    """The same narrator name with ONE word spelled differently: 'Stephen Kaplan' / 'Steven Kaplan', 'Cliff Kurt' / 'Cliff Kirk' (same first
+    letter, >= 3 letters, at most 2 edits)."""
+    ta, tb = fold_accents_s(a or '').lower().split(), fold_accents_s(b or '').lower().split()
+    if len(ta) != len(tb) or len(ta) < 2: return False
+    diff = [(x, y) for x, y in zip(ta, tb) if x != y]
+    if len(diff) != 1: return False
+    x, y = (re.sub(r'[^a-z]', '', w) for w in diff[0])
+    return len(x) >= 3 and len(y) >= 3 and x[0] == y[0] and _edits(x, y) <= 2
+
+def narr_respell(abs_n, aud_n):
+    """Audible's narrator list when every ABS narrator is one of them, the same or spelled a little differently, and at least one is spelled
+    differently (2026-11-26 'Rebel': 'Nile Bullock, Stephen Kaplan' from the file tags, Audible and the folder 'Steven Kaplan'). Else None."""
+    if not abs_n or len(abs_n) != len(aud_n or []): return None
+    used, changed = set(), False
+    for a in abs_n:
+        j = next((i for i, b in enumerate(aud_n) if i not in used and narr_fold(a) == narr_fold(b)), None)
+        if j is None:
+            j = next((i for i, b in enumerate(aud_n) if i not in used and narr_variant(a, b)), None); changed = changed or j is not None
+        if j is None: return None
+        used.add(j)
+    return list(aud_n) if changed else None
+
 def narrator_canonical(n):
     """The library's most used spelling of this narrator (ties: the one with accents / initials with periods)."""
     c = NARR_SPELL.get(narr_fold(n))
@@ -6114,8 +6146,8 @@ def process_queue(work_queue, history, failed, recheck):
                                 abs_updates['narrators'] = aud_narr
                                 FILLED_NARR.add(key)
                                 log_updates.append(f"Narrators: {meta['narrators']} -> {aud_narr} (book folder and Audible's same recording agree)")
-                        elif len(meta['narrators']) == len(aud_narr) and not (k_(meta['narrators']) & k_(aud_narr)) \
-                                and all(any(typo_(a_, b_) for b_ in aud_narr) for a_ in meta['narrators']):
+                        elif (len(meta['narrators']) == len(aud_narr) and not (k_(meta['narrators']) & k_(aud_narr))
+                              and all(any(typo_(a_, b_) for b_ in aud_narr) for a_ in meta['narrators'])) or narr_respell(meta['narrators'], aud_narr):
                             if 'lock_narrators' in tags: logging.info(f"        🔒 Narrators Update Skipped (Locked): {aud_narr}")
                             else:
                                 abs_updates['narrators'] = aud_narr

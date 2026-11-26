@@ -465,3 +465,5 @@ full run (test run first, apply selectively), done: merged into main 2026-11-09.
   old file); a chapter TEST run adds no review entry (2026-11-26: a dry run's Snow Crash entry reached the chain via review.json).
   _add_review: an entry that was 'obsolete' (swept / book gone) and is raised again is reopened (Forever Peace' second swap stayed off the list);
   user decisions (accepted/rejected) stay as they are.
+  narr_respell/narr_variant: the same recording's narrator spelled a little differently in ONE word (same first letter, <= 2 edits), also
+  when the other narrators already match ('Rebel': 'Stephen Kaplan' -> Audible + folder 'Steven Kaplan'); library check: only Rebel.
