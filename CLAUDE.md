@@ -463,3 +463,5 @@ full run (test run first, apply selectively), done: merged into main 2026-11-09.
   (Audible +-5 min): the end is cut ('Stardust'), no redownload.
   chapter_check.settled(): chapters that fit the file (again) drop the 'replaced_file' review entry ('Forever Peace': the chain restored the
   old file); a chapter TEST run adds no review entry (2026-11-26: a dry run's Snow Crash entry reached the chain via review.json).
+  _add_review: an entry that was 'obsolete' (swept / book gone) and is raised again is reopened (Forever Peace' second swap stayed off the list);
+  user decisions (accepted/rejected) stay as they are.

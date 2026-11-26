@@ -2560,6 +2560,11 @@ def _add_review(key, title, kind, candidate, reason, evidence=None, ctx=None):
     if not isinstance(q, list): q = []
     for x in q:
         if x.get('key') == key and x.get('kind') == kind and x.get('candidate') == candidate:
+            if x.get('status') == 'obsolete':  # it was gone and is true again (2026-11-26 'Forever Peace': a second file swap stayed off the list)
+                x.update(status='open', reason=reason, evidence=evidence or [], run=RUN_ID, seen=RUN_ID, reopened=datetime.now(timezone.utc).isoformat(timespec='seconds'))
+                x.pop('obsolete_run', None); x.pop('obsolete_reason', None)
+                if ctx: x['ctx'] = ctx
+                rw_json(REVIEW_FILE, q); return
             if x.get('status', 'open') == 'open':
                 x['seen'] = RUN_ID  # still true in this run (review_sweep keeps it)
                 if ctx: x['ctx'], x['run'] = ctx, RUN_ID  # refresh the context for group_confirm()

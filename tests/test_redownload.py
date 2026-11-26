@@ -83,6 +83,18 @@ def test_fitting_chapters_drop_only_the_replaced_file_entry():
     assert q == [('lib_i1', 'replaced_file', 'obsolete'), ('lib_i1', 'no chapters', 'open'), ('lib_i2', 'replaced_file', 'open')], q
 
 
+def test_entry_raised_again_is_reopened():
+    tmp = tempfile.mkdtemp(); _fresh(tmp)
+    A.REVIEW_FILE = os.path.join(tmp, 'review_queue.json')
+    A.rw_json(A.REVIEW_FILE, [{'key': 'lib_i1', 'title': 'Forever Peace', 'kind': 'chapters', 'candidate': 'replaced_file', 'reason': 'old', 'status': 'obsolete', 'obsolete_run': 'r1'},
+                              {'key': 'lib_i1', 'title': 'Forever Peace', 'kind': 'asin', 'candidate': 'B0X', 'reason': 'x', 'status': 'rejected'}])
+    A.add_review('lib_i1', 'Forever Peace', 'chapters', 'replaced_file', 'second swap: 28 % at the pauses')
+    A.add_review('lib_i1', 'Forever Peace', 'asin', 'B0X', 'again')  # a user's decision is never reopened
+    q = A.rw_json(A.REVIEW_FILE)
+    assert len(q) == 2 and q[0]['status'] == 'open' and q[0]['reason'] == 'second swap: 28 % at the pauses' and 'obsolete_run' not in q[0]
+    assert q[1]['status'] == 'rejected'
+
+
 if __name__ == '__main__':
     n = 0
     for name, fn in list(globals().items()):
