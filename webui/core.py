@@ -963,7 +963,7 @@ def open_queue():
 
 def redownload_list(): return _load_json(os.path.join(CONFIG_DIR, 'redownload.json'), {})
 def redownload_status(): return _load_json(os.path.join(CONFIG_DIR, 'redownload_status.json'), {})
-CHAIN_GAVE_UP = ('not_better', 'no_asin')  # statuses of the audiobook chain after which the user has to look
+CHAIN_GAVE_UP = ('no_asin', 'given_up')  # statuses after which the user has to look ('not_better' = the chain keeps searching)
 
 
 def chain_split(queue):
@@ -974,7 +974,10 @@ def chain_split(queue):
     if not isinstance(stt, dict): stt = {}
     busy, gave_up = [], []
     for k, v in sorted(rd.items(), key=lambda kv: str(kv[1].get('title') or '').lower()):
-        e = dict(v, key=k, chain=stt.get(k) or {})
+        c_ = dict(stt.get(k) or {})
+        if isinstance(c_.get('ts'), (int, float)):  # the chain writes epoch seconds
+            c_['ts'] = datetime.fromtimestamp(c_['ts']).strftime('%Y-%m-%d %H:%M')
+        e = dict(v, key=k, chain=c_)
         (gave_up if e['chain'].get('status') in CHAIN_GAVE_UP else busy).append(e)
     hidden = {e['key'] for e in busy}
     return [x for x in queue if not (x.get('kind') in ('chapters', 'incomplete') and x.get('key') in hidden)], busy, gave_up

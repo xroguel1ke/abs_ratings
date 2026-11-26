@@ -22,7 +22,7 @@ def client():
 
 def test_chain_books_are_folded_away():
     st = os.path.join(cfg, 'redownload_status.json')
-    json.dump({'lib_1': {'status': 'searching', 'ts': '2026-11-26T11:00:00'}}, open(st, 'w'))
+    json.dump({'lib_1': {'status': 'searching', 'ts': 1795686601}}, open(st, 'w'))
     q, busy, gave = core.chain_split(core.open_queue())
     assert [x['key'] for x in q] == ['lib_2'] and {e['key'] for e in busy} == {'lib_1', 'lib_3'} and not gave
     html = client().get('/review').get_data(as_text=True)
@@ -31,7 +31,7 @@ def test_chain_books_are_folded_away():
 
 
 def test_chain_gave_up_is_shown_to_the_user():
-    json.dump({'lib_3': {'status': 'not_better', 'note': 'only the same release found', 'ts': '2026-11-26T11:00:00'}}, open(os.path.join(cfg, 'redownload_status.json'), 'w'))
+    json.dump({'lib_3': {'status': 'no_asin', 'note': 'only the same release found', 'ts': '2026-11-26T11:00:00'}}, open(os.path.join(cfg, 'redownload_status.json'), 'w'))
     q, busy, gave = core.chain_split(core.open_queue())
     assert [e['key'] for e in gave] == ['lib_3'] and [e['key'] for e in busy] == ['lib_1']
     html = client().get('/review').get_data(as_text=True)

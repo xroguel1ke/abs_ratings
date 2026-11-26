@@ -139,7 +139,12 @@ def main():
                 poor = A.chapters_poor(chs0, dur)
                 if poor and poor != 'only numbered chapters without names' and 'too few chapters' not in why:  # ('Guns': one chapter is all there is)
                     # user 2026-11-26: unusable chapters that no Audible list fits - the FILE is the problem: handed to the chain
-                    flag(key, d, 'chapters', f"{poor}; {why}", pre); st['redownload'] += 1
+                    miss = round((sum(float(c[1]) for c in aud[0]) - dur) / 60)
+                    if miss >= 5:  # the file is shorter than Audible's edition: content is missing - the chain must check the runtime, not only chapters
+                        # (2026-11-26 'Legends & Lattes': listed as 'chapters', the chain swapped in another 382-min file of a 439-min book)
+                        flag(key, d, 'incomplete', f"the file is about {miss} min shorter than Audible's edition ({poor})", pre, missing_min=miss)
+                    else: flag(key, d, 'chapters', f"{poor}; {why}", pre)
+                    st['redownload'] += 1
                 else: A.redownload_clear(key, {'chapters'})
                 continue
             if A.abs_set_chapters(d['id'], key, title, new, chs0, 'chapter_check'):
