@@ -393,7 +393,7 @@ add({  # page tour 2026-11-08
     'Scan this book': 'Dieses Buch scannen', 'Test run': 'Testlauf', 'after Apply': 'nach Übernehmen', 'unchanged': 'unverändert', 'now': 'jetzt',
     'Open cover': 'Cover groß öffnen',
     'ABS backup': 'ABS-Backup', 'Metadata': 'Metadaten', 'Empty authors': 'Leere Autoren', 'Chapter check': 'Kapitelprüfung',
-    'Compare every book with Audible and set missing or wrong chapters on the pauses of the audio file': 'Jedes Buch mit Audible vergleichen und fehlende oder falsche Kapitel an den Pausen der Audiodatei setzen', 'Real authors': 'Echte Autoren', 'Authors': 'Autoren', 'Series': 'Reihen',
+    'Compare every book with Audible and set missing or wrong chapters on the pauses of the audio file': 'Jedes Buch mit Audible vergleichen und fehlende oder falsche Kapitel an den Pausen der Audiodatei setzen', 'Real authors': 'Echte Autoren', 'Clean up authors: unify spellings, remove illustrators, translators etc. (if a real author remains), delete authors without a single book - each step as set in the settings': 'Autoren aufräumen: Schreibweisen vereinheitlichen, Illustratoren, Übersetzer usw. entfernen (wenn ein echter Autor bleibt), Autoren ohne ein einziges Buch löschen - jeder Schritt wie in den Einstellungen gesetzt', 'Authors': 'Autoren', 'Series': 'Reihen',
     '"≠" is not an error: ABS values are only filled when empty.': '„≠“ ist kein Fehler: ABS-Werte werden nur gefüllt, wenn sie leer sind.',
     'A manual ASIN or link stays for good and is never replaced.': 'Eine manuelle ASIN oder ein Link bleibt dauerhaft und wird nie ersetzt.',
     'How sure the ASIN is this exact book (0–100).': 'Wie sicher die ASIN genau dieses Buch ist (0–100).',

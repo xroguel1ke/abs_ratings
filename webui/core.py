@@ -157,14 +157,14 @@ def save_settings(s):
         os.replace(tmp, SETTINGS_FILE)
 
 
-SCAN_FORM_BOOL = ('task_meta', 'task_authors', 'task_series', 'task_roles', 'task_empty', 'task_chapters', 'dry', 'backup', 'HARDCOVER_ENABLED')
+SCAN_FORM_BOOL = ('task_meta', 'task_authors', 'task_series', 'task_chapters', 'dry', 'backup', 'HARDCOVER_ENABLED')
 SCAN_FORM_INT = ('BATCH_SIZE', 'REFRESH_DAYS')
 
 
 def scan_form(s):
     """Last choices on the scan page; defaults from the saved settings (a choice there never changes a setting)."""
-    f = {'task_meta': True, 'task_authors': bool(s.get('AUTHOR_NORMALIZE')), 'task_series': bool(s.get('SERIES_MERGE')),
-         'task_roles': bool(s.get('REMOVE_ROLE_CREDITS')), 'task_empty': bool(s.get('REMOVE_EMPTY_AUTHORS')), 'task_chapters': False, 'dry': True, 'backup': bool(s.get('ABS_BACKUP')),
+    f = {'task_meta': True, 'task_authors': bool(s.get('AUTHOR_NORMALIZE') or s.get('REMOVE_ROLE_CREDITS') or s.get('REMOVE_EMPTY_AUTHORS')),
+         'task_series': bool(s.get('SERIES_MERGE')), 'task_chapters': False, 'dry': True, 'backup': bool(s.get('ABS_BACKUP')),
          'BATCH_SIZE': s.get('BATCH_SIZE'), 'REFRESH_DAYS': s.get('REFRESH_DAYS'), 'HARDCOVER_ENABLED': bool(s.get('HARDCOVER_ENABLED')),
          'selection': 'all', 'list': '', 'adv_open': False}
     f.update({k: v for k, v in (s.get('scan_form') or {}).items() if k in f})

@@ -6284,6 +6284,14 @@ def process_queue(work_queue, history, failed, recheck):
                                 logging.info(f"        ℹ️ Audible's chapters not taken: {why_c}" + (f"; pauses: {au_[1]}" if 'lock_chapters' not in tags else ''))
                                 if poor in ('no chapters', 'a single chapter'):  # user 2026-11-10: books WITHOUT chapters that cannot be matched go on the list
                                     add_review(key, title, 'chapters', poor, f"the book has no chapters and Audible's do not fit reliably ({why_c}) - add them in ABS (Edit > Chapters)")
+                        elif not poor and new_book and CHAPTER_AUDIO and abs_dur and abs_chs and 'lock_chapters' not in tags \
+                                and (aud_ch := audible_chapters(asin, aud_data.get('domain'))) and len(aud_ch[0] or []) >= 4 \
+                                and not ((an_ := anchor_align(abs_chs, aud_ch[0], abs_dur)) and abs(len(abs_chs) - len(aud_ch[0])) <= max(1, len(aud_ch[0]) // 10)):
+                            # user 2026-11-26: a NEW book gets the chapter check of the scan task (chapter_check.classify): named own marks that do
+                            # not sit at Audible's chapter starts - the file's pauses decide (own marks on the pauses are kept, misplaced ones replaced)
+                            a_ok_, a_why_ = audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch)
+                            if a_ok_: stats['chapters'] += 1; ch_done_ = True
+                            else: logging.info(f"        ℹ️ Own chapters kept ({len(abs_chs)}, Audible {len(aud_ch[0])}): {a_why_}")
 
                 # Hardcover: ratings only. Audible's clean title first, the ABS title as second comparison.
                 hc_targets = hc_target_titles(aud_data if not skip_meta else None, search_title, title, meta.get('subtitle'))

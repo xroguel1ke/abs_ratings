@@ -391,6 +391,9 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     (Archmage -28 min), drift (Thud!): 116 of 290 failed books, 0 false in ~10500 cross pairs; truth files worst ~4-9 s (Audible's
     mark after the spoken title, the longest pause before it). decide(): own marks starting after the file end -> replaced; own marks
     > 3 h apart (file parts 'pt.1/pt.2') -> replaced; chapters_poor() also flags marks > 3 h apart (Reality Dysfunction 2 in 41 h).
+    2026-11-26 (user): a NEW book (new_book) with not-poor own marks that do not sit at Audible's starts (chapter_check.classify rule:
+    anchor_align miss, Audible >= 4 chapters) gets audio_chapters() in the normal run - the scan task no longer needed for new imports.
+    Scan page: ONE 'Authors' box = AUTHOR_NORMALIZE + REMOVE_ROLE_CREDITS + REMOVE_EMPTY_AUTHORS as set in the settings (all three if none).
   - Title = only the series name (2026-11-26, 'Ends of Magic' #4 = 'Anarchist', file tags; runtime 8 min off = no same_recording):
     title_is_series_name() - the ABS title equals its own series name, Audible files the product under the same series AND number,
     Audible's title does NOT start with the series name ('Beware of Chicken: A Xianxia ...' = marketing, kept) -> Audible's title

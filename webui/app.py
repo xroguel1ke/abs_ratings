@@ -804,7 +804,12 @@ def runs():
         rs, items = None, None
         if a == 'start':  # scan page: tasks as checkboxes (metadata & ratings / authors / series) + test-run switch
             core.save_scan_form(request.form)  # remembered for the next visit (never changes the settings)
-            meta, authors, series, roles, empty, chap = (request.form.get(k) == 'on' for k in ('task_meta', 'task_authors', 'task_series', 'task_roles', 'task_empty', 'task_chapters'))
+            meta, authors, series, chap = (request.form.get(k) == 'on' for k in ('task_meta', 'task_authors', 'task_series', 'task_chapters'))
+            # user 2026-11-26: ONE 'Authors' box for the three author steps (spellings, only real authors, empty authors); each step as set in
+            # the settings - all three when none is switched on there (the box must do something)
+            s_a = core.load_settings()
+            a3 = [bool(s_a.get(k)) for k in ('AUTHOR_NORMALIZE', 'REMOVE_ROLE_CREDITS', 'REMOVE_EMPTY_AUTHORS')]
+            authors, roles, empty = (x and authors for x in (a3 if any(a3) else [True] * 3))
             rm = [src for src in ('audible', 'goodreads', 'hardcover') if request.form.get(f'rm_{src}') == 'on']
             if rm:  # remove-ratings task: runs alone (no searches, no metadata)
                 dry = request.form.get('dry') == 'on'
