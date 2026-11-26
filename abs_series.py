@@ -678,7 +678,7 @@ def genre_key(g):
 # genre loop 2026-11-15 (user: one name per genre): synonyms -> one name (Audible's where it has one). '-' = no genre at all.
 _GENRE_SYN = {
     # user 2026-11-15: one name per genre, no '&' names (except the established 'Sword & Sorcery'), no umbrella categories
-    'Humorous': ['Humor', 'Humour', 'comedy', 'Comedy & Humor', 'Humorous Fiction', 'Humour fiction'],
+    'Humorous': ['Humor', 'Humour', 'comedy', 'Comedy & Humor', 'Humorous Fiction', 'Humour fiction', 'Humor & Satire'],  # 'Humor & Satire': 'Space 1969' 2026-11-27
     'Science Fiction': ['Science fiction', 'Sci-fi', 'Sci-Fi', 'SciFi', 'Science-Fiction'],
     'LitRPG': ['litrpg', 'LitRpg', 'Lit RPG', 'GameLit', 'gamelit', 'Fantasy LitRPG'],
     'Young Adult': ['Young Adult Fiction', 'Teen & Young Adult', 'Young adult fantasy', 'teen', 'YA', 'Jugendliche & Heranwachsende'],

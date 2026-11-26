@@ -151,6 +151,18 @@ def test_glued_known_genres_are_split():
         assert i not in writes or len(writes[i]) == 1, writes  # a known whole name is never split
 
 
+def test_glued_umbrella_and_humor_genre_is_split():
+    # import 2026-11-27 'Space 1969': the file tag 'Literature & Fiction, Humor & Satire' stayed next to Audible's 'Humorous' - 'Humor & Satire'
+    # was no known name, so the glued entry was not split
+    recs = [{'id': 1, 'lib': 'l', 'title': 'Space 1969', 'genres': ['Science Fiction', 'Humorous', 'Literature & Fiction, Humor & Satire'],
+             'language': 'English', 'tags': set()}]
+    writes = {}
+    ctx = {'dry_run': True, 'audible_genres': set(), 'abs_update': lambda iid, key, title, upd, old, src: writes.__setitem__(iid, upd['genres']) or True}
+    S.normalize_genres(ctx, recs)
+    assert writes.get(1) == ['Science Fiction', 'Humorous'], writes
+    assert S.canonical_genre('Humor & Satire') == 'Humorous'
+
+
 if __name__ == '__main__':
     n = 0
     for name, fn in sorted(globals().items()):

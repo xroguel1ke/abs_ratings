@@ -467,3 +467,5 @@ full run (test run first, apply selectively), done: merged into main 2026-11-09.
   user decisions (accepted/rejected) stay as they are.
   narr_respell/narr_variant: the same recording's narrator spelled a little differently in ONE word (same first letter, <= 2 edits), also
   when the other narrators already match ('Rebel': 'Stephen Kaplan' -> Audible + folder 'Steven Kaplan'); library check: only Rebel.
+  Genres 2026-11-27: 'Humor & Satire' is a synonym of 'Humorous' - so normalize_genres splits the file tag 'Literature & Fiction, Humor & Satire'
+  (Space 1969; the only glued entry of that kind in the library) into umbrella (dropped) + Humorous.
