@@ -47,7 +47,7 @@ def test_title_that_is_only_the_series_name():
 def test_file_parts_are_poor_chapters():
     assert A.chapters_poor([{'start': 0, 'end': 61566, 'title': 'X_pt.1'}, {'start': 61566, 'end': 148023, 'title': 'X_pt.2'}], 148023) == 'only a few marks hours apart (file parts)'
     # real chapters of a long book are not
-    assert A.chapters_poor([{'start': i * 1800, 'end': (i + 1) * 1800, 'title': f'The {i}'} for i in range(80)], 144000) is None
+    assert A.chapters_poor([{'start': i * 1800, 'end': (i + 1) * 1800, 'title': f'The {chr(65 + i % 26)}{i}'} for i in range(80)], 144000) is None
 
 
 def test_bracket_number_prefix_is_messy():

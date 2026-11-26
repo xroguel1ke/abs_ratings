@@ -66,7 +66,7 @@ def test_decide_keeps_own_marks_at_pauses_and_replaces_split_points():
     new2, why2 = CA.decide(split, total + 20, aud, sil)
     assert new2 and 'only' in why2, why2
     # own named chapters at the pauses -> kept
-    own = [{'start': 0.0 if i == 0 else c[0] + 20, 'end': 0, 'title': f'My name {i}'} for i, c in enumerate(chs)]
+    own = [{'start': 0.0 if i == 0 else c[0] + 20, 'end': 0, 'title': f'My name {chr(65 + i % 26)}{i}'} for i, c in enumerate(chs)]
     new3, why3 = CA.decide(own, total + 20, aud, sil)
     assert new3 is None and 'kept' in why3, why3
 
@@ -150,6 +150,32 @@ def test_same_master_without_telling_pauses_takes_audible_as_listed():
     assert CA.loose_chapters(own, dur, (chs, 0, 0), sil)[0] is None
     # another length (another master): no
     assert CA.loose_chapters([], 30000.0 + 200, (chs, 0, 0), sil)[0] is None
+
+
+def test_numbered_file_parts_are_no_chapter_names():
+    mk = lambda ts: [{'start': i * 100.0, 'end': (i + 1) * 100.0, 'title': t} for i, t in enumerate(ts)]
+    assert CA.numbered_parts(mk([f'And Another Thing {i}-9' for i in range(1, 10)]))
+    assert CA.numbered_parts(mk([f'The Whispering Skull {i:02d}' for i in range(1, 6)]))
+    assert not CA.numbered_parts(mk(['Chapter One', 'Chapter Two', 'Chapter Three']))  # words, not numbers: names
+    assert not CA.numbered_parts(mk(['1', '2', '3']))  # plain numbers: RE_GENERIC's job
+    assert not CA.numbered_parts(mk(['Prologue', 'Chapter 1', 'Chapter 2']))
+    assert not CA.numbered_parts(mk(['Part 1 - The Storm', 'Part 2 - The Calm', 'Part 3 - The End']))
+
+
+def test_numbered_parts_at_audible_starts_get_audibles_finer_list():
+    random.seed(7)
+    total = 15 * 1800.0
+    chs = [(i * 1800.0, 1800.0, f"Named chapter {i + 1}") for i in range(15)]
+    sil = sorted([(c[0] - 2.5, c[0] - 0.4) for c in chs[1:]] + [(random.uniform(10, total - 10),) * 2 for _ in range(0)] +
+                 [(x, x + 0.6) for x in [random.uniform(10, total - 10) for _ in range(400)]])
+    own = [{'start': chs[i][0], 'end': chs[i + 3][0] if i + 3 < 15 else total, 'title': f'Chapter {i // 3 + 1}'} for i in range(0, 15, 3)]
+    new, why = CA.decide(own, total, (chs, 0, 0), sil)
+    assert new and len(new) == 15 and ('finer list' in why or 'download parts' in why), why
+    # download parts named by number ('And Another Thing 1-5'), cut at pauses but NOT at chapter starts: Audible's named list too
+    parts = [{'start': 0.0 if i == 0 else chs[i][0] + 600.0, 'end': 0, 'title': f'And Another Thing {i // 3 + 1}-5'} for i in range(0, 15, 3)]
+    sil2 = sorted(sil + [(p['start'] - 1.5, p['start'] - 0.2) for p in parts[1:]])
+    new2, why2 = CA.decide(parts, total, (chs, 0, 0), sil2)
+    assert new2 and len(new2) == 15 and 'download parts' in why2, why2
 
 
 def test_non_utf8_ffmpeg_output_does_not_raise():

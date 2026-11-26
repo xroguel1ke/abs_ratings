@@ -403,6 +403,10 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     (redownload). Stale 'incomplete' review entries are swept when the chapter checks ran and no longer raise them. Runtime mismatch
     + another author (match_author False) = another book: nothing taken, not even ratings ('Imaginary Friends' had the ratings of
     'Confessions of an Imaginary Friend').
+    2026-11-26 numbered download parts: CA.numbered_parts() = >= 3 marks that differ only by numbers ('And Another Thing 1-9', 'Neuromancer -
+    02', 'The Warded Man 02 of 16', '002-200 Billy Summers') = no chapter names (chapters_poor 'only numbered ...' too); decide(): such marks
+    with Audible's (aligned, proven) longer list -> Audible's; generic own marks all at Audible's aligned starts (+-5 s) with a longer Audible
+    list -> Audible's finer named list. Library dry run chapdry5: 138 planned (107 download parts), 39 for a redownload.
   - Title = only the series name (2026-11-26, 'Ends of Magic' #4 = 'Anarchist', file tags; runtime 8 min off = no same_recording):
     title_is_series_name() - the ABS title equals its own series name, Audible files the product under the same series AND number,
     Audible's title does NOT start with the series name ('Beware of Chicken: A Xianxia ...' = marketing, kept) -> Audible's title

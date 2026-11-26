@@ -20,6 +20,15 @@ FILE_TIMEOUT = int(os.getenv('CHAPTER_AUDIO_TIMEOUT', 1800) or 1800)  # seconds 
 RE_GENERIC = re.compile(r'(?i)^\s*(?:(?:chapter|kapitel|track|part|teil|cd|disc|section|file|titel)\s*)?[\divxlc]+(?:\s*[-:.]\s*\d+)?\s*$|^\s*$')
 
 
+def numbered_parts(chs):
+    """Marks that differ only by their numbers: file parts of a merged download ('And Another Thing 1-9', 'And Another Thing 2-9' ...,
+    2026-11-26), no chapter names. At least 3 marks; the shared text must not be empty."""
+    ts = [str(c.get('title') or '') for c in chs or []]
+    if len(ts) < 3: return False
+    stripped = {re.sub(r'\s+', ' ', re.sub(r'\d+', '#', t)).strip().lower() for t in ts}
+    return len(stripped) == 1 and '#' in next(iter(stripped)) and bool(re.sub(r'[#\W]', '', next(iter(stripped))))
+
+
 def available():
     return bool(FFMPEG)
 
@@ -406,7 +415,7 @@ def decide(abs_chs, dur, aud, sil):
     if dur / len(abs_chs) > 3 * 3600 and len(new) >= 3 * len(abs_chs):  # file parts hours apart, not chapters (Reality Dysfunction 2 marks in 41 h)
         return new, why + f"; the file's own {len(abs_chs)} marks are file parts, {dur / len(abs_chs) / 3600:.0f} h apart"
     share = on_pause_share(abs_chs, sil)
-    generic = all(RE_GENERIC.match(str(c.get('title') or '')) for c in abs_chs)
+    generic = all(RE_GENERIC.match(str(c.get('title') or '')) for c in abs_chs) or numbered_parts(abs_chs)
     if share < 0.6:  # the own marks are split points, not chapters: Audible's chapters on the pauses are better
         return new, why + f"; the file's own {len(abs_chs)} marks: only {share:.0%} at a pause"
     if generic and all(RE_GENERIC.match(c['title'] or '') for c in new):
@@ -420,4 +429,11 @@ def decide(abs_chs, dur, aud, sil):
                    why + "; names only (the file's own marks are kept)"
     if generic and share < 0.85 and len(new) >= len(abs_chs):
         return new, why + f"; the file's own marks are only numbered ({share:.0%} at a pause)"
+    if numbered_parts(abs_chs) and len(new) > len(abs_chs):
+        # 'And Another Thing 1-9' ... (2026-11-26): parts of a merged download, cut at pauses but not at chapters - Audible's named list
+        return new, why + f"; the file's own {len(abs_chs)} marks are numbered download parts"
+    if generic and len(new) > len(abs_chs) and all(any(abs(float(c.get('start') or 0) - x) <= 5 for x in al['starts']) for c in abs_chs[1:]):
+        # numbered marks at some of Audible's chapter starts (file parts at chapter ends, 2026-11-26 'And Another Thing' 9 of 15): Audible's
+        # finer, named list keeps every own mark
+        return new, why + f"; the file's own {len(abs_chs)} numbered marks sit at Audible's chapter starts: Audible's finer list with names"
     return None, f"the file's own {len(abs_chs)} chapters sit at its pauses ({share:.0%}): kept"

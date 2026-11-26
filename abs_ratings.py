@@ -1432,6 +1432,8 @@ def chapters_poor(chs, dur):
     if dur and max(float(c.get('end') or 0) for c in chs) < dur - max(300, 0.03 * dur):
         return 'chapters end long before the file does'  # chapter loop 2026-11-15: '1% Lifesteal 2' 997 of 1205 min (marks of another volume)
     if all(RE_GENERIC_CH.match(str(c.get('title') or '')) for c in chs): return 'only numbered chapters without names'
+    import chapter_audio as CA_
+    if CA_.numbered_parts(chs): return 'only numbered chapters without names'  # 2026-11-26: 'And Another Thing 1-9', '2-9' ... (file parts)
     if dur and dur / len(chs) > 3 * 3600: return 'only a few marks hours apart (file parts)'  # 2026-11-26: Reality Dysfunction 41 h, 'pt.1' / 'pt.2'
     return None
 
