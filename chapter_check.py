@@ -157,6 +157,8 @@ def main():
                  f"{st['kept']} own chapters kept, {st['not_aligned']} not safely alignable, {st['unreadable']} audio not readable, "
                  f"{st['no_audible']} without Audible chapters, {st['locked']} locked, {st['no_asin']} without ASIN, "
                  f"{st['redownload']} for a redownload (redownload.json)")
+    try: A.export_review()
+    except Exception as e: logging.warning(f"review.json not written ({type(e).__name__}: {e})")
     logging.info(f"Duration: {A.format_time(time.time() - t0)}")
     return 0
 

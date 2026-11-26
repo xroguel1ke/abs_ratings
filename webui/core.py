@@ -961,6 +961,25 @@ def open_queue():
             and not (x.get('kind') == 'isbn' and 'no verified replacement' in (x.get('reason') or ''))]
 
 
+def redownload_list(): return _load_json(os.path.join(CONFIG_DIR, 'redownload.json'), {})
+def redownload_status(): return _load_json(os.path.join(CONFIG_DIR, 'redownload_status.json'), {})
+CHAIN_GAVE_UP = ('not_better', 'no_asin')  # statuses of the audiobook chain after which the user has to look
+
+
+def chain_split(queue):
+    """user 2026-11-26 ('as little as possible on the review list'): books whose FILE is the problem are the audiobook chain's job (redownload).
+    Returns (queue without them, [books the chain works on], [books the chain could not improve]) - the last ones stay for the user."""
+    rd, stt = redownload_list(), redownload_status()
+    if not isinstance(rd, dict): rd = {}
+    if not isinstance(stt, dict): stt = {}
+    busy, gave_up = [], []
+    for k, v in sorted(rd.items(), key=lambda kv: str(kv[1].get('title') or '').lower()):
+        e = dict(v, key=k, chain=stt.get(k) or {})
+        (gave_up if e['chain'].get('status') in CHAIN_GAVE_UP else busy).append(e)
+    hidden = {e['key'] for e in busy}
+    return [x for x in queue if not (x.get('kind') in ('chapters', 'incomplete') and x.get('key') in hidden)], busy, gave_up
+
+
 def isbn_report(): return _load_json(os.path.join(REPORT_DIR, 'missing_isbn.json'), [])
 def set_queue_decision(qid, action):
     with _lock:

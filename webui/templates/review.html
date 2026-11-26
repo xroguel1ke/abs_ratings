@@ -19,6 +19,14 @@
  {% if k in ('asin', 'hardcover', 'title', 'isbn') %}<button type="button" onclick="qMarkAll('accept', '{{ k }}')">{{ _('Mark all: apply') }}</button>{% endif %}
  <button type="button" onclick="qMarkAll('reject', '{{ k }}')">{{ _('Mark all: discard') }}</button>
 {% endif %}{% endfor %}</div>{% endif %}</div>
+{% set cst = {'searching': _('the chain is looking for a better file'), 'replaced': _('file replaced, waits for the next chapter check'), 'skipped': _('another edition swap is running'),
+               'not_better': _('no better file found'), 'no_asin': _('the chain cannot check it (no ASIN)')} %}
+{% if secs.buecher.chain_gave_up %}<div class="card"><b>{{ _('The audiobook chain found no better file') }}</b> <span class="badge warn">{{ secs.buecher.chain_gave_up|length }}</span>
+ <p class="muted small" style="margin:4px 0 8px">{{ _('Its audio file is the problem (incomplete, damaged or chapters that fit no Audible edition). A redownload did not help: set the chapters in ABS (Edit > Chapters) or replace the file yourself.') }}</p>
+ {% for e in secs.buecher.chain_gave_up %}<div class="small">{{ e.title }} <span class="muted">· {{ (e.authors or [])|join(', ') }} · {{ e.reason }}{% if e.chain.note %} · {{ e.chain.note }}{% endif %}</span></div>{% endfor %}</div>{% endif %}
+{% if secs.buecher.chain_busy %}<details class="card"><summary><b>{{ _('The audiobook chain takes care of these') }}</b> <span class="badge">{{ secs.buecher.chain_busy|length }}</span>
+ <span class="muted small">– {{ _('the audio file is the problem; a redownload replaces it, nothing to do for you') }}</span></summary>
+ {% for e in secs.buecher.chain_busy %}<div class="small" style="margin-top:4px">{{ e.title }} <span class="muted">· {{ e.reason }} · {{ cst.get(e.chain.status, _('waits for the chain')) }}{% if e.chain.ts %} ({{ e.chain.ts[:16]|replace('T', ' ') }}){% endif %}</span></div>{% endfor %}</details>{% endif %}
 {% if secs.buecher.entries %}<div class="row small selbar"><span class="muted">{{ _('Mark every entry, then process them all at once.') }}</span>
  <button type="button" onclick="qMarkAll('accept')">{{ _('Mark all: apply') }}</button><button type="button" onclick="qMarkAll('reject')">{{ _('Mark all: discard') }}</button><button type="button" onclick="qMarkAll('')">{{ _('Clear marks') }}</button>
  <span class="muted keys"><kbd>J</kbd><kbd>K</kbd> {{ _('next/previous') }} · <kbd>A</kbd> {{ _('apply') }} · <kbd>D</kbd> {{ _('discard') }} · <kbd>U</kbd> {{ _('unmark') }}</span></div>

@@ -941,7 +941,13 @@ def title_is_series_name(title, abs_series, aud_title, aud_series):
     information and Audible's title belongs to the book."""
     t = normalize_title_text(title or '')
     if not t or not aud_title or normalize_title_text(aud_title) == t: return False
-    if normalize_title_text(aud_title).startswith(t + ' '): return False  # 'Beware of Chicken: A Xianxia Cultivation Novel' = marketing, the ABS title stays
+    if normalize_title_text(aud_title).startswith(t + ' '):
+        # 'Beware of Chicken: A Xianxia Cultivation Novel' = marketing, the ABS title stays; 'The Remaining: Trust' (#7, 2026-11-26) = the real title
+        rest = re.sub(r'^[\W_]+', '', aud_title[len(re.match(r'(?i)^.*?' + r'\W*'.join(map(re.escape, t.split())), aud_title).group(0)):]) \
+            if re.match(r'(?i)^.*?' + r'\W*'.join(map(re.escape, t.split())), aud_title) else ''
+        if not rest or re.match(r'(?i)^(?:an?\s|book\s*\d|vol(?:ume|\.)?\s*\d|part\s*\d|\d)', rest) \
+                or re.search(r'(?i)\b(?:novels?|novellas?|series|saga|litrpg|gamelit|cultivation|adventures?|fantasy|thriller|stories|story|tales?|edition)\b', rest):
+            return False
     if not any(normalize_title_text(x.get('name') or '') == t for x in (abs_series or [])): return False
     theirs = {p for p in _series_pairs(aud_series) if p[1] is not None}
     return any(p[1] is not None and p in theirs for p in _series_pairs(abs_series))
@@ -1558,6 +1564,31 @@ def redownload_flag(key, item_data, kind, reason, **extra):
                         duration_min=round(float(((item_data or {}).get('media') or {}).get('duration') or 0) / 60), kind=kind, reason=reason,
                         since=old.get('since') or datetime.now().strftime('%Y-%m-%d %H:%M'), updated=datetime.now().strftime('%Y-%m-%d %H:%M'))
         rw_json(REDOWNLOAD_FILE, cur)
+
+REVIEW_EXPORT_FILE = os.path.join(SCRIPT_DIR, 'review.json')  # the whole review list, machine-readable, for the audiobook chain (2026-11-26)
+REDOWNLOAD_STATUS_FILE = os.path.join(SCRIPT_DIR, 'redownload_status.json')  # written by the chain: {key: {status, note, ts}}
+FIX_BY_DOWNLOAD = frozenset({'chapters', 'incomplete'})  # review kinds a new audio file can solve (constant)
+
+def export_review():
+    """review.json = ONE list for the audiobook chain (its proposal 2026-11-26, user: as little as possible on the review list): every book
+    on the redownload list (fix 'download') plus every open review entry ('download' for chapters/incomplete, else 'user' - data the user
+    decides). Same fields as redownload.json; review entries of a book are under 'review'. Real runs only."""
+    if DRY_RUN: return
+    with IO_LOCK:
+        rd = rw_json(REDOWNLOAD_FILE) or {}
+        q = [x for x in (rw_json(REVIEW_FILE) or []) if isinstance(x, dict) and x.get('status', 'open') == 'open' and x.get('key')]
+        res = rw_json(RESULTS_FILE) or {}
+        out = {k: dict(v, fix='download', review=[]) for k, v in rd.items()}
+        for x in q:
+            k = x['key']; e_ = {'kind': x.get('kind'), 'reason': x.get('reason'), 'candidate': x.get('candidate')}
+            if k not in out:
+                r = res.get(k) or {}
+                out[k] = {'item_id': k.split('_', 1)[-1], 'title': x.get('title') or r.get('title'), 'authors': [r['author']] if r.get('author') else [],
+                          'narrators': [], 'asin': r.get('asin'), 'path': None, 'kind': x.get('kind'), 'reason': x.get('reason'),
+                          'fix': 'download' if x.get('kind') in FIX_BY_DOWNLOAD and r.get('asin') else 'user',
+                          'since': str(x.get('ts') or '')[:16].replace('T', ' '), 'updated': str(x.get('ts') or '')[:16].replace('T', ' '), 'review': []}
+            out[k]['review'].append(e_)
+        rw_json(REVIEW_EXPORT_FILE, out)
 
 def redownload_clear(key, kinds=None):
     """The book's file is fine now (chapters fit / complete): off the redownload list (kinds: only these kinds)."""
@@ -6684,6 +6715,10 @@ def process_queue(work_queue, history, failed, recheck):
                              | ({'chapters'} if ch_done_ or len((item_data.get('media') or {}).get('chapters') or []) > 1 else set())
                              | ({'incomplete'} if ch_checked_ and not ch_incomplete_ else set())
                              | ({'description'} if 'lock_description' not in tags else set()))  # the description step runs for every unlocked book
+                if ch_checked_ and not ch_incomplete_ and (ch_done_ or not chapters_poor((item_data.get('media') or {}).get('chapters') or [], abs_dur)):
+                    # 2026-11-26: the file (e.g. replaced by the chain) has fitting chapters now; 'incomplete' only goes when it is as long as Audible's
+                    rt_ = (aud_data or {}).get('runtime_sec')
+                    redownload_clear(key, None if (rt_ and abs_dur and abs_dur >= rt_ - 300) else {'chapters'})
                 cert, cert_parts = certainty_score(search_title, authors, meta.get('narrators') or [], abs_dur, meta.get('publisher'), meta.get('publishedYear'),
                                                    meta.get('series') or [], aud_data, hc_data, asin_from_search,
                                                    any(x.get('key') == key and x.get('status', 'open') == 'open' for x in (rw_json(REVIEW_FILE) or []) if isinstance(x, dict)))
@@ -6982,6 +7017,8 @@ def main():
         if net_guard.GAVE_UP: logging.error(f"🌐 Run stopped early - network outage: {', '.join(f'{h} ({w})' for h, (w, _t) in net_guard.GAVE_UP.items())}. Untouched books are done next run, no strikes.")
         group_confirm()
         if not DRY_RUN: rw_json(HISTORY_FILE, history); rw_json(FAILED_FILE, failed); rw_json(RECHECK_FILE, recheck); rw_json(HC_CACHE_FILE, HC_CACHE); rw_json(NEW_PENDING_FILE, sorted(NEW_PENDING))
+        try: export_review()
+        except Exception as e: logging.warning(f"review.json not written ({type(e).__name__}: {e})")
         save_reports()
         if AUTHOR_NOTES: rw_json(os.path.join(REPORT_DIR, "author_variants.json"), AUTHOR_NOTES)
         rw_json(RESULTS_FILE, RESULTS)  # also in DRY_RUN: it is the web UI's view of the last check

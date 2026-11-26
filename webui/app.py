@@ -495,7 +495,7 @@ def review_page():
     merged = [m for m in core.merges().values() if dec.get(m['id'], {}).get('action') not in ('confirmed', 'undone')]
     merged.sort(key=lambda m: m.get('last_seen', ''), reverse=True)
     rv = core.review()
-    queue = core.open_queue()
+    queue, chain_busy, chain_gave_up = core.chain_split(core.open_queue())
     res_all = core.results()
     for x in queue: x['res'] = res_all.get(x['key']) or {}; x['explain'] = explain_entry(x, res_all)
     rep = core._load_json(os.path.join(core.REPORT_DIR, 'library_report.json'), {})
@@ -508,14 +508,14 @@ def review_page():
     dups_ = [d for d in dups_ if (d['gid'] in hid) == show_hidden]
     # user 2026-11-09: automatic merges are safe by rule and are in the History (with undo) - not shown here again
     secs = {
-        'buecher': {'label': T('Books'), 'entries': queue},
+        'buecher': {'label': T('Books'), 'entries': queue, 'chain_busy': chain_busy, 'chain_gave_up': chain_gave_up},
         'reihen': {'label': T('Series'), 'review': rv.get('series') or []},
         'autoren': {'label': T('Authors'), 'review': rv.get('authors') or []},
         'sonstiges': {'label': T('Other'), 'dups': dups_, 'same_asin': same_, 'foreign': rv.get('other') or [], 'hidden_n': n_hidden, 'show_hidden': show_hidden,
                       'languages': rv.get('languages') or [],
                       'lang_choices': [x.strip() for x in str(core.load_settings().get('BOOK_LANGUAGES') or 'English, German').split(',') if x.strip()]},
     }
-    counts = {'buecher': len(queue), 'reihen': len(secs['reihen']['review']), 'autoren': len(secs['autoren']['review']),
+    counts = {'buecher': len(queue) + len(chain_gave_up), 'reihen': len(secs['reihen']['review']), 'autoren': len(secs['autoren']['review']),
               'sonstiges': len(secs['sonstiges']['foreign']) + len(secs['sonstiges']['dups']) + len(secs['sonstiges']['same_asin']) + len(secs['sonstiges']['languages'])}
     return render_template('review.html', secs=secs, counts=counts, generated=rv.get('generated'))
 

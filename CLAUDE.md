@@ -446,3 +446,9 @@ full run (test run first, apply selectively), done: merged into main 2026-11-09.
 
 ## Open items
 `docs/STATUS.md` is the single list of ALL open items (task + user requests) with state. Update it after every batch/chain and whenever an item changes; read it before choosing the next task.
+- 2026-11-26 ONE list for the audiobook chain (its proposal): `review.json` (export_review, end of every real run / chapter check) = redownload
+  entries (fix 'download') + open review entries ('download' for chapters/incomplete with ASIN, else 'user'). The chain writes
+  `redownload_status.json` in /config ({key: {status: searching|not_better|replaced|no_asin|skipped, note, ts}}). Review page
+  (core.chain_split): redownload books fold into 'the chain takes care of these'; not_better/no_asin ones are shown to the user.
+  A normal run clears a redownload flag when the chapter checks ran and the chapters fit (incomplete only when as long as Audible's).
+  title_is_series_name: 'The Remaining' + Audible 'The Remaining: Trust' (#7) = the real title (taglines 'A ... Novel' etc. still not).

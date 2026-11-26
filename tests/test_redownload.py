@@ -36,6 +36,21 @@ def test_test_run_writes_nothing():
     finally: A.DRY_RUN = False
 
 
+def test_review_json_is_one_list_for_the_chain():
+    tmp = tempfile.mkdtemp(); _fresh(tmp)
+    A.REVIEW_FILE, A.RESULTS_FILE, A.REVIEW_EXPORT_FILE = (os.path.join(tmp, f) for f in ('review_queue.json', 'results.json', 'review.json'))
+    A.rw_json(A.REVIEW_FILE, [{'key': 'lib_i1', 'title': 'The Crystal Shard', 'kind': 'incomplete', 'reason': 'short', 'status': 'open'},
+                              {'key': 'lib_i2', 'title': 'Other', 'kind': 'asin', 'candidate': 'B0X', 'reason': 'weak', 'status': 'open'},
+                              {'key': 'lib_i3', 'title': 'Old', 'kind': 'asin', 'status': 'obsolete'}])
+    A.rw_json(A.RESULTS_FILE, {'lib_i2': {'title': 'Other', 'author': 'Someone', 'asin': 'B0Y'}})
+    A.redownload_flag('lib_i1', ITEM, 'chapters', 'chapters run past the end of the file')
+    A.export_review()
+    out = A.rw_json(A.REVIEW_EXPORT_FILE)
+    assert set(out) == {'lib_i1', 'lib_i2'}
+    assert out['lib_i1']['fix'] == 'download' and out['lib_i1']['narrators'] == ['Victor Bevine'] and out['lib_i1']['review'][0]['kind'] == 'incomplete'
+    assert out['lib_i2']['fix'] == 'user' and out['lib_i2']['asin'] == 'B0Y' and out['lib_i2']['authors'] == ['Someone']
+
+
 def test_bonus_chapters_are_no_missing_story():
     for t in ('Bonus Excerpt: Queen Demon', 'End Credits', 'Closing Credits', 'The Story Continues in Defiance', 'Bloopers', 'Excerpt from Mr. Mercedes',
               'Bonus: Conversation between the authors'):

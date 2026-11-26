@@ -40,6 +40,9 @@ def test_title_that_is_only_the_series_name():
     # book 1 whose Audible title only adds marketing: the ABS title stays
     assert not A.title_is_series_name('Beware of Chicken', [{'name': 'Beware of Chicken', 'sequence': '1'}], 'Beware of Chicken: A Xianxia Cultivation Novel',
                                       [{'name': 'Beware of Chicken', 'part': '1'}])
+    # the series name plus the real title on Audible ('The Remaining' #7 = 'The Remaining: Trust', 2026-11-26): Audible's title
+    assert A.title_is_series_name('The Remaining', [{'name': 'The Remaining', 'sequence': '7'}], 'The Remaining: Trust', [{'name': 'The Remaining', 'part': '7'}])
+    assert not A.title_is_series_name('Dungeon Life', [{'name': 'Dungeon Life', 'sequence': '1'}], 'Dungeon Life: A LitRPG Adventure', [{'name': 'Dungeon Life', 'part': '1'}])
     # a real title that is not the series name: not this rule
     assert not A.title_is_series_name('Anarchist', [{'name': 'Ends of Magic', 'sequence': '4'}], 'Anarchist: Book 4', [{'name': 'Ends of Magic', 'part': '4'}])
 
