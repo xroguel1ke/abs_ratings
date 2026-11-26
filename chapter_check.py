@@ -44,6 +44,12 @@ def classify(abs_chs, dur, aud):
     return 'audio', poor
 
 
+def complete(key, dur, aud):
+    """The file is as long as Audible's edition (at most 5 min shorter, the limit of abs_ratings' 'incomplete' check): an open 'incomplete'
+    entry of the review list is obsolete (2026-11-26: books whose file the chain replaced stayed on the list - and in review.json for the chain)."""
+    if aud and aud[0] and dur and sum(float(c[1]) for c in aud[0]) - dur <= 300: A.review_sweep(key, {'incomplete'})
+
+
 def loose(d, chs0, dur, aud, sil, key):
     """CA.loose_chapters for a recording verified like abs_ratings verifies a cover (narrator + runtime +-2 min, abs_ratings.same_recording);
     the Audible product is only asked when the length already fits (a handful of books). (new, why) or None."""
@@ -104,7 +110,7 @@ def main():
         if not aud or not aud[0]: st['no_audible'] += 1; continue
         what, why = classify(chs0, dur, aud)
         if what == 'ok':  # (a file without Audible's bonus excerpt / end credits is no redownload: Witch King, Holly ... 2026-11-26)
-            st['ok'] += 1; A.redownload_clear(key); continue
+            st['ok'] += 1; A.redownload_clear(key); complete(key, dur, aud); continue
         todo.append((key, d, title, chs0, dur, aud, why))
     A.rw_json(AUD_CACHE_FILE, cache)
     logging.info(f"{st['ok']} books already have Audible's chapters; {len(todo)} are checked against their audio ({WORKERS} at a time)")
@@ -145,7 +151,7 @@ def main():
                         flag(key, d, 'incomplete', f"the file is about {miss} min shorter than Audible's edition ({poor})", pre, missing_min=miss)
                     else: flag(key, d, 'chapters', f"{poor}; {why}", pre)
                     st['redownload'] += 1
-                else: A.redownload_clear(key, {'chapters'})
+                else: A.redownload_clear(key, {'chapters'}); complete(key, dur, aud)
                 continue
             if A.abs_set_chapters(d['id'], key, title, new, chs0, 'chapter_check'):
                 st['written'] += 1
@@ -156,7 +162,7 @@ def main():
                 if gone > 0 and miss >= 5:  # Audible's last chapters are not in the file: it lacks its end
                     flag(key, d, 'incomplete', f"Audible's last {gone} chapter(s) are not in the file, about {miss} min shorter than Audible's edition", pre, missing_min=miss)
                     st['redownload'] += 1
-                else: A.redownload_clear(key)
+                else: A.redownload_clear(key); complete(key, dur, aud)
     logging.info('-' * 60)
     logging.info(f"Checked {st['checked']} books: {st['ok']} already fine, {st['written']} chapters {'planned' if A.DRY_RUN else 'written'}, "
                  f"{st['kept']} own chapters kept, {st['not_aligned']} not safely alignable, {st['unreadable']} audio not readable, "

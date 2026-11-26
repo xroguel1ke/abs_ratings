@@ -452,3 +452,5 @@ full run (test run first, apply selectively), done: merged into main 2026-11-09.
   (core.chain_split): redownload books fold into 'the chain takes care of these'; not_better/no_asin ones are shown to the user.
   A normal run clears a redownload flag when the chapter checks ran and the chapters fit (incomplete only when as long as Audible's).
   title_is_series_name: 'The Remaining' + Audible 'The Remaining: Trust' (#7) = the real title (taglines 'A ... Novel' etc. still not).
+  chapter_check.complete(): a file at most 5 min shorter than Audible's edition drops its open 'incomplete' review entry (chain-replaced
+  books stayed on the list and in review.json: The Companions, Emily Wilde, Threshold).

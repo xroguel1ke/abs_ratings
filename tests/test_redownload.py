@@ -59,6 +59,19 @@ def test_bonus_chapters_are_no_missing_story():
         assert not CC.RE_EXTRA.search(t), t
 
 
+def test_complete_file_drops_incomplete_review_entry():
+    tmp = tempfile.mkdtemp(); _fresh(tmp)
+    A.REVIEW_FILE = os.path.join(tmp, 'review_queue.json')
+    A.rw_json(A.REVIEW_FILE, [{'key': 'lib_i1', 'kind': 'incomplete', 'status': 'open', 'run': 'old'},
+                              {'key': 'lib_i1', 'kind': 'asin', 'status': 'open', 'run': 'old'},
+                              {'key': 'lib_i2', 'kind': 'incomplete', 'status': 'open', 'run': 'old'}])
+    aud = ([['Ch 1', 3000.0, 'Chapter 1'], ['Ch 2', 3000.0, 'Chapter 2']], None)
+    CC.complete('lib_i2', 5400.0, aud)  # 10 min short: stays
+    CC.complete('lib_i1', 5800.0, aud)  # replaced file, 200 s short: the entry is obsolete, other kinds stay
+    q = {(x['key'], x['kind']): x['status'] for x in A.rw_json(A.REVIEW_FILE)}
+    assert q == {('lib_i1', 'incomplete'): 'obsolete', ('lib_i1', 'asin'): 'open', ('lib_i2', 'incomplete'): 'open'}, q
+
+
 if __name__ == '__main__':
     n = 0
     for name, fn in list(globals().items()):
