@@ -50,10 +50,11 @@ def file_silences(path):
     """Pauses of ONE file via ffmpeg (low priority, audio only)."""
     cmd = [FFMPEG, '-nostdin', '-hide_banner', '-nostats', '-vn', '-sn', '-dn', '-i', path, '-af', SILENCE_ARGS, '-f', 'null', '-']
     try:
-        p = subprocess.run(['nice', '-n', '15'] + cmd if shutil.which('nice') else cmd, capture_output=True, text=True, timeout=FILE_TIMEOUT)
+        p = subprocess.run(['nice', '-n', '15'] + cmd if shutil.which('nice') else cmd, capture_output=True, timeout=FILE_TIMEOUT)
     except (subprocess.TimeoutExpired, OSError) as e:
         logging.warning(f"        ⚠️ Pause analysis failed for {os.path.basename(path)}: {e}"); return None
-    return parse_silences(p.stderr.splitlines())
+    # bytes: ffmpeg prints the file's tags, which are not always UTF-8 (2026-11-26: one book stopped the whole library check)
+    return parse_silences(p.stderr.decode('utf-8', errors='replace').splitlines())
 
 
 def book_silences(item_data, cache_dir):

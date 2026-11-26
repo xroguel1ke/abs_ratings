@@ -89,6 +89,15 @@ def test_offset_jump_mid_book_is_found():
     assert CA.decide([], total2, (chs2, 0, 0), sil)[0] is None
 
 
+def test_non_utf8_ffmpeg_output_does_not_raise():
+    # 2026-11-26: a tag in Latin-1 made ffmpeg's stderr undecodable and stopped the whole library check
+    class P: stderr = b'title: caf\xe9\n[silencedetect @ 0x1] silence_start: 1.0\n[silencedetect @ 0x1] silence_end: 3.5 | silence_duration: 2.5\n'
+    run_, ff_ = CA.subprocess.run, CA.FFMPEG
+    CA.subprocess.run, CA.FFMPEG = (lambda *a, **k: P()), '/usr/bin/ffmpeg'
+    try: assert CA.file_silences('/x.m4b') == [(1.0, 3.5)]
+    finally: CA.subprocess.run, CA.FFMPEG = run_, ff_
+
+
 def test_parse_silences():
     lines = ['[silencedetect @ 0x1] silence_start: 12.5', '[silencedetect @ 0x1] silence_end: 15.9 | silence_duration: 3.4', 'junk']
     assert CA.parse_silences(lines) == [(12.5, 15.9)]

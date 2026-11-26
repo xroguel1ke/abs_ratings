@@ -1483,9 +1483,13 @@ def audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch, source=
     import chapter_audio as CA
     if not (CHAPTER_AUDIO and MATCH_CHAPTERS): return False, 'pause analysis off'
     if not CA.available(): return False, 'ffmpeg missing'
-    sil = CA.book_silences(item_data, SILENCE_CACHE_DIR)
-    if sil is None: return False, 'the audio file cannot be read here'
-    new, why = CA.decide(abs_chs, abs_dur, aud_ch, sil)
+    try:
+        sil = CA.book_silences(item_data, SILENCE_CACHE_DIR)
+        if sil is None: return False, 'the audio file cannot be read here'
+        new, why = CA.decide(abs_chs, abs_dur, aud_ch, sil)
+    except Exception as e:  # the pause analysis is an extra: it never costs the book its other updates
+        logging.warning(f"        ⚠️ Pause analysis failed: {type(e).__name__}: {e}"); return False, 'pause analysis failed'
+
     if not new: return False, why
     if abs_set_chapters(iid, key, title, new, abs_chs, source):
         logging.info(f"        📑 Chapters {'would be ' if DRY_RUN else ''}taken from Audible, aligned on the file's pauses: {len(new)} ({why})")

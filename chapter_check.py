@@ -92,10 +92,14 @@ def main():
 
     def work(job):
         key, d, title, chs0, dur, aud, why0 = job
-        sil = CA.book_silences(d, A.SILENCE_CACHE_DIR)
-        if sil is None: return job, None, None, 'the audio cannot be read here'
-        new, why = CA.decide(chs0, dur, aud, sil)
-        return job, sil, new, why
+        try:
+            sil = CA.book_silences(d, A.SILENCE_CACHE_DIR)
+            if sil is None: return job, None, None, 'the audio cannot be read here'
+            new, why = CA.decide(chs0, dur, aud, sil)
+            return job, sil, new, why
+        except Exception as e:  # one book must never stop the check of all others
+            logging.exception(f"   {title}: chapter check failed")
+            return job, None, None, f'error: {type(e).__name__}: {e}'[:200]
 
     done = 0
     with ThreadPoolExecutor(max_workers=WORKERS) as ex:
