@@ -359,6 +359,34 @@ def build(chs, starts, dur):
             for i, (st, t) in enumerate(zip(starts, titles))]
 
 
+LOOSE_SECONDS = 60.0  # = abs_ratings.CH_LOOSE_SECONDS (user rule 2026-11-10: a file within 60 s of Audible's list takes it as it is)
+
+
+def loose_chapters(abs_chs, dur, aud, sil, max_diff=LOOSE_SECONDS):
+    """Last resort for a VERIFIED recording (the caller checked narrator + runtime) whose own chapters are unusable (none, one, or file
+    parts hours apart) and whose pauses prove nothing (chapter breaks without long pauses - Snow Crash, Foxglove Summer, Death of Kings
+    2026-11-26): a file as long as Audible's chapter list (+-max_diff s) is the same master, so Audible's chapters are taken as listed;
+    each start moves onto a pause within 3 s when there is one. (new or None, reason)"""
+    chs = aud[0] if aud else None
+    if not chs or len(chs) < 4: return None, "Audible lists too few chapters"
+    if len(abs_chs or []) > 1 and dur / len(abs_chs) <= 3 * 3600: return None, "the file has chapters of its own"
+    diff = dur - sum(float(c[1]) for c in chs)
+    if abs(diff) > max_diff: return None, f"length differs from Audible's chapter list by {diff:+.0f} s"
+    marks = _marks(sil or [], 0.5)
+    starts, moved = [], 0
+    for i, c in enumerate(chs):
+        s = float(c[0])
+        if i:
+            j = bisect.bisect_left(marks, s - 3)
+            near = [m for m in marks[j:j + 8] if abs(m - s) <= 3]
+            if near: s = min(near, key=lambda m: abs(m - float(c[0]))); moved += 1
+        if starts and s <= starts[-1] + 1: s = float(c[0])  # never out of order
+        starts.append(s)
+    if any(b <= a for a, b in zip(starts, starts[1:])): return None, "Audible's chapter list is not in order"
+    return build(chs, starts, dur), (f"same recording (narrator and runtime), the file {diff:+.0f} s against Audible's chapter list: "
+                                     f"Audible's chapters as listed, {moved}/{len(chs) - 1} moved onto a pause within 3 s")
+
+
 def decide(abs_chs, dur, aud, sil):
     """(new chapter list or None, reason). aud = (chs, intro, outro) from Audible. Books WITHOUT usable chapters get Audible's chapters
     on the pauses. A book WITH chapters keeps them unless they do not sit at pauses (download split points) or only carry numbers -

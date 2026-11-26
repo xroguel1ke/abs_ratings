@@ -136,6 +136,22 @@ def test_file_parts_hours_apart_are_replaced():
     assert new and 'file parts' in why and len(new) == 40, why
 
 
+def test_same_master_without_telling_pauses_takes_audible_as_listed():
+    # Snow Crash 2026-11-26: file 10 s off Audible's list, only file parts, chapter breaks without long pauses
+    chs = [(i * 1500.0, 1500.0, f"Chapter {i + 1} name") for i in range(20)]
+    dur = 30000.0 - 10
+    sil = [(i * 37.0, i * 37.0 + 0.7) for i in range(1, 800)] + [(4500.5, 5501.5 - 1000)]  # sentence pauses only (one long one near ch 4)
+    sil.sort()
+    new, why = CA.loose_chapters([{'start': 0, 'end': 15000, 'title': 'pt1'}, {'start': 15000, 'end': dur, 'title': 'pt2'}], dur, (chs, 0, 0), sil)
+    assert new and len(new) == 20 and 'as listed' in why, why
+    assert all(abs(c['start'] - i * 1500.0) <= 3 for i, c in enumerate(new)), [c['start'] for c in new]
+    # the file's own real chapters: not this rule
+    own = [{'start': i * 1000.0, 'end': (i + 1) * 1000.0, 'title': f'Own {i}'} for i in range(30)]
+    assert CA.loose_chapters(own, dur, (chs, 0, 0), sil)[0] is None
+    # another length (another master): no
+    assert CA.loose_chapters([], 30000.0 + 200, (chs, 0, 0), sil)[0] is None
+
+
 def test_non_utf8_ffmpeg_output_does_not_raise():
     # 2026-11-26: a tag in Latin-1 made ffmpeg's stderr undecodable and stopped the whole library check
     class P: stderr = b'title: caf\xe9\n[silencedetect @ 0x1] silence_start: 1.0\n[silencedetect @ 0x1] silence_end: 3.5 | silence_duration: 2.5\n'

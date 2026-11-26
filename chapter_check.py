@@ -18,6 +18,9 @@ from abs_series import load_full_items, expand_locks
 
 AUD_CACHE_FILE = os.path.join(A.SCRIPT_DIR, 'cache', 'audible_chapters.json')
 AUD_CACHE_DAYS = 30
+# Audible chapters a file may lack without being incomplete (bonus material, credits; 2026-11-26: Witch King, Holly, Ascendant ...)
+RE_EXTRA = re.compile(r"(?i)credits|bonus|excerpt|preview|sneak peek|story continues|bloopers|teaser|about the author|acknowledg|"
+                      r"also by|coming soon|an interview|conversation (?:with|between)")
 WORKERS = max(1, int(os.getenv('CHAPTER_WORKERS', 3) or 3))
 
 
@@ -41,6 +44,21 @@ def classify(abs_chs, dur, aud):
     return 'audio', poor
 
 
+def loose(d, chs0, dur, aud, sil, key):
+    """CA.loose_chapters for a recording verified like abs_ratings verifies a cover (narrator + runtime +-2 min, abs_ratings.same_recording);
+    the Audible product is only asked when the length already fits (a handful of books). (new, why) or None."""
+    if abs(dur - sum(float(c[1]) for c in aud[0])) > CA.LOOSE_SECONDS: return None
+    if len(chs0 or []) > 1 and dur / len(chs0) <= 3 * 3600: return None
+    md = (d.get('media') or {}).get('metadata') or {}
+    dom = ((A.rw_json(A.RESULTS_FILE) or {}).get(key) or {}).get('domain') or 'www.audible.com'
+    p = A.get_audible_api(md.get('asin'), dom)
+    if not isinstance(p, dict) or not A.same_recording(dur, md.get('narrators') or [], p):
+        logging.info(f"   {md.get('title')}: the file is as long as Audible's chapter list, but the recording is not verified (narrator/runtime)")
+        return None
+    new, why = CA.loose_chapters(chs0, dur, aud, sil)
+    return (new, why) if new else None
+
+
 def main():
     A.setup_logging()
     A.LAST_WRITTEN.update(A.rw_json(A.LAST_WRITTEN_FILE) or {})
@@ -62,7 +80,11 @@ def main():
         for it, d, err in load_full_items(A.abs_session, A.ABS_URL, items):
             if isinstance(d, dict): books.append((lib, d))
     logging.info(f"{len(books)} books loaded")
-    st = {'checked': 0, 'no_asin': 0, 'locked': 0, 'no_audible': 0, 'ok': 0, 'written': 0, 'kept': 0, 'not_aligned': 0, 'unreadable': 0}
+    def flag(key, d, kind, reason, pre, **kw):
+        logging.info(f"{pre}: 🔁 {'would be handed' if A.DRY_RUN else 'handed'} to the audiobook chain for a redownload ({kind}: {reason})")
+        A.redownload_flag(key, d, kind, reason, **kw)
+
+    st = {'redownload': 0, 'checked': 0, 'no_asin': 0, 'locked': 0, 'no_audible': 0, 'ok': 0, 'written': 0, 'kept': 0, 'not_aligned': 0, 'unreadable': 0}
     todo = []
     for n_, (lib, d) in enumerate(books, 1):
         if n_ % 250 == 0:
@@ -81,7 +103,8 @@ def main():
         aud = c.get('aud')
         if not aud or not aud[0]: st['no_audible'] += 1; continue
         what, why = classify(chs0, dur, aud)
-        if what == 'ok': st['ok'] += 1; continue
+        if what == 'ok':  # (a file without Audible's bonus excerpt / end credits is no redownload: Witch King, Holly ... 2026-11-26)
+            st['ok'] += 1; A.redownload_clear(key); continue
         todo.append((key, d, title, chs0, dur, aud, why))
     A.rw_json(AUD_CACHE_FILE, cache)
     logging.info(f"{st['ok']} books already have Audible's chapters; {len(todo)} are checked against their audio ({WORKERS} at a time)")
@@ -96,6 +119,8 @@ def main():
             sil = CA.book_silences(d, A.SILENCE_CACHE_DIR)
             if sil is None: return job, None, None, 'the audio cannot be read here'
             new, why = CA.decide(chs0, dur, aud, sil)
+            if not new and 'do not line up' in why and (lc := loose(d, chs0, dur, aud, sil, key)):
+                new, why = lc  # 2026-11-26: same master without telling pauses - Audible's chapters as listed (verified recording only)
             return job, sil, new, why
         except Exception as e:  # one book must never stop the check of all others
             logging.exception(f"   {title}: chapter check failed")
@@ -110,14 +135,28 @@ def main():
             if sil is None: st['unreadable'] += 1; logging.info(f"{pre}: ⚠️ {why}"); continue
             if not new:
                 st['kept' if 'kept' in why or 'no names either' in why else 'not_aligned'] += 1
-                logging.info(f"{pre}: ℹ️ {why}"); continue
+                logging.info(f"{pre}: ℹ️ {why}")
+                poor = A.chapters_poor(chs0, dur)
+                if poor and poor != 'only numbered chapters without names' and 'too few chapters' not in why:  # ('Guns': one chapter is all there is)
+                    # user 2026-11-26: unusable chapters that no Audible list fits - the FILE is the problem: handed to the chain
+                    flag(key, d, 'chapters', f"{poor}; {why}", pre); st['redownload'] += 1
+                else: A.redownload_clear(key, {'chapters'})
+                continue
             if A.abs_set_chapters(d['id'], key, title, new, chs0, 'chapter_check'):
                 st['written'] += 1
                 logging.info(f"{pre}: 📑 {'would take' if A.DRY_RUN else 'took'} {len(new)} chapters from Audible ({why})")
+                kept_t = {c['title'] for c in new}
+                lost = [c[2] for c in aud[0] if c[2] not in kept_t and not RE_EXTRA.search(c[2] or '')]  # story chapters the file lacks
+                gone = len(lost); miss = round((sum(float(c[1]) for c in aud[0]) - dur) / 60)
+                if gone > 0 and miss >= 5:  # Audible's last chapters are not in the file: it lacks its end
+                    flag(key, d, 'incomplete', f"Audible's last {gone} chapter(s) are not in the file, about {miss} min shorter than Audible's edition", pre, missing_min=miss)
+                    st['redownload'] += 1
+                else: A.redownload_clear(key)
     logging.info('-' * 60)
     logging.info(f"Checked {st['checked']} books: {st['ok']} already fine, {st['written']} chapters {'planned' if A.DRY_RUN else 'written'}, "
                  f"{st['kept']} own chapters kept, {st['not_aligned']} not safely alignable, {st['unreadable']} audio not readable, "
-                 f"{st['no_audible']} without Audible chapters, {st['locked']} locked, {st['no_asin']} without ASIN")
+                 f"{st['no_audible']} without Audible chapters, {st['locked']} locked, {st['no_asin']} without ASIN, "
+                 f"{st['redownload']} for a redownload (redownload.json)")
     logging.info(f"Duration: {A.format_time(time.time() - t0)}")
     return 0
 

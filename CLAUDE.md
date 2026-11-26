@@ -394,6 +394,15 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     2026-11-26 (user): a NEW book (new_book) with not-poor own marks that do not sit at Audible's starts (chapter_check.classify rule:
     anchor_align miss, Audible >= 4 chapters) gets audio_chapters() in the normal run - the scan task no longer needed for new imports.
     Scan page: ONE 'Authors' box = AUTHOR_NORMALIZE + REMOVE_ROLE_CREDITS + REMOVE_EMPTY_AUTHORS as set in the settings (all three if none).
+    2026-11-26 (user: 'as little as possible on the review list'): CA.loose_chapters = last resort for a VERIFIED recording
+    (same_recording) with no/one/file-part chapters and a file within 60 s of Audible's chapter list whose pauses prove nothing (Snow
+    Crash, Death of Kings, Good Omens, Four Past Midnight): Audible's list as it is, starts moved onto a pause within 3 s. REDOWNLOAD
+    list `redownload.json` (redownload_flag/redownload_clear, real runs only): books whose FILE is the problem - chapter check: poor
+    chapters no Audible list fits (not 'only numbered', not 'too few'), or aligned but Audible's story chapters missing at the end
+    (>= 5 min; bonus/credits/excerpt chapters RE_EXTRA do not count); normal run: the 'incomplete' check. Read by the audiobook chain
+    (redownload). Stale 'incomplete' review entries are swept when the chapter checks ran and no longer raise them. Runtime mismatch
+    + another author (match_author False) = another book: nothing taken, not even ratings ('Imaginary Friends' had the ratings of
+    'Confessions of an Imaginary Friend').
   - Title = only the series name (2026-11-26, 'Ends of Magic' #4 = 'Anarchist', file tags; runtime 8 min off = no same_recording):
     title_is_series_name() - the ABS title equals its own series name, Audible files the product under the same series AND number,
     Audible's title does NOT start with the series name ('Beware of Chicken: A Xianxia ...' = marketing, kept) -> Audible's title

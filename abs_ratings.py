@@ -450,6 +450,7 @@ IDENTITY_META = set()
 SERIES_LIST_DAYS = float(os.getenv('SERIES_LIST_DAYS', 1))  # missing volumes: Audible series lists cached this long (user 2026-11-15: was 7 days, new volumes came a week late)
 FIXED_USER_AGENT_WEB = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36'  # twin web search only
 TWIN_WEB_FILE = os.path.join(SCRIPT_DIR, 'twin_web_misses.json')  # hit ASIN -> time: the preferred store's web search found no twin (not asked again for 180 days)
+REDOWNLOAD_FILE = os.path.join(SCRIPT_DIR, 'redownload.json')  # books whose FILE is the problem (user 2026-11-26): read by the audiobook chain
 NEW_PENDING_FILE = os.path.join(SCRIPT_DIR, 'new_pending.json')  # new books not matched yet (they keep the new-book rules)
 NEW_PENDING = set()
 NEW_BOOK_DAYS = int(os.getenv('NEW_BOOK_DAYS', 30))  # 'new book' = never processed and added to ABS within these days
@@ -1490,7 +1491,7 @@ CH_LOOSE_SECONDS = 60
 CHAPTER_AUDIO = os.getenv('CHAPTER_AUDIO', 'true').lower() == 'true'  # Audible's chapters on the file's own pauses (chapter_audio.py, 2026-11-25)
 SILENCE_CACHE_DIR = os.path.join(SCRIPT_DIR, 'cache', 'silences')
 
-def audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch, source='audible_chapters_audio'):
+def audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch, source='audible_chapters_audio', verified=False):
     """Audible's chapters aligned on the pauses of the audio file (the file is only read). Returns (written, reason)."""
     import chapter_audio as CA
     if not (CHAPTER_AUDIO and MATCH_CHAPTERS): return False, 'pause analysis off'
@@ -1499,6 +1500,8 @@ def audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch, source=
         sil = CA.book_silences(item_data, SILENCE_CACHE_DIR)
         if sil is None: return False, 'the audio file cannot be read here'
         new, why = CA.decide(abs_chs, abs_dur, aud_ch, sil)
+        if not new and verified and 'do not line up' in why:  # 2026-11-26: same master without telling pauses (Snow Crash): Audible's list as it is
+            new, why = (lambda r: r if r[0] else (None, why))(CA.loose_chapters(abs_chs, abs_dur, aud_ch, sil))
     except Exception as e:  # the pause analysis is an extra: it never costs the book its other updates
         logging.warning(f"        ⚠️ Pause analysis failed: {type(e).__name__}: {e}"); return False, 'pause analysis failed'
 
@@ -1538,6 +1541,29 @@ def runtime_mismatch(abs_sec, aud_sec):
     return diff > RUNTIME_TOLERANCE_MIN * 60 and diff > float(aud_sec) * RUNTIME_TOLERANCE_PCT / 100
 
 _CORRUPT_KEPT = set()  # paths whose unreadable content was already copied aside in this process
+
+def redownload_flag(key, item_data, kind, reason, **extra):
+    """Hand a book whose audio FILE is the problem (incomplete, damaged, chapters that fit no Audible edition) to the audiobook chain for a
+    redownload (user 2026-11-26). {key: {item_id, title, authors, narrators, asin, path, kind, reason, since, updated}} in REDOWNLOAD_FILE;
+    nothing in ABS changes. Not in a test run."""
+    if DRY_RUN: return
+    md = ((item_data or {}).get('media') or {}).get('metadata') or {}
+    with IO_LOCK:
+        cur = rw_json(REDOWNLOAD_FILE) or {}
+        old = cur.get(key) or {}
+        cur[key] = dict(extra, item_id=(item_data or {}).get('id'), title=md.get('title'), authors=[a.get('name') if isinstance(a, dict) else a for a in md.get('authors') or []],
+                        narrators=md.get('narrators') or [], asin=md.get('asin'), path=(item_data or {}).get('relPath') or (item_data or {}).get('path'),
+                        duration_min=round(float(((item_data or {}).get('media') or {}).get('duration') or 0) / 60), kind=kind, reason=reason,
+                        since=old.get('since') or datetime.now().strftime('%Y-%m-%d %H:%M'), updated=datetime.now().strftime('%Y-%m-%d %H:%M'))
+        rw_json(REDOWNLOAD_FILE, cur)
+
+def redownload_clear(key, kinds=None):
+    """The book's file is fine now (chapters fit / complete): off the redownload list (kinds: only these kinds)."""
+    if DRY_RUN: return
+    with IO_LOCK:
+        cur = rw_json(REDOWNLOAD_FILE) or {}
+        if key in cur and (kinds is None or cur[key].get('kind') in kinds):
+            cur.pop(key); rw_json(REDOWNLOAD_FILE, cur)
 
 def rw_json(path, data=None):
     try:
@@ -5373,11 +5399,20 @@ def process_queue(work_queue, history, failed, recheck):
                         and not asin_from_search and not (ov.get('identity') and ov.get('asin') == asin):  # identity: the user confirmed this ASIN for the file (ABS title = the other volume's)
                     skip_meta = True
                     logging.info(f"      -> ⏭️ Metadata sync skipped: volume number still differs from Audible ('{aud_data.get('title_raw')}'). Only ratings are used.")
+                elif aud_data and runtime_mismatch(abs_dur, aud_data.get('runtime_sec')) and authors and aud_data.get('authors_raw') \
+                        and match_author(authors, ', '.join(aud_data.get('authors_raw') or [])) is False and not aud_data.get('related_edition'):
+                    # 2026-11-26 ('Imaginary Friends' by Terry Brooks, 52 min, had the ASIN of 'Confessions of an Imaginary Friend' by another
+                    # author, 182 min - its Audible ratings stood in the description): another runtime AND another author = another book
+                    logging.info(f"      -> ⛔ ASIN {asin} is another book: Audible '{aud_data.get('title_raw')}' by {', '.join(aud_data.get('authors_raw') or [])}, "
+                                 f"runtime {format_time(aud_data['runtime_sec'])} vs ABS {format_time(abs_dur)}. Nothing is taken from it (ASIN stays for a manual look)")
+                    add_review(key, title, "asin", asin, "ASIN belongs to another book (other author and runtime) and no safe replacement was found", plaus_why)
+                    aud_data, skip_meta = None, True
                 elif aud_data and runtime_mismatch(abs_dur, aud_data.get('runtime_sec')):
                     skip_meta = True
                     logging.info(f"      -> ⏭️ Metadata sync skipped: runtime still differs (ABS {format_time(abs_dur)} vs Audible {format_time(aud_data['runtime_sec'])}). Only ratings are used.")
 
                 ch_done_ = False  # chapters written in this run (the review entry 'no chapters' is then obsolete)
+                ch_checked_ = ch_incomplete_ = False  # chapter/length checks ran / found the file incomplete (2026-11-26: stale 'incomplete' entries)
                 co_late = None  # co-authors to add once Hardcover had its say on roles (see 'user 2026-11-24' below)
                 if aud_data and aud_data.get('meta_raw') and not skip_meta:
                     md_raw = aud_data['meta_raw']
@@ -6246,6 +6281,7 @@ def process_queue(work_queue, history, failed, recheck):
                             logging.info(f"        ⚠️ The audio is {more_} min longer than Audible's edition ({round(rt_ / 60)} min): review list")
                             add_review(key, title, 'too_long', str(more_), f"the audio is {more_} min longer than Audible's edition of {round(rt_ / 60)} min - content twice, a collection or another edition?")
                         poor = chapters_poor(abs_chs, abs_dur)
+                        ch_checked_ = True  # the chapter/length checks ran: an 'incomplete' entry they no longer raise is obsolete
                         if poor and 'lock_chapters' in tags: logging.info("        🔒 Chapters not replaced (locked)")
                         elif poor and abs_dur and abs_chs and max(float(c.get('end') or 0) for c in abs_chs) > abs_dur + 300 \
                                 and aud_data.get('runtime_sec') and aud_data['runtime_sec'] > abs_dur + 300:  # user 2026-11-10: only > 5 min on the list
@@ -6254,6 +6290,8 @@ def process_queue(work_queue, history, failed, recheck):
                             miss_ = round((aud_data['runtime_sec'] - abs_dur) / 60)
                             logging.info(f"        ⚠️ The file seems incomplete: chapters and Audible's runtime are {miss_} min longer than the file - review list")
                             add_review(key, title, 'incomplete', str(miss_), f"the audio file is {miss_} min shorter than its chapters and Audible's runtime - incomplete download or a shorter edition?")
+                            redownload_flag(key, item_data, 'incomplete', f"the file is {miss_} min shorter than Audible's edition and its own chapters", missing_min=miss_)
+                            ch_incomplete_ = True
                         elif poor and abs_dur and not (aud_ch := audible_chapters(asin, aud_data.get('domain'))) and poor in ('no chapters', 'a single chapter'):
                             logging.info("        ⚠️ The book has no chapters and Audible has none for it: review list")
                             add_review(key, title, 'chapters', poor, "the book has no chapters and Audible lists none for this product - add them in ABS (Edit > Chapters)")
@@ -6269,7 +6307,7 @@ def process_queue(work_queue, history, failed, recheck):
                             if new_chs and poor == 'only numbered chapters without names' and all(RE_GENERIC_CH.match(c['title'] or '') for c in new_chs):
                                 new_chs, why_c = None, "Audible's chapters have no names either"  # 'Chapter 1' for 'Chapter 1': nothing gained
                             if new_chs and why_c.startswith('the file has no chapters, length within') and 'lock_chapters' not in tags \
-                                    and audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch)[0]:
+                                    and audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch, verified=cover_verified)[0]:
                                 # 2026-11-26: Audible's list as it is can be up to a minute off; on the file's pauses it is exact
                                 stats['chapters'] += 1
                                 ch_done_ = True
@@ -6277,7 +6315,7 @@ def process_queue(work_queue, history, failed, recheck):
                                 stats['chapters'] += 1
                                 ch_done_ = True
                                 logging.info(f"        📑 Chapters {'would be ' if DRY_RUN else ''}taken from Audible: {len(new_chs)} ({poor} before; {why_c})")
-                            elif not new_chs and 'lock_chapters' not in tags and (au_ := audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch))[0]:
+                            elif not new_chs and 'lock_chapters' not in tags and (au_ := audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch, verified=cover_verified))[0]:
                                 stats['chapters'] += 1
                                 ch_done_ = True
                             elif not new_chs:
@@ -6634,6 +6672,7 @@ def process_queue(work_queue, history, failed, recheck):
                 review_sweep(key, {'asin', 'title', 'series'} | ({'hardcover'} if HARDCOVER_ENABLED and hc_status != 'fresh' else set())
                              | ({'authors'} if aud_data and aud_data.get('meta_raw') and not skip_meta else set())
                              | ({'chapters'} if ch_done_ or len((item_data.get('media') or {}).get('chapters') or []) > 1 else set())
+                             | ({'incomplete'} if ch_checked_ and not ch_incomplete_ else set())
                              | ({'description'} if 'lock_description' not in tags else set()))  # the description step runs for every unlocked book
                 cert, cert_parts = certainty_score(search_title, authors, meta.get('narrators') or [], abs_dur, meta.get('publisher'), meta.get('publishedYear'),
                                                    meta.get('series') or [], aud_data, hc_data, asin_from_search,
