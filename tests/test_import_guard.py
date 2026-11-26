@@ -32,6 +32,18 @@ def test_number_rule_must_not_fire():
     assert not A.title_number_conflict('Death: Genesis 7', [], 'Death: Genesis 3')
 
 
+def test_title_that_is_only_the_series_name():
+    # 2026-11-26: 'Ends of Magic' #4 (file tags) is 'Anarchist' on Audible
+    assert A.title_is_series_name('Ends of Magic', [{'name': 'Ends of Magic', 'sequence': '4'}], 'Anarchist', [{'name': 'Ends of Magic', 'part': '4'}])
+    # another number on Audible: no
+    assert not A.title_is_series_name('Ends of Magic', [{'name': 'Ends of Magic', 'sequence': '4'}], 'Aspirant', [{'name': 'Ends of Magic', 'part': '5'}])
+    # book 1 whose Audible title only adds marketing: the ABS title stays
+    assert not A.title_is_series_name('Beware of Chicken', [{'name': 'Beware of Chicken', 'sequence': '1'}], 'Beware of Chicken: A Xianxia Cultivation Novel',
+                                      [{'name': 'Beware of Chicken', 'part': '1'}])
+    # a real title that is not the series name: not this rule
+    assert not A.title_is_series_name('Anarchist', [{'name': 'Ends of Magic', 'sequence': '4'}], 'Anarchist: Book 4', [{'name': 'Ends of Magic', 'part': '4'}])
+
+
 def test_bracket_number_prefix_is_messy():
     m = A.parse_messy_title('[03] - Necropolis')
     assert m and m['title'] == 'Necropolis' and m['sequence'] == '3', m

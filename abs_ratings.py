@@ -934,6 +934,17 @@ def title_number_conflict(abs_title, abs_series, aud_title):
     own = {strip_lead0(str(x.get('sequence')).strip()) for x in (abs_series or []) if x.get('sequence') not in (None, '')}
     return bool(own & a)
 
+def title_is_series_name(title, abs_series, aud_title, aud_series):
+    """The ABS title is EXACTLY the name of its own series (file tags with only the series: 'Ends of Magic' for book 4 'Anarchist'), Audible's
+    title is another one, and Audible files this product under the same series with the same number. Then the ABS title carries no
+    information and Audible's title belongs to the book."""
+    t = normalize_title_text(title or '')
+    if not t or not aud_title or normalize_title_text(aud_title) == t: return False
+    if normalize_title_text(aud_title).startswith(t + ' '): return False  # 'Beware of Chicken: A Xianxia Cultivation Novel' = marketing, the ABS title stays
+    if not any(normalize_title_text(x.get('name') or '') == t for x in (abs_series or [])): return False
+    theirs = {p for p in _series_pairs(aud_series) if p[1] is not None}
+    return any(p[1] is not None and p in theirs for p in _series_pairs(abs_series))
+
 def same_recording(abs_dur, abs_narrators, aud):
     """Same recording: runtime within 2 min AND a shared narrator. Then a differing volume NUMBER is a numbering scheme difference
     ('Book 8' in ABS vs 'Book 7' on Audible), not a wrong ASIN."""
@@ -5432,6 +5443,12 @@ def process_queue(work_queue, history, failed, recheck):
                         else:
                             abs_updates['title'] = aud_title
                             log_updates.append(f"Title: '{title}' -> '{aud_title}' (the title was only the series name and number)")
+                    elif aud_title and 'lock_title' not in tags and title_is_series_name(title, meta.get('series'), aud_title, (aud_data.get('meta_raw') or {}).get('series')) \
+                            and match_author(authors, ', '.join(aud_data.get('authors_raw') or [])) and not runtime_mismatch(abs_dur, aud_data.get('runtime_sec')):
+                        # 2026-11-26 ('Ends of Magic' #4 = 'Anarchist', file tags held only the series name; runtime 8 min off, so no
+                        # 'same recording'): the ABS title says nothing about the book - Audible's series AND number agree, so its title
+                        abs_updates['title'] = aud_title
+                        log_updates.append(f"Title: '{title}' -> '{aud_title}' (the title was only the series name; Audible's series and number agree)")
                     elif aud_title and same_recording(abs_dur, meta.get('narrators'), aud_data) and (head_ := series_tail_head(title, [s_.get('name') for s_ in (meta.get('series') or [])], aud_title)):
                         # round 1 (2026-11-09): the book's own series name appended to the title ('Hogfather: Discworld', 'Mark of the Crijik 4:
                         # The Burning Lake: Mark of the Crijik') - the title without it; Audible's own title when the rest is title + subtitle

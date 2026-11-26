@@ -383,6 +383,10 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     (counted with the number of offsets it could pick), jumps <= length difference + 60 s (The White Song: 0 / -112 / -100 s, 40/40).
     chapter_check.py with CHAPTER_CHECK_PLAN_ONLY=true only counts (no audio read). Review entries of books deleted in ABS are dropped
     (review_drop_missing, listing before the moved-item guard). tests/test_review_missing.py.
+  - Title = only the series name (2026-11-26, 'Ends of Magic' #4 = 'Anarchist', file tags; runtime 8 min off = no same_recording):
+    title_is_series_name() - the ABS title equals its own series name, Audible files the product under the same series AND number,
+    Audible's title does NOT start with the series name ('Beware of Chicken: A Xianxia ...' = marketing, kept) -> Audible's title
+    (author must match, runtime within the normal tolerance). Library check: 7 books (Ends of Magic 4/5, Completionist 4, Good Guys 13 ...).
 
 - Web UI: keep texts short (help texts <= ~100 chars, user 2026-11-15: human readability first). Series and missing volumes are ONE page (series.html, two views). Screenshots: tools/ui_shots.sh <snapshot> <port> name=/path ... (FULL=0 = viewport only); never commit them (private data).
 
