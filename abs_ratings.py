@@ -6431,6 +6431,7 @@ def process_queue(work_queue, history, failed, recheck):
 
                 # Hardcover: ratings only. Audible's clean title first, the ABS title as second comparison.
                 hc_targets = hc_target_titles(aud_data if not skip_meta else None, search_title, title, meta.get('subtitle'))
+                hc_wrong = False  # a cached / linked Hardcover book turned out to be another book (its old rating line must go)
                 if 'hardcover' in src_due or not HARDCOVER_ENABLED:
                     hc_data, hc_status = get_hardcover_data(key, hc_targets, list(dict.fromkeys([*authors, *((aud_data or {}).get('authors_raw') or [])])),  # ABS and Audible authors (ABS sometimes lists the translator)
                                                              asin, meta.get('isbn'), ov.get('hardcover'),
@@ -6444,7 +6445,7 @@ def process_queue(work_queue, history, failed, recheck):
                     cc_ok, cc_why = hc_audible_crosscheck(hc_data, aud_data)
                     if not cc_ok and hc_data.get('source') == 'cache':  # the cached id came from earlier (wrong) data: forget it, search again
                         logging.info(f"        ♻️ Cached Hardcover '{hc_data.get('title')}' does not fit Audible '{aud_data.get('title_raw')}' ({cc_why}): cache dropped, searching again")
-                        HC_CACHE.pop(key, None)
+                        HC_CACHE.pop(key, None); hc_wrong = True
                         hc_data, hc_status = get_hardcover_data(key, hc_targets, list(dict.fromkeys([*authors, *((aud_data or {}).get('authors_raw') or [])])), asin, meta.get('isbn'),
                                                                 ov.get('hardcover'), use_cache=False, abs_series=hc_series(meta, aud_data),
                                                                 lang=lang, abs_title=search_title)
@@ -6469,7 +6470,7 @@ def process_queue(work_queue, history, failed, recheck):
                                      f"{' (another book of the author)' if other_ else ' (review list)'}")
                         if not other_: add_review(key, title, 'hardcover', hc_data.get('url'), f"Hardcover book differs from the Audible product ({cc_why})")
                         if HC_CACHE.get(key, {}).get('id') == hc_data.get('id'): HC_CACHE.pop(key, None)
-                        hc_data = None; LOOKUP_HITS['hardcover'] = None
+                        hc_data = None; LOOKUP_HITS['hardcover'] = None; hc_wrong = True
                     elif hc_data:
                         logging.info(f"        ✓ Hardcover cross-check against Audible: {cc_why}")
                         hc_learn_roles(hc_data)
@@ -6631,6 +6632,8 @@ def process_queue(work_queue, history, failed, recheck):
                 if 'lock_description' not in tags:
                     cur_desc = meta.get('description') or ''  # ABS sends null for empty descriptions
                     old_blocks = parse_rating_block(cur_desc)
+                    if hc_wrong and not hc_data and old_blocks.pop('Hardcover', None):  # 2026-11-27 The Remaining: Trust kept the rejected book's 4.5
+                        logging.info("        🧹 Old Hardcover rating removed: it belonged to another book")
                     # Empty description (apart from our rating block): use Audible's summary
                     summary = (aud_data or {}).get('summary') if not skip_meta else None
                     base_desc = cur_desc
