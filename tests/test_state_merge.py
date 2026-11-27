@@ -38,3 +38,16 @@ def test_other_files_are_written_whole():
         with open(p, 'w') as f: json.dump({'a': 1}, f)
         d = A.rw_json(p); d.pop('a'); A.rw_json(p, d)
         with open(p) as f: assert json.load(f) == {}
+
+
+def test_cover_state_is_merged_too():
+    # cover_state.json (item id -> cover token) is written by the import run and the web UI run alike
+    assert A.COVER_STATE_FILE in A._merged_files()
+    with tempfile.TemporaryDirectory() as tmp:
+        p = os.path.join(tmp, 'cover_state.json')
+        with open(p, 'w') as f: json.dump({'i1': 'A1'}, f)
+        A.COVER_STATE_FILE = p
+        mine = A.rw_json(p)
+        with open(p, 'w') as f: json.dump({'i1': 'A1', 'i2': 'B2'}, f)
+        mine['i3'] = 'C3'; A.rw_json(p, mine)
+        with open(p) as f: assert json.load(f) == {'i1': 'A1', 'i2': 'B2', 'i3': 'C3'}

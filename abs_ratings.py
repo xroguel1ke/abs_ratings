@@ -1633,7 +1633,7 @@ def redownload_clear(key, kinds=None):
 _LOADED = {}  # path -> {key: fingerprint} of a shared per-book state file as THIS process read it last
 
 def _merged_files():
-    return {RESULTS_FILE, SOURCE_STATE_FILE, HISTORY_FILE, FAILED_FILE, RECHECK_FILE, GR_CACHE_FILE, HC_CACHE_FILE}
+    return {RESULTS_FILE, SOURCE_STATE_FILE, HISTORY_FILE, FAILED_FILE, RECHECK_FILE, GR_CACHE_FILE, HC_CACHE_FILE, COVER_STATE_FILE}
 
 def _fp(v):
     try: return json.dumps(v, sort_keys=True, ensure_ascii=False, default=str)

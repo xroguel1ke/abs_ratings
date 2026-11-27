@@ -222,9 +222,11 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   - Chapters (2026-11-27 Moon Over Soho): drifting_marks in match_chapters - one own mark per Audible chapter (credits aside), all inner marks
     within 3 s of ONE line (slope 1 +- 0.3 %, a slow drift anchor_align misses) -> Audible's names on the file's own times; counts as proof
     of the recording (>= 8 marks). Library sweep: 0 false in 105750 cross pairs.
-  - Per-book state files (results, source_state, history, failed, recheck, Goodreads/Hardcover cache) are MERGED on write (rw_json,
+  - Per-book state files (results, source_state, history, failed, recheck, Goodreads/Hardcover cache, cover_state) are MERGED on write (rw_json,
     2026-11-27): only keys this process changed since it read the file; a second process (Goodreads background, a docker-exec run)
     no longer drops the other's books (Moon Over Soho + The Lost Plot lost their results).
+  - Authors (2026-11-27 Space Team): file tags name the narrator as author AND narrator; same recording (runtime to 2 min), Audible lists
+    him only as narrator -> authors = Audible's (no review entry). Existing books keep the review entry route.
   - Hardcover cross-check (2026-11-27 The Remaining 3 + 7): Hardcover book = another number of the same Audible series and fits only via an
     alternative title (main title < 0.95, has words Audible lacks) -> rejected; merged records list other volumes as alternative titles.
     The Hardcover search compares with the ABS series, else Audible's (hc_series: new imports have none in ABS yet).
