@@ -469,3 +469,5 @@ full run (test run first, apply selectively), done: merged into main 2026-11-09.
   when the other narrators already match ('Rebel': 'Stephen Kaplan' -> Audible + folder 'Steven Kaplan'); library check: only Rebel.
   Genres 2026-11-27: 'Humor & Satire' is a synonym of 'Humorous' - so normalize_genres splits the file tag 'Literature & Fiction, Humor & Satire'
   (Space 1969; the only glued entry of that kind in the library) into umbrella (dropped) + Humorous.
+  new_book_title_ok 2026-11-27: Audible's appended words without a number are the title (not marketing) when the folder names exactly
+  them ('Space Team (Unabridged)' + folder '08 - The Time Titan of Tomorrow' -> 'Space Team: The Time Titan of Tomorrow').

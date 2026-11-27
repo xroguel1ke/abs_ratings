@@ -1011,11 +1011,16 @@ def verified_recording(abs_dur, abs_narrators, abs_authors, aud):
     n = lambda xs: {re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in (xs or []) if x}
     return bool(abs_authors and (match_author(abs_authors, ', '.join(aud.get('authors_raw') or [])) or n(abs_authors) & n(aud.get('narrators_raw'))))
 
-def new_book_title_ok(abs_t, aud_t):
+def new_book_title_ok(abs_t, aud_t, folder_t=None):
     """A NEW book takes Audible's title of the verified recording - except when Audible only appends marketing words without a number
-    ('Beware of Chicken 2' + ': A Xianxia Cultivation Novel'); 'Konosuba' -> 'Konosuba: ..., Vol. 13' (the number) is taken."""
+    ('Beware of Chicken 2' + ': A Xianxia Cultivation Novel'); 'Konosuba' -> 'Konosuba: ..., Vol. 13' (the number) is taken.
+    import 2026-11-27 'Space Team (Unabridged)' + Audible 'Space Team: The Time Titan of Tomorrow': the appended words ARE the book's
+    title when the folder names exactly them ('08 - The Time Titan of Tomorrow {Phil Thron}') - the file tag held only the series name."""
     a, b = normalize_title_text(abs_t), normalize_title_text(aud_t)
-    return not (a and b.startswith(a + ' ') and not re.search(r'\d', b[len(a):]))
+    if a and b.startswith(a + ' ') and not re.search(r'\d', b[len(a):]):
+        f = normalize_title_text(folder_t or '')
+        return bool(f) and f != a and b[len(a):].strip() == f
+    return True
 
 def folder_book_title(item_data):
     """Title part of the book folder ('13 - The King's Secret - Saskia Maarleveld' -> 'The King's Secret'): a search fallback when the
@@ -5517,7 +5522,7 @@ def process_queue(work_queue, history, failed, recheck):
                         ser_ = meta.get('series') or []
                         same_lbl = _sl(cur_, ser_) and _sl(fmt_(aud_title), ser_) and _sl(cur_, ser_)[1] == _sl(fmt_(aud_title), ser_)[1]
                         # 'Defiance of the Fall 10' vs Audible 'Defiance of the Fall, Book 10': the series task chose the form, keep it
-                        new_t = cur_ if same_lbl or normalize_title_text(aud_title) == normalize_title_text(cur_) or not new_book_title_ok(cur_, aud_title) else fmt_(aud_title)
+                        new_t = cur_ if same_lbl or normalize_title_text(aud_title) == normalize_title_text(cur_) or not new_book_title_ok(cur_, aud_title, folder_book_title(item_data)) else fmt_(aud_title)
                         # new-books test 2026-11-16: the same title with file junk or in file-name case ('The Primal Hunter 3 [Audiobook] [2022]',
                         # 'GUARDS! GUARDS!', 'overlord_vol_3') - Audible's spelling
                         junk_ = strip_title_junk(cur_)[0] != cur_ or '_' in cur_ or (len(cur_) >= 6 and (cur_.isupper() or cur_.islower()))

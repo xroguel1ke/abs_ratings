@@ -19,6 +19,11 @@ def test_new_book_title_rule():
     assert A.new_book_title_ok('Konosuba', "Konosuba: God's Blessing on This Wonderful World!, Vol. 13")       # the volume number counts
     assert A.new_book_title_ok("Book 20 - Volume 07 - Part 06 - Memory's Flame - The Wandering Inn Series", "Memory's Flame")
     assert A.new_book_title_ok('Zero Enigma', "The King's Secret")
+    # import 2026-11-27: the file tag held only the series name; the folder names the appended words -> Audible's title
+    assert A.new_book_title_ok('Space Team', 'Space Team: The Time Titan of Tomorrow', 'The Time Titan of Tomorrow')
+    assert not A.new_book_title_ok('Space Team', 'Space Team: The Time Titan of Tomorrow', 'Space Team')
+    assert not A.new_book_title_ok('Space Team', 'Space Team: The Time Titan of Tomorrow', None)
+    assert not A.new_book_title_ok('Beware of Chicken 2', 'Beware of Chicken 2: A Xianxia Cultivation Novel', 'Beware of Chicken 2')
 
 
 def test_folder_book_title():
