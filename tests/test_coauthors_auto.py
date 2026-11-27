@@ -26,3 +26,11 @@ def test_co_author_is_no_review_entry_any_more():
 def test_obsolete_author_and_chapter_entries_leave_the_list():
     assert "({'authors'} if aud_data and aud_data.get('meta_raw') and not skip_meta else set())" in SRC
     assert "({'chapters'} if ch_done_ or len((item_data.get('media') or {}).get('chapters') or []) > 1 else set())" in SRC
+
+
+def test_narrator_in_author_field_with_narrator_set_gets_audibles_author():
+    # import 2026-11-27 (Space Team): tags 'Phil Thron' as author AND narrator, Audible: author Barry J. Hutchison, narrator Phil Thron
+    assert "and set(_nk(authors)) <= set(_nk(meta.get('narrators'))) and not set(_nk(authors)) & set(_nk(a_auth)):" in SRC
+    assert 'log_updates.append(f"Author field held the narrator: authors -> {a_auth}")' in SRC
+    # no review entry 'Audible names other authors' once the author field was corrected
+    assert "if not abs_updates.get('authors') and not match_author(authors, ', '.join(aud_auth))" in SRC

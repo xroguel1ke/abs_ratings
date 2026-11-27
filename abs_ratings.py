@@ -6197,6 +6197,14 @@ def process_queue(work_queue, history, failed, recheck):
                         else:
                             abs_updates['authors'] = [{'name': n} for n in a_auth]; abs_updates['narrators'] = list(a_narr)
                             log_updates.append(f"Author field held the narrator: authors -> {a_auth}, narrators -> {a_narr}")
+                    elif exact_rec and a_auth and a_narr and authors and meta.get('narrators') and set(_nk(authors)) <= set(_nk(a_narr)) \
+                            and set(_nk(authors)) <= set(_nk(meta.get('narrators'))) and not set(_nk(authors)) & set(_nk(a_auth)):
+                        # import 2026-11-27 (Space Team): file tags name the narrator as author AND as narrator - Audible lists him only as
+                        # narrator of exactly this recording (runtime to 2 min) and another person as author -> Audible's authors
+                        if 'lock_authors' in tags: logging.info("        🔒 Author field holds the narrator, but locked")
+                        else:
+                            abs_updates['authors'] = [{'name': n} for n in a_auth]
+                            log_updates.append(f"Author field held the narrator: authors -> {a_auth}")
                     elif exact_rec and len(authors) == 1 and len(a_auth) >= 2 and 'lock_authors' not in tags \
                             and ''.join(_nk(authors)) in (''.join(re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in a_auth),
                                                           ''.join(re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in reversed(a_auth))):
@@ -6315,7 +6323,7 @@ def process_queue(work_queue, history, failed, recheck):
                             # 'Taishi - Translator - translator') - every Audible author is there, the extra names are no author of this recording
                             abs_updates['authors'] = [{'name': next((a_ for a_ in authors if match_author([a_], b_)), b_)} for b_ in aud_auth]
                             log_updates.append(f"Authors: {authors} -> {[x['name'] for x in abs_updates['authors']]} (new book: names Audible does not list as authors of this recording)")
-                        if not match_author(authors, ', '.join(aud_auth)) and not any(re.search(r'[^\x00-ɏ]', a_) for a_ in aud_auth) \
+                        if not abs_updates.get('authors') and not match_author(authors, ', '.join(aud_auth)) and not any(re.search(r'[^\x00-ɏ]', a_) for a_ in aud_auth) \
                                 and 'lock_authors' not in tags and same_recording(abs_dur, meta.get('narrators'), aud_data):
                             # same recording (runtime 2 min + narrator), but NO author in common ('War of the Spider Queen' books by Thomas M.
                             # Reid & co. listed under the series editor R.A. Salvatore): a person is never replaced automatically -> review list
