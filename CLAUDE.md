@@ -217,6 +217,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   - ASIN not released yet (release date in the future, re-release): strict search for the released edition, else its ratings.
   - Series number conflict only when NO candidate entry of the same series agrees ('Dune' #1 + 'The Dune Sequence' #12, both key 'dune').
   - Hardcover cross-check: both titles carry a volume number and share none -> another volume (rejected).
+  - Unreleased re-release (2026-11-27 The Hanging Tree, Tantor 2027): when the strict search confirms the unreleased ASIN as this recording,
+    its metadata stays and count/overall/performance/story come from the released edition with the same narrator (LAST_SEARCH related).
   - Chapters (2026-11-27 Moon Over Soho): drifting_marks in match_chapters - one own mark per Audible chapter (credits aside), all inner marks
     within 3 s of ONE line (slope 1 +- 0.3 %, a slow drift anchor_align misses) -> Audible's names on the file's own times; counts as proof
     of the recording (>= 8 marks). Library sweep: 0 false in 105750 cross pairs.

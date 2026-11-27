@@ -5291,6 +5291,7 @@ def process_queue(work_queue, history, failed, recheck):
                 else: new_lang_detected = None
                 
                 should_search = False
+                unreleased_ = False  # the ASIN is a re-release that is not out yet (no ratings)
                 check_lang = new_lang_detected if new_lang_detected else lang
 
                 # Language check: ABS and Audible disagree -> who is right?
@@ -5375,7 +5376,7 @@ def process_queue(work_queue, history, failed, recheck):
                     # a re-release that is not out yet (Dune B0HQ4V4BGY, 2026-11-24, library 2026-11-09): the released edition has the ratings.
                     # Strict search: the same recording would replace the ASIN, else the other edition's ratings are used (nothing else changes)
                     logging.info(f"      -> 🆕 ASIN is not released yet ({aud_data['meta_raw']['releaseDate']}): looking for the released edition...")
-                    should_search, strict_search = True, True
+                    should_search, strict_search, unreleased_ = True, True, True
                 elif int(aud_data.get('count', 0)) == 0 and aud_data.get('page_ok'):
                     logging.info(f"      -> 🆕 Product page exists on {aud_data.get('domain')}, but no ratings yet. No replacement search, re-check in {NO_RATINGS_RECHECK_DAYS} days.")
                 elif int(aud_data.get('count', 0)) == 0:
@@ -5532,6 +5533,14 @@ def process_queue(work_queue, history, failed, recheck):
                         logging.warning(f"        ⛔ Other-edition candidate '{rel.get('title_raw')}' does not fit '{title}' (title/author): not used")
                         rel = None
                     if rel and not book_lang_allowed((rel.get('meta_raw') or {}).get('language')): rel = None
+                    if found and found == asin and unreleased_ and rel and aud_data and int(aud_data.get('count', 0)) == 0 and rel.get('asin') != asin \
+                            and narr_keys(rel.get('narrators_raw')) & narr_keys(aud_data.get('narrators_raw')):
+                        # 2026-11-27 The Hanging Tree: the strict search confirmed the unreleased re-release (Tantor 2027) as THIS recording, so its
+                        # metadata stays; the ratings come from the released edition with the same narrator (DAW 2017, 3266 ratings)
+                        aud_data = dict(aud_data, **{k_: rel.get(k_) for k_ in ('count', 'overall', 'performance', 'story')}, ratings_from=rel.get('asin'))
+                        logging.info(f"        📎 Ratings of the released edition [{rel.get('asin')}] on {rel.get('domain')} (same narrator, runtime "
+                                     f"{format_time(rel.get('runtime_sec') or 0)} vs ABS {format_time(abs_dur or 0)}); metadata of {asin} (not released yet) as before")
+                        stats['other_edition'] += 1
                     if not found and rel and not search_only and (not aud_data or int(aud_data.get('count', 0)) == 0 or lang_conflict_pre):
                         aud_data = dict(rel, related_edition=True)
                         skip_meta = True
