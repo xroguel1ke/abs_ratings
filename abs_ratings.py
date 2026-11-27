@@ -6387,7 +6387,8 @@ def process_queue(work_queue, history, failed, recheck):
                                 new_chs, why_c = None, f"Audible's chapters cover {aud_len_ / 60:.0f} of {abs_dur / 60:.0f} min"
                             if new_chs and not cover_verified and not ((an_ := anchor_align(abs_chs, aud_ch[0], abs_dur, 0.95)) and an_[2] >= 7):
                                 new_chs, why_c = None, 'recording not verified and the chapter marks do not prove it'
-                            if new_chs and poor == 'only numbered chapters without names' and all(RE_GENERIC_CH.match(c['title'] or '') for c in new_chs):
+                            if new_chs and poor == 'only numbered chapters without names' and all(RE_GENERIC_CH.match(c['title'] or '') for c in new_chs) \
+                                    and not __import__('chapter_audio').coarse_parts(abs_chs, len(new_chs), abs_dur):  # 1-h file parts: Audible's finer list
                                 new_chs, why_c = None, "Audible's chapters have no names either"  # 'Chapter 1' for 'Chapter 1': nothing gained
                             if new_chs and why_c.startswith('the file has no chapters, length within') and 'lock_chapters' not in tags \
                                     and audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch, verified=cover_verified)[0]:

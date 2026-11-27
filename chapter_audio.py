@@ -29,6 +29,14 @@ def numbered_parts(chs):
     return len(stripped) == 1 and '#' in next(iter(stripped)) and bool(re.sub(r'[#\W]', '', next(iter(stripped))))
 
 
+def coarse_parts(abs_chs, n_new, dur):
+    """The file's numbered marks are download parts, not chapters: at least 30 min each on average and Audible lists at least twice as
+    many chapters (2026-11-27 Wings of Fire 1 + 7: 8 / 7 parts of ~1 h, Audible 'Chapter 1-40' / '1-28') - Audible's numbered list is
+    the better one although it has no names either."""
+    n = len(abs_chs or [])
+    return n >= 2 and bool(dur) and dur / n >= 1800 and n_new >= 2 * n
+
+
 def file_print(item):
     """Fingerprint of a book's audio (size of its audio files + length) from an ABS item, listing or full: another value = the file was
     replaced since its chapters were checked (2026-11-26: the chain's in-place swaps left the OLD chapter times in ABS, up to 6 min off
@@ -539,6 +547,8 @@ def decide(abs_chs, dur, aud, sil):
     if share < 0.6:  # the own marks are split points, not chapters: Audible's chapters on the pauses are better
         return new, why + f"; the file's own {len(abs_chs)} marks: only {share:.0%} at a pause"
     if generic and all(RE_GENERIC.match(c['title'] or '') for c in new):
+        if coarse_parts(abs_chs, len(new), dur):  # 'The Dragonet Prophecy - Part 1-8' (1 h each) vs Audible's 'Chapter 1-40'
+            return new, why + f"; the file's own {len(abs_chs)} marks are file parts ({dur / len(abs_chs) / 60:.0f} min each): Audible's finer numbered list"
         return None, "the file's own marks sit at pauses and Audible's chapters have no names either"
     if generic and abs(len(abs_chs) - len(new)) <= max(1, len(new) // 10):
         # the same marks, only numbered: Audible's names on the file's OWN times (they already sit at the pauses)

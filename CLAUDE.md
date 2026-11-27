@@ -395,6 +395,9 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     nothing about it (other intro/outro) - lines through a pause near one of the first 3 and one of the last 3 chapters, least-squares
     refit, chance x number of lines tried (Bonferroni) <= 1e-12, ambiguity check at mid-book. 30 of 145 cascade failures gained
     (Drizzt, Wizard and Glass, Illuminae, Pillars of the Earth ...), 0 false in 10979 cross pairs (other book within 3 % length).
+    2026-11-27 coarse_parts(): numbered own marks >= 30 min each on average and Audible lists >= 2x as many chapters = download parts -
+    Audible's numbered list is taken although it has no names either (decide + abs_ratings 'only numbered' path; Wings of Fire 1 + 7:
+    8 / 7 parts of ~1 h vs 'Chapter 1-40' / '1-28'). Own numbered chapters about as many as Audible's: still kept.
     2026-11-26 (user): a NEW book (new_book) with not-poor own marks that do not sit at Audible's starts (chapter_check.classify rule:
     anchor_align miss, Audible >= 4 chapters) gets audio_chapters() in the normal run - the scan task no longer needed for new imports.
     Scan page: ONE 'Authors' box = AUTHOR_NORMALIZE + REMOVE_ROLE_CREDITS + REMOVE_EMPTY_AUTHORS as set in the settings (all three if none).

@@ -224,6 +224,22 @@ def test_drift_is_the_last_step_of_both_cascades():
         CA.silence_align, CA.piecewise_align, CA.prop_align = saved
 
 
+def test_hour_long_file_parts_get_audibles_finer_numbered_list():
+    # 2026-11-27 Wings of Fire 1: 8 marks 'The Dragonet Prophecy - Part N' (~1 h each), Audible 'Chapter 1-40' (no names either)
+    chs, total, rnd = book(n=40, seed=8)
+    chs = [(s, l, f"Chapter {i + 1}") for i, (s, l, _) in enumerate(chs)]
+    sil = pauses(chs, total, rnd)
+    starts = [chs[i][0] for i in range(0, 40, 5)]
+    own = [{'start': s, 'end': (starts[k + 1] if k + 1 < len(starts) else total), 'title': f"The Dragonet Prophecy - Part {k + 1}"} for k, s in enumerate(starts)]
+    new, why = CA.decide(own, total, (chs, None, None), sil)
+    assert new and len(new) == 40 and 'file parts' in why, why
+    # the file's own numbered CHAPTERS (about as many as Audible's): nothing gained, kept
+    own2 = [{'start': c[0], 'end': c[0] + c[1], 'title': f"Chapter {i + 1}"} for i, c in enumerate(chs[:-12])]
+    own2[-1]['end'] = total
+    assert CA.decide(own2, total, (chs, None, None), sil)[0] is None
+    assert CA.coarse_parts(own, 40, total) and not CA.coarse_parts(own, 15, total) and not CA.coarse_parts(own, 40, 8 * 1500)
+
+
 if __name__ == '__main__':
     n = 0
     for name, fn in list(globals().items()):
