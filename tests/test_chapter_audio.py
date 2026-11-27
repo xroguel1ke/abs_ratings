@@ -192,6 +192,38 @@ def test_parse_silences():
     assert CA.parse_silences(lines) == [(12.5, 15.9)]
 
 
+def test_free_drift_line_is_found_and_never_fits_another_book():
+    # 2026-11-27: a release 0.24 % slower with a different outro - the file's length says nothing about the drift (Pillars of the Earth,
+    # Drizzt, Wizard and Glass ...: 30 books the other aligners missed)
+    for seed in (1, 2, 3):
+        chs, total, rnd = book(n=30, seed=seed)
+        sil = pauses(chs, total, rnd, offset=31.0, rate=0.0024)
+        dur = total + 600
+        al = CA.drift_align(chs, dur, sil)
+        assert al and al['hit'] >= 27 and abs(al['rate'] - 0.0024) < 0.0002 and abs(al['offset'] - 31) < 2, al
+        assert max(abs(x - (s * 1.0024 + 31)) for x, (s, _, _) in zip(al['starts'][1:], chs[1:])) < 1.5
+        other, _, _ = book(n=30, seed=seed + 50)
+        assert CA.drift_align(other, dur, sil) is None, seed
+        rnd2 = __import__('random').Random(seed)
+        assert CA.drift_align(chs, dur, pauses([], total, rnd2, rate=0.0024)) is None  # sentence pauses only
+
+
+def test_drift_is_the_last_step_of_both_cascades():
+    chs, total, rnd = book(n=30, seed=4)
+    sil = pauses(chs, total, rnd, offset=31.0, rate=0.0024)
+    dur = total + 600
+    saved = CA.silence_align, CA.piecewise_align, CA.prop_align
+    CA.silence_align = CA.piecewise_align = CA.prop_align = lambda *a, **k: None
+    try:
+        new, why = CA.decide([], dur, (chs, None, None), sil)
+        assert new and len(new) == len(chs) and 'drift +0.2' in why, why
+        own = [{'start': s, 'end': s + l, 'title': t} for s, l, t in chs]
+        new2, why2 = CA.realign_own(own, dur, sil)
+        assert new2 and len(new2) == len(chs), why2
+    finally:
+        CA.silence_align, CA.piecewise_align, CA.prop_align = saved
+
+
 if __name__ == '__main__':
     n = 0
     for name, fn in list(globals().items()):

@@ -315,6 +315,79 @@ def prop_align(chs, dur, sil, tolf=0.06, need=0.85, max_chance=1e-12, min_win=20
     return best
 
 
+def drift_align(chs, dur, sil, need=0.8, max_chance=1e-12, max_rate=0.003):
+    """Audible's starts on the pauses with a free slow drift (file time = s * (1 + r) + o, |r| <= 0.3 %): lines through a pause near one
+    of the first 3 chapters and one near one of the last 3, refit by least squares. Every line tried counts against the chance (Bonferroni).
+    For files whose length says nothing about the drift (other intro/outro cut, 2026-11-27: 30 of 145 books the other aligners missed -
+    Drizzt books, Wizard and Glass, Illuminae, The Pillars of the Earth; 0 false fits in 10979 pairs of other books within 3 % length)."""
+    inner = [c[0] for c in chs[1:]]
+    n = len(inner)
+    if n < 6 or not sil or not dur: return None
+    total = chs[-1][0] + chs[-1][1]
+    lens = sorted(e - s for s, e in sil)
+    q = lambda f: lens[min(len(lens) - 1, int(len(lens) * f))]
+    best = None
+    for min_pause in sorted({1.0, q(0.95), q(0.98), q(0.99)}):
+        marks = _marks(sil, min_pause)
+        if len(marks) < n * need: continue
+        density = len(marks) / dur
+        def near(x, w):
+            lo, hi = bisect.bisect_left(marks, x - w), bisect.bisect_right(marks, x + w)
+            return marks[lo:hi]
+        def score(o, r, tol):
+            hit, pos, pairs = 0, [], []
+            for s in inner:
+                t = s * (1 + r) + o
+                i = bisect.bisect_left(marks, t)
+                d, j = min(((abs(marks[j] - t), j) for j in (i - 1, i) if 0 <= j < len(marks)), default=(1e9, -1))
+                if d <= tol: hit += 1; pos.append(marks[j]); pairs.append((s, marks[j]))
+                else: pos.append(None)
+            return hit, pos, pairs
+        w0 = 120.0
+        w1 = abs(dur - total) + max_rate * total + 120
+        lines = set()
+        for a in inner[:3]:
+            for ma in near(a, w0):
+                for b in inner[-3:]:
+                    if b - a < 0.5 * total: continue
+                    for mb in near(b, w1):
+                        r = (mb - ma) / (b - a) - 1
+                        if abs(r) <= max_rate: lines.add((round(r, 7), round(ma - a * (1 + r), 1)))
+        if not lines: continue
+        for tol in (1.0, 2.0):
+            p_rand = min(1.0, density * 2 * tol)
+            scored = []
+            for r, o in lines:
+                hit, pos, pairs = score(o, r, tol)
+                for _ in range(3):
+                    if len(pairs) < 3: break
+                    mx = sum(a for a, _ in pairs) / len(pairs); my = sum(b for _, b in pairs) / len(pairs)
+                    vx = sum((a - mx) ** 2 for a, _ in pairs)
+                    if vx <= 0: break
+                    sl = sum((a - mx) * (b - my) for a, b in pairs) / vx
+                    if abs(sl - 1) > max_rate: break
+                    r2, o2 = sl - 1, my - sl * mx
+                    h2, p2, pr2 = score(o2, r2, tol)
+                    if h2 <= hit: break
+                    hit, pos, pairs, o, r = h2, p2, pr2, o2, r2
+                scored.append((hit, o, r, pos))
+            scored.sort(key=lambda z: -z[0])
+            hit, o, r, pos = scored[0]
+            chance = min(1.0, _tail(n, hit, p_rand)) * len(lines)
+            if hit < need * n or chance > max_chance: continue
+            mid = inner[n // 2]
+            if any(abs((mid * (1 + r2) + o2) - (mid * (1 + r) + o)) > 10 and h2 >= 0.5 * hit and _tail(n, h2, p_rand) * len(lines) <= 1e-6
+                   for h2, o2, r2, _ in scored[1:]): continue
+            if best is None or chance < best['chance']:
+                starts = [0.0]
+                for p, s in zip(pos, inner):
+                    starts.append(p if p is not None and p > starts[-1] + 0.5 else s * (1 + r) + o)
+                if any(b <= a for a, b in zip(starts, starts[1:])): continue
+                best = {'starts': [round(x, 3) for x in starts], 'hit': hit, 'total': n, 'offset': round(o, 2), 'rate': round(r, 6),
+                        'chance': chance, 'tol': tol, 'min_pause': round(min_pause, 2), 'lines': len(lines)}
+    return best
+
+
 def refine(chs, al, sil, tol=2.0):
     """Exact positions after an accepted alignment. It is the SAME recording, so Audible's mark sits inside the same pause of this file -
     but not always at the same depth (sometimes the middle of the pause, sometimes near its end): snapping every chapter to one fixed
@@ -384,7 +457,7 @@ def realign_own(abs_chs, dur, sil):
     sat at 12 % of its pauses; Audible's list fits neither)."""
     ref = [(float(c.get('start') or 0), max(0.0, float(c.get('end') or 0) - float(c.get('start') or 0)), c.get('title')) for c in abs_chs or []]
     if len(ref) < 4: return None, 'too few own chapters'
-    al = silence_align(ref, dur, sil) or piecewise_align(ref, dur, sil) or prop_align(ref, dur, sil)
+    al = silence_align(ref, dur, sil) or piecewise_align(ref, dur, sil) or prop_align(ref, dur, sil) or drift_align(ref, dur, sil)
     if not al: return None, "the old chapters do not line up with the new file's pauses either"
     return build(ref, al['starts'], dur), f"the old chapters moved onto the new file's pauses ({al['hit']}/{al['total']}, chance {al['chance']:.0e})"
 
@@ -448,11 +521,12 @@ def decide(abs_chs, dur, aud, sil):
     then Audible's (aligned) chapters are better."""
     chs = aud[0] if aud else None
     if not chs or len(chs) < 4: return None, "Audible lists too few chapters"
-    al = silence_align(chs, dur, sil) or piecewise_align(chs, dur, sil) or prop_align(chs, dur, sil)
+    al = silence_align(chs, dur, sil) or piecewise_align(chs, dur, sil) or prop_align(chs, dur, sil) or drift_align(chs, dur, sil)
     if not al: return None, "Audible's chapters do not line up with the pauses of the file"
     new = build(chs, al['starts'], dur)
     seg = (', offsets ' + ' / '.join(f"{o:+.0f} s" for _, _, o in al['segments'])) if al.get('segments') else \
-        (f", chapter by chapter on the longest pauses, file {1 + al['rate']:.3f} x Audible's length" if al.get('proportional') else f", offset {al['offset']:+.1f} s")
+        (f", chapter by chapter on the longest pauses, file {1 + al['rate']:.3f} x Audible's length" if al.get('proportional') else
+         f", offset {al['offset']:+.1f} s, drift {al['rate'] * 100:+.3f} %" if al.get('lines') else f", offset {al['offset']:+.1f} s")
     why = f"{al['hit']}/{al['total']} chapter starts on the file's pauses ({seg[2:]}, chance {al['chance']:.0e})"
     if len(abs_chs or []) <= 1: return new, why
     past = sum(float(c.get('start') or 0) >= dur - 1 for c in abs_chs)
