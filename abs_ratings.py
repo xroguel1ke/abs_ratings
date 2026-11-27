@@ -1603,12 +1603,43 @@ def redownload_clear(key, kinds=None):
         if key in cur and (kinds is None or cur[key].get('kind') in kinds):
             cur.pop(key); rw_json(REDOWNLOAD_FILE, cur)
 
+_LOADED = {}  # path -> {key: fingerprint} of a shared per-book state file as THIS process read it last
+
+def _merged_files():
+    return {RESULTS_FILE, SOURCE_STATE_FILE, HISTORY_FILE, FAILED_FILE, RECHECK_FILE, GR_CACHE_FILE, HC_CACHE_FILE}
+
+def _fp(v):
+    try: return json.dumps(v, sort_keys=True, ensure_ascii=False, default=str)
+    except (TypeError, ValueError, RuntimeError): return None
+
+def _merge_onto_file(path, data):
+    """2026-11-27 (Moon Over Soho, The Lost Plot): two processes - a run started outside the web UI and the run of the import, or the
+    Goodreads background mode - each dumped their WHOLE in-memory copy; the later writer dropped the other's new books. Per-book state
+    files are now merged: only the keys THIS process added, changed or removed since it read the file go onto the file as it is now,
+    and the other process's changes come into our copy. Caller holds IO_LOCK."""
+    base = _LOADED.get(path)
+    if base is None or not isinstance(data, dict) or not os.path.exists(path): return data
+    try:
+        with open(path, 'r', encoding='utf-8') as f: cur = json.load(f)
+    except Exception: return data
+    if not isinstance(cur, dict): return data
+    ours = {k for k, v in data.items() if base.get(k, '\0') != _fp(v)}
+    for k in ours: cur[k] = data[k]
+    for k in [k for k in base if k not in data]: cur.pop(k, None)
+    for k, v in cur.items():  # the other process's books into our copy (a key we did not touch)
+        if k not in ours: data[k] = v
+    for k in [k for k in data if k not in cur]: data.pop(k, None)
+    return cur
+
 def rw_json(path, data=None):
     try:
         if data is None:
             if not os.path.exists(path): return {}
             try:
-                with open(path, 'r', encoding='utf-8') as f: return json.load(f)
+                with open(path, 'r', encoding='utf-8') as f: out_ = json.load(f)
+                if isinstance(out_, dict) and path in _merged_files():
+                    with IO_LOCK: _LOADED[path] = {k: _fp(v) for k, v in out_.items()}
+                return out_
             except Exception as e:
                 # an unreadable state file counts as empty (as before), but it is no longer lost silently: the next write would
                 # replace it, so a copy is kept and the problem is logged (module logger: never configures logging before main())
@@ -1625,8 +1656,10 @@ def rw_json(path, data=None):
         else:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with IO_LOCK:  # parallel books: one writer at a time, and a dict changed by another thread is dumped again
+                merged = path in _merged_files() and isinstance(data, dict)
+                out_ = _merge_onto_file(path, data) if merged else data
                 for _try in range(5):
-                    try: payload = json.dumps(data, indent=4, ensure_ascii=False); break
+                    try: payload = json.dumps(out_, indent=4, ensure_ascii=False); break
                     except RuntimeError: time.sleep(0.01)
                 else: return None
                 tmp_path = path + f".tmp{threading.get_ident()}"
@@ -1635,6 +1668,7 @@ def rw_json(path, data=None):
                     f.flush()
                     os.fsync(f.fileno())
                 os.replace(tmp_path, path)
+                if merged: _LOADED[path] = {k: _fp(v) for k, v in out_.items()}
     except Exception as e:
         if data is not None: logging.getLogger('abs_ratings').warning(f"⚠️ {os.path.basename(path)} not written ({type(e).__name__}: {e})")
         return {} if data is None else None
