@@ -120,3 +120,19 @@ if __name__ == '__main__':
     for name, fn in sorted(globals().items()):
         if name.startswith('test_') and callable(fn): fn(); n += 1; print('ok', name)
     print(n, 'tests passed')
+
+
+def test_crosscheck_merged_record_of_another_number_is_dropped():
+    # 2026-11-27 The Remaining 3 + 7: Hardcover's 'The Remaining Allegiance' (#1) lists the titles of books 1-5 as alternative titles
+    hc = {'title': 'The Remaining Allegiance', 'authors': ['D. J. Molles'], 'source': 'search', 'series': [('The Remaining', 1.0)],
+          'alts': ['Remaining', 'Fractured', 'The Remaining', 'The Remaining: Refugees', 'The Remaining Allegiance', 'Aftermath']}
+    aud = lambda t, n: {'title_raw': t, 'authors_raw': ['D. J. Molles'], 'meta_raw': {'language': 'english', 'series': [{'name': 'The Remaining', 'part': n}]}}
+    assert not A.hc_audible_crosscheck(hc, aud('The Remaining: Refugees', '3'))[0]
+    assert not A.hc_audible_crosscheck(hc, aud('The Remaining: Trust', '7'))[0]
+    assert A.hc_audible_crosscheck(hc, aud('The Remaining', '1'))[0], 'its own number stays'
+    assert A.hc_audible_crosscheck({**hc, 'title': 'The Remaining: Trust', 'alts': []}, aud('The Remaining: Trust', '7'))[0], 'the main title decides over a numbering difference'
+    revan = {'title': 'The Old Republic: Revan', 'authors': ['D K'], 'source': 'search', 'series': [('The Old Republic', 3.0)], 'alts': ['Star Wars: The Old Republic: Revan']}
+    assert A.hc_audible_crosscheck(revan, {'title_raw': 'Star Wars: The Old Republic: Revan', 'authors_raw': ['D K'],
+                                           'meta_raw': {'language': 'english', 'series': [{'name': 'The Old Republic', 'part': '1'}]}})[0], 'only the numbering differs'
+    assert A.hc_series({'series': []}, aud('X', '3')) == [('The Remaining', '3')], 'no ABS series yet: Audible says which number it is'
+    assert A.hc_series({'series': [{'name': 'Own', 'sequence': '2'}]}, aud('X', '3')) == [('Own', '2')]

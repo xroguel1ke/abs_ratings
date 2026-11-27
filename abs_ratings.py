@@ -3498,6 +3498,12 @@ def hc_fetch_gr_ids(hc_id):
     except SourceBlockedException: raise
     except Exception: return []
 
+def hc_series(meta, aud):
+    """Series pairs the Hardcover hit is checked against: the ABS series, else Audible's (a new import often has none in ABS yet -
+    2026-11-26 'The Remaining: Refugees' (#3) took Hardcover's book #1 because nothing said which number it is)."""
+    own = [(x.get('name'), x.get('sequence')) for x in (meta.get('series') or []) if x.get('name')]
+    return own or [(x.get('name'), x.get('part')) for x in ((aud or {}).get('meta_raw') or {}).get('series') or [] if isinstance(x, dict) and x.get('name')]
+
 def hc_audible_crosscheck(hc, aud):
     """Is the Hardcover book the same book as the Audible product? Returns (ok, why). Title similar AND author matching; both missing = mismatch."""
     t = max(title_similarity(clean_title(hc.get('title') or ''), clean_title(aud.get('title_raw') or '')),
@@ -3519,6 +3525,14 @@ def hc_audible_crosscheck(hc, aud):
             m_ = re.search(r'\d+(?:\.\d+)?', str(cs.get('part') or ''))
             if sn and sp is not None and m_ and float(m_.group(0)) == float(sp) and title_similarity(sn, cs.get('name') or '') >= 0.85: same_series = True
     if same_series: why += ', same series and number'
+    # 2026-11-27 The Remaining 3 + 7: Hardcover's merged record 'The Remaining Allegiance' (#1, alternative titles of books 1-5) fit
+    # only via an alternative title or the bare series name - Hardcover's book is ANOTHER number of the same Audible series. Not when
+    # Hardcover's main title lies inside Audible's: then only the numbering differs ('The Old Republic: Revan' #3 = Audible #1 'Legends')
+    other_n = sorted({str(sp) for sn, sp in hc.get('series') or [] for cs in (aud.get('meta_raw') or {}).get('series') or []
+                      if sn and sp is not None and (m_ := re.search(r'\d+(?:\.\d+)?', str(cs.get('part') or '')))
+                      and float(m_.group(0)) != float(sp) and title_similarity(sn, cs.get('name') or '') >= 0.85})
+    if other_n and not same_series and not tied and not non_english and t < 0.95 and not (hw and aw and hw <= aw):
+        return False, why + f", other number of the same series on Hardcover (#{'/'.join(other_n)})"
     # another volume (2026-11-09, library: 'Throne Hunters 4' cached as 'Throne Hunters: Throne Hunters, Book 1'): both titles carry a
     # volume number and they share none -> not the same book, whatever the title score says (containment counts 'Throne Hunters')
     va, vh = extract_volume(aud.get('title_raw') or ''), extract_volume(hc.get('title') or '')
@@ -6421,7 +6435,7 @@ def process_queue(work_queue, history, failed, recheck):
                     hc_data, hc_status = get_hardcover_data(key, hc_targets, list(dict.fromkeys([*authors, *((aud_data or {}).get('authors_raw') or [])])),  # ABS and Audible authors (ABS sometimes lists the translator)
                                                              asin, meta.get('isbn'), ov.get('hardcover'),
                                                             use_cache=not item.get('_manual_trigger'),
-                                                            abs_series=[(x.get('name'), x.get('sequence')) for x in (meta.get('series') or [])], lang=lang, abs_title=search_title)
+                                                            abs_series=hc_series(meta, aud_data), lang=lang, abs_title=search_title)
                 else:
                     hc_data, hc_status = None, 'fresh'
                     logging.info(f"      -> ⏭️ Hardcover not asked: {source_note(key, 'hardcover')}")
@@ -6432,7 +6446,7 @@ def process_queue(work_queue, history, failed, recheck):
                         logging.info(f"        ♻️ Cached Hardcover '{hc_data.get('title')}' does not fit Audible '{aud_data.get('title_raw')}' ({cc_why}): cache dropped, searching again")
                         HC_CACHE.pop(key, None)
                         hc_data, hc_status = get_hardcover_data(key, hc_targets, list(dict.fromkeys([*authors, *((aud_data or {}).get('authors_raw') or [])])), asin, meta.get('isbn'),
-                                                                ov.get('hardcover'), use_cache=False, abs_series=[(x.get('name'), x.get('sequence')) for x in (meta.get('series') or [])],
+                                                                ov.get('hardcover'), use_cache=False, abs_series=hc_series(meta, aud_data),
                                                                 lang=lang, abs_title=search_title)
                         if hc_data and hc_data.get('id') and not DRY_RUN: HC_CACHE[key] = {'id': hc_data['id'], 'slug': hc_data.get('slug')}
                         cc_ok, cc_why = hc_audible_crosscheck(hc_data, aud_data) if hc_data else (True, '')
@@ -6442,7 +6456,7 @@ def process_queue(work_queue, history, failed, recheck):
                         logging.info(f"        ♻️ Hardcover links this {hc_data['source']} to '{hc_data.get('title')}', not Audible '{aud_data.get('title_raw')}' ({cc_why}): searching by title")
                         HC_CACHE.pop(key, None)
                         hc_data, hc_status = get_hardcover_data(key, hc_targets, list(dict.fromkeys([*authors, *((aud_data or {}).get('authors_raw') or [])])), None, None,
-                                                                None, use_cache=False, abs_series=[(x.get('name'), x.get('sequence')) for x in (meta.get('series') or [])],
+                                                                None, use_cache=False, abs_series=hc_series(meta, aud_data),
                                                                 lang=lang, abs_title=search_title)
                         if hc_data and hc_data.get('id') and not DRY_RUN: HC_CACHE[key] = {'id': hc_data['id'], 'slug': hc_data.get('slug')}
                         cc_ok, cc_why = hc_audible_crosscheck(hc_data, aud_data) if hc_data else (True, '')

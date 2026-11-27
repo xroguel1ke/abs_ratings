@@ -217,6 +217,9 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   - ASIN not released yet (release date in the future, re-release): strict search for the released edition, else its ratings.
   - Series number conflict only when NO candidate entry of the same series agrees ('Dune' #1 + 'The Dune Sequence' #12, both key 'dune').
   - Hardcover cross-check: both titles carry a volume number and share none -> another volume (rejected).
+  - Hardcover cross-check (2026-11-27 The Remaining 3 + 7): Hardcover book = another number of the same Audible series and fits only via an
+    alternative title (main title < 0.95, has words Audible lacks) -> rejected; merged records list other volumes as alternative titles.
+    The Hardcover search compares with the ABS series, else Audible's (hc_series: new imports have none in ABS yet).
   - Our own later writes (apply, symbol rewrite, library task; journal ts) are no 'manual update' (the symbol rewrite would have
     re-queued all 1917 books). A value the user UNDID is never written again by the script (`_UNDONE_VAL`), unless the user applies it.
   - Undo skips a field that changed again since (newer run / by hand) - `abs_undo.py --force` to override. abs_apply: the same field
