@@ -72,3 +72,24 @@ def test_small_difference_without_chapters_takes_audibles():
     assert new and [c['start'] for c in new] == [0.0, 40.0, 3140.0] and new[-1]['end'] == 3150.0, why
     new, why = A.match_chapters([], 3141.0, short)  # -59 s: the last start (3140) lies past the end of the file and is dropped
     assert new and len(new) == 2 and new[-1]["end"] == 3141.0, why
+
+
+def test_drifting_numbered_marks_get_audibles_names():
+    # 2026-11-27 Moon Over Soho: 14 numbered marks = Audible's 14 chapters, drifting -7 s ... +12 s (no constant offset)
+    lens = [2599, 2487, 2598, 2525, 2808, 3134, 2718, 2693, 3330, 2997, 2916, 2632, 1703, 812]
+    starts, t = [], 47.0
+    for L in lens: starts.append(t); t += L
+    aud = ([(0.0, 47.0, 'Opening Credits')] + [(s_, L, f'Chapter {i + 1} - Name {i + 1}') for i, (s_, L) in enumerate(zip(starts, lens))]
+           + [(t, 30.0, 'End Credits')], 0, 0)
+    dur = t + 30 + 8
+    own_starts = [0.0] + [s_ * 1.00058 - 8.3 + (0.9 if i % 3 == 0 else -0.7) for i, s_ in enumerate(starts[1:])]
+    marks = [{'start': s_, 'end': (own_starts[i + 1] if i + 1 < len(own_starts) else dur), 'title': f'Moon Over Soho Chapter {i + 1:02d}'} for i, s_ in enumerate(own_starts)]
+    new, why = A.match_chapters(marks, dur, aud)
+    assert new and why.startswith(A.DRIFT_MARKS_WHY), why
+    assert [c['start'] for c in new] == own_starts and new[0]['title'] == 'Chapter 1 - Name 1' and new[-1]['title'] == 'Chapter 14 - Name 14'
+    other = [dict(m, start=m['start'] + (60 if i == 6 else 0)) for i, m in enumerate(marks)]
+    r = A.drifting_marks(other, aud[0], dur)
+    assert r is None, 'one mark a minute off the line: not the same structure'
+    assert A.drifting_marks(marks[:-1], aud[0], dur) is None, 'one mark fewer than Audible chapters: no one-to-one pairing'
+    swapped = [dict(m, title=f'Moon Over Soho Chapter {n:02d}') for m, n in zip(marks, [1, 2, 4, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])]
+    assert A.drifting_marks(swapped, aud[0], dur) is None, 'numbered marks out of order'

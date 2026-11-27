@@ -1482,6 +1482,7 @@ def match_chapters(abs_chs, dur, aud):
         starts = [0.0] + [c[0] + off for c in chs[1:]]
         keep = [i for i, st in enumerate(starts) if st < dur - 1]
         return mk([starts[i] for i in keep], [titles[i] for i in keep]), f"the file's chapter marks sit at Audible's chapter starts ({an[1]}/{an[2]}, offset {off:+.1f} s)"
+    if dm := drifting_marks(abs_chs, chs, dur): return dm
     if abs(diff) > 120: return None, f"length differs by {diff:+.0f} s"
     if abs_chs and len(abs_chs) == len(chs) and len(chs) >= 3 and max(float(c.get('end') or 0) for c in abs_chs) <= dur + 2:  # broken marks (past the end) are no anchor
         al = [float(c['end']) - float(c['start']) for c in abs_chs]
@@ -1523,6 +1524,32 @@ def audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch, source=
         logging.info(f"        📑 Chapters {'would be ' if DRY_RUN else ''}taken from Audible, aligned on the file's pauses: {len(new)} ({why})")
         return True, why
     return False, 'write failed'
+
+RE_CREDITS_CH = re.compile(r'(?i)^\s*(?:opening|end|closing)\s+credits\s*$')
+DRIFT_MARKS_WHY = "the file's own marks are Audible's chapters"
+
+def drifting_marks(abs_chs, chs, dur, tol=3.0, max_rate=0.003):
+    """2026-11-27 Moon Over Soho: the file's 14 numbered marks ('Moon Over Soho Chapter 01') are Audible's 14 chapters, but they drift
+    from -7 s to +12 s (another master, a little slower) - no constant offset, so anchor_align misses them. One mark per Audible chapter
+    (credits aside) and every inner mark within tol of ONE straight line through Audible's starts (slope within max_rate of 1):
+    Audible's names on the file's own times, positions unchanged. Returns (chapters, why) or None."""
+    own = sorted(abs_chs or [], key=lambda c: float(c.get('start') or 0))
+    real = [c for c in chs if not RE_CREDITS_CH.match(c[2] or '')]
+    if len(own) < 5 or len(own) != len(real) or all(RE_GENERIC_CH.match(c[2] or '') for c in real): return None
+    nums = [re.search(r'(\d+)\s*$', str(c.get('title') or '')) for c in own]
+    if all(nums) and [int(m.group(1)) for m in nums] != list(range(1, len(own) + 1)): return None  # numbered marks out of order
+    x, y = [c[0] for c in real[1:]], [float(c.get('start') or 0) for c in own[1:]]
+    mx, my = sum(x) / len(x), sum(y) / len(y)
+    sxx = sum((a - mx) ** 2 for a in x)
+    if not sxx: return None
+    b = sum((a - mx) * (c - my) for a, c in zip(x, y)) / sxx
+    a0 = my - b * mx
+    res = max(abs(c - (a0 + b * a)) for a, c in zip(x, y))
+    if abs(b - 1) > max_rate or res > tol or abs(a0) > 150 or float(own[0].get('start') or 0) > max(5.0, a0 + b * real[0][0] + tol): return None
+    if all(str(o.get('title') or '') == (r[2] or '') for o, r in zip(own, real)): return None  # the names are Audible's already
+    out = [{'id': i, 'start': float(o.get('start') or 0), 'end': float(own[i + 1].get('start') or 0) if i + 1 < len(own) else float(o.get('end') or dur),
+            'title': r[2] or o.get('title')} for i, (o, r) in enumerate(zip(own, real))]
+    return out, f"{DRIFT_MARKS_WHY} ({len(own) - 1} inner marks within {res:.1f} s of one line, drift {(b - 1) * 100:+.3f} %): Audible's names on the file's times"
 
 def anchor_align(abs_chs, chs, dur, need=0.9):
     """The file's own chapter marks sit where Audible's chapters start, up to one constant offset (Audible's intro cut differently):
@@ -6433,7 +6460,8 @@ def process_queue(work_queue, history, failed, recheck):
                                 # chapter loop 2026-11-15: 'Sherlock Holmes: The Definitive Collection' 9233 min, Audible's chapters 4318 min -
                                 # the file holds more than this product: its chapters would not cover it either
                                 new_chs, why_c = None, f"Audible's chapters cover {aud_len_ / 60:.0f} of {abs_dur / 60:.0f} min"
-                            if new_chs and not cover_verified and not ((an_ := anchor_align(abs_chs, aud_ch[0], abs_dur, 0.95)) and an_[2] >= 7):
+                            if new_chs and not cover_verified and not ((an_ := anchor_align(abs_chs, aud_ch[0], abs_dur, 0.95)) and an_[2] >= 7) \
+                                    and not (why_c.startswith(DRIFT_MARKS_WHY) and len(new_chs) >= 8):  # 13 marks on one line prove the recording too
                                 new_chs, why_c = None, 'recording not verified and the chapter marks do not prove it'
                             if new_chs and poor == 'only numbered chapters without names' and all(RE_GENERIC_CH.match(c['title'] or '') for c in new_chs) \
                                     and not __import__('chapter_audio').coarse_parts(abs_chs, len(new_chs), abs_dur):  # 1-h file parts: Audible's finer list
