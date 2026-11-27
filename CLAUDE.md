@@ -226,7 +226,7 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     2026-11-27): only keys this process changed since it read the file; a second process (Goodreads background, a docker-exec run)
     no longer drops the other's books (Moon Over Soho + The Lost Plot lost their results).
   - Authors (2026-11-27 Space Team): file tags name the narrator as author AND narrator; same recording (runtime to 2 min), Audible lists
-    him only as narrator -> authors = Audible's (no review entry). Existing books keep the review entry route.
+    him only as narrator -> authors = Audible's (no review entry). Same rule as the swap / Of Empires cases: any book, not only new ones.
   - Hardcover cross-check (2026-11-27 The Remaining 3 + 7): Hardcover book = another number of the same Audible series and fits only via an
     alternative title (main title < 0.95, has words Audible lacks) -> rejected; merged records list other volumes as alternative titles.
     The Hardcover search compares with the ABS series, else Audible's (hc_series: new imports have none in ABS yet).
