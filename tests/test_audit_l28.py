@@ -325,3 +325,12 @@ def test_zero_padded_volume_label_follows_audible():
     t = 'Nowhere Stars, Vol. 03'
     zp = re.search(r'(?i)\b(vol\.|volume|book|band)\s+(0\d+)\b', t)
     assert t[:zp.start(2)] + str(int(zp.group(2))) + t[zp.end(2):] == 'Nowhere Stars, Vol. 3'
+
+
+def test_own_series_prefix_with_book_in_brackets_or_part():
+    f = A.title_series_tail
+    S = lambda n: [{'name': 'His Dark Materials', 'sequence': n}]
+    assert f('His Dark Materials: The Golden Compass (Book 1)', S('1')) == 'The Golden Compass'
+    assert f('His Dark Materials Part 1: Northern Lights', S('1')) == 'Northern Lights'
+    assert f('His Dark Materials: The Subtle Knife (Book 2)', S('1')) is None  # another number
+    assert f('The Book of Lost Tales, Part I', [{'name': 'The History of Middle-earth', 'sequence': '1'}]) is None

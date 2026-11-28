@@ -1873,7 +1873,8 @@ def title_series_tail(title, series, aud_title=None):
     own_q = {strip_lead0(str(x.get('sequence'))) for x in series if x.get('sequence')}
     num_ok = lambda w: (mm := re.search(r'(\d+(?:\.\d+)?)\s*$', _lt2(f"Book {w}"))) and strip_lead0(mm.group(1)) in own_q
     for pat in (r'^(?P<s>.+?):\s+(?P<t>.+?),?\s+(?:Book|Band)\s+(?P<n>\w+)\s*$',
-                r'^(?P<s>.+?),?\s+(?:Book|Band)\s+(?P<n>\w+)\s*[:\-–]\s*(?P<t>.+)$',
+                r'^(?P<s>.+?):\s+(?P<t>.+?)\s*\((?:Book|Band|Part)\s+(?P<n>\w+)\)\s*$',  # 'His Dark Materials: The Golden Compass (Book 1)'
+                r'^(?P<s>.+?),?\s+(?:Book|Band|Part)\s+(?P<n>\w+)\s*[:\-–]\s*(?P<t>.+)$',  # 'His Dark Materials Part 1: Northern Lights'
                 r'^(?P<s>.+?),\s+(?:Book|Band)\s+(?P<n>[A-Za-z]+)\s+(?P<t>(?:The|A|An)\s.+)$'):
         if (m := re.match(pat, t, re.I)) and num_ok(m.group('n')) and any(_ssn2(m.group('s'), str(x.get('name') or '')) for x in series) \
                 and (h := ok_head(m.group('t'))) and not re.fullmatch(r'(?i)\W*(?:an?\s+)?(?:light\s+)?novel(?:la)?\W*', h):  # 'Vol.' = light-novel style: kept
