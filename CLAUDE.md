@@ -230,7 +230,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   - Authors (2026-11-28 Guns of Tanith): title and author swapped in the tags (ABS author = Audible's title, ABS title = Audible's author,
     same recording) -> Audible's authors.
   - Store preference (2026-11-28 Stone and Sky): when the current ASIN matches the file to 2 min, the preferred-store edition must match to
-    2 min too (need_exact_rt) - an .com master 11 min longer is another edition, the UK ASIN stays.
+    2 min too (need_exact_rt) - an .com master 11 min longer is another edition, the UK ASIN stays. Also for an ASIN missing on .com
+    (pref_miss): its runtime comes from the other stores first (one lookup, reused by the fallback).
   - Hardcover cross-check (2026-11-27 The Remaining 3 + 7): Hardcover book = another number of the same Audible series and fits only via an
     alternative title (main title < 0.95, has words Audible lacks) -> rejected; merged records list other volumes as alternative titles.
     The Hardcover search compares with the ABS series, else Audible's (hc_series: new imports have none in ABS yet).

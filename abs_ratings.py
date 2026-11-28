@@ -5293,6 +5293,7 @@ def process_queue(work_queue, history, failed, recheck):
                 should_search = False
                 unreleased_ = False  # the ASIN is a re-release that is not out yet (no ratings)
                 pref_exact_ = False  # store-preference search while the current ASIN IS this recording (runtime to 2 min)
+                pref_cur_ = None  # the current ASIN's product from the other stores (pref_miss), fetched once
                 check_lang = new_lang_detected if new_lang_detected else lang
 
                 # Language check: ABS and Audible disagree -> who is right?
@@ -5346,6 +5347,10 @@ def process_queue(work_queue, history, failed, recheck):
                     should_search = True
                 elif pref_miss:
                     should_search, strict_search, lang_target, search_only = True, True, map_language(lang), pref_store
+                    # import 2026-11-28 (Stone and Sky): the ASIN exists only in another store and matches the file to 2 min (UK master) -
+                    # the preferred-store edition must then match to 2 min too; one lookup, reused by the fallback below
+                    pref_cur_ = get_audible_data(asin, lang, skip=(pref_store,)) if abs_dur else None
+                    pref_exact_ = bool(pref_cur_ and pref_cur_.get('runtime_sec') and abs(abs_dur - pref_cur_['runtime_sec']) <= 120)
                 elif aud_data is None:
                     logging.info("      -> ⚠️ ASIN not found in any marketplace.")
                     should_search, strict_search = True, True
@@ -5431,7 +5436,7 @@ def process_queue(work_queue, history, failed, recheck):
                                                             only_domain=search_only, narrators=search_narr, abs_series=srch_series)
                     if not found and pref_miss:
                         logging.info(f"        ℹ️ No exact match on {pref_store}: asking the other stores for {asin} (fallback)")
-                        aud_data = get_audible_data(asin, lang, skip=(pref_store,))
+                        aud_data = pref_cur_ if pref_cur_ is not None else get_audible_data(asin, lang, skip=(pref_store,))
                         wide, wide_strict = aud_data is None, True
                         if aud_data and aud_data.get('title_raw'):  # the same checks as for any found product
                             plaus, plaus_why = asin_plausibility(search_title, authors, aud_data['title_raw'], aud_data.get('subtitle_raw'), aud_data.get('authors_raw'),
@@ -6210,11 +6215,13 @@ def process_queue(work_queue, history, failed, recheck):
                         else:
                             abs_updates['authors'] = [{'name': n} for n in a_auth]
                             log_updates.append(f"Author field held the narrator: authors -> {a_auth}")
-                    elif exact_rec and a_auth and len(authors) == 1 and 'lock_authors' not in tags and aud_data.get('title_raw') \
-                            and normalize_title_text(authors[0]) == normalize_title_text(aud_data['title_raw']) \
-                            and set(_nk([title])) <= set(_nk(a_auth)) and not set(_nk(authors)) & set(_nk(a_auth)):
+                    elif exact_rec and a_auth and authors and 'lock_authors' not in tags and aud_data.get('title_raw') \
+                            and (t_auth_ := [a_ for a_ in authors if normalize_title_text(a_) == normalize_title_text(aud_data['title_raw'])]) \
+                            and not set(_nk(t_auth_)) & set(_nk(a_auth)) \
+                            and (set(_nk([title])) <= set(_nk(a_auth)) or set(_nk([a_ for a_ in authors if a_ not in t_auth_])) & set(_nk(a_auth))):
                         # import 2026-11-28 (Guns of Tanith): file tags with title and author swapped (title 'Dan Abnett', author 'Guns of
-                        # Tanith') - same recording, the ABS author IS Audible's title and the ABS title is Audible's author -> Audible's authors
+                        # Tanith') - same recording, an ABS author IS Audible's title and the ABS title (or another ABS author) is Audible's
+                        # author -> Audible's authors (also once a run had added Audible's author next to the title-author)
                         abs_updates['authors'] = [{'name': n} for n in a_auth]
                         log_updates.append(f"Title and author were swapped: authors -> {a_auth}")
                     elif exact_rec and len(authors) == 1 and len(a_auth) >= 2 and 'lock_authors' not in tags \
