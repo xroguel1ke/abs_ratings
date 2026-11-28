@@ -68,3 +68,16 @@ def test_cover_of_the_accepted_asin_for_recent_books():
     src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'abs_ratings.py')).read()
     assert "cover_ok_ = cover_verified or bool(recent_ and asin and not lang_conflict and not aud_data.get('related_edition'))" in src
     assert '(cover_ok_ and (UPDATE_COVERS or id_switch) and has_cover and COVER_STATE.get(iid) != cover_token(asin))' in src
+
+
+def test_series_number_with_label_word_becomes_audibles():
+    # 2026-11-28 ('The Fall of Neverdark': file tags gave the sequence 'Book 4', Audible #4 -> 'ABS kept' and the subtitle label stayed)
+    src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'abs_ratings.py')).read()
+    i = src.index("(the label word is no part of the number)")
+    blk = src[src.rindex("elif s_seq and existing.get('sequence')", 0, i):i]
+    import re
+    rx = re.search(r"re\.fullmatch\(r'(.+?)', str\(existing\['sequence'\]\)\)", blk).group(1).replace('\\\\', '\\')
+    for q, n in (('Book 4', '4'), ('book 04', '4'), ('Vol. 3', '3'), ('#2', '2'), ('Band 1.5', '1.5')):
+        assert re.fullmatch(rx, q).group(1) == n
+    for q in ('4', 'Book 4-5', 'Part 3a', 'Omnibus'):
+        assert not re.fullmatch(rx, q)

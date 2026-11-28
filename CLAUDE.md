@@ -231,6 +231,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   - Cover (user 2026-11-28 '1922', file 3 min off Audible: metadata synced, old cover kept): "if the book is the right one, just change it"
     - a recently added book (recent_) takes the cover of its accepted ASIN (cover_ok_; not related_edition / lang_conflict). The library
     keeps the strict rule (runtime 2 min + narrator). No review entry for covers.
+  - Series number (2026-11-28 The Fall of Neverdark): an ABS sequence 'Book 4' / 'Vol. 3' / '#2' with Audible's number -> Audible's (then the
+    subtitle label 'The Echoes Saga, Book 4' goes too). Library: this was the only such book.
   - Per-book state files (results, source_state, history, failed, recheck, Goodreads/Hardcover cache, cover_state) are MERGED on write (rw_json,
     2026-11-27): only keys this process changed since it read the file; a second process (Goodreads background, a docker-exec run)
     no longer drops the other's books (Moon Over Soho + The Lost Plot lost their results).

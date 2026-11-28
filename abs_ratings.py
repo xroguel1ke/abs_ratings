@@ -6065,6 +6065,12 @@ def process_queue(work_queue, history, failed, recheck):
                                     elif s_seq and existing.get('sequence') and str(existing['sequence']) != str(s_seq) and re.fullmatch(r'0+\d+(?:\.\d+)?', str(existing['sequence']).strip()) \
                                             and str(existing['sequence']).strip().lstrip('0') == str(s_seq).strip():
                                         existing['sequence'] = s_seq  # '04' -> '4' (a zero-padded file-name number, same value)
+                                    elif s_seq and existing.get('sequence') and str(existing['sequence']) != str(s_seq) \
+                                            and (m_lq := re.fullmatch(r'(?i)\s*(?:book|vol(?:ume)?\.?|band|teil|part|no\.?|#)\s*0*(\d+(?:\.\d+)?)\s*', str(existing['sequence']))) \
+                                            and m_lq.group(1) == str(s_seq).strip().lstrip('0'):
+                                        # 2026-11-28 ('The Fall of Neverdark': file tags gave 'Book 4'): a word before the number is no number - Audible's, same value
+                                        logging.info(f"        🔢 Series '{canon}': #{existing['sequence']} -> #{s_seq} (the label word is no part of the number)")
+                                        existing['sequence'] = s_seq
                                     elif s_seq and existing.get('sequence') and str(existing['sequence']) != str(s_seq):
                                         proven_fix = ((SEARCH_CTX.get('seq_fix') or {}).get(asin) or {}) if asin_from_search else {}
                                         if ver and (seq_shared(lib_id, existing['name'], existing['sequence']) or (folder_fix and (asin_from_search or folder_fix.get('same')))):  # ABS number is no evidence
