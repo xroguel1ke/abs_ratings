@@ -273,6 +273,9 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     Reborn King, Book 6' / 'The Prydain Chronicles Book One: The Book of Three' / 'Lockwood & Co., Book Five The Empty Grave' -> the title.
     'Vol. N' (light-novel style: Tanya, Konosuba, Ishura) stays; never a format word ('Light Novel') as result.
     Also '<series>: <title> (Book N)' and '<series> Part N: <title>' (His Dark Materials).
+    same_chapters(): Audible's list equal to the book's (count, starts within 0.5 s, titles) is not written again (Excalibur: 6 file parts
+    rewritten on every run). series_cleanup: an ADDED series whose name an existing series of the book holds as words with the same
+    number is dropped ('Witness' #1 next to 'Tales of Witness (Malazan Universe)' #1).
     ASIN plausibility 'wrong' (title off + runtime >5 min) is re-checked with the BOOK FOLDER title when that equals Audible's title: then the
     ASIN stays (asin_by_folder_title), and a NEW book with a shared narrator and runtime within 10 % takes Audible's title (Shadow and Bone,
     tag title 'Alina Starkov Trilogy', 30 min extras); the box-set number check then looks at the new title.

@@ -334,3 +334,29 @@ def test_own_series_prefix_with_book_in_brackets_or_part():
     assert f('His Dark Materials Part 1: Northern Lights', S('1')) == 'Northern Lights'
     assert f('His Dark Materials: The Subtle Knife (Book 2)', S('1')) is None  # another number
     assert f('The Book of Lost Tales, Part I', [{'name': 'The History of Middle-earth', 'sequence': '1'}]) is None
+
+
+def test_same_chapters_are_not_written_again():
+    a = [{'start': 0, 'end': 17.6, 'title': 'Opening Credits'}, {'start': 17.6, 'end': 900, 'title': 'Part 1'}]
+    b = [{'start': 0.0, 'end': 17.6, 'title': 'Opening Credits'}, {'start': 17.9, 'end': 900, 'title': 'Part  1'}]
+    assert A.same_chapters(a, b)
+    assert not A.same_chapters(a, b[:1]) and not A.same_chapters(a, [dict(b[0]), dict(b[1], start=30)])
+    assert not A.same_chapters(a, [dict(b[0]), dict(b[1], title='Chapter 1')])
+    assert "if new_chs and same_chapters(new_chs, abs_chs):" in SRC
+
+
+def test_no_second_series_that_an_existing_one_holds_with_the_same_number():
+    it = {'relPath': 'Steven Erikson/Witness/01 - The God Is Not Willing {Emma Gregory}'}
+    old = A.SERIES_FACTS
+    try:
+        for facts in ({}, {('L', 'tales of witness (malazan universe)'): {'n': 3, 'authors': {'steven erikson'}, 'folders': {'witness'}}}):
+            A.SERIES_FACTS = facts
+            out, _ = A.series_cleanup('L', it, [{'name': 'Tales of Witness (Malazan Universe)', 'sequence': '1'}], [{'name': 'Witness', 'sequence': '1'}],
+                                      ['Steven Erikson'], set(), True)
+            assert out == [{'name': 'Tales of Witness (Malazan Universe)', 'sequence': '1'}]
+        A.SERIES_FACTS = {}
+        out, _ = A.series_cleanup('L', {'relPath': 'W/Cradle/01 - U'}, [{'name': 'Chains of the Fallen', 'sequence': '1'}],
+                                  [{'name': 'Soul Force Saga', 'sequence': '1'}], ['X'], set(), True)
+        assert len(out) == 2  # a real sub-series stays next to Audible's
+    finally:
+        A.SERIES_FACTS = old

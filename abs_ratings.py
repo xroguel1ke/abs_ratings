@@ -692,6 +692,15 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
                 out.pop(i_)  # Audible's series is already there (English: another Audible-listed series of the book stays, the foreign one goes)
             else: out[i_] = {'name': canon, 'sequence': a.get('sequence') or x.get('sequence')}
             notes.append(f"'{x['name']}' -> '{canon}' #{a.get('sequence') or x.get('sequence') or '-'} ({other} book(s) of that series are in another language; Audible's {bl} series)")
+    # big run 2026-11-28 ('The God Is Not Willing': 'Witness' #1 added next to 'Tales of Witness (Malazan Universe)' #1): an ADDED series whose
+    # name a series the book already had holds as words, with the same number, is that series under a longer name - not added
+    orig_ = [dict(y) for y in series]
+    for y in [y for y in out if not any(same(y['name'], o['name']) for o in orig_)]:
+        if y.get('sequence') and any(o is not y and not same(o['name'], y['name']) and re.search(r'\b' + re.escape(plain_(y['name'])) + r'\b', plain_(o['name']))
+                                     and strip_lead0(str(o.get('sequence') or '')) == strip_lead0(str(y['sequence'])) for o in orig_) \
+                and any(same(o['name'], z['name']) for o in orig_ for z in out if z is not y):
+            out.remove(y)
+            notes = [t for t in notes if not t.startswith(f"'{y['name']}' #")] + [f"'{y['name']}' #{y['sequence']} not added (the book's series holds that name with the same number)"]
     return out, notes
 
 def folder_narrators(item_data):
@@ -1581,6 +1590,12 @@ def anchor_align(abs_chs, chs, dur, need=0.9):
     off = diffs[len(diffs) // 2]
     hit = sum(1 for x in inner if abs(near(x + off) - (x + off)) <= 2)
     return (off, hit, len(inner)) if hit >= need * len(inner) and abs(off) <= 150 else None
+
+def same_chapters(a, b, tol=0.5):
+    """Two chapter lists are the same: same count, starts within tol seconds, same titles (whitespace aside)."""
+    if not a or not b or len(a) != len(b): return False
+    t = lambda x: re.sub(r'\s+', ' ', str(x.get('title') or '')).strip()
+    return all(abs(float(x.get('start') or 0) - float(y.get('start') or 0)) <= tol and t(x) == t(y) for x, y in zip(a, b))
 
 def abs_set_chapters(iid, key, title, new, old, source):
     """Write chapters (own ABS endpoint), journaled like every write; undo writes the old list back."""
@@ -6754,6 +6769,10 @@ def process_queue(work_queue, history, failed, recheck):
                             if new_chs and poor == 'only numbered chapters without names' and all(RE_GENERIC_CH.match(c['title'] or '') for c in new_chs) \
                                     and not __import__('chapter_audio').coarse_parts(abs_chs, len(new_chs), abs_dur):  # 1-h file parts: Audible's finer list
                                 new_chs, why_c = None, "Audible's chapters have no names either"  # 'Chapter 1' for 'Chapter 1': nothing gained
+                            if new_chs and same_chapters(new_chs, abs_chs):
+                                # big run 2026-11-28 (Excalibur, Enemy of God, Four Past Midnight: Audible itself lists the 6 file parts): the same
+                                # list was written again on every run - nothing to do
+                                new_chs, why_c = None, "Audible's chapters are the book's chapters already"
                             if new_chs and (why_c.startswith('the file has no chapters, length within') or why_c.startswith("the file lacks Audible's")
                                             or why_c.startswith('length matches Audible')) \
                                     and 'lock_chapters' not in tags \
