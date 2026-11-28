@@ -166,3 +166,14 @@ def test_zero_padded_title_glued_with_audibles_subtitle():
     assert A.normalize_title_text(re.sub(r'\b0+(\d)', r'\1', t)) == A.normalize_title_text(f"{at}: {sub}")
     assert re.sub(r'\b0+(\d)', r'\1', t) == 'The Saga of Tanya the Evil, Vol. 4: Dabit Deus His Quoque Finem'
     assert "(zero-padded number)\")" in SRC and "elif lib_ok_ and aud_title and aud_sub and re.search(r'\\b0\\d', title)" in SRC
+
+
+def test_time_bound_announcement_lead_goes():
+    body = '<p>Their foothold established, Reach and the soldiers sent to secure Amir have only begun to repair the destruction. ' + 'More plot. ' * 30 + '</p>'
+    s = '<p><b>Coming this summer, the sequel you’ve all b-b-been waiting for....</b></p> ' + body
+    assert A.strip_promo_lead(s).startswith('<p>Their foothold established')
+    assert A.strip_promo_lead('<p>Pre-order now!</p>' + body).startswith('<p>Their foothold')
+    keep = '<p>Coming home was never easy for Jack.</p>' + body  # a story sentence, no announcement
+    assert A.strip_promo_lead(keep) == keep
+    tag = '<p><b>A world destroyed. An axe to grind. And a path to infinite power.</b></p>' + body  # a tagline stays
+    assert A.strip_promo_lead(tag) == tag

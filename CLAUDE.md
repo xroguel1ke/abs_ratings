@@ -247,6 +247,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     a long file with < 3 pauses is not cached, decide() needs >= 1 pause per 30 min (White Wolf). Series: folder number + Audible agree ->
     Audible's (lib_ok_; The Emperor's Soul #0). New book whose title is only the series name -> Audible's (Nevermoor). 'Vol. 04: <Audible's
     subtitle>' -> 'Vol. 4: ...' (lib_ok_; Tanya the Evil).
+    PROMO_SENTENCES: time-bound announcements ('Coming this summer, the sequel ...', 'Pre-order now') go from the front of Audible's
+    summary (Wayward Galaxy 2 - 'Audible wins' would have replaced the clean text with it).
   - Per-book state files (results, source_state, history, failed, recheck, Goodreads/Hardcover cache, cover_state) are MERGED on write (rw_json,
     2026-11-27): only keys this process changed since it read the file; a second process (Goodreads background, a docker-exec run)
     no longer drops the other's books (Moon Over Soho + The Lost Plot lost their results).

@@ -4236,6 +4236,11 @@ PROMO_SENTENCES = [re.compile(x, re.I) for x in (
     r"(?:series|show|film|movie|motion picture)(?: (?:on|from|streaming on) [\w ]{2,30})?(?:,? starring [\w .,'&-]{2,80})?",
     r"the inspiration for the (?:netflix|hbo|amazon|prime video|tv) (?:series|show|film) [\w' :-]{1,40}",
     r"(?:with )?over [\d.,]+ (?:million|thousand) [\w' -]{0,40}sold\b[^.!]{0,140}",
+    # audit 2026-11-28 (Wayward Galaxy 2: '<p><b>Coming this summer, the sequel you've all b-b-been waiting for....</b></p>'): time-bound
+    # announcements - they are wrong as soon as the book is out
+    r"coming (?:soon|this (?:spring|summer|fall|autumn|winter|year)|in (?:january|february|march|april|may|june|july|august|september|october|november|december|\d{4}))"
+    r"(?:[,:;]? [\w'’ ,-]{0,80})?",
+    r"(?:pre-?order|available|out) (?:now|today)(?:[,:;!]? [\w'’ ,-]{0,60})?",
 )]
 
 def strip_promo_lead(html):
@@ -4253,6 +4258,7 @@ def strip_promo_lead(html):
         mp = re.match(r'(?is)\s*(?:<p[^>]*>)?(.*?)(?:</p>|<br\s*/?>)\s*(?:<br\s*/?>)?', out)
         if mb and promo(mb.group(3)):
             rest = mb.group(1) + re.sub(r'^(?:\s|<br\s*/?>)+', '', out[mb.end():], flags=re.I)
+            rest = re.sub(r'^\s*<p[^>]*>\s*</p>\s*', '', rest)  # the bold lead was the whole first paragraph
         elif mp and promo(mp.group(1)):
             rest = out[mp.end():].lstrip()
         else: break
