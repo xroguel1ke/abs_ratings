@@ -5469,9 +5469,20 @@ def process_queue(work_queue, history, failed, recheck):
 
                 # Deterministic plausibility check (no LLM): does the product behind the ASIN look like this book at all?
                 plaus, plaus_why = "ok", []
+                asin_by_folder_title = False  # the ASIN was kept because the book folder names exactly Audible's title (Shadow and Bone)
                 if asin and aud_data and aud_data.get("title_raw"):
                     plaus, plaus_why = asin_plausibility(search_title, authors, aud_data["title_raw"], aud_data.get("subtitle_raw"), aud_data.get("authors_raw"),
                                                          meta.get("narrators") or [], aud_data.get("narrators_raw"), abs_dur, aud_data.get("runtime_sec"))
+                    if plaus == "wrong" and (fbt_ := folder_book_title(item_data)) and normalize_title_text(fbt_) != normalize_title_text(search_title) \
+                            and normalize_title_text(fbt_) in {normalize_title_text(aud_data["title_raw"]), normalize_title_text(f"{aud_data['title_raw']}: {aud_data.get('subtitle_raw') or ''}")}:
+                        # import 2026-11-28 ('Shadow and Bone' with the file-tag title 'Alina Starkov Trilogy', 30 min longer than Audible): the book
+                        # folder names exactly Audible's title - the ABS title is what is off, not the ASIN; the folder title decides
+                        plaus2_, why2_ = asin_plausibility(fbt_, authors, aud_data["title_raw"], aud_data.get("subtitle_raw"), aud_data.get("authors_raw"),
+                                                           meta.get("narrators") or [], aud_data.get("narrators_raw"), abs_dur, aud_data.get("runtime_sec"))
+                        if plaus2_ != "wrong":
+                            logging.info(f"      -> ℹ️ ABS title '{search_title}' differs from Audible '{aud_data['title_raw']}', but the book folder names exactly that title: ASIN kept")
+                            plaus, plaus_why = plaus2_, why2_ + ["folder title = Audible"]
+                            asin_by_folder_title = True
                     if plaus == "asin_ok_metadata_differs":
                         logging.info(f"      -> ℹ️ ASIN is right (same narrator and runtime) but ABS title/authors differ from Audible '{aud_data.get('title_raw')}' ({', '.join(plaus_why)}): proposal in the review list")
                         add_review(key, title, "title", aud_data.get("title_raw"), "ASIN confirmed by runtime and narrator; ABS title/author differ", plaus_why,
@@ -5757,7 +5768,11 @@ def process_queue(work_queue, history, failed, recheck):
                             log_updates.append(f"Title: '{title}' -> '{new_t}' (was another volume's title)")
                     elif aud_title and new_book and not lang_conflict and (verified_recording(abs_dur, meta.get('narrators'), authors, aud_data) or (
                             asin_from_search and narr_keys(meta.get('narrators')) & narr_keys(aud_data.get('narrators_raw'))
-                            and abs_dur and aud_data.get('runtime_sec') and not runtime_mismatch(abs_dur, aud_data['runtime_sec']))):  # Bee Speaker: 3 narrators, file 5 min shorter
+                            and abs_dur and aud_data.get('runtime_sec') and not runtime_mismatch(abs_dur, aud_data['runtime_sec']))
+                            # import 2026-11-28 (Shadow and Bone, tag title 'Alina Starkov Trilogy', 30 min of extras): the folder names exactly
+                            # Audible's title, same narrator, runtime within 10 % - the folder title is the book's title
+                            or (asin_by_folder_title and narr_keys(meta.get('narrators')) & narr_keys(aud_data.get('narrators_raw'))
+                                and abs_dur and aud_data.get('runtime_sec') and abs(abs_dur - aud_data['runtime_sec']) <= 0.10 * aud_data['runtime_sec'])):  # Bee Speaker: 3 narrators, file 5 min shorter
                         # user 2026-11-15: a NEW book's title comes from its file tags ('Book 20 - Volume 07 - Part 06 - Memory's Flame - The
                         # Wandering Inn Series', 'Crow's Fortune - Ramón de Ocampo', 'Zero Enigma'): the verified recording's Audible title.
                         # A format label goes ('(Unabridged)', '(Light Novel)'); a missing subtitle comes from Audible.
@@ -6200,7 +6215,7 @@ def process_queue(work_queue, history, failed, recheck):
                                     # user decision 2026-11-09: a pack / omnibus keeps Audible's own range as its number ('1-2' for Publisher's
                                     # Pack 1, '3-4' for Pack 2) - it says exactly which volumes the book holds
                                     s_seq = f"{rng_.group(1)}-{rng_.group(2)}"
-                                elif s_seq is not None and (is_boxset_title(title) or is_boxset_title(aud_data.get('title_raw') or '') or is_boxset_subtitle(aud_data.get('subtitle_raw'))):  # 'Trilogie 1-3' is not book 5; Audible's TITLE only ('Black Magician Trilogy, Book 3' as subtitle is no box set)
+                                elif s_seq is not None and (is_boxset_title(abs_updates.get('title') or title) or is_boxset_title(aud_data.get('title_raw') or '') or is_boxset_subtitle(aud_data.get('subtitle_raw'))):  # 'Trilogie 1-3' is not book 5; Audible's TITLE only ('Black Magician Trilogy, Book 3' as subtitle is no box set)
                                     logging.info(f"        ℹ️ Series '{s_name}': no number for a box set / collection ('{title}')")
                                     s_seq = None
                                 elif s_seq is None and not is_boxset_title(title):

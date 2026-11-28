@@ -296,3 +296,15 @@ def test_own_series_prefix_with_own_number():
     assert f('The Saga of Tanya the Evil, Vol. 4: Dabit Deus His Quoque Finem', [{'name': 'The Saga of Tanya the Evil', 'sequence': '4'}]) is None  # LN style
     assert f('Neon Genesis Evangelion: ANIMA, Vol. 2: Light Novel', [{'name': 'Neon Genesis Evangelion: ANIMA', 'sequence': '2'}]) is None
     assert f('Mistborn: The Final Empire', [{'name': 'Mistborn', 'sequence': '1'}]) is None
+
+
+def test_folder_title_equal_to_audible_keeps_the_asin_and_names_the_book():
+    # import 2026-11-28 Shadow and Bone: tag title 'Alina Starkov Trilogy', folder '01 - Shadow and Bone {Lauren Fortgang}', 30 min extras
+    assert A.asin_plausibility('Alina Starkov Trilogy', ['Leigh Bardugo'], 'Shadow and Bone', None, ['Leigh Bardugo'], ['Lauren Fortgang'],
+                               ['Lauren Fortgang'], 530 * 60, 500 * 60)[0] == 'wrong'
+    assert A.asin_plausibility('Shadow and Bone', ['Leigh Bardugo'], 'Shadow and Bone', None, ['Leigh Bardugo'], ['Lauren Fortgang'],
+                               ['Lauren Fortgang'], 530 * 60, 500 * 60)[0] != 'wrong'
+    assert A.asin_plausibility('Phantom Deadfall', ['J.N. Chaney'], 'Black Labyrinth', None, ['J.N. Chaney'], [], [], 600 * 60, 625 * 60)[0] == 'wrong'
+    assert "asin_by_folder_title = True" in SRC and "or (asin_by_folder_title and narr_keys(meta.get('narrators'))" in SRC
+    assert "abs(abs_dur - aud_data['runtime_sec']) <= 0.10 * aud_data['runtime_sec']" in SRC
+    assert "is_boxset_title(abs_updates.get('title') or title)" in SRC
