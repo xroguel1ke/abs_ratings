@@ -5823,6 +5823,14 @@ def process_queue(work_queue, history, failed, recheck):
                         abs_updates['title'] = aud_title if normalize_title_text(meta.get('subtitle') or '') == normalize_title_text(aud_sub) \
                             else re.sub(r'\b0+(\d)', r'\1', title)
                         log_updates.append(f"Title: '{title}' -> '{abs_updates['title']}' (zero-padded number)")
+                    elif lib_ok_ and aud_title and 'lock_title' not in tags and (zp_ := re.search(r'(?i)\b(vol\.|volume|book|band)\s+(0\d+)\b', title)) \
+                            and not re.search(r'\b0\d', f"{aud_title} {aud_sub or ''}") and re.search(rf'(?<![\d.]){int(zp_.group(2))}(?![\d.])', f"{aud_title} {aud_sub or ''}") \
+                            and same_recording(abs_dur, meta.get('narrators'), aud_data):
+                        # audit 2026-11-28 ('Ishura, Vol. 05: Grotesque Seeds Lay Dormant' / Audible 'Ishura, Vol. 5', 'Nowhere Stars, Vol. 03' / 'Nowhere
+                        # Stars 3'): Audible writes the number without the zero-padding of the file name - only the number changes ('Shield Hero
+                        # Volume 05' stays: Audible pads it too)
+                        abs_updates['title'] = title[:zp_.start(2)] + str(int(zp_.group(2))) + title[zp_.end(2):]
+                        log_updates.append(f"Title: '{title}' -> '{abs_updates['title']}' (zero-padded number)")
                     elif aud_title and same_recording(abs_dur, meta.get('narrators'), aud_data) and normalize_title_text(aud_title) != normalize_title_text(title) \
                             and any(re.fullmatch(r'(?i)\s*' + re.escape(str(s_.get('name') or '').strip()) + r'\s*#\s*\d+(?:\.\d+)?\s*', title)  # only the '#N' label: 'Beware of Chicken 2' IS the title (Audible adds marketing)
                                     or (normalize_title_text(title) == normalize_title_text(s_.get('name') or '') and normalize_title_text(aud_title).startswith(normalize_title_text(title) + ' ')

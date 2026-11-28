@@ -316,3 +316,12 @@ def test_one_volume_of_a_trilogy_is_no_box_set():
     assert not f('Star Wars: The Thrawn Trilogy, Book 3: The Last Command')
     assert f('The Hunger Games Trilogy') and f('Mistborn Trilogy, Books 1-3') and f('Die Chroniken von Waldsee Trilogie 1-3')
     assert f('Trilogy Box Set, Book 1') and f('Dämonenblut / Nachtfeuer / Perlmond')
+
+
+def test_zero_padded_volume_label_follows_audible():
+    assert "(zp_ := re.search(r'(?i)\\b(vol\\.|volume|book|band)\\s+(0\\d+)\\b', title))" in SRC
+    assert "abs_updates['title'] = title[:zp_.start(2)] + str(int(zp_.group(2))) + title[zp_.end(2):]" in SRC
+    import re
+    t = 'Nowhere Stars, Vol. 03'
+    zp = re.search(r'(?i)\b(vol\.|volume|book|band)\s+(0\d+)\b', t)
+    assert t[:zp.start(2)] + str(int(zp.group(2))) + t[zp.end(2):] == 'Nowhere Stars, Vol. 3'
