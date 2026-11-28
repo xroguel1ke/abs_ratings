@@ -7,11 +7,10 @@ import abs_ratings as A, abs_series as S
 SRC = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'abs_ratings.py'), encoding='utf-8').read()
 
 
-def test_role_credit_with_author_prefix():
-    assert S.is_role_credit('Ellen Datlow - author/editor') and S.role_base('Ellen Datlow - author/editor') == 'Ellen Datlow'
-    assert S.is_role_credit('Jane Doe - author & editor') and S.is_role_credit('Ken Liu - translator')
-    assert not S.is_role_credit('Ellen Datlow') and not S.is_role_credit('Author Name')
-    assert S.EDITOR_ROLE_RE.search('Ellen Datlow - author/editor') and S.EDITOR_ROLE_RE.search('John Joseph Adams - editor')
+def test_author_editor_is_an_author_credit_not_a_role():
+    # audit 2026-11-28 (Best Horror of the Year 4): 'X - author/editor' must never be dropped as a role credit
+    assert not S.is_role_credit('Ellen Datlow - author/editor') and S.AUTHOR_NOTE_RE.search('Ellen Datlow - author/editor')
+    assert S.is_role_credit('Ken Liu - translator') and S.EDITOR_ROLE_RE.search('John Joseph Adams - editor')
     assert not S.EDITOR_ROLE_RE.search('Ken Liu - translator') and not S.EDITOR_ROLE_RE.search('Kurone Mishima - illustrator')
 
 
@@ -20,22 +19,24 @@ def _ctx(calls, lib=False):
             'new_rules_library': lib, 'new_book_days': 30}
 
 
-def test_sole_editor_keeps_the_name_without_role():
+def test_editor_credits_keep_the_editor():
     now_ms = time.time() * 1000
     rec = lambda t, au, added: {'id': t, 'lib': 'L', 'title': t, 'authors': au, 'tags': set(), 'added': added}
     calls = []
-    S.remove_role_credits(_ctx(calls), [rec('Best Horror 4', ['Ellen Datlow - author/editor'], now_ms),
-                                        rec('Old Anthology', ['Ellen Datlow - author/editor'], now_ms - 90 * 86400000),
+    S.remove_role_credits(_ctx(calls), [rec('Best Horror 4', ['Ellen Datlow - author/editor', 'Peter Straub'], now_ms - 90 * 86400000),
+                                        rec('New Anthology', ['Ellen Datlow - author/editor', 'Peter Straub'], now_ms),
+                                        rec('Sole Editor', ['John Joseph Adams - editor'], now_ms),
+                                        rec('Old Sole Editor', ['John Joseph Adams - editor'], now_ms - 90 * 86400000),
                                         rec('Illustrated', ['Kurone Mishima - illustrator'], now_ms),
                                         rec('Three-Body', ['Cixin Liu', 'Ken Liu - translator'], now_ms - 90 * 86400000)])
     got = {t: [a['name'] for a in u['authors']] for t, u in calls}
-    assert got['Best Horror 4'] == ['Ellen Datlow']
-    assert 'Old Anthology' not in got  # library book: only with NEW_RULES_LIBRARY
-    assert 'Illustrated' not in got  # an illustrator alone is no author: left for a person to decide
-    assert got['Three-Body'] == ['Cixin Liu']  # the old rule (a real author stays) is unchanged for every book
+    assert 'Best Horror 4' not in got  # library book: the editor is never dropped, the note stays until NEW_RULES_LIBRARY
+    assert got['New Anthology'] == ['Ellen Datlow', 'Peter Straub']  # recent book: only the note goes, nobody is dropped
+    assert got['Sole Editor'] == ['John Joseph Adams'] and 'Old Sole Editor' not in got
+    assert 'Illustrated' not in got and got['Three-Body'] == ['Cixin Liu']
     calls = []
-    S.remove_role_credits(_ctx(calls, lib=True), [rec('Old Anthology', ['Ellen Datlow - author/editor'], now_ms - 90 * 86400000)])
-    assert [a['name'] for a in calls[0][1]['authors']] == ['Ellen Datlow']
+    S.remove_role_credits(_ctx(calls, lib=True), [rec('Best Horror 4', ['Ellen Datlow - author/editor', 'Peter Straub'], now_ms - 90 * 86400000)])
+    assert [a['name'] for a in calls[0][1]['authors']] == ['Ellen Datlow', 'Peter Straub']
 
 
 def test_narrator_role_suffix_and_library_gate():

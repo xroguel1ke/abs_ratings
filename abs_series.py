@@ -87,7 +87,7 @@ def _n(x): return str(int(x)) if float(x).is_integer() else str(x)
 
 
 # Role credits that are not authors ('Kevin Steinbach - translator', 'X - Illustrator', 'Y - Übersetzer'): Audible lists them in the authors list
-ROLE_CREDIT_RE = re.compile(r'\s+[-–—]\s+(?:\S.*?\s+[-–—]\s+)?(?:authors?\s*(?:/|&|and)\s*)?(other|illustrat\w*|illustrations?|translat\w*|translated by|edited by|editor|editors|introductions?|foreword|afterword|preface|contributor|adapt\w*|cover\s+\w+|'
+ROLE_CREDIT_RE = re.compile(r'\s+[-–—]\s+(?:\S.*?\s+[-–—]\s+)?(other|illustrat\w*|illustrations?|translat\w*|translated by|edited by|editor|editors|introductions?|foreword|afterword|preface|contributor|adapt\w*|cover\s+\w+|'
                             r'übersetz\w*|übertragen\w*|herausgeb\w*|hrsg\.?|zeichn\w*|illustriert\w*|vorwort|nachwort|bearbeit\w*)\s*$', re.I)
 
 
@@ -1765,7 +1765,10 @@ def wrong_languages(records, allowed):
     return sorted(out, key=lambda x: x['title'].lower())
 
 
-EDITOR_ROLE_RE = re.compile(r'\s+[-–—]\s+(?:authors?\s*(?:/|&|and)\s*)?(?:editors?|edited by|herausgeb\w*|hrsg\.?)\s*$', re.I)
+EDITOR_ROLE_RE = re.compile(r'\s+[-–—]\s+(?:editors?|edited by|herausgeb\w*|hrsg\.?)\s*$', re.I)
+# 'Ellen Datlow - author/editor': an AUTHOR credit with a role note - never removed (audit 2026-11-28: the first version counted it as a
+# role and the library task dropped the editor of 'The Best Horror of the Year 4', leaving a contributor), only the note goes (new_rule_ok)
+AUTHOR_NOTE_RE = re.compile(r'\s+[-–—]\s+authors?\s*(?:/|&|and)\s*(?:editors?|illustrat\w*|translat\w*|narrat\w*)\s*$', re.I)
 
 
 def new_rule_ok(ctx, r):
@@ -1786,6 +1789,13 @@ def remove_role_credits(ctx, records, known_roles=()):
     changed = 0
     for r in records:
         if not r['authors'] or 'lock_authors' in r['tags']: continue
+        if any(AUTHOR_NOTE_RE.search(a) for a in r['authors']) and new_rule_ok(ctx, r):
+            clean = list(dict.fromkeys(AUTHOR_NOTE_RE.sub('', a).strip() for a in r['authors']))
+            if abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'authors': [{'name': a} for a in clean]},
+                          {'authors': [{'name': a} for a in r['authors']]}, 'role_note_removed'):
+                changed += 1
+                logging.info(f"   🎨 AUTHOR NOTE{' (DRY_RUN)' if dry else ''}: '{r['title']}': {r['authors']} -> {clean}")
+            continue
         drop = [a for i, a in enumerate(r['authors']) if is_role_credit(a) or (i > 0 and author_key(a) in roles and author_key(a) not in first)]
         keep = [a for a in r['authors'] if a not in drop]
         if drop and not keep and all(EDITOR_ROLE_RE.search(a) for a in drop) and new_rule_ok(ctx, r):

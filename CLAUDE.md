@@ -236,7 +236,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   - Library audit 2026-11-28 (tests/private/loop/audit2.py, L28/log.md): NEW_RULES_LIBRARY (default false) - the audit's rules that
     change books (title series label, cover of the accepted ASIN, narrator/editor role suffixes, year after the recording's release) apply
     to recently added books only (lib_ok_ = recent_ or NEW_RULES_LIBRARY; abs_series.new_rule_ok) until the user decides for the library.
-    Fixes: ROLE_CREDIT_RE knows 'author/editor'; a sole 'X - editor' author keeps 'X'; narrator role suffixes go ('Robert J. Sawyer -
+    Fixes: 'X - author/editor' is an AUTHOR credit (never dropped as a role - the first version did, the library task removed the
+    editor of Best Horror of the Year 4; only the note goes, new_rule_ok); a sole 'X - editor' author keeps 'X'; narrator role suffixes go ('Robert J. Sawyer -
     introduction'); too_long review also when the metadata sync was skipped (The Great Cleric 5: 20 h vs 6 h); praise first + plot is no
     'only reader reviews' text (Death's End); review entries whose proposal ABS already has go (review_drop_applied, every listing);
     Hardcover: a part whose alternative title is 'Ours, Part N: ...' is rejected (hc_part_of_ours), a compilation with exactly our title
