@@ -241,6 +241,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     'only reader reviews' text (Death's End); review entries whose proposal ABS already has go (review_drop_applied, every listing);
     Hardcover: a part whose alternative title is 'Ours, Part N: ...' is rejected (hc_part_of_ours), a compilation with exactly our title
     and >= 100 ratings is our book (The Green Mile got part 5 'Night Journey'); year later than the same recording's release -> its year.
+    A book with an open review entry (REVIEW_RECHECK_KINDS) is checked again after REVIEW_RECHECK_DAYS=7 (done entries go; REFRESH_DAYS is 100).
+    Series names equal up to punctuation with other authors (shared world: 'Space Marine Conquests - / : Warhammer 40,000') -> merge review.
   - Per-book state files (results, source_state, history, failed, recheck, Goodreads/Hardcover cache, cover_state) are MERGED on write (rw_json,
     2026-11-27): only keys this process changed since it read the file; a second process (Goodreads background, a docker-exec run)
     no longer drops the other's books (Moon Over Soho + The Lost Plot lost their results).

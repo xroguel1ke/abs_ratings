@@ -219,7 +219,8 @@ def interleaved(g_seqs, c_seqs):
     return sum(1 for i in range(1, len(side)) if side[i] != side[i - 1]) >= 2
 
 
-UNCERTAIN = ('not enough numbered books', "numbers don't complement", 'matches more than one series', "numbers don't interleave", 'contains book(s) with lock_series')  # -> review list
+UNCERTAIN = ('not enough numbered books', "numbers don't complement", 'matches more than one series', "numbers don't interleave", 'contains book(s) with lock_series',
+             'same name except punctuation')  # -> review list
 
 def series_info(s):
     """Titles (with number) and authors of a Series object, for the web UI."""
@@ -278,7 +279,15 @@ def merge_check(group, cand, decisions=None):
     if target.variant != cand.variant:
         return False, rel, f"different edition ({', '.join(sorted(target.variant)) or 'plain'} vs {', '.join(sorted(cand.variant)) or 'plain'})"
     g_authors = set().union(*(s.authors for s in group))
-    if not (g_authors & cand.authors): return False, rel, 'no shared author'
+    if not (g_authors & cand.authors):
+        # audit 2026-11-28 ('Space Marine Conquests - Warhammer 40,000' / ': Warhammer 40,000', one author per book): the SAME name up to
+        # punctuation is one series of a shared world - never merged automatically, but shown for your decision (merge review)
+        strict = lambda n: re.sub(r'[^a-z0-9]', '', fold_accents(n or '').lower())
+        g_q = {parse_seq(q) for s_ in group for _, q in s_.entries if parse_seq(q) is not None}
+        c_q = {parse_seq(q) for _, q in cand.entries if parse_seq(q) is not None}
+        if strict(target.name) and strict(target.name) == strict(cand.name) and not (g_q & c_q):
+            return False, rel, 'same name except punctuation, other authors (one series of a shared world?)'
+        return False, rel, 'no shared author'
     # A manually locked book means the user decided on this series name: don't touch the series
     # (on EITHER side: a book you locked in the target series also means 'don't touch these names')
     # User rule 2026-11-08: lock_series protects the BOOK. If all locked books sit in ONE series of the group, that series becomes

@@ -110,3 +110,16 @@ def test_books_on_the_review_list_are_checked_again_after_a_week():
     assert "item['_recheck'] = True" in SRC[i:i + 600]
     assert SRC.index("elif recheck_due:") < i < SRC.index("elif due := [s_ for s_ in SST.due_sources(")
     assert "x.get('kind') in REVIEW_RECHECK_KINDS" in SRC
+
+
+def test_same_series_name_up_to_punctuation_with_other_authors_goes_to_review():
+    rec = lambda i, au, name, q: {'id': i, 'lib': 'l', 'title': f't{i}', 'authors': [au], 'narrators': ['N'], 'series': [{'name': name, 'sequence': q}], 'tags': set()}
+    r = [rec(1, 'Andy Clark', 'Space Marine Conquests - Warhammer 40,000', '1'), rec(2, 'Gav Thorpe', 'Space Marine Conquests - Warhammer 40,000', '2'),
+         rec(3, 'Ian St. Martin', 'Space Marine Conquests: Warhammer 40,000', '3')]
+    merges, rejected = S.find_merges(r, {}, None)
+    assert merges == []  # never merged automatically
+    assert any(x['reason'].startswith('same name except punctuation') for x in rejected)
+    assert any(S.UNCERTAIN and x['reason'].startswith(S.UNCERTAIN) for x in rejected)  # -> merge review in the web UI
+    # numbers that overlap: two different series, no review entry of that kind
+    r2 = [rec(1, 'A', 'Legacy - Saga', '1'), rec(2, 'B', 'Legacy: Saga', '1')]
+    assert not any(x['reason'].startswith('same name except punctuation') for x in S.find_merges(r2, {}, None)[1])
