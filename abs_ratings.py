@@ -3689,6 +3689,19 @@ def hc_year_plausible(year, edition_years):
     later = [y for y in edition_years if y > int(year) + 1]
     return near > 0 and not (near == 1 and len(edition_years) >= 2 and later and min(later) - int(year) > 5)
 
+def hc_year_language_ok(hc_data, year, book_lang):
+    """An English book's first-release year must come from an edition that is not only a translation (audit 2026-11-28, 'The Crown
+    Tower': Hardcover's 2011 = one Polish paperback dated 2011-01-01, every English edition 2013). Asked only when ONE edition carries
+    that year (one extra Hardcover request); no answer = as before (the year is taken)."""
+    if book_lang != 'English' or not hc_data or not hc_data.get('id') or not str(year).isdigit(): return True
+    if sum(1 for y in hc_data.get('edition_years') or [] if y == int(year)) != 1: return True
+    d = hc_query("query($id:Int!){ editions(where:{book_id:{_eq:$id}}, limit:60){ release_date language{ language } } }", {'id': int(hc_data['id'])})
+    eds = [e for e in ((d or {}).get('editions') or []) if str((e or {}).get('release_date') or '')[:4] == str(year)]
+    langs = {str(((e or {}).get('language') or {}).get('language') or '').strip().lower() for e in eds}
+    if not eds or '' in langs or 'english' in langs: return True
+    logging.info(f"        ⏭️ Year {year} not taken: Hardcover has it only from a {', '.join(sorted(langs))} edition")
+    return False
+
 def hc_result(book, source):
     return {'gr_ids': hc_goodreads_ids(book), 'id': book.get('id'), 'slug': book.get('slug'), 'url': f"https://hardcover.app/books/{book.get('slug')}",
             'val': book.get('rating'), 'count': int(book.get('ratings_count') or 0), 'source': source, 'title': book.get('title'),
@@ -6728,6 +6741,7 @@ def process_queue(work_queue, history, failed, recheck):
                         if hy_ and hy_ok and str(hy_).isdigit() and 1400 < int(hy_) <= datetime.now().year and (not ay_ or int(hy_) <= int(ay_)) \
                                 and hc_year_plausible(hy_, hc_data.get('edition_years')) \
                                 and str(hy_) != str(meta.get('publishedYear') or '').strip() and 'lock_year' not in tags and not skip_meta \
+                                and hc_year_language_ok(hc_data, hy_, map_language(meta.get('language') or lang)) \
                                 and abs_update(iid, key, title, {'publishedYear': str(hy_)}, meta, 'book_year'):
                             logging.info(f"        📅 Year: '{meta.get('publishedYear')}' -> '{hy_}' (first release of the book, Hardcover){' (DRY_RUN, not saved)' if DRY_RUN else ''}")
                 if hc_data and hc_sure_match(hc_data, title, authors):

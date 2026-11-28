@@ -190,3 +190,20 @@ def test_shared_number_confirmed_by_the_folder_stays(monkeypatch):
     # without the folder's confirmation the old rule stays: the clash removes the number
     out2, notes2 = A.series_cleanup('L', item('Philip Pullman/Northern Lights {Full Cast}'), ser, [], ['Philip Pullman'], set(), True, 'English')
     assert [(x['name'], x['sequence']) for x in out2] == [('His Dark Materials', None)], notes2
+
+
+def test_first_release_year_only_from_a_translation_is_not_taken(monkeypatch):
+    calls = []
+    def fake(q, v=None):
+        calls.append(v)
+        return {'editions': [{'release_date': '2011-01-01', 'language': {'language': 'Polish'}},
+                             {'release_date': '2013-08-06', 'language': {'language': 'English'}}]}
+    monkeypatch.setattr(A, 'hc_query', fake)
+    hc = {'id': 1, 'edition_years': [2011, 2013, 2013, 2013]}
+    assert A.hc_year_language_ok(hc, 2011, 'English') is False
+    assert A.hc_year_language_ok(hc, 2011, 'German') is True and len(calls) == 1  # translations keep the original's year
+    assert A.hc_year_language_ok({'id': 1, 'edition_years': [2011, 2011, 2013]}, 2011, 'English') is True  # two editions: no question
+    monkeypatch.setattr(A, 'hc_query', lambda q, v=None: None)
+    assert A.hc_year_language_ok(hc, 2011, 'English') is True  # no answer: as before
+    monkeypatch.setattr(A, 'hc_query', lambda q, v=None: {'editions': [{'release_date': '2011-05-01', 'language': {'language': 'English'}}]})
+    assert A.hc_year_language_ok(hc, 2011, 'English') is True
