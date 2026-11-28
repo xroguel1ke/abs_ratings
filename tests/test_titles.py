@@ -60,7 +60,7 @@ def test_title_series_tail():
 
 def test_title_series_tail_only_recent_books():
     src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'abs_ratings.py')).read()
-    assert 'lbl_t = title_series_tail(new_t, ser_now) if lib_ok_ and new_t else None' in src
+    assert 'lbl_t = title_series_tail(new_t, ser_now, aud_title) if lib_ok_ and new_t else None' in src
 
 
 def test_cover_of_the_accepted_asin_for_recent_books():

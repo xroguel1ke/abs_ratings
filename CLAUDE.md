@@ -267,6 +267,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     Knights -> 'the-eye-of-divinity' with ratings).
     Write loops (changes.jsonl audit): a single chapter is not rewritten with Audible's single chapter (Guns, no review entry); the book
     step leaves genres the series task (genre_series) set last (journal_last tracks genres); identity overrides keep an earlier year.
+    Genres are written only when the set changes (not for the order). title_series_tail(t, series, aud_title): '<Audible's exact title>:
+    <any name>, Book N' with the book's own number goes too (The Skies of Pern: Dragonriders of Pern, Book 15 with ABS series 'Pern').
   - Per-book state files (results, source_state, history, failed, recheck, Goodreads/Hardcover cache, cover_state) are MERGED on write (rw_json,
     2026-11-27): only keys this process changed since it read the file; a second process (Goodreads background, a docker-exec run)
     no longer drops the other's books (Moon Over Soho + The Lost Plot lost their results).

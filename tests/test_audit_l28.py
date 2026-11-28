@@ -277,3 +277,11 @@ def test_no_ping_pong_between_book_step_and_series_task():
 
 def test_genres_are_not_rewritten_for_their_order_alone():
     assert "elif sorted(_gk(x) for x in rebuilt_) != sorted(_gk(x) for x in current_genres if isinstance(x, str)):" in SRC
+
+
+def test_label_after_audibles_exact_title_goes():
+    S = [{'name': 'Pern', 'sequence': '15'}]
+    assert A.title_series_tail('The Skies of Pern: Dragonriders of Pern, Book 15', S, 'The Skies of Pern') == 'The Skies of Pern'
+    assert A.title_series_tail('The Skies of Pern: Dragonriders of Pern, Book 14', S, 'The Skies of Pern') is None  # another number
+    assert A.title_series_tail('The Skies of Pern: Dragonriders of Pern, Book 15', S) is None  # without Audible's title: as before
+    assert A.title_series_tail('Azarinth Healer, Book Five', [{'name': 'Azarinth Healer', 'sequence': '5'}], 'Azarinth Healer') is None

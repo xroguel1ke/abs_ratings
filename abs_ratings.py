@@ -1836,7 +1836,7 @@ def series_tail_head(title, abs_series, aud_title):
                 return head
     return None
 
-def title_series_tail(title, series):
+def title_series_tail(title, series, aud_title=None):
     """'Shaman's Crossing, Book One of the Soldier Son Trilogy' / 'X: Soldier Son Trilogy, Book 1' / 'X (Soldier Son Trilogy #1)' / 'X - Book 1 of the
     Soldier Son Trilogy': the title ends with one of the book's OWN series names + its own number -> the title without it, else None.
     Never when only the series name would be left ('Defiance of the Fall, Book 10', 'Mushoku Tensei: Jobless Reincarnation, Vol. 5')."""
@@ -1860,6 +1860,14 @@ def title_series_tail(title, series):
     for m in re.finditer(r'\s*[,:]\s+|\s+[-–—]\s+', t):
         tail = t[m.end():]
         if tail and named(tail) and _sbl(tail, series) and (h := ok_head(t[:m.start()])): return h
+    # audit 2026-11-28 ('The Skies of Pern: Dragonriders of Pern, Book 15', series 'Pern' #15, Audible 'The Skies of Pern'): a '<name>, Book N'
+    # label with the book's OWN number after exactly Audible's title - the label's series name need not be the ABS one
+    if aud_title and (m := re.match(r'^(.+?)\s*[:,]\s+(.{3,60}?),?\s+(?:Book|Volume|Vol\.|Band)\s+(\w+)\s*$', t, re.I)) \
+            and normalize_title_text(m.group(1)) == normalize_title_text(aud_title):
+        from abs_series import _label_text as _lt
+        num = re.search(r'(\d+(?:\.\d+)?)\s*$', _lt(f"Book {m.group(3)}"))
+        own = {strip_lead0(str(x.get('sequence'))) for x in series if x.get('sequence')}
+        if num and strip_lead0(num.group(1)) in own and (h := ok_head(m.group(1))): return h
     return None
 
 def glued_subtitle(title, abs_sub, aud_title, aud_sub, abs_series=None):
@@ -5918,7 +5926,7 @@ def process_queue(work_queue, history, failed, recheck):
                                 break
                         # 2026-11-28 (Audible's own title 'Shaman's Crossing, Book One of the Soldier Son Trilogy'): the book's OWN series label
                         # at the end of the title goes, the series field holds it - only for recently added books (the library stays as it is)
-                        lbl_t = title_series_tail(new_t, ser_now) if lib_ok_ and new_t else None
+                        lbl_t = title_series_tail(new_t, ser_now, aud_title) if lib_ok_ and new_t else None
                         if lbl_t: new_t = lbl_t
                         if new_t and new_t == title and cur_t != title:  # an earlier rule set Audible's glued title, this step cuts it back: no change
                             abs_updates.pop('title', None); log_updates[:] = [x for x in log_updates if not x.startswith('Title:')]
