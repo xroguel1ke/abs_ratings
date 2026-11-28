@@ -129,7 +129,7 @@ def test_same_series_name_up_to_punctuation_with_other_authors_goes_to_review():
 def test_intro_shift_asks_the_pauses_first():
     i = SRC.index("audit 2026-11-28 ('And Another Thing...'")
     blk = SRC[SRC.rindex("if new_chs and (why_c.startswith('the file has no chapters, length within')", 0, i):i]
-    assert "why_c.startswith(\"the file lacks Audible's\")" in blk and 'audio_chapters(' in blk
+    assert "why_c.startswith(\"the file lacks Audible's\")" in blk and "why_c.startswith('length matches Audible')" in blk and 'audio_chapters(' in blk
 
 
 def test_too_few_pauses_is_no_evidence(tmp_path, monkeypatch):
@@ -219,3 +219,11 @@ def test_audible_values_without_surrounding_spaces():
 
 def test_zero_padding_with_the_subtitle_already_set_takes_audibles_title():
     assert "abs_updates['title'] = aud_title if normalize_title_text(meta.get('subtitle') or '') == normalize_title_text(aud_sub)" in SRC
+
+
+def test_chapter_titles_are_written_without_control_characters(monkeypatch):
+    got = []
+    monkeypatch.setattr(A, 'DRY_RUN', True)
+    monkeypatch.setattr(A, 'journal_change', lambda *a: got.append(a[5]))
+    assert A.abs_set_chapters('i', 'k', 't', [{'start': 0, 'end': 5, 'title': 'Chapter 1\t'}, {'start': 5, 'end': 9, 'title': ' Two \r\n Part '}], [], 'x')
+    assert [c['title'] for c in got[0]] == ['Chapter 1', 'Two Part']

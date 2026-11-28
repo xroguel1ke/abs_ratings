@@ -1576,6 +1576,8 @@ def anchor_align(abs_chs, chs, dur, need=0.9):
 
 def abs_set_chapters(iid, key, title, new, old, source):
     """Write chapters (own ABS endpoint), journaled like every write; undo writes the old list back."""
+    # audit 2026-11-28: one cached Audible chapter list carries tabs ('Chapter 1\t') - titles are written without control characters
+    new = [dict(c, title=re.sub(r'\s+', ' ', re.sub(r'[\x00-\x1f\x7f]', ' ', str(c.get('title') or ''))).strip()) for c in new]
     if not DRY_RUN:
         r = abs_session.post(f"{ABS_URL}/api/items/{iid}/chapters", json={'chapters': new})
         if r.status_code != 200:
@@ -6663,12 +6665,14 @@ def process_queue(work_queue, history, failed, recheck):
                             if new_chs and poor == 'only numbered chapters without names' and all(RE_GENERIC_CH.match(c['title'] or '') for c in new_chs) \
                                     and not __import__('chapter_audio').coarse_parts(abs_chs, len(new_chs), abs_dur):  # 1-h file parts: Audible's finer list
                                 new_chs, why_c = None, "Audible's chapters have no names either"  # 'Chapter 1' for 'Chapter 1': nothing gained
-                            if new_chs and (why_c.startswith('the file has no chapters, length within') or why_c.startswith("the file lacks Audible's")) \
+                            if new_chs and (why_c.startswith('the file has no chapters, length within') or why_c.startswith("the file lacks Audible's")
+                                            or why_c.startswith('length matches Audible')) \
                                     and 'lock_chapters' not in tags \
                                     and audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch, verified=cover_verified)[0]:
                                 # 2026-11-26: Audible's list as it is can be up to a minute off; on the file's pauses it is exact.
                                 # audit 2026-11-28 ('And Another Thing...': the length rule shifted Audible's list by the 5 s intro the file
                                 # seemed to lack, the pauses put it at +8.5 s, 14/14 starts): an intro/outro shift asks the pauses first too
+                                # ('Fairy Tale': 'length matches Audible (-3.2 s)' put chapters up to 10.6 s off, the pauses 34/35): that one too
                                 stats['chapters'] += 1
                                 ch_done_ = True
                             elif new_chs and abs_set_chapters(iid, key, title, new_chs, abs_chs, 'audible_chapters'):

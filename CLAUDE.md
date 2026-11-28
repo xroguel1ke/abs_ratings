@@ -255,6 +255,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     (hc_year_language_ok, one lazy edition query; The Crown Tower 2011 = a Polish paperback).
     Audible values are stripped (publisher 'Brilliance Audio ', title, subtitle, authors, narrators); a recent book's publisher with
     surrounding spaces is cleaned (lib_ok_).
+    Chapter titles are written without control characters (abs_set_chapters; one Audible list had tabs). 'length matches Audible'
+    asks the pauses first too (Fairy Tale: up to 10.6 s off). Library: 255 + 64 books carry length-only chapters (decision list).
   - Per-book state files (results, source_state, history, failed, recheck, Goodreads/Hardcover cache, cover_state) are MERGED on write (rw_json,
     2026-11-27): only keys this process changed since it read the file; a second process (Goodreads background, a docker-exec run)
     no longer drops the other's books (Moon Over Soho + The Lost Plot lost their results).
