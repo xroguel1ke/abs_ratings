@@ -6059,7 +6059,8 @@ def process_queue(work_queue, history, failed, recheck):
                                 # back and forth in every run): the series task decided them last - it decides again in every scan, the book step
                                 # leaves them
                                 logging.info(f"        ℹ️ Genres kept: set by the series task ({current_genres})")
-                            elif [_gk(x) for x in rebuilt_] != [_gk(x) for x in current_genres if isinstance(x, str)]:
+                            elif sorted(_gk(x) for x in rebuilt_) != sorted(_gk(x) for x in current_genres if isinstance(x, str)):
+                                # (audit 2026-11-28, A Sacrifice of Light: the same genres in another order were rewritten - only a real change)
                                 abs_updates['genres'] = rebuilt_
                                 log_updates.append(f"Genres: {current_genres} -> {rebuilt_}")
                         else:

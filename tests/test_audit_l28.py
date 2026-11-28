@@ -273,3 +273,7 @@ def test_no_ping_pong_between_book_step_and_series_task():
     assert "if e.get('field') not in REAPPLY_FIELDS + ('asin', 'genres'): continue" in SRC
     assert "Genres kept: set by the series task" in SRC and "str(lg_.get('source') or '') == 'genre_series'" in SRC
     assert "str(id_year) if id_year and not (cur_y_ and int(cur_y_.group(1)) <= int(id_year)) else None" in SRC
+
+
+def test_genres_are_not_rewritten_for_their_order_alone():
+    assert "elif sorted(_gk(x) for x in rebuilt_) != sorted(_gk(x) for x in current_genres if isinstance(x, str)):" in SRC
