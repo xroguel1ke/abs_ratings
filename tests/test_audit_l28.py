@@ -360,3 +360,21 @@ def test_no_second_series_that_an_existing_one_holds_with_the_same_number():
         assert len(out) == 2  # a real sub-series stays next to Audible's
     finally:
         A.SERIES_FACTS = old
+
+
+def test_anchor_aligned_marks_keep_the_file_times_and_bad_lists_are_never_written():
+    # big run 2026-11-28 'He Who Fights with Monsters 10': offset -42.6 s put 'Opening Credits' at 0 -> -21.8 s
+    aud = [(0.0, 21.8, 'Opening Credits'), (21.8, 40.6, "Author's Note")]
+    st = 62.4
+    for i in range(92):
+        L = 900 + (i * 37) % 400
+        aud.append((st, L, f'Chapter {i + 1}: Name {i}')); st += L
+    aud.append((st, 63.4, 'End Credits')); st += 63.4
+    dur = st - 42.6
+    marks = [0.0, 19.78, 60.11] + [a[0] - 42.6 for a in aud[3:]]
+    abs_chs = [{'start': m, 'end': (marks[i + 1] if i + 1 < len(marks) else dur), 'title': f'Chapter {i + 1}'} for i, m in enumerate(marks)]
+    new, why = A.match_chapters(abs_chs, dur, (aud, 3.97, 4.9))
+    assert 'names on the file' in why
+    assert [c['start'] for c in new] == [c['start'] for c in abs_chs] and new[2]['title'] == 'Chapter 1: Name 0'
+    assert all(c['end'] >= c['start'] >= 0 for c in new)
+    assert "a list with a negative time, an end before its start or starts that go" in SRC

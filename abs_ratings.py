@@ -1506,8 +1506,13 @@ def match_chapters(abs_chs, dur, aud):
     an = anchor_align(abs_chs, chs, dur)
     if an:  # Audible's starts moved by the measured offset, cut at the end of the file (marks past the end are dropped)
         off = an[0]
+        if abs_chs and len(abs_chs) == len(chs) and max(float(c.get('end') or 0) for c in abs_chs) <= dur + 2:
+            # big run 2026-11-28 ('He Who Fights with Monsters 10': 95 marks, 93/94 at Audible's starts, offset -42.6 s): the file's own
+            # marks ARE Audible's chapters - their times stay, only the names come from Audible (the shift put credits before 0 s)
+            return [{'id': i, 'start': float(c['start']), 'end': float(c['end']), 'title': titles[i] or c.get('title')} for i, c in enumerate(abs_chs)], \
+                   f"the file's chapter marks sit at Audible's chapter starts ({an[1]}/{an[2]}, offset {off:+.1f} s): Audible's names on the file's marks"
         starts = [0.0] + [c[0] + off for c in chs[1:]]
-        keep = [i for i, st in enumerate(starts) if st < dur - 1]
+        keep = [i for i, st in enumerate(starts) if st < dur - 1 and (i == 0 or st > 0.5)]  # a mark moved before the file start is gone
         return mk([starts[i] for i in keep], [titles[i] for i in keep]), f"the file's chapter marks sit at Audible's chapter starts ({an[1]}/{an[2]}, offset {off:+.1f} s)"
     if dm := drifting_marks(abs_chs, chs, dur): return dm
     if abs(diff) > 120: return None, f"length differs by {diff:+.0f} s"
@@ -1601,6 +1606,11 @@ def abs_set_chapters(iid, key, title, new, old, source):
     """Write chapters (own ABS endpoint), journaled like every write; undo writes the old list back."""
     # audit 2026-11-28: one cached Audible chapter list carries tabs ('Chapter 1\t') - titles are written without control characters
     new = [dict(c, title=re.sub(r'\s+', ' ', re.sub(r'[\x00-\x1f\x7f]', ' ', str(c.get('title') or ''))).strip()) for c in new]
+    # big run 2026-11-28 (HWFM 10: 'Opening Credits' 0 -> -21.8 s): a list with a negative time, an end before its start or starts that go
+    # back is never written
+    if not new or any(float(c.get('start') or 0) < 0 or float(c.get('end') or 0) < float(c.get('start') or 0) for c in new) \
+            or any(float(b.get('start') or 0) < float(a.get('start') or 0) for a, b in zip(new, new[1:])):
+        logging.warning(f"        ⚠️ Chapters for '{title}' not written: the new list has times that go back or below 0 s ({source})"); return False
     if not DRY_RUN:
         r = abs_session.post(f"{ABS_URL}/api/items/{iid}/chapters", json={'chapters': new})
         if r.status_code != 200:

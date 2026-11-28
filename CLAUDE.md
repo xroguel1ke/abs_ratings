@@ -276,6 +276,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     same_chapters(): Audible's list equal to the book's (count, starts within 0.5 s, titles) is not written again (Excalibur: 6 file parts
     rewritten on every run). series_cleanup: an ADDED series whose name an existing series of the book holds as words with the same
     number is dropped ('Witness' #1 next to 'Tales of Witness (Malazan Universe)' #1).
+    match_chapters anchor path: same count as the file's marks -> Audible's NAMES on the file's own times (HWFM 10: the -42.6 s shift put
+    'Opening Credits' at 0 -> -21.8 s); abs_set_chapters never writes a list with a time below 0, an end before its start or starts going back.
     ASIN plausibility 'wrong' (title off + runtime >5 min) is re-checked with the BOOK FOLDER title when that equals Audible's title: then the
     ASIN stays (asin_by_folder_title), and a NEW book with a shared narrator and runtime within 10 % takes Audible's title (Shadow and Bone,
     tag title 'Alina Starkov Trilogy', 30 min extras); the box-set number check then looks at the new title.
