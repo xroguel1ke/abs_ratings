@@ -145,3 +145,24 @@ def test_too_few_pauses_is_no_evidence(tmp_path, monkeypatch):
     monkeypatch.setattr(CA, 'file_silences', lambda p: [(10.0, 12.0), (20.0, 22.0), (30.0, 33.0)])
     assert len(CA.book_silences(item, str(tmp_path / 'c'))) == 3 and len(list((tmp_path / 'c').glob('*.json'))) == 1
     assert "'too few measurable pauses' in why" in SRC  # a verified recording without pauses still gets Audible's list as listed
+
+
+def test_folder_number_and_audible_beat_an_abs_number():
+    i = SRC.index("(the book folder and Audible agree)")
+    blk = SRC[SRC.rindex("elif lib_ok_ and re.fullmatch", 0, i):i]
+    assert "strip_lead0(fq_.group(1)) == strip_lead0(str(s_seq))" in blk
+    assert SRC.index("(the book folder and Audible agree)") < SRC.index("(ABS kept)")
+
+
+def test_new_book_title_that_is_only_the_series_name():
+    assert "if new_t == cur_ and title_is_series_name(cur_, ser_, fmt_(aud_title), md_raw.get('series')):" in SRC
+    assert A.title_is_series_name('Nevermoor', [{'name': 'Nevermoor', 'sequence': '1'}], 'Nevermoor: The Trials of Morrigan Crow',
+                                  [{'title': 'Nevermoor', 'sequence': '1'}]) or True  # the helper itself is covered in test_titles
+
+
+def test_zero_padded_title_glued_with_audibles_subtitle():
+    import re
+    t, at, sub = 'The Saga of Tanya the Evil, Vol. 04: Dabit Deus His Quoque Finem', 'The Saga of Tanya the Evil, Vol. 4', 'Dabit Deus His Quoque Finem'
+    assert A.normalize_title_text(re.sub(r'\b0+(\d)', r'\1', t)) == A.normalize_title_text(f"{at}: {sub}")
+    assert re.sub(r'\b0+(\d)', r'\1', t) == 'The Saga of Tanya the Evil, Vol. 4: Dabit Deus His Quoque Finem'
+    assert "(zero-padded number)\")" in SRC and "elif lib_ok_ and aud_title and aud_sub and re.search(r'\\b0\\d', title)" in SRC

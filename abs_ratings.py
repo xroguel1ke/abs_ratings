@@ -5713,6 +5713,8 @@ def process_queue(work_queue, history, failed, recheck):
                         same_lbl = _sl(cur_, ser_) and _sl(fmt_(aud_title), ser_) and _sl(cur_, ser_)[1] == _sl(fmt_(aud_title), ser_)[1]
                         # 'Defiance of the Fall 10' vs Audible 'Defiance of the Fall, Book 10': the series task chose the form, keep it
                         new_t = cur_ if same_lbl or normalize_title_text(aud_title) == normalize_title_text(cur_) or not new_book_title_ok(cur_, aud_title, folder_book_title(item_data)) else fmt_(aud_title)
+                        if new_t == cur_ and title_is_series_name(cur_, ser_, fmt_(aud_title), md_raw.get('series')):
+                            new_t = fmt_(aud_title)  # audit 2026-11-28 ('Nevermoor' #1 = Audible 'Nevermoor: The Trials of Morrigan Crow'): only the series name
                         # new-books test 2026-11-16: the same title with file junk or in file-name case ('The Primal Hunter 3 [Audiobook] [2022]',
                         # 'GUARDS! GUARDS!', 'overlord_vol_3') - Audible's spelling
                         junk_ = strip_title_junk(cur_)[0] != cur_ or '_' in cur_ or (len(cur_) >= 6 and (cur_.isupper() or cur_.islower()))
@@ -5734,6 +5736,13 @@ def process_queue(work_queue, history, failed, recheck):
                         else:
                             abs_updates['title'] = aud_title
                             log_updates.append(f"Title: '{title}' -> '{aud_title}' (format label / zero-padded number)")
+                    elif lib_ok_ and aud_title and aud_sub and re.search(r'\b0\d', title) and not re.search(r'\b0\d', f"{aud_title} {aud_sub}") \
+                            and 'lock_title' not in tags and same_recording(abs_dur, meta.get('narrators'), aud_data) \
+                            and normalize_title_text(re.sub(r'\b0+(\d)', r'\1', title)) == normalize_title_text(f"{aud_title}: {aud_sub}"):
+                        # audit 2026-11-28 ('The Saga of Tanya the Evil, Vol. 04: Dabit Deus His Quoque Finem', Audible 'Vol. 4' + that subtitle):
+                        # the same title without the zero-padding of the file name
+                        abs_updates['title'] = re.sub(r'\b0+(\d)', r'\1', title)
+                        log_updates.append(f"Title: '{title}' -> '{abs_updates['title']}' (zero-padded number)")
                     elif aud_title and same_recording(abs_dur, meta.get('narrators'), aud_data) and normalize_title_text(aud_title) != normalize_title_text(title) \
                             and any(re.fullmatch(r'(?i)\s*' + re.escape(str(s_.get('name') or '').strip()) + r'\s*#\s*\d+(?:\.\d+)?\s*', title)  # only the '#N' label: 'Beware of Chicken 2' IS the title (Audible adds marketing)
                                     or (normalize_title_text(title) == normalize_title_text(s_.get('name') or '') and normalize_title_text(aud_title).startswith(normalize_title_text(title) + ' ')
@@ -6177,6 +6186,12 @@ def process_queue(work_queue, history, failed, recheck):
                                             # number and no other library book of this series holds it -> the ABS number is no own numbering, it is wrong.
                                             # Own reading orders stay: Dune 2-6 (Audible 13-17, Hardcover 2-6), First Law World 4-6 (Audible's 1-3 taken)
                                             logging.info(f"        🔢 Series '{canon}': ABS #{existing['sequence']} -> #{s_seq} (Audible and Hardcover agree, the number is free in the library)")
+                                            existing['sequence'] = s_seq
+                                        elif lib_ok_ and re.fullmatch(r'\d+(?:\.\d+)?', str(s_seq)) and (fq_ := re.match(r'^(?:book\s*)?(\d+(?:\.\d+)?)\s+-\s+',
+                                                str(item_data.get('relPath') or '').replace('\\', '/').split('/')[-1], re.I)) and strip_lead0(fq_.group(1)) == strip_lead0(str(s_seq)):
+                                            # audit 2026-11-28 ('The Emperor's Soul': ABS #0, its folder '02 - ...' and Audible #2): the folder number and
+                                            # Audible agree - the ABS number is no own numbering
+                                            logging.info(f"        🔢 Series '{canon}': ABS #{existing['sequence']} -> #{s_seq} (the book folder and Audible agree)")
                                             existing['sequence'] = s_seq
                                         else:
                                             logging.info(f"        ℹ️ Series '{canon}': ABS #{existing['sequence']} vs Audible #{s_seq} (ABS kept)")

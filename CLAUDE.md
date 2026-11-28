@@ -243,6 +243,10 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     and >= 100 ratings is our book (The Green Mile got part 5 'Night Journey'); year later than the same recording's release -> its year.
     A book with an open review entry (REVIEW_RECHECK_KINDS) is checked again after REVIEW_RECHECK_DAYS=7 (done entries go; REFRESH_DAYS is 100).
     Series names equal up to punctuation with other authors (shared world: 'Space Marine Conquests - / : Warhammer 40,000') -> merge review.
+    Chapters: an intro/outro shift (match_chapters 'the file lacks Audible's ...') asks the pauses first (And Another Thing... 12.7 s off);
+    a long file with < 3 pauses is not cached, decide() needs >= 1 pause per 30 min (White Wolf). Series: folder number + Audible agree ->
+    Audible's (lib_ok_; The Emperor's Soul #0). New book whose title is only the series name -> Audible's (Nevermoor). 'Vol. 04: <Audible's
+    subtitle>' -> 'Vol. 4: ...' (lib_ok_; Tanya the Evil).
   - Per-book state files (results, source_state, history, failed, recheck, Goodreads/Hardcover cache, cover_state) are MERGED on write (rw_json,
     2026-11-27): only keys this process changed since it read the file; a second process (Goodreads background, a docker-exec run)
     no longer drops the other's books (Moon Over Soho + The Lost Plot lost their results).
