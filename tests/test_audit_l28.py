@@ -285,3 +285,14 @@ def test_label_after_audibles_exact_title_goes():
     assert A.title_series_tail('The Skies of Pern: Dragonriders of Pern, Book 14', S, 'The Skies of Pern') is None  # another number
     assert A.title_series_tail('The Skies of Pern: Dragonriders of Pern, Book 15', S) is None  # without Audible's title: as before
     assert A.title_series_tail('Azarinth Healer, Book Five', [{'name': 'Azarinth Healer', 'sequence': '5'}], 'Azarinth Healer') is None
+
+
+def test_own_series_prefix_with_own_number():
+    f = A.title_series_tail
+    assert f('The Godling Chronicles: The Reborn King, Book 6', [{'name': 'The Godling Chronicles', 'sequence': '6'}]) == 'The Reborn King'
+    assert f('The Prydain Chronicles Book One: The Book of Three', [{'name': 'The Prydain Chronicles', 'sequence': '1'}]) == 'The Book of Three'
+    assert f('Lockwood & Co., Book Five The Empty Grave', [{'name': 'Lockwood & Co.', 'sequence': '5'}]) == 'The Empty Grave'
+    assert f('The Prydain Chronicles Book One: The Book of Three', [{'name': 'The Prydain Chronicles', 'sequence': '2'}]) is None  # other number
+    assert f('The Saga of Tanya the Evil, Vol. 4: Dabit Deus His Quoque Finem', [{'name': 'The Saga of Tanya the Evil', 'sequence': '4'}]) is None  # LN style
+    assert f('Neon Genesis Evangelion: ANIMA, Vol. 2: Light Novel', [{'name': 'Neon Genesis Evangelion: ANIMA', 'sequence': '2'}]) is None
+    assert f('Mistborn: The Final Empire', [{'name': 'Mistborn', 'sequence': '1'}]) is None

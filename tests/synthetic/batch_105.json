@@ -14504,9 +14504,9 @@
    "asin": "B07GHQXJ71",
    "status": "confirmed",
    "title": "Matt Miller in the Colonies: Book Two: Prophet",
-   "note": "synthetic case duplicate_title; true product B07GHQXJ71",
+   "note": "synthetic case duplicate_title; true product B07GHQXJ71 | 2026-11-28: own series name + Book N in front go (user OK)",
    "case": "duplicate_title",
-   "expect_title": "Matt Miller in the Colonies: Book Two: Prophet"
+   "expect_title": "Prophet"
   },
   "114068f9-142d-4524-b0ef-a349354b5f88_syn-105-en65": {
    "asin": "B08CJ82YJ4",

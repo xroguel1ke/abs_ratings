@@ -14242,9 +14242,9 @@
    "asin": "B002V1AHQI",
    "status": "confirmed",
    "title": "The Prydain Chronicles Book Three: The Castle of Llyr",
-   "note": "synthetic case messy_number_prefix; true product B002V1AHQI",
+   "note": "synthetic case messy_number_prefix; true product B002V1AHQI | 2026-11-28: own series name + Book N in front go (user OK)",
    "case": "messy_number_prefix",
-   "expect_title": "The Prydain Chronicles Book Three: The Castle of Llyr"
+   "expect_title": "The Castle of Llyr"
   },
   "114068f9-142d-4524-b0ef-a349354b5f88_syn-75-en49": {
    "asin": "B084WZ6H1C",

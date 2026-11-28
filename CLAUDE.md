@@ -269,6 +269,9 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     step leaves genres the series task (genre_series) set last (journal_last tracks genres); identity overrides keep an earlier year.
     Genres are written only when the set changes (not for the order). title_series_tail(t, series, aud_title): '<Audible's exact title>:
     <any name>, Book N' with the book's own number goes too (The Skies of Pern: Dragonriders of Pern, Book 15 with ABS series 'Pern').
+    Own series name IN FRONT with the own 'Book N' (user's open question (a), decided 2026-11-28 by his OK): 'The Godling Chronicles: The
+    Reborn King, Book 6' / 'The Prydain Chronicles Book One: The Book of Three' / 'Lockwood & Co., Book Five The Empty Grave' -> the title.
+    'Vol. N' (light-novel style: Tanya, Konosuba, Ishura) stays; never a format word ('Light Novel') as result.
   - Per-book state files (results, source_state, history, failed, recheck, Goodreads/Hardcover cache, cover_state) are MERGED on write (rw_json,
     2026-11-27): only keys this process changed since it read the file; a second process (Goodreads background, a docker-exec run)
     no longer drops the other's books (Moon Over Soho + The Lost Plot lost their results).

@@ -1860,6 +1860,17 @@ def title_series_tail(title, series, aud_title=None):
     for m in re.finditer(r'\s*[,:]\s+|\s+[-–—]\s+', t):
         tail = t[m.end():]
         if tail and named(tail) and _sbl(tail, series) and (h := ok_head(t[:m.start()])): return h
+    # audit 2026-11-28, user's open question (a) decided by his OK "so, wie die Metadaten sauberer werden": the OWN series name in FRONT
+    # with the own number ('The Godling Chronicles: The Reborn King, Book 6', 'Lockwood & Co., Book Five: The Empty Grave') -> the title
+    from abs_series import _same_series_name as _ssn2, _label_text as _lt2
+    own_q = {strip_lead0(str(x.get('sequence'))) for x in series if x.get('sequence')}
+    num_ok = lambda w: (mm := re.search(r'(\d+(?:\.\d+)?)\s*$', _lt2(f"Book {w}"))) and strip_lead0(mm.group(1)) in own_q
+    for pat in (r'^(?P<s>.+?):\s+(?P<t>.+?),?\s+(?:Book|Band)\s+(?P<n>\w+)\s*$',
+                r'^(?P<s>.+?),?\s+(?:Book|Band)\s+(?P<n>\w+)\s*[:\-–]\s*(?P<t>.+)$',
+                r'^(?P<s>.+?),\s+(?:Book|Band)\s+(?P<n>[A-Za-z]+)\s+(?P<t>(?:The|A|An)\s.+)$'):
+        if (m := re.match(pat, t, re.I)) and num_ok(m.group('n')) and any(_ssn2(m.group('s'), str(x.get('name') or '')) for x in series) \
+                and (h := ok_head(m.group('t'))) and not re.fullmatch(r'(?i)\W*(?:an?\s+)?(?:light\s+)?novel(?:la)?\W*', h):  # 'Vol.' = light-novel style: kept
+            return h
     # audit 2026-11-28 ('The Skies of Pern: Dragonriders of Pern, Book 15', series 'Pern' #15, Audible 'The Skies of Pern'): a '<name>, Book N'
     # label with the book's OWN number after exactly Audible's title - the label's series name need not be the ABS one
     if aud_title and (m := re.match(r'^(.+?)\s*[:,]\s+(.{3,60}?),?\s+(?:Book|Volume|Vol\.|Band)\s+(\w+)\s*$', t, re.I)) \
