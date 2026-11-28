@@ -5764,7 +5764,9 @@ def process_queue(work_queue, history, failed, recheck):
                             and normalize_title_text(re.sub(r'\b0+(\d)', r'\1', title)) == normalize_title_text(f"{aud_title}: {aud_sub}"):
                         # audit 2026-11-28 ('The Saga of Tanya the Evil, Vol. 04: Dabit Deus His Quoque Finem', Audible 'Vol. 4' + that subtitle):
                         # the same title without the zero-padding of the file name
-                        abs_updates['title'] = re.sub(r'\b0+(\d)', r'\1', title)
+                        # the subtitle field holds Audible's subtitle already (Tanya the Evil 8, audit 2026-11-28): Audible's title alone
+                        abs_updates['title'] = aud_title if normalize_title_text(meta.get('subtitle') or '') == normalize_title_text(aud_sub) \
+                            else re.sub(r'\b0+(\d)', r'\1', title)
                         log_updates.append(f"Title: '{title}' -> '{abs_updates['title']}' (zero-padded number)")
                     elif aud_title and same_recording(abs_dur, meta.get('narrators'), aud_data) and normalize_title_text(aud_title) != normalize_title_text(title) \
                             and any(re.fullmatch(r'(?i)\s*' + re.escape(str(s_.get('name') or '').strip()) + r'\s*#\s*\d+(?:\.\d+)?\s*', title)  # only the '#N' label: 'Beware of Chicken 2' IS the title (Audible adds marketing)

@@ -215,3 +215,7 @@ def test_audible_values_without_surrounding_spaces():
     assert "res['narrators_raw'] = [n['name'].strip() for n in (p.get('narrators') or []) if str(n.get('name') or '').strip()]" in SRC
     assert "'authors_raw': [a['name'].strip() for a in (p.get('authors') or []) if str(a.get('name') or '').strip()]" in SRC
     assert "elif lib_ok_ and meta.get('publisher') and meta['publisher'] != meta['publisher'].strip():" in SRC
+
+
+def test_zero_padding_with_the_subtitle_already_set_takes_audibles_title():
+    assert "abs_updates['title'] = aud_title if normalize_title_text(meta.get('subtitle') or '') == normalize_title_text(aud_sub)" in SRC
