@@ -2919,7 +2919,7 @@ def search_audible_api(title, authors_list, duration, lang, raw_title=None, requ
             na_w, nf_w = set(normalize_title_text(title).split()), set(normalize_title_text(found_title).split())
             exact_rt = bool(duration and p.get('runtime_sec') and abs(duration - p['runtime_sec']) <= 120)
             if duration and p.get('runtime_sec') and not exact_rt and (SEARCH_CTX.get('need_exact_rt') or title_shared(SEARCH_CTX.get('key'), title, p['runtime_sec'])):
-                logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] (the ABS title is shared by several library books: runtime must match to ±2 min, "
+                logging.info(f"        ↪️ Rejected '{found_title}' [{cand}] ({SEARCH_CTX.get('exact_why') or 'the ABS title is shared by several library books'}: runtime must match to ±2 min, "
                              f"differs by {abs(duration - p['runtime_sec']) / 60:.0f} min)")
                 continue
             ser_same = any(an is not None and cn is not None and an == cn and (ak == ck or difflib.SequenceMatcher(None, ak, ck).ratio() >= 0.9)
@@ -5292,6 +5292,7 @@ def process_queue(work_queue, history, failed, recheck):
                 
                 should_search = False
                 unreleased_ = False  # the ASIN is a re-release that is not out yet (no ratings)
+                pref_exact_ = False  # store-preference search while the current ASIN IS this recording (runtime to 2 min)
                 check_lang = new_lang_detected if new_lang_detected else lang
 
                 # Language check: ABS and Audible disagree -> who is right?
@@ -5386,6 +5387,9 @@ def process_queue(work_queue, history, failed, recheck):
                     logging.info(f"      -> ℹ️ ASIN is from {aud_data.get('domain')}, preferred store for {map_language(check_lang)} books is {pref}. "
                                  f"Looking for the same edition there (the current ASIN is kept if there is no exact match)...")
                     should_search, strict_search, lang_target, search_only = True, True, map_language(check_lang), pref
+                    # import 2026-11-28 (Stone and Sky): the UK ASIN matched the file to 2 min, the .com edition differs by 11 min (other
+                    # master) - 'same edition' then means the runtime to 2 min as well, not only inside the library tolerance
+                    pref_exact_ = bool(abs_dur and aud_data.get('runtime_sec') and abs(abs_dur - aud_data['runtime_sec']) <= 120)
 
                 if should_search and asin and 'lock_asin' in tags:
                     logging.info(f"      -> 🔒 ASIN search skipped (lock_asin), keeping {asin}")
@@ -5416,7 +5420,8 @@ def process_queue(work_queue, history, failed, recheck):
                     SEARCH_CTX['dup_claim'] = bool(asin and (ASIN_OWNERS.get(asin, set()) - {key}))  # another ABS book has the same ASIN
                     SEARCH_CTX['pub'], SEARCH_CTX['year'] = meta.get('publisher'), meta.get('publishedYear')
                     SEARCH_CTX['key'] = key; SEARCH_CTX['has_asin'] = bool(asin)
-                    if folder_fix or SEARCH_CTX_need_exact: SEARCH_CTX['need_exact_rt'] = True
+                    if folder_fix or SEARCH_CTX_need_exact or pref_exact_: SEARCH_CTX['need_exact_rt'] = True
+                    if pref_exact_: SEARCH_CTX['exact_why'] = 'the current ASIN is this exact recording'
                     SEARCH_CTX['want_vol'] = extract_volume(search_title)  # the volume we are looking for (twin check)
                     if asin and aud_data and aud_data.get('title_raw'):
                         SEARCH_CTX.update({'old_title': aud_data['title_raw'], 'old_authors': ', '.join(aud_data.get('authors_raw') or [])})
@@ -6205,6 +6210,13 @@ def process_queue(work_queue, history, failed, recheck):
                         else:
                             abs_updates['authors'] = [{'name': n} for n in a_auth]
                             log_updates.append(f"Author field held the narrator: authors -> {a_auth}")
+                    elif exact_rec and a_auth and len(authors) == 1 and 'lock_authors' not in tags and aud_data.get('title_raw') \
+                            and normalize_title_text(authors[0]) == normalize_title_text(aud_data['title_raw']) \
+                            and set(_nk([title])) <= set(_nk(a_auth)) and not set(_nk(authors)) & set(_nk(a_auth)):
+                        # import 2026-11-28 (Guns of Tanith): file tags with title and author swapped (title 'Dan Abnett', author 'Guns of
+                        # Tanith') - same recording, the ABS author IS Audible's title and the ABS title is Audible's author -> Audible's authors
+                        abs_updates['authors'] = [{'name': n} for n in a_auth]
+                        log_updates.append(f"Title and author were swapped: authors -> {a_auth}")
                     elif exact_rec and len(authors) == 1 and len(a_auth) >= 2 and 'lock_authors' not in tags \
                             and ''.join(_nk(authors)) in (''.join(re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in a_auth),
                                                           ''.join(re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in reversed(a_auth))):

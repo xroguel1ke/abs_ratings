@@ -34,3 +34,16 @@ def test_narrator_in_author_field_with_narrator_set_gets_audibles_author():
     assert 'log_updates.append(f"Author field held the narrator: authors -> {a_auth}")' in SRC
     # no review entry 'Audible names other authors' once the author field was corrected
     assert "if not abs_updates.get('authors') and not match_author(authors, ', '.join(aud_auth))" in SRC
+
+
+def test_title_and_author_swapped_in_tags_gets_audibles_author():
+    # import 2026-11-28 (Guns of Tanith): title 'Dan Abnett', author 'Guns of Tanith' -> author Dan Abnett, no 'Guns of Tanith' co-author
+    assert "and normalize_title_text(authors[0]) == normalize_title_text(aud_data['title_raw'])" in SRC
+    assert 'log_updates.append(f"Title and author were swapped: authors -> {a_auth}")' in SRC
+
+
+def test_store_preference_keeps_an_exact_recording():
+    # import 2026-11-28 (Stone and Sky): UK ASIN = the file to 2 min, the .com edition 11 min off -> the UK ASIN stays
+    assert "pref_exact_ = bool(abs_dur and aud_data.get('runtime_sec') and abs(abs_dur - aud_data['runtime_sec']) <= 120)" in SRC
+    assert "if folder_fix or SEARCH_CTX_need_exact or pref_exact_: SEARCH_CTX['need_exact_rt'] = True" in SRC
+    assert SRC.index("pref_exact_ = False") < SRC.index("pref_exact_ = bool(")
