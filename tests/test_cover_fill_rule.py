@@ -27,7 +27,7 @@ def test_replace_keeps_the_strict_rule():
     assert "(cover_ok_ and (UPDATE_COVERS or id_switch) and has_cover" in b
     assert 'not lang_conflict' in b
     # strict for the library: only a RECENT book gets past cover_verified
-    assert "cover_ok_ = cover_verified or bool(recent_ and asin and not lang_conflict and not aud_data.get('related_edition'))" in SRC
+    assert "cover_ok_ = cover_verified or bool(lib_ok_ and asin and not lang_conflict and not aud_data.get('related_edition'))" in SRC
 
 
 def test_cover_block_only_runs_with_metadata_sync():
