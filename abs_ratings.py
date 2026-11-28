@@ -553,6 +553,7 @@ def search_series(lib, series):
     return out
 
 SOLO_AUTHORS = {}  # author_key -> number of library books that list ONLY this author (co-author evidence, author loop 2026-11-15)
+SERIES_AUTHORS = {}  # (lib, series name lower) -> keys of ALL authors of its books (a co-author already credited in the series, 2026-11-28)
 SERIES_FACTS = {}  # (lib, series name lower) -> {'n': books, 'authors': first authors, 'folders': series folders, 'name'} (from the listing)
 FOLDER_SERIES = {}  # (lib, parent folders of the book lower) -> [{series names lower} of every book in that folder] (from the listing)
 
@@ -4591,6 +4592,7 @@ def note_listing_item(lib_id, it):
                                                                      'author_name': str(md_.get('authorName') or '').split(',')[0].strip()})
             f_ = SERIES_FACTS.setdefault((lib_id, sn_.lower()), {'n': 0, 'authors': set(), 'folders': set(), 'name': sn_, 'langs': {}})
             f_['n'] += 1; f_['authors'] |= {_first_author(md_.get('authorName'))}
+            SERIES_AUTHORS.setdefault((lib_id, sn_.lower()), set()).update(re.sub(r'[^a-z]', '', fold_accents(a_).lower()) for a_ in str(md_.get('authorName') or '').split(',') if a_.strip())
             if q_: f_['numbered'] = f_.get('numbered', 0) + 1
             if (l_ := map_language(md_.get('language'))) and str(md_.get('language')).lower() not in ('und', 'mul', 'zxx'):
                 f_['langs'][l_] = f_['langs'].get(l_, 0) + 1
@@ -6577,7 +6579,16 @@ def process_queue(work_queue, history, failed, recheck):
                         co_maybe = [an for an in aud_auth if re.sub(r'[^a-z]', '', fold_accents(an).lower()) not in abs_norm and not match_author(authors, an)
                                     and an not in co_ and 2 <= len(an.split()) <= 4
                                     and not re.search(r'(?i)\d|\b(?:books|publishing|press|studios?|media|audio|entertainment|llc|inc)\b', an)]
-                        if co_maybe and not co_ and 'lock_authors' not in tags and same_recording(abs_dur, meta.get('narrators'), aud_data):
+                        ser_auth_ = set().union(*[SERIES_AUTHORS.get((lib_id, str(x.get('name') or '').strip().lower()), set()) for x in meta.get('series') or []]) \
+                            if meta.get('series') else set()
+                        co_ser_ok = lambda names_: bool(lib_ok_ and names_ and not lang_conflict and ser_auth_
+                                                        and all(re.sub(r'[^a-z]', '', fold_accents(an).lower()) in ser_auth_ for an in names_)
+                                                        and title_similarity(title, aud_data.get('title_raw') or '') >= 0.9)
+                        co_series_ = co_ser_ok(co_maybe)
+                        if co_maybe and not co_ and 'lock_authors' not in tags and (same_recording(abs_dur, meta.get('narrators'), aud_data) or co_series_):
+                            # import 2026-11-28 ('Dragons of Autumn Twilight': Weis only, Audible 'Margaret Weis, Tracy Hickman', file 26 min off):
+                            # authors belong to the BOOK - another recording of it still names them when the co-author is already credited on
+                            # another book of the same series in the library (Dragons of Spring Dawning)
                             # user 2026-11-24 ('extrem viele Bücher' on the review list, 90 of them): a co-author Audible lists for exactly this
                             # recording is ADDED, also without own books here and also when it may be a pen name ('wenn sie wichtig genug sind
                             # um auf dem cover zu stehen'). Never a translator / illustrator / editor: names credited with such a role (on
@@ -6586,8 +6597,9 @@ def process_queue(work_queue, history, failed, recheck):
                             if role_: logging.info(f"        ℹ️ Not added as author: {', '.join(role_)} (credited as translator / illustrator / editor elsewhere)")
                             if [an for an in co_maybe if an not in role_]:
                                 co_late = ([a_ for a_ in aud_auth if a_ in co_maybe or match_author(authors, a_)], [an for an in co_maybe if an not in role_])
-                        if co_ and 'lock_authors' not in tags and not abs_updates.get('authors') and same_recording(abs_dur, meta.get('narrators'), aud_data) \
-                                and all(len(a_.split()) >= 2 for a_ in authors):
+                        if co_ and 'lock_authors' not in tags and not abs_updates.get('authors') \
+                                and (same_recording(abs_dur, meta.get('narrators'), aud_data) or co_ser_ok(co_)) \
+                                and all(len(a_.split()) >= 2 for a_ in authors):  # Towers of Midnight + Brandon Sanderson (another recording, 2026-11-28)
                             order_ = [a_ for a_ in aud_auth if a_ in co_ or match_author(authors, a_)]
                             new_a = [next((a_ for a_ in authors if match_author([a_], b_)), b_) for b_ in order_] + [a_ for a_ in authors if not any(match_author([a_], b_) for b_ in order_)]
                             abs_updates['authors'] = [{'name': n_} for n_ in dict.fromkeys(new_a)]

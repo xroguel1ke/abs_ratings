@@ -382,3 +382,10 @@ def test_anchor_aligned_marks_keep_the_file_times_and_bad_lists_are_never_writte
 
 def test_audiobook_word_at_the_title_end_goes():
     assert "or lib_ok_ and re.sub(r'(?i)[\\s\\-–(\\[]*\\b(?:audio\\s?book|h(?:ö|oe)rbuch)\\b[)\\]]?\\s*$', '', title).strip() == aud_title" in SRC
+
+
+def test_series_coauthor_added_for_another_recording():
+    assert "SERIES_AUTHORS.setdefault((lib_id, sn_.lower()), set()).update(" in SRC
+    assert "(same_recording(abs_dur, meta.get('narrators'), aud_data) or co_series_)" in SRC
+    assert "(same_recording(abs_dur, meta.get('narrators'), aud_data) or co_ser_ok(co_))" in SRC
+    assert "and title_similarity(title, aud_data.get('title_raw') or '') >= 0.9)" in SRC

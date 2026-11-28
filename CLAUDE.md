@@ -279,6 +279,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     match_chapters anchor path: same count as the file's marks -> Audible's NAMES on the file's own times (HWFM 10: the -42.6 s shift put
     'Opening Credits' at 0 -> -21.8 s); abs_set_chapters never writes a list with a time below 0, an end before its start or starts going back.
     A trailing 'Audiobook' / 'Hörbuch' word goes when the rest is exactly Audible's title of the same recording ('Invent Audiobook').
+    Co-author of ANOTHER recording (lib_ok_, title ~ Audible >= 0.9): added when that person is already an author of another book of the
+    same series in the library (SERIES_AUTHORS; Dragons of Autumn Twilight + Tracy Hickman); Hardcover's role check still applies (co_late).
     ASIN plausibility 'wrong' (title off + runtime >5 min) is re-checked with the BOOK FOLDER title when that equals Audible's title: then the
     ASIN stays (asin_by_folder_title), and a NEW book with a shared narrator and runtime within 10 % takes Audible's title (Shadow and Bone,
     tag title 'Alina Starkov Trilogy', 30 min extras); the box-set number check then looks at the new title.
