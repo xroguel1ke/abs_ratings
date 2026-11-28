@@ -262,6 +262,9 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     Audible's aligned starts sit at an own mark (Fairy Tale '01-36 Fairy Tale', 34/35).
     Subtitles that only name the kind of book ('A Novel', 'A Thriller', RE_GENERIC_SUBTITLE) go; chapter titles with control characters
     are rewritten clean (same times, source chapter_titles_cleaned).
+    Hardcover: role credits are no search authors (Relict Pyramid 'Andrew Schmitt - translator'); hc_target_titles adds the part after a
+    series-name prefix ('The Royal Ranger: The Red Fox Clan' -> 'The Red Fox Clan'; hc golden: Monarch now 'a-prince-out-of-time',
+    Knights -> 'the-eye-of-divinity' with ratings).
   - Per-book state files (results, source_state, history, failed, recheck, Goodreads/Hardcover cache, cover_state) are MERGED on write (rw_json,
     2026-11-27): only keys this process changed since it read the file; a second process (Goodreads background, a docker-exec run)
     no longer drops the other's books (Moon Over Soho + The Lost Plot lost their results).

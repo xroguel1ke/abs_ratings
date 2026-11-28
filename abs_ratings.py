@@ -3668,7 +3668,7 @@ def hc_goodreads_ids(book):
     """Goodreads book IDs Hardcover knows for this book (one per edition; the rating belongs to the work, any edition page shows it)."""
     return [m["external_id"] for m in (book or {}).get("book_mappings") or [] if str(m.get("external_id", "")).isdigit()]
 
-def hc_target_titles(aud, search_title, title, abs_subtitle=None):
+def hc_target_titles(aud, search_title, title, abs_subtitle=None, series=None):
     """Titles a Hardcover hit is compared with. The first one is also the search query (unchanged).
     Added for comparison only: 'Title: Subtitle' (Hardcover search documents store the subtitle inside the title:
     'A Book Forged in Hell: Spinoza's Scandalous Treatise ...') and the book title after a numbered series prefix
@@ -3677,9 +3677,16 @@ def hc_target_titles(aud, search_title, title, abs_subtitle=None):
     out = [aud.get('title_raw'), search_title, title]
     if aud.get('title_raw') and aud.get('subtitle_raw'): out.append(f"{aud['title_raw']}: {aud['subtitle_raw']}")
     if title and abs_subtitle: out.append(f"{title}: {abs_subtitle}")
+    # audit 2026-11-28 ('The Royal Ranger: The Red Fox Clan': Hardcover lists 'The Red Fox Clan', #2 of 'Ranger's Apprentice: The Royal
+    # Ranger' - the full title fit only as alternative title and was rejected as another volume): the part after a SERIES name prefix
+    ser_names = [str(x.get('name') or x.get('title') or '') for x in list((aud.get('meta_raw') or {}).get('series') or []) + list(series or [])
+                 if isinstance(x, dict)]
     for t in (aud.get('title_raw'), title):
         m = re.match(r'^(.+?):\s*(.+)$', t or '')
         if m and extract_volume(m.group(1)) and len(m.group(2).strip()) >= 6 and not extract_volume(m.group(2)):
+            out.append(m.group(2).strip())
+        elif m and len(m.group(2).strip()) >= 6 and len(normalize_title_text(m.group(1))) >= 4 and any(
+                f" {normalize_title_text(m.group(1))} " in f" {normalize_title_text(n)} " for n in ser_names if n):
             out.append(m.group(2).strip())
     return list(dict.fromkeys(t for t in out if t))
 
@@ -3879,6 +3886,10 @@ def get_hardcover_data(key, targets, authors, asin, isbn, manual_url=None, use_c
     """Returns (data, status) with status in 'found', 'not_found', 'blocked', 'disabled'."""
     HC_CTX['lang'] = map_language(lang) if lang else None
     HC_CTX['title'] = abs_title
+    # audit 2026-11-28 (Relict Pyramid: the search asked 'The Mysteries of the Relict Pyramid Andrew Schmitt - translator'): role credits
+    # are no authors for the search and the author check - the real authors only (unchanged when there are none)
+    from abs_series import is_role_credit as _irc_h
+    authors = [a for a in (authors or []) if not _irc_h(a)] or list(authors or [])
     if not HARDCOVER_ENABLED: return None, 'disabled'
     if HC_STATE['disabled']:
         logging.info(f"      -> ⏭️ Hardcover skipped ({HC_STATE['disabled']})")
@@ -6709,7 +6720,7 @@ def process_queue(work_queue, history, failed, recheck):
                             else: logging.info(f"        ℹ️ Own chapters kept ({len(abs_chs)}, Audible {len(aud_ch[0])}): {a_why_}")
 
                 # Hardcover: ratings only. Audible's clean title first, the ABS title as second comparison.
-                hc_targets = hc_target_titles(aud_data if not skip_meta else None, search_title, title, meta.get('subtitle'))
+                hc_targets = hc_target_titles(aud_data if not skip_meta else None, search_title, title, meta.get('subtitle'), meta.get('series'))
                 hc_wrong = False  # a cached / linked Hardcover book turned out to be another book (its old rating line must go)
                 if 'hardcover' in src_due or not HARDCOVER_ENABLED:
                     hc_data, hc_status = get_hardcover_data(key, hc_targets, list(dict.fromkeys([*authors, *((aud_data or {}).get('authors_raw') or [])])),  # ABS and Audible authors (ABS sometimes lists the translator)

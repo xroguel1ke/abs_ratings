@@ -249,3 +249,17 @@ def test_generic_subtitles_and_chapter_title_cleanup():
         assert not A.RE_GENERIC_SUBTITLE.fullmatch(x), x
     assert "if lib_ok_ and gen_s and RE_GENERIC_SUBTITLE.fullmatch(gen_s.strip())" in SRC
     assert "'chapter_titles_cleaned'" in SRC
+
+
+def test_hardcover_search_without_role_credits():
+    i = SRC.index('def get_hardcover_data(')
+    assert "authors = [a for a in (authors or []) if not _irc_h(a)] or list(authors or [])" in SRC[i:i + 1500]
+
+
+def test_hardcover_targets_drop_a_series_name_prefix():
+    aud = {'title_raw': 'The Royal Ranger: The Red Fox Clan', 'meta_raw': {'series': [{'name': "Ranger's Apprentice: The Royal Ranger", 'part': '2'}]}}
+    t = A.hc_target_titles(aud, 'The Royal Ranger: The Red Fox Clan', 'The Royal Ranger: The Red Fox Clan', None, [{'name': "Ranger's Apprentice", 'sequence': '12'}])
+    assert t[0] == 'The Royal Ranger: The Red Fox Clan' and 'The Red Fox Clan' in t  # the query stays the full title
+    assert A.hc_target_titles({'title_raw': 'Dune: Part One'}, 'Dune: Part One', 'Dune: Part One') == ['Dune: Part One']  # no series: unchanged
+    t2 = A.hc_target_titles({'title_raw': 'High Druid of Shannara: Jarka Ruus'}, 'x', 'High Druid of Shannara: Jarka Ruus', None, [{'name': 'High Druid of Shannara', 'sequence': '1'}])
+    assert 'Jarka Ruus' in t2
