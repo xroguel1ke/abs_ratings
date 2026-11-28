@@ -1823,6 +1823,32 @@ def series_tail_head(title, abs_series, aud_title):
                 return head
     return None
 
+def title_series_tail(title, series):
+    """'Shaman's Crossing, Book One of the Soldier Son Trilogy' / 'X: Soldier Son Trilogy, Book 1' / 'X (Soldier Son Trilogy #1)' / 'X - Book 1 of the
+    Soldier Son Trilogy': the title ends with one of the book's OWN series names + its own number -> the title without it, else None.
+    Never when only the series name would be left ('Defiance of the Fall, Book 10', 'Mushoku Tensei: Jobless Reincarnation, Vol. 5')."""
+    from abs_series import _subtitle_label as _sbl, _same_series_name as _ssn
+    t = (title or '').strip()
+    if not t or not series: return None
+    n = lambda x: normalize_title_text(x or '')
+    def ok_head(h):
+        h = h.strip(' ,:-–—')
+        if len(n(h)) < 3: return None
+        for s_ in series:
+            nm = str(s_.get('name') or '').strip()
+            if nm and (_ssn(h, nm) or n(nm).startswith(n(h))): return None
+        for s_ in series:  # 'Sojourn: Legend of Drizzt' (+ ': Dark Elf Trilogy, Book 3'): another own series name before the label goes too
+            nm = str(s_.get('name') or '').strip()
+            if nm and (m_ := re.match(r'^(.+?)\s*[:,]\s+(.+)$', h)) and _ssn(m_.group(2), nm) and len(n(m_.group(1))) >= 3: return m_.group(1).strip()
+        return h
+    # the label names the series ('Book 10' alone after 'Choose Your Enemies: Ciaphas Cain: Warhammer 40,000' would leave a half title)
+    named = lambda x: any(len(n(s_.get('name'))) >= 3 and f" {n(s_.get('name'))} " in f" {n(x)} " for s_ in series)
+    if (m := re.match(r'^(.+?)\s*\(([^()]+)\)\s*$', t)) and named(m.group(2)) and _sbl(m.group(2), series) and (h := ok_head(m.group(1))): return h
+    for m in re.finditer(r'\s*[,:]\s+|\s+[-–—]\s+', t):
+        tail = t[m.end():]
+        if tail and named(tail) and _sbl(tail, series) and (h := ok_head(t[:m.start()])): return h
+    return None
+
 def glued_subtitle(title, abs_sub, aud_title, aud_sub, abs_series=None):
     """The ABS title is Audible's title + ': ' + Audible's subtitle (once or the subtitle twice) -> 'title' (title only) or 'subtitle' (title
     and the subtitle field: it is empty or names a series the book is not in - 'Moreta' had 'Victor of Tucson, Book 4'). Else None.
@@ -5772,6 +5798,9 @@ def process_queue(work_queue, history, failed, recheck):
                                 if not cur_s_ or _sbl(cur_s_, ser_now) or normalize_title_text(cur_s_) == normalize_title_text(p_) or 'lock_subtitle' in tags:
                                     new_t, tag_s = ': '.join(parts_[:i_]), p_
                                 break
+                        # 2026-11-28 (Audible's own title 'Shaman's Crossing, Book One of the Soldier Son Trilogy'): the book's OWN series label
+                        # at the end of the title goes, the series field holds it - only for recently added books (the library stays as it is)
+                        if recent_ and new_t and (lbl_t := title_series_tail(new_t, ser_now)): new_t = lbl_t
                         if new_t and new_t == title and cur_t != title:  # an earlier rule set Audible's glued title, this step cuts it back: no change
                             abs_updates.pop('title', None); log_updates[:] = [x for x in log_updates if not x.startswith('Title:')]
                         elif new_t and new_t != cur_t:
@@ -6427,15 +6456,18 @@ def process_queue(work_queue, history, failed, recheck):
                         or (new_book and not lang_conflict and verified_recording(abs_dur, meta.get('narrators'), authors, aud_data)
                             and (asin_from_search or 'title' in abs_updates or title_similarity(clean_title(title), clean_title(aud_data.get('title_raw') or '')) >= 0.85))
                     # (id_switch: confirmed other book - the old cover shows it; new book without narrator tag: runtime + author + title, 2026-11-15)
-                    if aud_data.get('cover_url') and has_cover and UPDATE_COVERS and not cover_verified and new_book and COVER_STATE.get(iid) != cover_token(asin):
+                    # user 2026-11-28 ('1922', file 3 min off Audible: metadata synced, the old cover stayed): "if the book is the right one,
+                    # just change it" - a recently added book takes the cover of the ASIN its metadata came from (not another edition / language)
+                    cover_ok_ = cover_verified or bool(recent_ and asin and not lang_conflict and not aud_data.get('related_edition'))
+                    if aud_data.get('cover_url') and has_cover and UPDATE_COVERS and not cover_ok_ and new_book and COVER_STATE.get(iid) != cover_token(asin):
                         logging.info("        🖼️ Cover kept: the recording is not verified (runtime ±2 min + narrator, or author and title without a narrator)")
                     # user 2026-11-22 ('Battle of the Labyrinth': runtime 6.6 min off, so no cover at all): a book WITHOUT a cover takes the cover of
-                    # every ASIN the match accepted (good enough for ratings and metadata) - nothing is overwritten. Replacing keeps the strict rule.
+                    # every ASIN the match accepted (good enough for ratings and metadata). Replacing: strict for the library, the accepted ASIN for recent books (above).
                     fill_ok = bool(asin) and not aud_data.get('related_edition')
                     if aud_data.get('cover_url') and not has_cover and FILL_COVERS and not lang_conflict and not fill_ok:
                         logging.info(f"        🖼️ No cover set: {'only another edition matched' if aud_data.get('related_edition') else 'no accepted ASIN'}")
                     if aud_data.get('cover_url') and not lang_conflict and ((FILL_COVERS and not has_cover and fill_ok) or
-                                                                            (cover_verified and (UPDATE_COVERS or id_switch) and has_cover and COVER_STATE.get(iid) != cover_token(asin))):
+                                                                            (cover_ok_ and (UPDATE_COVERS or id_switch) and has_cover and COVER_STATE.get(iid) != cover_token(asin))):
                         if 'lock_cover' in tags: logging.info("        🔒 Cover Update Skipped (Locked)")
                         elif cover_used := next((u for u in dict.fromkeys(filter(None, (aud_data['cover_url'], aud_data.get('cover_url_small'))))
                                                  if abs_set_cover(iid, key, title, u, 'audible_cover' if not has_cover else 'audible_cover_verified', replace=has_cover,

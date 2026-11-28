@@ -1,6 +1,7 @@
 """Cover rules (user 2026-11-22, 'Battle of the Labyrinth' had no cover: runtime 6.6 min off Audible's, so the strict check failed):
 a book WITHOUT a cover takes the cover of every accepted ASIN (the match that is good enough for ratings and metadata);
-REPLACING an existing cover keeps the strict verified-recording rule.
+REPLACING an existing cover keeps the strict verified-recording rule for the library; user 2026-11-28 ('1922'): a recently added book
+takes the cover of its accepted ASIN ("if the book is the right one, just change it").
 Run: python -m pytest tests/test_cover_fill_rule.py"""
 import os
 
@@ -23,8 +24,10 @@ def test_fill_needs_only_an_accepted_asin():
 
 def test_replace_keeps_the_strict_rule():
     b = block()
-    assert "(cover_verified and (UPDATE_COVERS or id_switch) and has_cover" in b
+    assert "(cover_ok_ and (UPDATE_COVERS or id_switch) and has_cover" in b
     assert 'not lang_conflict' in b
+    # strict for the library: only a RECENT book gets past cover_verified
+    assert "cover_ok_ = cover_verified or bool(recent_ and asin and not lang_conflict and not aud_data.get('related_edition'))" in SRC
 
 
 def test_cover_block_only_runs_with_metadata_sync():

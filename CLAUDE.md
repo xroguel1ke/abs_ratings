@@ -225,6 +225,12 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   - Chapters (2026-11-28 Erak's Ransom 'X 001-202', The Kill Society 'X - Part 01-08'): own marks = the book's name + a running number
     (numbered_parts, not 'Chapter N') and their count differs from Audible's by > 10 % -> download parts: Audible's aligned list (named
     or numbered). About as many as Audible's -> unchanged rules. Library: 93 such books, not re-run (needs the user's OK).
+  - Title (2026-11-28 Shaman's Crossing): Audible's own title can carry the series label ('X, Book One of the Soldier Son Trilogy',
+    'X: S, Book 1', 'X (S #1)', 'X - Book 1 of S'): title_series_tail() cuts it when the label names one of the book's OWN series + its
+    own number (abs_series._subtitle_label); never when only the series name would be left. Recently added books only (recent_).
+  - Cover (user 2026-11-28 '1922', file 3 min off Audible: metadata synced, old cover kept): "if the book is the right one, just change it"
+    - a recently added book (recent_) takes the cover of its accepted ASIN (cover_ok_; not related_edition / lang_conflict). The library
+    keeps the strict rule (runtime 2 min + narrator). No review entry for covers.
   - Per-book state files (results, source_state, history, failed, recheck, Goodreads/Hardcover cache, cover_state) are MERGED on write (rw_json,
     2026-11-27): only keys this process changed since it read the file; a second process (Goodreads background, a docker-exec run)
     no longer drops the other's books (Moon Over Soho + The Lost Plot lost their results).

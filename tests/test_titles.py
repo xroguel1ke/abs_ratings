@@ -35,3 +35,36 @@ def test_series_name_appended_to_title():
     assert h('Casual Farming 2: Sowing Season', ['Sowing Season'], 'Casual Farming 2: A Slow Living LitRPG') == 'Casual Farming 2'
     assert h('Dune: Messiah', ['Dune'], 'Dune Messiah') is None  # the tail is not the series name
     assert h('Discworld', ['Discworld'], 'Discworld') is None
+
+
+def test_title_series_tail():
+    # 2026-11-28: Audible's own title carries the series label ('Shaman's Crossing, Book One of the Soldier Son Trilogy') - the series field holds it
+    f, S = A.title_series_tail, [{'name': 'Soldier Son Trilogy', 'sequence': '1'}]
+    assert f("Shaman's Crossing, Book One of the Soldier Son Trilogy", S) == "Shaman's Crossing"
+    assert f("Shaman's Crossing: Soldier Son Trilogy, Book 1", S) == "Shaman's Crossing"
+    assert f("Shaman's Crossing (Soldier Son Trilogy #1)", S) == "Shaman's Crossing"
+    assert f("Shaman's Crossing - Book 1 of the Soldier Son Trilogy", S) == "Shaman's Crossing"
+    assert f('The Eye of the World: Book One of The Wheel of Time', [{'name': 'The Wheel of Time', 'sequence': '1'}]) == 'The Eye of the World'
+    assert f('Sojourn: Legend of Drizzt: Dark Elf Trilogy, Book 3', [{'name': 'Legend of Drizzt', 'sequence': '6'}, {'name': 'Dark Elf Trilogy', 'sequence': '3'}]) == 'Sojourn'
+    assert f('Moreta: Dragonlady of Pern: Dragonriders of Pern, Book 7', [{'name': 'Dragonriders of Pern', 'sequence': '7'}]) == 'Moreta: Dragonlady of Pern'
+    # another volume's number, only the series name left, no series named, normal titles: kept
+    assert f("Shaman's Crossing, Book Two of the Soldier Son Trilogy", S) is None
+    assert f('Soldier Son Trilogy, Book 1', S) is None
+    assert f('Defiance of the Fall, Book 10', [{'name': 'Defiance of the Fall', 'sequence': '10'}]) is None
+    assert f('Mushoku Tensei: Jobless Reincarnation, Vol. 5', [{'name': 'Mushoku Tensei: Jobless Reincarnation', 'sequence': '5'}]) is None
+    assert f('Choose Your Enemies: Ciaphas Cain: Warhammer 40,000, Book 10', [{'name': 'Ciaphas Cain', 'sequence': '10'}]) is None
+    assert f('The Murderbot Diaries 1: All Systems Red', [{'name': 'The Murderbot Diaries', 'sequence': '1'}]) is None
+    assert f('Mistborn: The Final Empire', [{'name': 'Mistborn', 'sequence': '1'}]) is None
+    assert f("Shaman's Crossing", S) is None and f("Shaman's Crossing, Book One of the Soldier Son Trilogy", []) is None
+
+
+def test_title_series_tail_only_recent_books():
+    src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'abs_ratings.py')).read()
+    assert 'if recent_ and new_t and (lbl_t := title_series_tail(new_t, ser_now)): new_t = lbl_t' in src
+
+
+def test_cover_of_the_accepted_asin_for_recent_books():
+    # user 2026-11-28 ('1922': metadata synced, the old cover stayed): a recently added book takes the cover of its accepted ASIN
+    src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'abs_ratings.py')).read()
+    assert "cover_ok_ = cover_verified or bool(recent_ and asin and not lang_conflict and not aud_data.get('related_edition'))" in src
+    assert '(cover_ok_ and (UPDATE_COVERS or id_switch) and has_cover and COVER_STATE.get(iid) != cover_token(asin))' in src
