@@ -5834,6 +5834,8 @@ def process_queue(work_queue, history, failed, recheck):
                             log_updates.append(f"Subtitle: '' -> '{aud_sub}' (new book)")
                     elif aud_title and aud_title != title and same_recording(abs_dur, meta.get('narrators'), aud_data) and (
                             re.sub(r'(?i)\s*\((?:unabridged|ungek(?:ü|ue)rzt)\)\s*$', '', title) == aud_title
+                            # import check 2026-11-28 ('Invent Audiobook', Audible 'Invent'): the word 'Audiobook' / 'Hörbuch' from the file name
+                            or lib_ok_ and re.sub(r'(?i)[\s\-–(\[]*\b(?:audio\s?book|h(?:ö|oe)rbuch)\b[)\]]?\s*$', '', title).strip() == aud_title
                             or re.sub(r'\b0+(\d)', r'\1', title) == re.sub(r'\b0+(\d)', r'\1', aud_title) and re.search(r'\b0\d', title) and not re.search(r'\b0\d', aud_title)):
                         # round 5 (2026-11-09): 'Witch King (Unabridged)', 'Ishura, Vol. 05: ...' - Audible's title of the same recording
                         if 'lock_title' in tags: logging.info(f"        🔒 Title Update Skipped (Locked): '{aud_title}'")

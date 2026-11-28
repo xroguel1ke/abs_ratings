@@ -378,3 +378,7 @@ def test_anchor_aligned_marks_keep_the_file_times_and_bad_lists_are_never_writte
     assert [c['start'] for c in new] == [c['start'] for c in abs_chs] and new[2]['title'] == 'Chapter 1: Name 0'
     assert all(c['end'] >= c['start'] >= 0 for c in new)
     assert "a list with a negative time, an end before its start or starts that go" in SRC
+
+
+def test_audiobook_word_at_the_title_end_goes():
+    assert "or lib_ok_ and re.sub(r'(?i)[\\s\\-–(\\[]*\\b(?:audio\\s?book|h(?:ö|oe)rbuch)\\b[)\\]]?\\s*$', '', title).strip() == aud_title" in SRC
