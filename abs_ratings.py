@@ -598,7 +598,11 @@ def series_cleanup(lib, item_data, series, aud_series, book_authors, book_varian
     for x in list(out):
         n = x['name']
         if x.get('sequence') and map_language(book_lang) == 'English' and clash_seq(lib, n, x['sequence'], book_lang) \
-                and not any(same(n, a['name']) and _seq_num(a.get('sequence')) == _seq_num(x['sequence']) for a in aud_series):
+                and not any(same(n, a['name']) and _seq_num(a.get('sequence')) == _seq_num(x['sequence']) for a in aud_series) \
+                and not (fm and folder and same(n, folder) and strip_lead0(fm.group(1)) == strip_lead0(str(x['sequence']))):
+            # audit 2026-11-28 ('His Dark Materials Part 1: Northern Lights' {Full Cast} and 'The Golden Compass (Book 1)' {Ruth Wilson}:
+            # two recordings of ONE work under its two titles; the folder 'His Dark Materials/01 - ...' confirms #1): the book's folder of
+            # this series with the same number keeps it
             # another work has this number in this series and Audible does not confirm it for this book (English books only: a German
             # translation in two parts legitimately shares a number). Audible's number of this series, else the folder number, else none;
             # Audible's sub-series that carries the same number is added ('A Little Hatred' = The Age of Madness #1).

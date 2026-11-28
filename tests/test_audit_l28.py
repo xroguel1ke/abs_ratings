@@ -177,3 +177,16 @@ def test_time_bound_announcement_lead_goes():
     assert A.strip_promo_lead(keep) == keep
     tag = '<p><b>A world destroyed. An axe to grind. And a path to infinite power.</b></p>' + body  # a tagline stays
     assert A.strip_promo_lead(tag) == tag
+
+
+def test_shared_number_confirmed_by_the_folder_stays(monkeypatch):
+    # two recordings of one work ('Northern Lights' {Full Cast} / 'The Golden Compass' {Ruth Wilson}) both #1 of His Dark Materials
+    monkeypatch.setitem(A.SEQ_WORKS, ('L', 'his dark materials', '1', 'English'),
+                        {A.normalize_title_text('His Dark Materials Part 1: Northern Lights'), A.normalize_title_text('The Golden Compass (Book 1)')})
+    ser = [{'name': 'His Dark Materials', 'sequence': '1'}]
+    item = lambda rel: {'relPath': rel, 'media': {'metadata': {}}}
+    out, notes = A.series_cleanup('L', item('Philip Pullman/His Dark Materials/01 - Northern Lights {Full Cast}'), ser, [], ['Philip Pullman'], set(), True, 'English')
+    assert [(x['name'], x['sequence']) for x in out] == [('His Dark Materials', '1')], notes
+    # without the folder's confirmation the old rule stays: the clash removes the number
+    out2, notes2 = A.series_cleanup('L', item('Philip Pullman/Northern Lights {Full Cast}'), ser, [], ['Philip Pullman'], set(), True, 'English')
+    assert [(x['name'], x['sequence']) for x in out2] == [('His Dark Materials', None)], notes2
