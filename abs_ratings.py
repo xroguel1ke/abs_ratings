@@ -4889,7 +4889,7 @@ def journal_last(key, field):
                         _UNDONE_VAL.setdefault((e.get('key'), e['field']), set()).add(listing_value(e['field'], e.get('new')))
                     if e.get('field') == 'description':  # did our last description write carry a rating block? (block_lost)
                         _BLOCK_KEYS[e.get('key')] = 'Infos' in str(e.get('new') or '') and 'undo' not in str(e.get('source') or '')
-                    if e.get('field') not in REAPPLY_FIELDS + ('asin',): continue
+                    if e.get('field') not in REAPPLY_FIELDS + ('asin', 'genres'): continue  # genres: who decided them last (audit 2026-11-28)
                     if 'undo' in str(e.get('source') or ''): _JOURNAL_LAST.pop((e.get('key'), e['field']), None); continue
                     _JOURNAL_LAST[(e.get('key'), e['field'])] = e
             except OSError: pass
@@ -6051,7 +6051,15 @@ def process_queue(work_queue, history, failed, recheck):
                                 else: GENRE_DROPS.pop(key, None)
                             new_genres_list = list(dict.fromkeys(new_genres_list + m_ + sp_))
                             added_genres = []
-                            if [_gk(x) for x in rebuilt_] != [_gk(x) for x in current_genres if isinstance(x, str)]:
+                            lg_ = journal_last(key, 'genres')
+                            series_set_ = bool(lg_ and str(lg_.get('source') or '') == 'genre_series'
+                                               and sorted(_gk(x) for x in (lg_.get('new') or []) if isinstance(x, str)) == sorted(_gk(x) for x in current_genres if isinstance(x, str)))
+                            if series_set_ and sorted(_gk(x) for x in rebuilt_) != sorted(_gk(x) for x in current_genres if isinstance(x, str)):
+                                # audit 2026-11-28 (Death: Genesis 7, The Duchess of Terra ...: the book step and the series task wrote the genres
+                                # back and forth in every run): the series task decided them last - it decides again in every scan, the book step
+                                # leaves them
+                                logging.info(f"        ℹ️ Genres kept: set by the series task ({current_genres})")
+                            elif [_gk(x) for x in rebuilt_] != [_gk(x) for x in current_genres if isinstance(x, str)]:
                                 abs_updates['genres'] = rebuilt_
                                 log_updates.append(f"Genres: {current_genres} -> {rebuilt_}")
                         else:
@@ -6570,7 +6578,10 @@ def process_queue(work_queue, history, failed, recheck):
                         id_pub = ((md_raw.get('publisher') or {}).get('name') or '').strip()
                         id_year = parse_release_year(md_raw.get('releaseDate'))
                         id_gen = [g for g in dict.fromkeys(map_genre(c.get('name'), aud_data.get('domain')) for c in (md_raw.get('categories') or []) if c.get('name')) if g]
-                        for fld, val, lk in (('publisher', id_pub, 'lock_publisher'), ('publishedYear', str(id_year) if id_year else None, 'lock_year'),
+                        cur_y_ = re.match(r'\s*(\d{4})', str(meta.get('publishedYear') or ''))
+                        for fld, val, lk in (('publisher', id_pub, 'lock_publisher'),
+                                             # audit 2026-11-28 (Neuromancer 1988 -> 2021 -> 1984 in every run): an earlier first release stays
+                                             ('publishedYear', str(id_year) if id_year and not (cur_y_ and int(cur_y_.group(1)) <= int(id_year)) else None, 'lock_year'),
                                              ('genres', id_gen, 'lock_genres')):
                             if not val or val == meta.get(fld): continue
                             if lk in tags: logging.info(f"        🔒 {fld} not replaced (locked)"); continue
@@ -6686,6 +6697,9 @@ def process_queue(work_queue, history, failed, recheck):
                             if new_chs and not cover_verified and not ((an_ := anchor_align(abs_chs, aud_ch[0], abs_dur, 0.95)) and an_[2] >= 7) \
                                     and not (why_c.startswith(DRIFT_MARKS_WHY) and len(new_chs) >= 8):  # 13 marks on one line prove the recording too
                                 new_chs, why_c = None, 'recording not verified and the chapter marks do not prove it'
+                            if new_chs and poor == 'a single chapter' and len(new_chs) <= 1:
+                                # audit 2026-11-28 ('Guns': its single chapter was rewritten in every run - Audible lists one chapter too)
+                                new_chs, why_c = None, "Audible lists a single chapter too"
                             if new_chs and poor == 'only numbered chapters without names' and all(RE_GENERIC_CH.match(c['title'] or '') for c in new_chs) \
                                     and not __import__('chapter_audio').coarse_parts(abs_chs, len(new_chs), abs_dur):  # 1-h file parts: Audible's finer list
                                 new_chs, why_c = None, "Audible's chapters have no names either"  # 'Chapter 1' for 'Chapter 1': nothing gained
@@ -6708,7 +6722,7 @@ def process_queue(work_queue, history, failed, recheck):
                                 ch_done_ = True
                             elif not new_chs:
                                 logging.info(f"        ℹ️ Audible's chapters not taken: {why_c}" + (f"; pauses: {au_[1]}" if 'lock_chapters' not in tags else ''))
-                                if poor in ('no chapters', 'a single chapter'):  # user 2026-11-10: books WITHOUT chapters that cannot be matched go on the list
+                                if poor in ('no chapters', 'a single chapter') and why_c != 'Audible lists a single chapter too':  # user 2026-11-10: books WITHOUT chapters that cannot be matched go on the list
                                     add_review(key, title, 'chapters', poor, f"the book has no chapters and Audible's do not fit reliably ({why_c}) - add them in ABS (Edit > Chapters)")
                         elif not poor and new_book and CHAPTER_AUDIO and abs_dur and abs_chs and 'lock_chapters' not in tags \
                                 and (aud_ch := audible_chapters(asin, aud_data.get('domain'))) and len(aud_ch[0] or []) >= 4 \

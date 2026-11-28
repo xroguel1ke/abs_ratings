@@ -263,3 +263,13 @@ def test_hardcover_targets_drop_a_series_name_prefix():
     assert A.hc_target_titles({'title_raw': 'Dune: Part One'}, 'Dune: Part One', 'Dune: Part One') == ['Dune: Part One']  # no series: unchanged
     t2 = A.hc_target_titles({'title_raw': 'High Druid of Shannara: Jarka Ruus'}, 'x', 'High Druid of Shannara: Jarka Ruus', None, [{'name': 'High Druid of Shannara', 'sequence': '1'}])
     assert 'Jarka Ruus' in t2
+
+
+def test_single_chapter_is_not_rewritten_with_a_single_chapter():
+    assert "if new_chs and poor == 'a single chapter' and len(new_chs) <= 1:" in SRC and "why_c != 'Audible lists a single chapter too'" in SRC  # and no review entry
+
+
+def test_no_ping_pong_between_book_step_and_series_task():
+    assert "if e.get('field') not in REAPPLY_FIELDS + ('asin', 'genres'): continue" in SRC
+    assert "Genres kept: set by the series task" in SRC and "str(lg_.get('source') or '') == 'genre_series'" in SRC
+    assert "str(id_year) if id_year and not (cur_y_ and int(cur_y_.group(1)) <= int(id_year)) else None" in SRC
