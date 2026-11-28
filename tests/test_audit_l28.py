@@ -227,3 +227,16 @@ def test_chapter_titles_are_written_without_control_characters(monkeypatch):
     monkeypatch.setattr(A, 'journal_change', lambda *a: got.append(a[5]))
     assert A.abs_set_chapters('i', 'k', 't', [{'start': 0, 'end': 5, 'title': 'Chapter 1\t'}, {'start': 5, 'end': 9, 'title': ' Two \r\n Part '}], [], 'x')
     assert [c['title'] for c in got[0]] == ['Chapter 1', 'Two Part']
+
+
+def test_names_on_own_marks_when_one_audible_start_has_no_mark(monkeypatch):
+    import chapter_audio as CA
+    own = [{'start': float(i * 600), 'end': float((i + 1) * 600), 'title': f'{i + 1:02d}-10 Fairy Tale'} for i in range(10)]
+    aud = ([(0.0, 600.0, 'Opening Credits')] + [(i * 600.0 + 3, 600.0, f'Chapter {i + 1}: Name {i + 1}') for i in range(1, 10)], 0, 0)
+    starts = [0.0] + [i * 600.0 + 0.5 for i in range(1, 9)] + [9 * 600.0 + 40]  # the last start is 40 s away from the own mark
+    monkeypatch.setattr(CA, 'silence_align', lambda *a, **k: {'starts': starts, 'hit': 9, 'total': 9, 'chance': 1e-30, 'offset': -2.5})
+    monkeypatch.setattr(CA, 'on_pause_share', lambda *a, **k: 1.0)
+    sil = [(i * 600.0 - 1, i * 600.0 + 0.5) for i in range(1, 30)]
+    new, why = CA.decide(own, 6000.0, aud, sil)
+    assert new and 'names only' in why and [c['start'] for c in new] == [c['start'] for c in own]
+    assert new[0]['title'] == 'Opening Credits' and new[2]['title'] == 'Chapter 3: Name 3'

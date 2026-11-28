@@ -568,7 +568,10 @@ def decide(abs_chs, dur, aud, sil):
     if generic and abs(len(abs_chs) - len(new)) <= max(1, len(new) // 10):
         # the same marks, only numbered: Audible's names on the file's OWN times (they already sit at the pauses)
         own = [float(c.get('start') or 0) for c in abs_chs]
-        if all(any(abs(o - s) <= 3 for o in own) for s in al['starts'][1:]):
+        # audit 2026-11-28 ('Fairy Tale': 36 marks '01-36 Fairy Tale' all on pauses, Audible 36 named chapters, 34/35 aligned): one
+        # Audible start without a mark must not throw the names away - all but one (or 10 %) of the starts at an own mark are enough
+        near_ = sum(1 for s in al['starts'][1:] if any(abs(o - s) <= 3 for o in own))
+        if near_ >= (len(al['starts']) - 1) - max(1, (len(al['starts']) - 1) // 10):  # one miss, or 10 %
             out = [dict(c, title=new[min(range(len(new)), key=lambda k: abs(new[k]['start'] - float(c.get('start') or 0)))]['title']) for c in abs_chs]
             return [{'id': i, 'start': float(c.get('start') or 0), 'end': float(c.get('end') or 0), 'title': c['title']} for i, c in enumerate(out)], \
                    why + "; names only (the file's own marks are kept)"
