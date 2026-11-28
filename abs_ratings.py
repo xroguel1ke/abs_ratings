@@ -2216,11 +2216,11 @@ def aud_prefetch(items):
 
 def audible_result(p, asin, domain):
     """Catalog product -> result dict (same shape as the web scraper)."""
-    res = {'domain': domain, 'source': 'API', 'page_ok': True, 'title_raw': p.get('title'), 'asin': p.get('asin') or asin,
-           'authors_raw': [a.get('name') for a in (p.get('authors') or []) if a.get('name')],
+    res = {'domain': domain, 'source': 'API', 'page_ok': True, 'title_raw': (p.get('title') or '').strip() or p.get('title'), 'asin': p.get('asin') or asin,
+           'authors_raw': [a['name'].strip() for a in (p.get('authors') or []) if str(a.get('name') or '').strip()],
            'authors_asin': [{'name': a.get('name'), 'asin': a.get('asin')} for a in (p.get('authors') or []) if a.get('name') and a.get('asin')],
            'runtime_sec': int(p.get('runtime_length_min') or 0) * 60}
-    if p.get('subtitle'): res['subtitle_raw'] = p['subtitle']
+    if str(p.get('subtitle') or '').strip(): res['subtitle_raw'] = p['subtitle'].strip()  # Audible's values can carry spaces (audit 2026-11-28)
     from abs_series import is_role_credit, role_base
     ROLE_NAMES.update(role_base(a) for a in res['authors_raw'] if is_role_credit(a))  # learn illustrators/translators for the clean-up
     rating = p.get('rating') or {}
@@ -2251,7 +2251,7 @@ def audible_result(p, asin, domain):
         for lad in ladders:
             up_ = next((n_ for n_ in (x.get('name') for x in reversed(lad[:-1]) if isinstance(x, dict)) if n_ and _cg(map_genre(n_, domain))), None)
             if up_ and up_ not in categories: categories.append(up_)
-    res['narrators_raw'] = [n.get('name') for n in (p.get('narrators') or []) if n.get('name')]
+    res['narrators_raw'] = [n['name'].strip() for n in (p.get('narrators') or []) if str(n.get('name') or '').strip()]
     res['summary'] = strip_promo_lead(p.get('publisher_summary') or p.get('merchandising_summary'))
     if res['summary'] and p.get('asin'):
         with IO_LOCK: SUMMARY_INDEX[p['asin']] = [p.get('title') or '', _sum_norm(res['summary'])[:800]]
@@ -2264,7 +2264,7 @@ def audible_result(p, asin, domain):
         res['cover_url'] = re.sub(r'\._[A-Z]{2}\d+_(?=\.[a-z]+$)', '', res['cover_url_small'])
     res['meta_raw'] = {
         'language': p.get('language'),
-        'publisher': {'name': p.get('publisher_name')} if p.get('publisher_name') else None,
+        'publisher': {'name': p['publisher_name'].strip()} if str(p.get('publisher_name') or '').strip() else None,  # 'Brilliance Audio ' (audit 2026-11-28)
         'releaseDate': p.get('release_date') or p.get('issue_date'),
         'format': p.get('format_type'),
         'categories': [{'name': c} for c in categories],
@@ -5952,6 +5952,10 @@ def process_queue(work_queue, history, failed, recheck):
                         if new_pub and not meta.get('publisher'):
                             abs_updates['publisher'] = new_pub
                             log_updates.append(f"Publisher: '{meta.get('publisher')}' -> '{new_pub}'")
+                        elif lib_ok_ and meta.get('publisher') and meta['publisher'] != meta['publisher'].strip():
+                            # audit 2026-11-28: Audible's 'Brilliance Audio ' (trailing space) was written as it came - a second spelling
+                            abs_updates['publisher'] = re.sub(r'\s+', ' ', meta['publisher']).strip()
+                            log_updates.append(f"Publisher: '{meta['publisher']}' -> '{abs_updates['publisher']}' (spaces)")
                         elif new_pub and same_recording(abs_dur, meta.get('narrators'), aud_data) and new_pub != meta.get('publisher') \
                                 and (map_language(meta.get('language') or lang) or '').lower() in ('english', '') \
                                 and re.search(r"(?i)\b(?:verlag|editorial|[ée]ditions?|edizioni|j'ai lu|bastei|l[üu]bbe|heyne|goldmann|piper|carlsen|argon|comics?)\b", meta['publisher']) \

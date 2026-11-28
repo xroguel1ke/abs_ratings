@@ -252,6 +252,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     A series number shared with another work stays when the book's folder of that series has the same number (Northern Lights / The
     Golden Compass). English books: Hardcover's first-release year from ONE edition only when that edition is not a translation
     (hc_year_language_ok, one lazy edition query; The Crown Tower 2011 = a Polish paperback).
+    Audible values are stripped (publisher 'Brilliance Audio ', title, subtitle, authors, narrators); a recent book's publisher with
+    surrounding spaces is cleaned (lib_ok_).
   - Per-book state files (results, source_state, history, failed, recheck, Goodreads/Hardcover cache, cover_state) are MERGED on write (rw_json,
     2026-11-27): only keys this process changed since it read the file; a second process (Goodreads background, a docker-exec run)
     no longer drops the other's books (Moon Over Soho + The Lost Plot lost their results).

@@ -207,3 +207,10 @@ def test_first_release_year_only_from_a_translation_is_not_taken(monkeypatch):
     assert A.hc_year_language_ok(hc, 2011, 'English') is True  # no answer: as before
     monkeypatch.setattr(A, 'hc_query', lambda q, v=None: {'editions': [{'release_date': '2011-05-01', 'language': {'language': 'English'}}]})
     assert A.hc_year_language_ok(hc, 2011, 'English') is True
+
+
+def test_audible_values_without_surrounding_spaces():
+    assert "'publisher': {'name': p['publisher_name'].strip()} if str(p.get('publisher_name') or '').strip() else None" in SRC
+    assert "res['narrators_raw'] = [n['name'].strip() for n in (p.get('narrators') or []) if str(n.get('name') or '').strip()]" in SRC
+    assert "'authors_raw': [a['name'].strip() for a in (p.get('authors') or []) if str(a.get('name') or '').strip()]" in SRC
+    assert "elif lib_ok_ and meta.get('publisher') and meta['publisher'] != meta['publisher'].strip():" in SRC
