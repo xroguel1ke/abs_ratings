@@ -172,6 +172,9 @@ PLANNED_FILE = os.path.join(REPORT_DIR, f"planned_changes_{RUN_ID}.jsonl")  # DR
 ENV_OUTPUT_FILE = os.path.join(SCRIPT_DIR, "last_run.env")
 
 REFRESH_DAYS = int(os.getenv('REFRESH_DAYS', 90))
+# audit 2026-11-28: a book with an open review entry that a run can resolve is checked again after this many days (done entries go)
+REVIEW_RECHECK_DAYS = int(os.getenv('REVIEW_RECHECK_DAYS', 7))
+REVIEW_RECHECK_KINDS = ('incomplete', 'chapters', 'authors', 'title', 'asin', 'too_long', 'series', 'isbn', 'hardcover')  # constant (tuple)
 # user 2026-11-19: new releases (Audible release date within NEW_RELEASE_DAYS) are refreshed after NEW_RELEASE_REFRESH_DAYS instead
 NEW_RELEASE = ((int(os.getenv('NEW_RELEASE_DAYS', 90)), int(os.getenv('NEW_RELEASE_REFRESH_DAYS', 10)))
                if os.getenv('NEW_RELEASE_REFRESH', 'false').lower() == 'true' else None)
@@ -4598,6 +4601,8 @@ def build_queue(lib_id, history, recheck):
 
     load_series_names(lib_id)
     for it in items: note_listing_item(lib_id, it)
+    open_review_ = {x.get('key') for x in (rw_json(REVIEW_FILE) or []) if isinstance(x, dict) and x.get('status', 'open') == 'open'
+                    and x.get('kind') in REVIEW_RECHECK_KINDS}
     if (n_ap := review_drop_applied(lib_id, items)):
         logging.info(f"🧹 {n_ap} review entr{'y' if n_ap == 1 else 'ies'}: the proposal is in ABS already (removed from the review list)")
     if items:  # books deleted in ABS leave the web UI's result list (they showed up as 'same ASIN twice', 2026-11-09)
@@ -4688,6 +4693,11 @@ def build_queue(lib_id, history, recheck):
         elif (now - last_run_dt.replace(tzinfo=None)).days >= refresh_for(key):
             work_queue.append(item); count_due += 1
         elif recheck_due:
+            item['_recheck'] = True
+            work_queue.append(item); count_recheck += 1
+        elif key in open_review_ and (now - last_run_dt.replace(tzinfo=None)).days >= REVIEW_RECHECK_DAYS:
+            # audit 2026-11-28 ('A Tangled Road to Justice': an 'incomplete' entry of 26.11. that a re-run would have dropped stayed for weeks -
+            # REFRESH_DAYS is 100): a book on the review list is checked again after REVIEW_RECHECK_DAYS, so done entries leave the list
             item['_recheck'] = True
             work_queue.append(item); count_recheck += 1
         elif due := [s_ for s_ in SST.due_sources(SOURCE_STATE, key, enabled_sources(), REFRESH_DAYS, new_release=NEW_RELEASE) if s_ != 'audible']:

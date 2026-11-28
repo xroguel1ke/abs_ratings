@@ -102,3 +102,11 @@ def test_year_later_than_the_recordings_release():
     i = SRC.index("(later than this recording's release)")
     blk = SRC[SRC.rindex('elif new_year and cur_y and lib_ok_', 0, i):i]
     assert "int(cur_y.group(1)) > int(str(new_year)[:4])" in blk and "abs(abs_dur - aud_data['runtime_sec']) <= 120" in blk
+
+
+def test_books_on_the_review_list_are_checked_again_after_a_week():
+    assert A.REVIEW_RECHECK_DAYS == 7 and 'incomplete' in A.REVIEW_RECHECK_KINDS and 'tmpfile' not in A.REVIEW_RECHECK_KINDS
+    i = SRC.index("elif key in open_review_ and (now - last_run_dt.replace(tzinfo=None)).days >= REVIEW_RECHECK_DAYS:")
+    assert "item['_recheck'] = True" in SRC[i:i + 600]
+    assert SRC.index("elif recheck_due:") < i < SRC.index("elif due := [s_ for s_ in SST.due_sources(")
+    assert "x.get('kind') in REVIEW_RECHECK_KINDS" in SRC
