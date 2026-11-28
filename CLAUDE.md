@@ -222,6 +222,9 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
   - Chapters (2026-11-27 Moon Over Soho): drifting_marks in match_chapters - one own mark per Audible chapter (credits aside), all inner marks
     within 3 s of ONE line (slope 1 +- 0.3 %, a slow drift anchor_align misses) -> Audible's names on the file's own times; counts as proof
     of the recording (>= 8 marks). Library sweep: 0 false in 105750 cross pairs.
+  - Chapters (2026-11-28 Erak's Ransom 'X 001-202', The Kill Society 'X - Part 01-08'): own marks = the book's name + a running number
+    (numbered_parts, not 'Chapter N') and their count differs from Audible's by > 10 % -> download parts: Audible's aligned list (named
+    or numbered). About as many as Audible's -> unchanged rules. Library: 93 such books, not re-run (needs the user's OK).
   - Per-book state files (results, source_state, history, failed, recheck, Goodreads/Hardcover cache, cover_state) are MERGED on write (rw_json,
     2026-11-27): only keys this process changed since it read the file; a second process (Goodreads background, a docker-exec run)
     no longer drops the other's books (Moon Over Soho + The Lost Plot lost their results).

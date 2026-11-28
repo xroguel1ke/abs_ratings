@@ -544,12 +544,20 @@ def decide(abs_chs, dur, aud, sil):
         return new, why + f"; the file's own {len(abs_chs)} marks are file parts, {dur / len(abs_chs) / 3600:.0f} h apart"
     share = on_pause_share(abs_chs, sil)
     generic = all(RE_GENERIC.match(str(c.get('title') or '')) for c in abs_chs) or numbered_parts(abs_chs)
+    # import 2026-11-28 (Erak's Ransom 'Erak's Ransom 001-202', The Kill Society 'The Kill Society - Part 01-08'): the book's own name with
+    # a running number are the parts of the download (tracks / CDs), not chapters - their count does not fit Audible's list, which sits
+    # on the file's pauses (accepted alignment above): Audible's chapters, named or 'Chapter N'
+    title_parts = numbered_parts(abs_chs) and not all(RE_GENERIC.match(str(c.get('title') or '')) for c in abs_chs) \
+        and abs(len(abs_chs) - len(new)) > max(1, len(new) // 10)
+    parts_why = f"; the file's own {len(abs_chs)} marks are numbered download parts ('{abs_chs[0].get('title')}' ...), not its chapters"
     if share < 0.6:  # the own marks are split points, not chapters: Audible's chapters on the pauses are better
         return new, why + f"; the file's own {len(abs_chs)} marks: only {share:.0%} at a pause"
     if generic and all(RE_GENERIC.match(c['title'] or '') for c in new):
         if coarse_parts(abs_chs, len(new), dur):  # 'The Dragonet Prophecy - Part 1-8' (1 h each) vs Audible's 'Chapter 1-40'
             return new, why + f"; the file's own {len(abs_chs)} marks are file parts ({dur / len(abs_chs) / 60:.0f} min each): Audible's finer numbered list"
+        if title_parts: return new, why + parts_why
         return None, "the file's own marks sit at pauses and Audible's chapters have no names either"
+    if title_parts: return new, why + parts_why  # Audible's named list (fewer or more chapters than the parts)
     if generic and abs(len(abs_chs) - len(new)) <= max(1, len(new) // 10):
         # the same marks, only numbered: Audible's names on the file's OWN times (they already sit at the pauses)
         own = [float(c.get('start') or 0) for c in abs_chs]

@@ -240,6 +240,27 @@ def test_hour_long_file_parts_get_audibles_finer_numbered_list():
     assert CA.coarse_parts(own, 40, total) and not CA.coarse_parts(own, 15, total) and not CA.coarse_parts(own, 40, 8 * 1500)
 
 
+
+
+def test_title_numbered_download_parts_get_audibles_list():
+    # import 2026-11-28 Erak's Ransom: 202 marks "Erak's Ransom 001-202" (track splits ~4 min, at pauses) vs Audible "Chapter 1-50"
+    chs, total, rnd = book(n=50, seed=11, dur_ch=900.0)
+    chs = [(s, l, f"Chapter {i + 1}") for i, (s, l, _) in enumerate(chs)]
+    sil = pauses(chs, total, rnd)
+    step = total / 202
+    own = [{"start": i * step, "end": (i + 1) * step, "title": f"Erak's Ransom {i + 1:03d}"} for i in range(202)]
+    sil = sorted(sil + [(o["start"] - 1.2, o["start"] - 0.1) for o in own[1:]])  # the track splits sit at pauses too
+    new, why = CA.decide(own, total, (chs, None, None), sil)
+    assert new and len(new) == 50 and "download parts" in why, why
+    # the same book with its own numbered CHAPTERS ("Chapter 1-50"): kept, nothing gained
+    own2 = [{"start": c[0], "end": c[0] + c[1], "title": f"Chapter {i + 1}"} for i, c in enumerate(chs)]
+    assert CA.decide(own2, total, (chs, None, None), pauses(chs, total, rnd))[0] is None
+    # title-numbered marks about as many as Audible's chapters (one track per chapter): not this rule
+    own3 = [{"start": c[0], "end": c[0] + c[1], "title": f"Erak's Ransom {i + 1:03d}"} for i, c in enumerate(chs)]
+    r3 = CA.decide(own3, total, (chs, None, None), pauses(chs, total, rnd))
+    assert r3[0] is None or "download parts" not in r3[1], r3[1]
+
+
 if __name__ == '__main__':
     n = 0
     for name, fn in list(globals().items()):
