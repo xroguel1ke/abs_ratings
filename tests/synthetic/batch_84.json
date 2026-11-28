@@ -14814,11 +14814,11 @@
    "asin": "B07LCR75PN",
    "status": "confirmed",
    "title": "The Big Store",
-   "note": "synthetic case wrong_narrator; true product B07LCR75PN",
+   "note": "synthetic case wrong_narrator; true product B07LCR75PN | 2026-11-28 audit: Audible narrator role suffixes are stripped (Donald Katz - introduction -> Donald Katz)",
    "case": "wrong_narrator",
    "expect_narr": [
     "Brian Sutherland",
-    "Donald Katz - introduction"
+    "Donald Katz"
    ]
   },
   "114068f9-142d-4524-b0ef-a349354b5f88_syn-84-en75": {

@@ -14,7 +14,7 @@ ABS-only maintenance task (no Audible/Goodreads requests):
 Called from abs_ratings.py at the end of a run (or alone with SERIES_ONLY=true).
 All writes go through ctx['abs_update'], so they are journaled and respect DRY_RUN.
 """
-import re, json, html, logging, difflib, os, unicodedata
+import re, time, json, html, logging, difflib, os, unicodedata
 from collections import defaultdict
 from datetime import datetime
 
@@ -87,7 +87,7 @@ def _n(x): return str(int(x)) if float(x).is_integer() else str(x)
 
 
 # Role credits that are not authors ('Kevin Steinbach - translator', 'X - Illustrator', 'Y - Übersetzer'): Audible lists them in the authors list
-ROLE_CREDIT_RE = re.compile(r'\s+[-–—]\s+(?:\S.*?\s+[-–—]\s+)?(other|illustrat\w*|illustrations?|translat\w*|translated by|edited by|editor|editors|introductions?|foreword|afterword|preface|contributor|adapt\w*|cover\s+\w+|'
+ROLE_CREDIT_RE = re.compile(r'\s+[-–—]\s+(?:\S.*?\s+[-–—]\s+)?(?:authors?\s*(?:/|&|and)\s*)?(other|illustrat\w*|illustrations?|translat\w*|translated by|edited by|editor|editors|introductions?|foreword|afterword|preface|contributor|adapt\w*|cover\s+\w+|'
                             r'übersetz\w*|übertragen\w*|herausgeb\w*|hrsg\.?|zeichn\w*|illustriert\w*|vorwort|nachwort|bearbeit\w*)\s*$', re.I)
 
 
@@ -1756,6 +1756,17 @@ def wrong_languages(records, allowed):
     return sorted(out, key=lambda x: x['title'].lower())
 
 
+EDITOR_ROLE_RE = re.compile(r'\s+[-–—]\s+(?:authors?\s*(?:/|&|and)\s*)?(?:editors?|edited by|herausgeb\w*|hrsg\.?)\s*$', re.I)
+
+
+def new_rule_ok(ctx, r):
+    """Rules added in the library audit (2026-11-28) change a library book only when it was added recently (ctx 'new_book_days') or when
+    the user switched them on for the whole library (ctx 'new_rules_library', setting NEW_RULES_LIBRARY)."""
+    if ctx.get('new_rules_library'): return True
+    try: return (time.time() - float(r.get('added') or 0) / 1000) <= float(ctx.get('new_book_days') or 30) * 86400
+    except (TypeError, ValueError): return False
+
+
 def remove_role_credits(ctx, records, known_roles=()):
     """Only real authors in the author field: role credits ('X - illustrator', 'Y - translator', 'Z - Übersetzer', ...) are removed
     when at least one real author remains. A plain name counts as a role credit when it was seen WITH a role suffix somewhere
@@ -1768,6 +1779,10 @@ def remove_role_credits(ctx, records, known_roles=()):
         if not r['authors'] or 'lock_authors' in r['tags']: continue
         drop = [a for i, a in enumerate(r['authors']) if is_role_credit(a) or (i > 0 and author_key(a) in roles and author_key(a) not in first)]
         keep = [a for a in r['authors'] if a not in drop]
+        if drop and not keep and all(EDITOR_ROLE_RE.search(a) for a in drop) and new_rule_ok(ctx, r):
+            # audit 2026-11-28 ('Ellen Datlow - author/editor', the only name of an anthology): the editor IS the book's author - the name
+            # without its role suffix (never a book without author)
+            keep = list(dict.fromkeys(role_base(a) for a in drop)); drop = [a for a in drop if a not in keep]
         if not drop or not keep: continue  # never leave a book without author
         if abs_update(r['id'], f"{r['lib']}_{r['id']}", r['title'], {'authors': [{'name': a} for a in keep]},
                       {'authors': [{'name': a} for a in r['authors']]}, 'role_credit_removed'):

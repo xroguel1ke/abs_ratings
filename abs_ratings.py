@@ -454,6 +454,9 @@ REDOWNLOAD_FILE = os.path.join(SCRIPT_DIR, 'redownload.json')  # books whose FIL
 NEW_PENDING_FILE = os.path.join(SCRIPT_DIR, 'new_pending.json')  # new books not matched yet (they keep the new-book rules)
 NEW_PENDING = set()
 NEW_BOOK_DAYS = int(os.getenv('NEW_BOOK_DAYS', 30))  # 'new book' = never processed and added to ABS within these days
+# library audit 2026-11-28: the rules added then (series label at the end of the title, cover of the accepted ASIN, role suffixes on narrators
+# and editors) change only recently added books - true = the whole library (the user's decision)
+NEW_RULES_LIBRARY = os.getenv('NEW_RULES_LIBRARY', 'false').lower() == 'true'
 NEW_VOLUMES = []  # missing volumes that became available since the last report (run summary / notification)
 SOURCE_DOWN = {}  # source -> reason: failed canary check or tripped breaker (source_health.py); nothing is counted or written from it
 BREAKER = None
@@ -2681,6 +2684,28 @@ def review_sweep(key, kinds):
             rw_json(REVIEW_FILE, q)
             logging.info(f"      -> 🧹 {n} review entr{'y' if n == 1 else 'ies'} of this book no longer apply (removed from the review list)")
 
+def review_drop_applied(lib_id, items):
+    """Open review entries whose proposal ABS already has (audit 2026-11-28: 9 'authors' entries - War of the Spider Queen, Celeste Academy -
+    stayed open for weeks after the authors were set, the books were not re-checked since): obsolete. Compared with the library listing
+    of every run; title / authors / ISBN / ASIN proposals only."""
+    if DRY_RUN or not items: return 0
+    cur = {f"{lib_id}_{it.get('id')}": (it.get('media') or {}).get('metadata') or {} for it in items}
+    people = lambda v: {re.sub(r'[^a-z]', '', fold_accents(x).lower()) for x in str(v or '').split(',') if x.strip()}
+    same = {'authors': lambda c, md: bool(people(c)) and people(c) == people(md.get('authorName')),
+            'title': lambda c, md: bool(normalize_title_text(c)) and normalize_title_text(c) == normalize_title_text(md.get('title') or ''),
+            'isbn': lambda c, md: bool(normalize_isbn(c)) and normalize_isbn(c) == normalize_isbn(md.get('isbn')),
+            'asin': lambda c, md: bool(c) and str(c).strip().upper() == str(md.get('asin') or '').strip().upper()}
+    with IO_LOCK:
+        q = rw_json(REVIEW_FILE) or []
+        n = 0
+        for x in q if isinstance(q, list) else []:
+            md = cur.get(x.get('key'))
+            if md is None or x.get('status', 'open') != 'open' or x.get('kind') not in same or not x.get('candidate'): continue
+            if same[x['kind']](x['candidate'], md):
+                x['status'], x['obsolete_run'], x['obsolete_reason'] = 'obsolete', RUN_ID, 'the proposal is in ABS already'; n += 1
+        if n: rw_json(REVIEW_FILE, q)
+    return n
+
 def review_drop_missing(keys, why='the book is no longer in ABS'):
     """Open review entries of books deleted in ABS are obsolete (2026-11-25: Sapiens / Homo Deus stayed on the list for days)."""
     keys = set(keys)
@@ -3730,6 +3755,19 @@ def hc_title_score(targets, book, extra_names=(), pure=False):
             best = max(best, sc)
     return best
 
+def hc_part_of_ours(targets, book):
+    """The Hardcover book fits only via an alternative title that names it a PART of our book ('The Green Mile, Part 5 : Night Journey'
+    for 'The Green Mile', 'X, Teil 5: ...', 'X, Volume 2: ...') while our title has no such number: a part, not our book."""
+    if hc_title_score(targets, {**book, 'alternative_titles': []}, (), True) >= 0.85: return False
+    lite = lambda x: re.sub(r'\s+', ' ', re.sub(r'[^\w]+', ' ', fold_accents(x or '').lower())).strip()  # keeps 'part' (normalize_title_text drops it)
+    for t in targets:
+        nt = lite(clean_title(t) or t)
+        if not nt or re.search(r'(?i)\b(?:part|teil|volume|vol|book|band|episode)\s*\d', t or ''): continue
+        for a in (book.get('alternative_titles') or [])[:15]:
+            na = lite(html_lib.unescape(a)) if isinstance(a, str) else ''
+            if na.startswith(nt + ' ') and re.match(r'(?:part|teil|volume|vol|book|band|episode)\s*\d', na[len(nt) + 1:]): return True
+    return False
+
 def hc_series_check(book, abs_series):
     """True/False if Hardcover's main series is one of the ABS series and the number matches/differs, else None."""
     fs = book.get('featured_series') or book.get('cached_featured_series') or {}
@@ -3808,7 +3846,10 @@ def hc_acceptable(targets, authors, book, min_score, abs_series=(), extra_names=
         # 'Midnight Tides' is flagged as compilation because Parts 1+2 exist separately, but it sits as ONE book (single position) in its series
         pos = fs.get('position')
         single = isinstance(pos, (int, float)) and float(pos).is_integer()
-        if not (score >= 0.99 and single): return False, score, "compilation"
+        # audit 2026-11-28 ('The Green Mile': the complete edition IS a compilation of its six parts on Hardcover - rejected, so part 5
+        # 'Night Journey' won via its alternative title): the compilation whose MAIN title is exactly ours is our book
+        exact_ = (book.get('ratings_count') or 0) >= 100 and any(normalize_title_text(clean_title(t)) == normalize_title_text(book.get('title') or '') for t in targets if t)
+        if not (score >= 0.99 and (single or exact_)): return False, score, "compilation"
     return True, max(score, 1.0 if series_confirms else 0), ''
 
 def get_hardcover_data(key, targets, authors, asin, isbn, manual_url=None, use_cache=True, abs_series=(), lang=None, abs_title=None):
@@ -3897,6 +3938,8 @@ def _hardcover_lookup(key, targets, authors, asin, isbn, manual_url, use_cache, 
             try: doc['id'] = int(doc.get('id'))
             except (TypeError, ValueError): continue
             ok, score, why = hc_acceptable(targets, authors, doc, 0.85, abs_series, pure=True)
+            if ok and hc_part_of_ours(targets, doc):  # 'Night Journey' = 'The Green Mile, Part 5 : Night Journey' for our 'The Green Mile'
+                ok, why = False, 'a part of our book (alternative title)'
             if ok: cands.append((score, doc))
             else: logging.debug(f"        ✖ HC '{doc.get('title')}' rejected: {why}")
         if cands:
@@ -4101,8 +4144,14 @@ def description_is_reviews(own):
     """The ABS text is only reader reviews / praise, no description ('Review "The way this story evolved ..." - 5 stars. Richard White'
     on Portal to Nova Roma 3, 2026-11-16)."""
     t = _plain_text(own)
-    return bool(re.match(r'(?i)^(?:editorial\s+)?(?:reviews?|praise(?:\s+for\b[^"“]{0,80})?)\s*:?\s*["“]', t)) \
-        and len(re.findall(r'(?i)\b\d\s*stars?\b|["“][^"”]{20,}["”]\s*[-–—]', t)) >= 1
+    if not (re.match(r'(?i)^(?:editorial\s+)?(?:reviews?|praise(?:\s+for\b[^"“]{0,80})?)\s*:?\s*["“]', t)
+            and len(re.findall(r'(?i)\b\d\s*stars?\b|["“][^"”]{20,}["”]\s*[-–—]', t)) >= 1): return False
+    # audit 2026-11-28 ('Death's End', 'The Dark Forest': Audible's own summary opens with 'PRAISE FOR THE THREE-BODY PROBLEM SERIES: "..."
+    # - The New York Times' and then tells the plot): praise FIRST is no review-only text - what is left without the quotes and their
+    # sources must be short
+    rest = re.sub(r'["“][^"”]{10,}["”]\s*(?:[-–—]\s*[^"“.]{0,80}?(?=\s+["“]|\s*$|\.\s)|)', ' ', t)
+    rest = re.sub(r'(?i)^(?:editorial\s+)?(?:reviews?|praise(?:\s+for\b[^:"“]{0,80})?)\s*:?', ' ', rest)
+    return len(re.sub(r'\s+', ' ', rest).strip()) < 300
 
 def description_of_other_book(own, asin, title):
     """The ABS description (without our block) is Audible's summary of ANOTHER book (round 3, 2026-11-09: 86 Vol. 4 had Vol. 5's text,
@@ -4549,6 +4598,8 @@ def build_queue(lib_id, history, recheck):
 
     load_series_names(lib_id)
     for it in items: note_listing_item(lib_id, it)
+    if (n_ap := review_drop_applied(lib_id, items)):
+        logging.info(f"🧹 {n_ap} review entr{'y' if n_ap == 1 else 'ies'}: the proposal is in ABS already (removed from the review list)")
     if items:  # books deleted in ABS leave the web UI's result list (they showed up as 'same ASIN twice', 2026-11-09)
         alive = {f"{lib_id}_{it['id']}" for it in items}
         with IO_LOCK:
@@ -5224,6 +5275,7 @@ def process_queue(work_queue, history, failed, recheck):
                 # a first run over a whole library (new install, new library) must not rewrite the user's curated titles (loop 2026-11-15)
                 added_ = float(item_data.get('addedAt') or 0) / 1000
                 recent_ = bool(added_) and time.time() - added_ <= NEW_BOOK_DAYS * 86400
+                lib_ok_ = recent_ or NEW_RULES_LIBRARY  # rules of the library audit 2026-11-28 (see NEW_RULES_LIBRARY)
                 new_book = recent_ and (key not in history or key in NEW_PENDING)
                 # new-books test 2026-11-16: a new book whose first run found no ASIN was no 'new book' in the run that found it (history
                 # entry): it stays new until its metadata were synced with a verified ASIN once
@@ -5605,6 +5657,14 @@ def process_queue(work_queue, history, failed, recheck):
                 elif aud_data and runtime_mismatch(abs_dur, aud_data.get('runtime_sec')):
                     skip_meta = True
                     logging.info(f"      -> ⏭️ Metadata sync skipped: runtime still differs (ABS {format_time(abs_dur)} vs Audible {format_time(aud_data['runtime_sec'])}). Only ratings are used.")
+                    rt_s_ = aud_data.get('runtime_sec')
+                    if rt_s_ and abs_dur and abs_dur > 1.5 * rt_s_ and abs_dur - rt_s_ > 3600 and title_similarity(title, aud_data.get('title_raw') or '') >= 0.85 \
+                            and not lang_conflict and not aud_data.get('related_edition'):
+                        # audit 2026-11-28 ('The Great Cleric: Volume 5': 20 h file, Audible 6 h, no replacement): the too-long check below only ran
+                        # with a metadata sync - a file that holds far more than its product goes on the review list here too
+                        more_ = round((abs_dur - rt_s_) / 60)
+                        logging.info(f"        ⚠️ The audio is {more_} min longer than Audible's edition ({round(rt_s_ / 60)} min): review list")
+                        add_review(key, title, 'too_long', str(more_), f"the audio is {more_} min longer than Audible's edition of {round(rt_s_ / 60)} min - content twice, a collection or another edition?")
 
                 ch_done_ = False  # chapters written in this run (the review entry 'no chapters' is then obsolete)
                 ch_checked_ = ch_incomplete_ = False  # chapter/length checks ran / found the file incomplete (2026-11-26: stale 'incomplete' entries)
@@ -5800,12 +5860,13 @@ def process_queue(work_queue, history, failed, recheck):
                                 break
                         # 2026-11-28 (Audible's own title 'Shaman's Crossing, Book One of the Soldier Son Trilogy'): the book's OWN series label
                         # at the end of the title goes, the series field holds it - only for recently added books (the library stays as it is)
-                        if recent_ and new_t and (lbl_t := title_series_tail(new_t, ser_now)): new_t = lbl_t
+                        lbl_t = title_series_tail(new_t, ser_now) if lib_ok_ and new_t else None
+                        if lbl_t: new_t = lbl_t
                         if new_t and new_t == title and cur_t != title:  # an earlier rule set Audible's glued title, this step cuts it back: no change
                             abs_updates.pop('title', None); log_updates[:] = [x for x in log_updates if not x.startswith('Title:')]
                         elif new_t and new_t != cur_t:
                             abs_updates['title'] = new_t
-                            log_updates.append(f"Title: '{cur_t}' -> '{new_t}' ({'tagline to the subtitle' if tag_s else 'format label'})")
+                            log_updates.append(f"Title: '{cur_t}' -> '{new_t}' ({'tagline to the subtitle' if tag_s else 'own series label' if lbl_t else 'format label'})")
                             old_s_ = abs_updates.get('subtitle', meta.get('subtitle')) or ''
                             if tag_s and 'lock_subtitle' not in tags and old_s_ != tag_s:
                                 abs_updates['subtitle'] = tag_s
@@ -5873,6 +5934,12 @@ def process_queue(work_queue, history, failed, recheck):
                             # unreleased re-release whose ASIN the book had): the same recording's release year (round 1, 2026-11-09)
                             abs_updates['publishedYear'] = new_year
                             log_updates.append(f"Year: '{meta.get('publishedYear')}' -> '{new_year}' (year in the future)")
+                        elif new_year and cur_y and lib_ok_ and int(cur_y.group(1)) > int(str(new_year)[:4]) and abs_dur and aud_data.get('runtime_sec') \
+                                and abs(abs_dur - aud_data['runtime_sec']) <= 120:
+                            # audit 2026-11-28 ('A Tangled Road to Justice' 2024, its recording came out 2019): the book cannot be younger than
+                            # this recording (runtime to 2 min) - its release year; the Hardcover step below may set an even earlier first release
+                            abs_updates['publishedYear'] = new_year
+                            log_updates.append(f"Year: '{meta.get('publishedYear')}' -> '{new_year}' (later than this recording's release)")
                     else:
                         new_year = parse_release_year(md_raw.get('releaseDate'))
                         if new_year and not meta.get('publishedYear'): logging.info(f"        🔒 Year Update Skipped (Locked): '{new_year}'")
@@ -6266,7 +6333,9 @@ def process_queue(work_queue, history, failed, recheck):
                         log_updates.append(f"Author '{authors[0]}' is {len(a_auth)} authors glued together: -> {a_auth}")
 
                     # Narrators / authors: only filled when empty
-                    aud_narr = aud_data.get('narrators_raw') or []
+                    from abs_series import is_role_credit as _irc_n, role_base as _rb_n
+                    # audit 2026-11-28: Audible credits 'Robert J. Sawyer - introduction' as narrator - the person, without the role
+                    aud_narr = list(dict.fromkeys(_rb_n(n_) if _irc_n(n_) else n_ for n_ in (aud_data.get('narrators_raw') or [])))
                     if aud_narr and not meta.get('narrators') and same_rec_rt:
                         if 'lock_narrators' in tags: logging.info(f"        🔒 Narrators Update Skipped (Locked): {aud_narr}")
                         else:
@@ -6307,7 +6376,7 @@ def process_queue(work_queue, history, failed, recheck):
                         # round 4 (2026-11-09): one spelling per narrator - the library's most used one; the same person twice on a book goes
                         new_n = []
                         for n_ in meta['narrators']:
-                            c_ = narrator_canonical(n_)
+                            c_ = narrator_canonical(_rb_n(n_) if lib_ok_ and _irc_n(n_) else n_)  # 'X - introduction' -> 'X' (audit 2026-11-28)
                             if not any(narr_fold(c_) == narr_fold(x_) for x_ in new_n): new_n.append(c_)
                         if new_n != list(meta['narrators']):
                             abs_updates['narrators'] = new_n
@@ -6464,7 +6533,7 @@ def process_queue(work_queue, history, failed, recheck):
                     # (id_switch: confirmed other book - the old cover shows it; new book without narrator tag: runtime + author + title, 2026-11-15)
                     # user 2026-11-28 ('1922', file 3 min off Audible: metadata synced, the old cover stayed): "if the book is the right one,
                     # just change it" - a recently added book takes the cover of the ASIN its metadata came from (not another edition / language)
-                    cover_ok_ = cover_verified or bool(recent_ and asin and not lang_conflict and not aud_data.get('related_edition'))
+                    cover_ok_ = cover_verified or bool(lib_ok_ and asin and not lang_conflict and not aud_data.get('related_edition'))
                     if aud_data.get('cover_url') and has_cover and UPDATE_COVERS and not cover_ok_ and new_book and COVER_STATE.get(iid) != cover_token(asin):
                         logging.info("        🖼️ Cover kept: the recording is not verified (runtime ±2 min + narrator, or author and title without a narrator)")
                     # user 2026-11-22 ('Battle of the Labyrinth': runtime 6.6 min off, so no cover at all): a book WITHOUT a cover takes the cover of
@@ -7244,7 +7313,7 @@ def main():
                 'decisions_file': os.path.join(SCRIPT_DIR, 'merge_decisions.json'), 'merges_file': os.path.join(SCRIPT_DIR, 'merges.json'),
                 'review_file': os.path.join(SCRIPT_DIR, 'merge_review.json'), 'shared_desc_file': SHARED_DESC_FILE, 'summary_index': SUMMARY_INDEX,
                 'author_links': {n: sorted(a) for n, a in AUTHOR_LINKS.items()},
-                'remove_role_credits': REMOVE_ROLE_CREDITS, 'genre_cleanup': GENRE_CLEANUP, 'audible_genres': AUD_GENRES, 'genre_drops': GENRE_DROPS, 'genre_series_drops': GENRE_SERIES_DROPS, 'genre_ladders': GENRE_LADDERS, 'load_workers': int(os.getenv('ABS_PARALLEL', '6') or 3),
+                'remove_role_credits': REMOVE_ROLE_CREDITS, 'new_rules_library': NEW_RULES_LIBRARY, 'new_book_days': NEW_BOOK_DAYS, 'genre_cleanup': GENRE_CLEANUP, 'audible_genres': AUD_GENRES, 'genre_drops': GENRE_DROPS, 'genre_series_drops': GENRE_SERIES_DROPS, 'genre_ladders': GENRE_LADDERS, 'load_workers': int(os.getenv('ABS_PARALLEL', '6') or 3),
                 'genre_hc': {**{k_: v_['gv'] for k_, v_ in HC_CACHE.items() if isinstance(v_, dict) and v_.get('gv')}, **GENRE_HC}, 'genre_max': GENRE_MAX, 'book_languages': list(BOOK_LANGUAGES), 'remove_empty_authors': REMOVE_EMPTY_AUTHORS, 'role_names': sorted(ROLE_NAMES), 'journal': journal_change,
                 'audible_series_names': set(SERIES_ASINS),
                 'new_book_days': NEW_BOOK_DAYS,

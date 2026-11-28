@@ -60,13 +60,13 @@ def test_title_series_tail():
 
 def test_title_series_tail_only_recent_books():
     src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'abs_ratings.py')).read()
-    assert 'if recent_ and new_t and (lbl_t := title_series_tail(new_t, ser_now)): new_t = lbl_t' in src
+    assert 'lbl_t = title_series_tail(new_t, ser_now) if lib_ok_ and new_t else None' in src
 
 
 def test_cover_of_the_accepted_asin_for_recent_books():
     # user 2026-11-28 ('1922': metadata synced, the old cover stayed): a recently added book takes the cover of its accepted ASIN
     src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'abs_ratings.py')).read()
-    assert "cover_ok_ = cover_verified or bool(recent_ and asin and not lang_conflict and not aud_data.get('related_edition'))" in src
+    assert "cover_ok_ = cover_verified or bool(lib_ok_ and asin and not lang_conflict and not aud_data.get('related_edition'))" in src
     assert '(cover_ok_ and (UPDATE_COVERS or id_switch) and has_cover and COVER_STATE.get(iid) != cover_token(asin))' in src
 
 
