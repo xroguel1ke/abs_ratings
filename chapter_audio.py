@@ -100,6 +100,11 @@ def book_silences(item_data, cache_dir):
         if sil is None:
             sil = file_silences(path)
             if sil is None: return None
+            if len(sil) < 3 and dur > 1800:
+                # audit 2026-11-28 ('White Wolf': 17 h, 0 pauses cached): no measurable pauses in a long file (noise floor above the
+                # threshold, music bed, or a failed read) - not cached, it is measured again next time; the book has no pause evidence
+                out += [(a + off, b + off) for a, b in sil]; off += dur
+                continue
             try:
                 with open(ck + '.tmp', 'w', encoding='utf-8') as f: json.dump([[round(a, 3), round(b, 3)] for a, b in sil], f)
                 os.replace(ck + '.tmp', ck)
@@ -529,6 +534,8 @@ def decide(abs_chs, dur, aud, sil):
     then Audible's (aligned) chapters are better."""
     chs = aud[0] if aud else None
     if not chs or len(chs) < 4: return None, "Audible lists too few chapters"
+    if dur and len(sil or []) < max(4, dur / 1800):  # fewer than one pause per 30 min: nothing to align on (no evidence either way)
+        return None, f"the file has too few measurable pauses ({len(sil or [])} in {dur / 3600:.1f} h)"
     al = silence_align(chs, dur, sil) or piecewise_align(chs, dur, sil) or prop_align(chs, dur, sil) or drift_align(chs, dur, sil)
     if not al: return None, "Audible's chapters do not line up with the pauses of the file"
     new = build(chs, al['starts'], dur)

@@ -150,7 +150,7 @@ def main():
             sil = CA.book_silences(d, A.SILENCE_CACHE_DIR)
             if sil is None: return job, None, None, 'the audio cannot be read here'
             new, why = CA.decide(chs0, dur, aud, sil)
-            if not new and 'do not line up' in why and (lc := loose(d, chs0, dur, aud, sil, key)):
+            if not new and ('do not line up' in why or 'too few measurable pauses' in why) and (lc := loose(d, chs0, dur, aud, sil, key)):
                 new, why = lc  # 2026-11-26: same master without telling pauses - Audible's chapters as listed (verified recording only)
             return job, sil, new, why
         except Exception as e:  # one book must never stop the check of all others

@@ -1520,7 +1520,7 @@ def audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch, source=
         sil = CA.book_silences(item_data, SILENCE_CACHE_DIR)
         if sil is None: return False, 'the audio file cannot be read here'
         new, why = CA.decide(abs_chs, abs_dur, aud_ch, sil)
-        if not new and verified and 'do not line up' in why:  # 2026-11-26: same master without telling pauses (Snow Crash): Audible's list as it is
+        if not new and verified and ('do not line up' in why or 'too few measurable pauses' in why):  # 2026-11-26: same master without telling pauses (Snow Crash): Audible's list as it is
             new, why = (lambda r: r if r[0] else (None, why))(CA.loose_chapters(abs_chs, abs_dur, aud_ch, sil))
     except Exception as e:  # the pause analysis is an extra: it never costs the book its other updates
         logging.warning(f"        ⚠️ Pause analysis failed: {type(e).__name__}: {e}"); return False, 'pause analysis failed'
@@ -6619,9 +6619,12 @@ def process_queue(work_queue, history, failed, recheck):
                             if new_chs and poor == 'only numbered chapters without names' and all(RE_GENERIC_CH.match(c['title'] or '') for c in new_chs) \
                                     and not __import__('chapter_audio').coarse_parts(abs_chs, len(new_chs), abs_dur):  # 1-h file parts: Audible's finer list
                                 new_chs, why_c = None, "Audible's chapters have no names either"  # 'Chapter 1' for 'Chapter 1': nothing gained
-                            if new_chs and why_c.startswith('the file has no chapters, length within') and 'lock_chapters' not in tags \
+                            if new_chs and (why_c.startswith('the file has no chapters, length within') or why_c.startswith("the file lacks Audible's")) \
+                                    and 'lock_chapters' not in tags \
                                     and audio_chapters(iid, key, title, item_data, abs_chs, abs_dur, aud_ch, verified=cover_verified)[0]:
-                                # 2026-11-26: Audible's list as it is can be up to a minute off; on the file's pauses it is exact
+                                # 2026-11-26: Audible's list as it is can be up to a minute off; on the file's pauses it is exact.
+                                # audit 2026-11-28 ('And Another Thing...': the length rule shifted Audible's list by the 5 s intro the file
+                                # seemed to lack, the pauses put it at +8.5 s, 14/14 starts): an intro/outro shift asks the pauses first too
                                 stats['chapters'] += 1
                                 ch_done_ = True
                             elif new_chs and abs_set_chapters(iid, key, title, new_chs, abs_chs, 'audible_chapters'):

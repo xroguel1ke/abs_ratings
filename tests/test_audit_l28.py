@@ -123,3 +123,25 @@ def test_same_series_name_up_to_punctuation_with_other_authors_goes_to_review():
     # numbers that overlap: two different series, no review entry of that kind
     r2 = [rec(1, 'A', 'Legacy - Saga', '1'), rec(2, 'B', 'Legacy: Saga', '1')]
     assert not any(x['reason'].startswith('same name except punctuation') for x in S.find_merges(r2, {}, None)[1])
+
+
+def test_intro_shift_asks_the_pauses_first():
+    i = SRC.index("audit 2026-11-28 ('And Another Thing...'")
+    blk = SRC[SRC.rindex("if new_chs and (why_c.startswith('the file has no chapters, length within')", 0, i):i]
+    assert "why_c.startswith(\"the file lacks Audible's\")" in blk and 'audio_chapters(' in blk
+
+
+def test_too_few_pauses_is_no_evidence(tmp_path, monkeypatch):
+    import chapter_audio as CA
+    aud = ([(0.0, 3600.0), (3600.0, 3600.0), (7200.0, 3600.0), (10800.0, 3600.0), (14400.0, 3600.0)], 0, 0)
+    new, why = CA.decide([], 18000.0, aud, [])
+    assert new is None and 'too few measurable pauses' in why
+    # a long file without pauses is not cached (measured again next time)
+    f = tmp_path / 'a.m4b'; f.write_bytes(b'x')
+    monkeypatch.setattr(CA, 'FFMPEG', '/bin/true'); monkeypatch.setattr(CA, 'file_silences', lambda p: [])
+    item = {'media': {'audioFiles': [{'index': 1, 'duration': 61200.0, 'metadata': {'path': str(f)}}]}}
+    assert CA.book_silences(item, str(tmp_path / 'c')) == []
+    assert not list((tmp_path / 'c').glob('*.json'))
+    monkeypatch.setattr(CA, 'file_silences', lambda p: [(10.0, 12.0), (20.0, 22.0), (30.0, 33.0)])
+    assert len(CA.book_silences(item, str(tmp_path / 'c'))) == 3 and len(list((tmp_path / 'c').glob('*.json'))) == 1
+    assert "'too few measurable pauses' in why" in SRC  # a verified recording without pauses still gets Audible's list as listed
