@@ -308,3 +308,11 @@ def test_folder_title_equal_to_audible_keeps_the_asin_and_names_the_book():
     assert "asin_by_folder_title = True" in SRC and "or (asin_by_folder_title and narr_keys(meta.get('narrators'))" in SRC
     assert "abs(abs_dur - aud_data['runtime_sec']) <= 0.10 * aud_data['runtime_sec']" in SRC
     assert "is_boxset_title(abs_updates.get('title') or title)" in SRC
+
+
+def test_one_volume_of_a_trilogy_is_no_box_set():
+    f = A.is_boxset_title
+    assert not f('Dragonsong: Harper Hall Trilogy, Volume 1')
+    assert not f('Star Wars: The Thrawn Trilogy, Book 3: The Last Command')
+    assert f('The Hunger Games Trilogy') and f('Mistborn Trilogy, Books 1-3') and f('Die Chroniken von Waldsee Trilogie 1-3')
+    assert f('Trilogy Box Set, Book 1') and f('Dämonenblut / Nachtfeuer / Perlmond')

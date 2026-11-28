@@ -1046,7 +1046,14 @@ def folder_book_title(item_data):
     return t
 
 BOXSET_RE = re.compile(r"\b\d+\s*[-–]\s*\d+\b|\b(trilog(y|ie)|box\s*set|boxed set|omnibus|sammelband|gesamtausgabe|publisher.?s pack|complete (series|collection)|collection)\b|\bbooks?\s+\d+\s*(?:-|–|&|and|,)\s*\d+", re.I)
-def is_boxset_title(t): return bool(t and (BOXSET_RE.search(t) or re.search(r'\S\s+/\s+\S.*\S\s+/\s+\S', t)))  # 'Dämonenblut / Nachtfeuer / Perlmond'
+def is_boxset_title(t):
+    if not t: return False
+    if re.search(r'\S\s+/\s+\S.*\S\s+/\s+\S', t): return True  # 'Dämonenblut / Nachtfeuer / Perlmond'
+    hits = [m.group(0).lower() for m in BOXSET_RE.finditer(t)]
+    if hits and all(h.startswith('trilog') for h in hits) \
+            and re.search(r'(?i)\btrilog(?:y|ie)\b,?\s+(?:book|volume|vol\.|band|teil)\s+(?:\d+|one|two|three|eins|zwei|drei)\b(?!\s*[-–&,]\s*\d)', t):
+        return False  # audit 2026-11-28: 'Dragonsong: Harper Hall Trilogy, Volume 1' names ONE volume of a trilogy, no box set
+    return bool(hits)
 
 def is_boxset_subtitle(t):
     """A subtitle naming a range of volumes with a collection word ('Die Chroniken von Waldsee Trilogie 1-3') - not 'X Trilogy, Book 3'."""

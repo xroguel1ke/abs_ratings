@@ -275,6 +275,7 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     ASIN plausibility 'wrong' (title off + runtime >5 min) is re-checked with the BOOK FOLDER title when that equals Audible's title: then the
     ASIN stays (asin_by_folder_title), and a NEW book with a shared narrator and runtime within 10 % takes Audible's title (Shadow and Bone,
     tag title 'Alina Starkov Trilogy', 30 min extras); the box-set number check then looks at the new title.
+    is_boxset_title: 'X Trilogy, Book/Volume N' (one volume, no range) is no box set when 'trilogy' is the only box-set word (Dragonsong).
   - Per-book state files (results, source_state, history, failed, recheck, Goodreads/Hardcover cache, cover_state) are MERGED on write (rw_json,
     2026-11-27): only keys this process changed since it read the file; a second process (Goodreads background, a docker-exec run)
     no longer drops the other's books (Moon Over Soho + The Lost Plot lost their results).
