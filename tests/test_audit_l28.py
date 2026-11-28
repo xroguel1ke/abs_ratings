@@ -42,7 +42,7 @@ def test_editor_credits_keep_the_editor():
 def test_narrator_role_suffix_and_library_gate():
     assert "aud_narr = list(dict.fromkeys(_rb_n(n_) if _irc_n(n_) else n_ for n_ in (aud_data.get('narrators_raw') or [])))" in SRC
     assert "c_ = narrator_canonical(_rb_n(n_) if lib_ok_ and _irc_n(n_) else n_)" in SRC
-    assert "lib_ok_ = recent_ or NEW_RULES_LIBRARY" in SRC and A.NEW_RULES_LIBRARY is False
+    assert "lib_ok_ = recent_ or NEW_RULES_LIBRARY" in SRC and A.NEW_RULES_LIBRARY is True  # user 2026-11-28: on
 
 
 def test_too_long_also_when_the_metadata_sync_is_skipped():
@@ -240,3 +240,12 @@ def test_names_on_own_marks_when_one_audible_start_has_no_mark(monkeypatch):
     new, why = CA.decide(own, 6000.0, aud, sil)
     assert new and 'names only' in why and [c['start'] for c in new] == [c['start'] for c in own]
     assert new[0]['title'] == 'Opening Credits' and new[2]['title'] == 'Chapter 3: Name 3'
+
+
+def test_generic_subtitles_and_chapter_title_cleanup():
+    for x in ('A Novel', 'a novel', 'A Thriller', 'A Novella', 'Novel', 'A Novel of Suspense', 'A Fantasy Novel'):
+        assert A.RE_GENERIC_SUBTITLE.fullmatch(x), x
+    for x in ('A Novel of the Samurai Era', 'A LitRPG Adventure', 'The Town of Strife I', 'Novel Approaches'):
+        assert not A.RE_GENERIC_SUBTITLE.fullmatch(x), x
+    assert "if lib_ok_ and gen_s and RE_GENERIC_SUBTITLE.fullmatch(gen_s.strip())" in SRC
+    assert "'chapter_titles_cleaned'" in SRC

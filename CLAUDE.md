@@ -233,7 +233,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     keeps the strict rule (runtime 2 min + narrator). No review entry for covers.
   - Series number (2026-11-28 The Fall of Neverdark): an ABS sequence 'Book 4' / 'Vol. 3' / '#2' with Audible's number -> Audible's (then the
     subtitle label 'The Echoes Saga, Book 4' goes too). Library: this was the only such book.
-  - Library audit 2026-11-28 (tests/private/loop/audit2.py, L28/log.md): NEW_RULES_LIBRARY (default false) - the audit's rules that
+  - Library audit 2026-11-28 (tests/private/loop/audit2.py, L28/log.md): NEW_RULES_LIBRARY (default TRUE since 13:15, user: "so wie die
+    Metadaten sauberer werden"; false = recent books only) - the audit's rules that
     change books (title series label, cover of the accepted ASIN, narrator/editor role suffixes, year after the recording's release) apply
     to recently added books only (lib_ok_ = recent_ or NEW_RULES_LIBRARY; abs_series.new_rule_ok) until the user decides for the library.
     Fixes: 'X - author/editor' is an AUTHOR credit (never dropped as a role - the first version did, the library task removed the
@@ -259,6 +260,8 @@ Data folder (`DATA_DIR`, container `/config` = `/mnt/user/appdata/audiobookshelf
     asks the pauses first too (Fairy Tale: up to 10.6 s off). Library: 255 + 64 books carry length-only chapters (decision list).
     decide(): numbered own marks on the pauses with Audible's count -> Audible's names on the own times when all but one (or 10 %) of
     Audible's aligned starts sit at an own mark (Fairy Tale '01-36 Fairy Tale', 34/35).
+    Subtitles that only name the kind of book ('A Novel', 'A Thriller', RE_GENERIC_SUBTITLE) go; chapter titles with control characters
+    are rewritten clean (same times, source chapter_titles_cleaned).
   - Per-book state files (results, source_state, history, failed, recheck, Goodreads/Hardcover cache, cover_state) are MERGED on write (rw_json,
     2026-11-27): only keys this process changed since it read the file; a second process (Goodreads background, a docker-exec run)
     no longer drops the other's books (Moon Over Soho + The Lost Plot lost their results).

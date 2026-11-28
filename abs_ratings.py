@@ -459,7 +459,8 @@ NEW_PENDING = set()
 NEW_BOOK_DAYS = int(os.getenv('NEW_BOOK_DAYS', 30))  # 'new book' = never processed and added to ABS within these days
 # library audit 2026-11-28: the rules added then (series label at the end of the title, cover of the accepted ASIN, role suffixes on narrators
 # and editors) change only recently added books - true = the whole library (the user's decision)
-NEW_RULES_LIBRARY = os.getenv('NEW_RULES_LIBRARY', 'false').lower() == 'true'
+NEW_RULES_LIBRARY = os.getenv('NEW_RULES_LIBRARY', 'true').lower() == 'true'  # user 2026-11-28: on for the whole library
+RE_GENERIC_SUBTITLE = re.compile(r'(?i)(?:an?\s+)?(?:novel|novella|thriller|novel of suspense|mystery novel|fantasy novel|science fiction novel)\.?')
 NEW_VOLUMES = []  # missing volumes that became available since the last report (run summary / notification)
 SOURCE_DOWN = {}  # source -> reason: failed canary check or tripped breaker (source_health.py); nothing is counted or written from it
 BREAKER = None
@@ -5946,6 +5947,14 @@ def process_queue(work_queue, history, failed, recheck):
                         else:
                             abs_updates.pop('subtitle', None); log_updates[:] = [x for x in log_updates if not x.startswith('Subtitle:')]
                         if (meta.get('subtitle') or '') != new_s: log_updates.append(f"Subtitle: '{cur_s}' -> '{new_s}' (only the series name and number)")
+                    # user 2026-11-28 ("so, wie die Metadaten sauberer werden"): a subtitle that only says what kind of book it is ('A Novel',
+                    # 'A Thriller', 'A Novella') carries no information - it goes (the file-tag guard below keeps it when ABS would restore it)
+                    gen_s = abs_updates.get('subtitle', meta.get('subtitle')) or ''
+                    if lib_ok_ and gen_s and RE_GENERIC_SUBTITLE.fullmatch(gen_s.strip()) and not ({'lock_subtitle', 'lock_title'} & set(tags)):
+                        abs_updates['subtitle'] = ''
+                        log_updates[:] = [x for x in log_updates if not x.startswith('Subtitle:')]
+                        if meta.get('subtitle'): log_updates.append(f"Subtitle: '{meta.get('subtitle')}' -> '' (only says what kind of book it is)")
+                        else: abs_updates.pop('subtitle', None)
 
                     # recording details come only from the SAME recording: runtime within EDITION_FILL_MIN (unknown ABS runtime: as before)
                     same_rec_rt = not (abs_dur and aud_data.get('runtime_sec')) or abs(abs_dur - aud_data['runtime_sec']) <= EDITION_FILL_MIN * 60
@@ -6609,6 +6618,10 @@ def process_queue(work_queue, history, failed, recheck):
 
                     # Chapters (user 2026-11-10): Audible's chapters for poorly chaptered files of the SAME recording, only when they fit reliably
                     chs0_ = (item_data.get('media') or {}).get('chapters') or []
+                    if lib_ok_ and chs0_ and 'lock_chapters' not in tags and any(re.search(r'[\x00-\x1f\x7f]', str(c.get('title') or '')) for c in chs0_):
+                        # audit 2026-11-28: 31 books carry tabs / line breaks in their chapter titles (from the files) - same times, clean titles
+                        if abs_set_chapters(iid, key, title, [dict(c) for c in chs0_], chs0_, 'chapter_titles_cleaned'):
+                            logging.info(f"        🧹 Chapter titles cleaned (control characters){' (DRY_RUN)' if DRY_RUN else ''}")
                     if MATCH_CHAPTERS and len(chs0_) <= 1 and 'lock_chapters' not in tags and not (cover_verified and not lang_conflict and asin and not aud_data.get('related_edition')):
                         # a book WITHOUT chapters whose recording is not verified: only the file's pauses can prove that Audible's chapter
                         # structure belongs to it (2026-11-25); otherwise -> review list (user 2026-11-10)
